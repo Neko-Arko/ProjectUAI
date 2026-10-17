@@ -50,6 +50,10 @@ return function(env)
 	-- Published for the composer's paste detection, so the two halves of the feature
 	-- share one number rather than each keeping a copy that drifts.
 	M.PASTE_CAP = PASTE_CAP
+	local function markDirty(session)
+		session.persistenceDirty = true
+		session.persistenceRevision = (session.persistenceRevision or 0) + 1
+	end
 
 	local function placeNumber(value)
 		local number = tonumber(value)
@@ -186,11 +190,14 @@ return function(env)
 			abortFlag = false,
 			log = {},
 			logBytes = 0,
+			persistenceDirty = true,
+			persistenceRevision = 0,
 			-- The plan for this conversation's job. agent/state owns the shape of it;
 			-- the list lives here so two conversations cannot overwrite each other's.
 			todos = {},
 		}
-		local queue = env.require("agent/message_queue").new(session, function() M.listChanged:fire() end)
+		local queue = env.require("agent/message_queue").new(session, function() if alive then M.listChanged:fire() end end)
+		local unloaded = false
 		local callbacks, runPrepared, startReady
 		local function preparing() session.preparing = queue.preparing() and true or nil end
 		local function validateFiles(files, needTools)
@@ -227,6 +234,7 @@ return function(env)
 		session.appendLog = session.transcript.append
 		function session.emit(kind, payload)
 			if session.removed or not alive then return end
+			markDirty(session)
 			payload = util.copy(payload or {})
 			if kind == "error" then payload.message = env.require("runtime/support").error(payload.message) end
 			if kind == "tool:error" or kind == "tool:result" and payload.ok == false then
@@ -284,7 +292,11 @@ return function(env)
 
 		function session.queueSnapshot() return queue.snapshot() end
 		function session.serialiseQueue() return queue.serialise() end
-		function session.restoreQueue(saved) return queue.restore(saved) end
+		function session.restoreQueue(saved)
+			local ok, why = queue.restore(saved)
+			if ok then markDirty(session) end
+			return ok, why
+		end
 		function session.removeQueued(id)
 			local ok, why = queue.remove(id)
 			preparing()
@@ -487,15 +499,18 @@ return function(env)
 		end
 
 		function session.abort()
-			if session.cancellingMessages then return false end
+			if session.cancellingMessages or unloaded then return false end
+			if not alive then unloaded = true end
 			session.cancellingMessages = true
 			session.toolEpoch = {}
-			session.abortFlag = session.busy == true
+			session.abortFlag = not alive or session.busy == true
 			local wasPreparing = queue.preparing()
 			queue.cancelPreparations("message preparation was cancelled; your draft was kept")
 			preparing()
 			if session.removed or not alive then
-				if not session.removed then session.persist() end
+				-- Idle saved histories need no serialization on unload. Save pending
+				-- follow-ups once before cancelling their in-memory callbacks.
+				if not session.removed and session.persistenceDirty then session.persist() end
 				queue.clear(session.removed and "conversation removed" or "client unloaded")
 			else
 				queue.hold("Stopped before these follow-ups were applied")
@@ -896,12 +911,14 @@ return function(env)
 		if not fsx.enabled or session.headless or session.removed then return false end
 		if session.depth and session.depth > 0 then return false end
 		if session.ephemeral then return false end
+		markDirty(session)
+		local revision = session.persistenceRevision
 		local savedPolicy = {}
 		for _, key in ipairs(POLICY_OPTIONS) do savedPolicy[key] = session[key] end
 		local policy, why = validateOptions(savedPolicy)
 		if not policy then return false, "invalid session policy: " .. tostring(why) end
 		policy.version = 1
-		return fsx.writeJson(THREAD_DIR .. "/" .. session.id .. ".json", {
+		local saved, err = fsx.writeJson(THREAD_DIR .. "/" .. session.id .. ".json", {
 			id = session.id,
 			title = session.title,
 			named = session.named == true,
@@ -917,6 +934,9 @@ return function(env)
 			transcript = session.transcript.snapshot(),
 			transcriptState = session.transcript.metadata(),
 		})
+		-- Executor file I/O can yield while another event changes the session.
+		if saved and session.persistenceRevision == revision then session.persistenceDirty = false end
+		return saved, err
 	end
 
 	function M.restore()
@@ -984,6 +1004,7 @@ return function(env)
 				if queueOk then
 					session.ctx.restore(data.context)
 					session.transcript.restore(data.transcript, session.ctx, data.transcriptState)
+					session.persistenceDirty = false
 					M.threads[session.id] = session
 					restored = restored + 1
 				else log.warn("session", "skipped saved conversation with invalid follow-ups", queueError) end
@@ -1000,9 +1021,23 @@ return function(env)
 
 	M.limits = { threads = THREAD_LIMIT, folders = folderStore.limit, folderNameBytes = folderStore.nameBytes, workers = 8, events = transcript.limits.events,
 		transcriptBytes = transcript.limits.bytes, transcriptBudgets = transcript.limits.budgets }
-	env.require("runtime/dispose").add(function()
+	function M.beginShutdown()
+		if not alive then return end
 		alive = false
-		for _, item in pairs(M.threads) do item.abort(); item.events:clear() end
+		-- Close admission and invalidate every turn before any save can yield.
+		for _, item in pairs(M.threads) do item.abortFlag = true; item.toolEpoch = {} end
+	end
+	env.require("runtime/dispose").add(function()
+		M.beginShutdown()
+		local slice = clock.ms()
+		for _, item in pairs(M.threads) do
+			local ok, why = pcall(item.abort)
+			item.events:clear()
+			if not ok then log.warn("session", "unload cleanup failed", why) end
+			-- Many newly changed histories still need saving. Give Roblox a frame
+			-- between batches; never close a native worker or wait for it to finish.
+			if coroutine.running() and clock.since(slice) >= 8 then clock.wait(); slice = clock.ms() end
+		end
 		M.anyEvent:clear(); M.listChanged:clear()
 	end, "native sessions")
 	return M

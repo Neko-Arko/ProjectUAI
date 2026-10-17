@@ -431,16 +431,10 @@ local function start()
 		destroy = function()
 			if not handle.alive then return 0 end
 			handle.alive = false
-			-- Every turn in flight is stopped, not just the one on screen: conversations
-			-- run on their own threads and more than one can be working, so aborting the
-			-- active session alone left the others to finish into a transcript that had
-			-- already been destroyed.
-			for _, session in ipairs(sessions.list()) do
-				pcall(session.abort)
-			end
-			-- Anything delegated is stopped with them. A subagent outlives the step that
-			-- dispatched it by design, and its budget is measured in minutes.
-			pcall(function() env.require("agent/subagent").stopAll() end)
+			-- Invalidate all turns immediately. The disposer owns cancellation and
+			-- final dirty saves once; aborting here used to rewrite every history and
+			-- refresh the sidebar, then repeat the same work during disposal.
+			sessions.beginShutdown()
 			local ran, failed = env.require("runtime/dispose").drain()
 			local screenOk = pcall(function() if app and app.screen then app.screen:Destroy() end end)
 			handle.uiMounted = false
