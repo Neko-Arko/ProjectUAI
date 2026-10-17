@@ -20,7 +20,7 @@ return function(env)
 		local rowHeight = math.max(options.rowHeight or common.pixels(options.detail and 50 or options.dense and 28 or 34), options.passive and 1 or responsive.minTarget(), textHeight)
 		local chevronWidth = math.max(common.pixels(24), responsive.minTarget())
 		local list = { root = scroll.instance, items = {}, rows = {}, selected = 1, visible = true, rowHeight = rowHeight }
-		local rendering, contentWidth, measurements = false, 0, {}
+		local alive, rendering, contentWidth, measurements = true, false, 0, {}
 		local function indent(item) return math.max(0, options.indent and options.indent(item) or 0) * theme.space.lg end
 		local function labelOf(item, index) return options.label and options.label(item, index) or item.label or tostring(item) end
 		local function measureItems()
@@ -132,7 +132,7 @@ return function(env)
 			return row
 		end
 		local function render()
-			if rendering or not list.visible then return end
+			if not alive or rendering or not list.visible then return end
 			rendering = true
 			local viewport = math.max(rowHeight, list.root.AbsoluteSize.Y)
 			local maxY = math.max(0, #list.items * rowHeight - viewport)
@@ -211,6 +211,7 @@ return function(env)
 			rendering = false
 		end
 		function list.set(items, preserve)
+			if not alive then return end
 			list.items = items or {}
 			measureItems()
 			list.selected = math.max(1, math.min(list.selected, #list.items))
@@ -219,6 +220,7 @@ return function(env)
 			render()
 		end
 		function list.move(delta)
+			if not alive then return end
 			list.selected = math.max(1, math.min(#list.items, list.selected + delta))
 			local item = list.items[list.selected]; list.selectedKey = item and key(item, list.selected)
 			local y = (list.selected - 1) * rowHeight
@@ -228,20 +230,30 @@ return function(env)
 			for _, row in ipairs(list.rows) do if row.index == list.selected and row.item then pcall(function() env.services.GuiService.SelectedObject = row.button.instance end) end end
 		end
 		function list.activate()
+			if not alive then return end
 			local item = list.items[list.selected]
 			if item and options.onSelect then options.onSelect(item, list.selected) end
 		end
 		function list.toggle(expand)
+			if not alive then return end
 			local item = list.items[list.selected]
 			if not item or not options.onToggle or not options.chevron then return end
 			local state = options.chevron(item)
 			if state and (expand == nil or (expand and state == "closed") or (not expand and state == "open")) then options.onToggle(item, list.selected) end
 		end
 		function list.focusKey(identity)
+			if not alive then return end
 			for index, item in ipairs(list.items) do if key(item, index) == identity then list.selected = index; list.move(0); return end end
 		end
-		list.root:GetPropertyChangedSignal("CanvasPosition"):Connect(render)
-		list.root:GetPropertyChangedSignal("AbsoluteSize"):Connect(render)
+		local moved = list.root:GetPropertyChangedSignal("CanvasPosition"):Connect(render)
+		local resized = list.root:GetPropertyChangedSignal("AbsoluteSize"):Connect(render)
+		list.root.Destroying:Connect(function()
+			-- Native destruction fires before descendants are removed. Geometry
+			-- changes during that removal must never create replacement rows.
+			alive, list.visible = false, false
+			moved:Disconnect(); resized:Disconnect()
+			list.items, list.rows, measurements = {}, {}, {}
+		end)
 		list.render = render
 		return list
 	end

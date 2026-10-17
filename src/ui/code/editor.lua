@@ -202,26 +202,28 @@ return function(env)
 			layingOut = false
 		end
 		local function queue()
+			if not handle.alive then return end
 			if not handle.visible then handle.needsLayout = true; return end
 			if pending then return end; pending = true
 			clock.delay(0.015, function() pending = false; if handle.alive and handle.visible then layout(); if handle.revealCursor then handle.revealCursor() end end end)
 		end
 		singleProbe:GetPropertyChangedSignal("TextBounds"):Connect(queue)
 		linesProbe:GetPropertyChangedSignal("TextBounds"):Connect(queue)
-		local syntaxGeneration, syntaxWorker = 0, nil
+		local syntaxGeneration = 0
 		local function checkSyntax()
+			if not handle.alive then return end
 			syntaxGeneration = syntaxGeneration + 1; local generation = syntaxGeneration
-			if syntaxWorker and task.cancel then pcall(task.cancel, syntaxWorker); syntaxWorker = nil end
 			if not handle.visible or not caps.exec then handle.syntax = "Syntax checking unavailable"; return end
 			handle.syntax = caps.exec and "Checking…" or "Syntax checking unavailable"
 			if options.onStatus then options.onStatus(handle.syntax) end
 			local revision, key = document and document.revision, document and document.id
-			syntaxWorker = clock.delay(0.5, function()
+			-- A host compiler may own a yielded native continuation. Invalidate the
+			-- result cooperatively; closing that thread can freeze the executor.
+			clock.delay(0.5, function()
 				if not handle.alive or generation ~= syntaxGeneration or not document or document.id ~= key or document.revision ~= revision then return end
 				local source = box.Text
 				local result = util.trim(source) == "" and { ok = true, text = "Empty document" } or execution.check(source)
 				if not handle.alive or generation ~= syntaxGeneration or not document or document.id ~= key or document.revision ~= revision then return end
-				syntaxWorker = nil
 				handle.syntax = result.ok and (source == "" and "Empty document" or "Syntax valid") or result.text
 				if not caps.exec then handle.syntax = "Syntax checking unavailable" end
 				if options.onStatus then options.onStatus(handle.syntax) end
@@ -404,19 +406,24 @@ return function(env)
 				box.CursorPosition, box.SelectionStart = math.min(cursor, #box.Text + 1), math.min(selection, #box.Text + 1); queue(); checkSyntax()
 			end
 		end)
-		function handle.destroy()
-			if not handle.alive then return end; saveView(); handle.alive = false; syntaxGeneration = syntaxGeneration + 1
+		local function cleanup()
+			if not handle.alive then return false end
+			saveView(); handle.alive, handle.visible = false, false; syntaxGeneration = syntaxGeneration + 1
 			sources.release(handle)
-			if syntaxWorker and task.cancel then pcall(task.cancel, syntaxWorker) end
-			blink:Disconnect(); findInput:Disconnect(); selectionEnded:Disconnect(); selectionFocusLost:Disconnect(); off(); root:Destroy()
+			blink:Disconnect(); findInput:Disconnect(); selectionEnded:Disconnect(); selectionFocusLost:Disconnect(); off()
+			return true
+		end
+		root.Destroying:Connect(cleanup)
+		function handle.destroy()
+			if cleanup() then root:Destroy() end
 		end
 		function handle.setVisible(visible)
-			if handle.visible == visible then return end
+			if not handle.alive or handle.visible == visible then return end
 			selectionPointer = nil
 			handle.visible = visible
 			pinSource()
 			if visible then handle.needsLayout = nil; layout(); checkSyntax()
-			else syntaxGeneration = syntaxGeneration + 1; if syntaxWorker and task.cancel then pcall(task.cancel, syntaxWorker); syntaxWorker = nil end; saveView(); caret.Visible = false; if focused then pcall(function() box:ReleaseFocus() end) end end
+			else syntaxGeneration = syntaxGeneration + 1; saveView(); caret.Visible = false; if focused then pcall(function() box:ReleaseFocus() end) end end
 		end
 		handle.select(store.active())
 		return handle

@@ -131,6 +131,7 @@ return function(env)
 	end
 
 	function M.mount()
+		if M.disposed or dispose.draining then return M end
 		if M.screen and M.screen.Parent then return M end
 
 		local container = parentGui()
@@ -152,6 +153,8 @@ return function(env)
 		screen.Parent = container
 		M.screen = screen
 		env.root = screen
+		local stopApp = dispose.add(function() M.disposed = true end, "app lifetime")
+		screen.Destroying:Connect(stopApp)
 
 		responsive.init(screen)
 		theme.rebuild()
@@ -180,9 +183,11 @@ return function(env)
 			end
 		end), "app.modeChanged")
 
-		dispose.add(theme.changed:connect(clock.debounce(function()
+		local rebuildForTheme, cancelThemeRebuild = clock.debounce(function()
 			M.rebuild("theme")
-		end, 0.2)), "app.themeChanged")
+		end, 0.2)
+		local stopTheme = theme.changed:connect(rebuildForTheme)
+		dispose.add(function() stopTheme(); cancelThemeRebuild() end, "app.themeChanged")
 
 		-- Two settings decide what a transcript row *shows* rather than how it looks, so
 		-- the theme's token list does not cover them and nothing else would notice they
@@ -196,13 +201,14 @@ return function(env)
 			["ui.showToolCode"] = true,
 			["ui.showActivity"] = true,
 		}
-		local rebuildForView = clock.debounce(function()
+		local rebuildForView, cancelViewRebuild = clock.debounce(function()
 			M.rebuild("view setting")
 		end, 0.2)
-		dispose.add(config.changed:connect(function(path)
+		local stopView = config.changed:connect(function(path)
 			if path == "ui.sidebarCollapsed" then M.layoutNavigation() end
 			if VIEW_KEYS[tostring(path)] then rebuildForView() end
-		end), "app.viewSettings")
+		end)
+		dispose.add(function() stopView(); cancelViewRebuild() end, "app.viewSettings")
 
 		-- Ctrl-comma opens the settings, which is the shortcut the profile menu
 		-- advertises. It is bound here because a menu that names a key it has not bound
@@ -1006,7 +1012,7 @@ return function(env)
 	end
 
 	function M.showPanel(id)
-		if not M.body then return end
+		if M.disposed or dispose.draining or not M.body then return end
 		if not BUILDERS[id] then id = "chat" end
 		for key, panel in pairs(M.panels or {}) do
 			if panel.root then panel.root.Visible = key == id end
@@ -1037,6 +1043,7 @@ return function(env)
 	end
 
 	function M.show(id)
+		if M.disposed or dispose.draining then return end
 		if not M.screen then M.mount() end
 		M.showPanel(id or M.panel)
 		M.window.show()
@@ -1633,7 +1640,7 @@ return function(env)
 	-- Cheap enough to be the answer to every discrete change, and it means no
 	-- component has to know how to re-theme itself in place.
 	function M.rebuild(reason)
-		if not M.screen then return end
+		if M.disposed or dispose.draining or not M.screen then return end
 		local wasVisible = M.window and M.window.visible
 		local panel = M.panel
 
@@ -1655,6 +1662,8 @@ return function(env)
 			M.launcher = nil
 		end
 
+		-- Panel cleanup can yield while saving. Unload may have completed meanwhile.
+		if M.disposed or dispose.draining then return end
 		M.panel = panel
 		M.buildLauncher()
 		M.buildWindow()
