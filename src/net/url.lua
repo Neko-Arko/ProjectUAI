@@ -81,6 +81,7 @@ return function(env)
 		local parsed = M.parse(raw)
 		local path = parsed and parsed.path:gsub("/+$", "") or ""
 		return path:match("/chat/completions$") ~= nil or path:match("/messages$") ~= nil or path:match("/responses$") ~= nil
+			or path:match("/models/[^/]+:generateContent$") ~= nil or path:match("/models/[^/]+:streamGenerateContent$") ~= nil
 	end
 
 	function M.endpoint(raw, suffix, extra)
@@ -88,6 +89,7 @@ return function(env)
 		local parsed = M.parse(base)
 		if not parsed then return base end
 		local path = parsed.path:gsub("/+$", ""):gsub("/chat/completions$", ""):gsub("/messages$", ""):gsub("/responses$", ""):gsub("/models$", "")
+		path = path:gsub("/models/[^/]+:generateContent$", ""):gsub("/models/[^/]+:streamGenerateContent$", "")
 		local query = {}
 		for part in tostring(parsed.query or ""):gmatch("[^&]+") do
 			local name = util.urlDecode(part:match("^([^=]*)") or "")

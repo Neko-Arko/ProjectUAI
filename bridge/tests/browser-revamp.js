@@ -8,6 +8,7 @@ const { once } = require('node:events');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const { startBridge, sleep } = require('./helpers/bridge');
 const { makePng } = require('./helpers/images');
+const { navigation } = require('./helpers/browser-ui');
 
 (async () => {
   const bridge = await startBridge();
@@ -47,10 +48,7 @@ const { makePng } = require('./helpers/images');
       fs.mkdirSync(process.env.UAI_SCREENSHOTS, { recursive: true });
       await page.screenshot({ path: path.join(process.env.UAI_SCREENSHOTS, name + '.png'), animations: 'disabled', fullPage: true });
     };
-    const navigate = async name => {
-      if (page.viewportSize().width <= 768 && await page.locator('#sidebarToggle').getAttribute('aria-expanded') !== 'true') await page.locator('#sidebarToggle').click();
-      await page.locator(`#sidebar [data-page="${name}"]`).first().click();
-    };
+    const { navigate, openSidebar } = navigation(page);
     const setTheme = async value => { await page.evaluate(mode => UAI.theme.set(mode), value); };
     const fit = async label => {
       const bounds = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth,
@@ -72,9 +70,9 @@ const { makePng } = require('./helpers/images');
     await page.locator('#app').waitFor({ state: 'visible' });
     assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
     await navigate('settings');
-    await page.getByLabel('Theme', { exact: true }).selectOption('game');
+    await page.locator('.theme-choice[data-theme-choice="game"]').click();
     assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue('--canvas')), '#111914');
-    await page.getByLabel('Theme', { exact: true }).selectOption('light');
+    await page.locator('.theme-choice[data-theme-choice="light"]').click();
     assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue('--canvas')), '');
     await navigate('cowork');
     await page.locator('#connectionGuide summary').click();
@@ -98,9 +96,18 @@ const { makePng } = require('./helpers/images');
     const image = makePng(96, 72);
     await page.locator('#pictureInput').setInputFiles(['one', 'two', 'three'].map(name => ({ name: name + '.png', mimeType: 'image/png', buffer: image })));
     await page.waitForFunction(() => document.querySelectorAll('.picture-card').length === 3);
+    const removedPicture = await page.getByRole('button', { name: 'Remove one.png', exact: true }).evaluate(node => node.closest('.picture-card').dataset.pictureId);
     await page.getByRole('button', { name: 'Remove one.png', exact: true }).click();
     await page.waitForFunction(() => document.querySelectorAll('.picture-card[data-status="staged"]').length === 2);
     assert.ok(uploadRequests >= 2); await page.unroute('**/api/pictures');
+    const lateCleanup = page.waitForResponse(response => response.url().endsWith('/api/pictures/' + removedPicture) && response.request().method() === 'DELETE');
+    await push({ events: [{ kind: 'bridge:picture', id: removedPicture, sessionId: 's1', status: 'staged', name: 'one.png',
+      bytes: image.length, mediaType: 'image/png', width: 96, height: 72, expiresAt: Date.now() + 900000 }] });
+    await lateCleanup;
+    assert.equal(await page.locator('.picture-card').count(), 2, 'late staging must not revive a removed picture');
+    await page.reload(); await page.locator('#app').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => document.querySelectorAll('.picture-card[data-status="staged"]').length === 2);
+    assert.equal(await page.getByRole('button', { name: 'Remove one.png', exact: true }).count(), 0, 'SSE replay after reload keeps dismissed pictures removed');
     await page.locator('#input').fill('Use the colors in these pictures for a quiet garden.');
     await screenshot('bridge-pictures-ready');
     await page.locator('#send').click();
@@ -225,9 +232,9 @@ const { makePng } = require('./helpers/images');
       await navigate('settings'); await fit('settings ' + width);
     }
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.locator('#sidebarToggle').click();
+    await openSidebar();
     assert.equal(await page.locator('#workspace').evaluate(node => node.inert), true);
-    await page.locator('#profile').focus(); await page.keyboard.press('Tab');
+    await page.locator('.sidebar-help').focus(); await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'closeSidebar');
     await screenshot('bridge-mobile-navigation');
     await page.keyboard.press('Escape');

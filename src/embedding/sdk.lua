@@ -33,7 +33,7 @@ return function(env)
 				or (options.onComplete ~= nil and type(options.onComplete) ~= "function") then
 				return nil, "request callbacks must be functions"
 			end
-			if pending[session] or session.busy or session.preparing then return nil, "already working" end
+			if pending[session] or session.busy or session.preparing or session.hasQueued and session.hasQueued() then return nil, "already working" end
 			local request = { status = "running", sessionId = session.id }
 			local completion = signal.new("sdk:completion")
 			local done, admitted, epoch, turn, cancelled, aborted, failure = false, false, nil, nil, false, false, nil
@@ -108,10 +108,10 @@ return function(env)
 			release = dispose.add(function()
 				if not done then session.abort(); finish("cancelled", "", "client unloaded") end
 			end, "embedding request")
-			local called, accepted, why = pcall(session.send, text, function(reply)
+			local called, accepted, why = pcall(session.send, text, function(reply, receipt)
 				if done then return end
-				if cancelled or aborted then finish("cancelled", reply, "aborted")
-				elseif failure then finish("failed", reply, failure)
+				if cancelled or aborted or receipt and receipt.status == "cancelled" then finish("cancelled", reply, receipt and receipt.reason or "aborted")
+				elseif failure or receipt and receipt.status == "failed" then finish("failed", reply, failure or "request failed")
 				elseif session.turns == turn and session.abortFlag then finish("cancelled", reply, "aborted")
 				else finish("succeeded", reply) end
 			end, options.files, options.images)

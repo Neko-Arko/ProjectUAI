@@ -30,6 +30,42 @@ async function run(t, handler, opts = {}) {
 const done = events => events.find(e => e.kind === 'inference:done');
 const deltas = events => events.filter(e => e.kind === 'inference:delta');
 
+test('Gemini projects text, thoughts and bounded calls while retaining exact signed parts', async t => {
+  const frames = [
+    { modelVersion: 'gemini-3.1-pro-preview', candidates: [{ content: { role: 'model', parts: [
+      { text: 'Checking the scene', thought: true, thoughtSignature: 'private-signature' }, { text: 'Ready' },
+      { functionCall: { name: 'inspect', args: { query: 'Workspace' } }, thoughtSignature: 'tool-signature' },
+      { inlineData: { mimeType: 'image/png', data: 'not-a-browser-preview' } },
+    ] } }] },
+    { candidates: [{ finishReason: 'STOP', content: { role: 'model', parts: [] } }], usageMetadata: { totalTokenCount: 100 } },
+  ];
+  const raw = frames.map(frame => 'data: ' + JSON.stringify(frame) + '\n\n').join('');
+  const { events, view, relay } = await run(t, (req, res) => {
+    res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end(raw);
+  });
+  assert.equal(view.state, 'completed'); assert.equal(view.body, raw);
+  assert.deepEqual(deltas(events).map(e => [e.channel, e.text]), [
+    ['reasoning', 'Checking the scene'], ['text', 'Ready'], ['tool', { name: 'inspect', argsDelta: '{"query":"Workspace"}' }],
+  ]);
+  assert.equal(deltas(events)[0].model, 'gemini-3.1-pro-preview');
+  assert.deepEqual(deltas(relay.previews('s1')), deltas(events));
+  assert.doesNotMatch(JSON.stringify(events), /signature|not-a-browser-preview/i);
+});
+
+test('Gemini blocked prompts reach the native adapter and truncated streams fail', async t => {
+  const blocked = 'data: {"promptFeedback":{"blockReason":"SAFETY"},"modelVersion":"gemini-fixture"}\n\n';
+  const result = await run(t, (req, res) => {
+    res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end(blocked);
+  });
+  assert.equal(result.view.state, 'completed'); assert.equal(result.view.body, blocked);
+  assert.deepEqual(deltas(result.events), []);
+  const truncated = await run(t, (req, res) => {
+    res.writeHead(200, { 'content-type': 'text/event-stream' });
+    res.end('data: {"candidates":[{"content":{"parts":[{"text":"partial"}]}}]}\n\n');
+  });
+  assert.equal(truncated.view.state, 'failed'); assert.match(truncated.view.error, /before completion/);
+});
+
 test('frame 1 is delivered to the browser before inference:done', async t => {
   const { events, view } = await run(t, (req, res) => {
     res.writeHead(200, { 'content-type': 'text/event-stream' });

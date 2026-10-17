@@ -26,7 +26,7 @@ return function(env)
 	local M = { running = false, online = false, lastError = nil, changed = signal.new("bridge") }
 	local clientId = env.services.HttpService:GenerateGUID(false)
 	local alive, generation = false, 0
-	local opencode, nextHello = nil, 0
+	local opencode, nextHello, bridgeInstance = nil, 0, nil
 	local opencodeModels = {}
 	local uploadFailed, pollFailed = false, false
 	local function syncRuntime()
@@ -51,6 +51,7 @@ return function(env)
 		["tool:error"] = true,
 		["tool:progress"] = true,
 		["status"] = true,
+		["model:route"] = true,
 		["error"] = true,
 		["abort"] = true,
 		["cleared"] = true,
@@ -195,18 +196,31 @@ return function(env)
 
 	local function runCommand(command)
 		if type(command) ~= "table" then return end
+		if type(command.type) == "string" and command.type:sub(1, 4) == "mcp:" then
+			return env.require("net/mcp").run(command)
+		end
 		local sessions = env.require("agent/session")
 		local kind = tostring(command.type or "")
 		local session = command.sessionId and sessions.threads[command.sessionId] or sessions.current()
 		if not session then error("Conversation no longer exists", 0) end
 
 		if kind == "send" then
-			local ok, why = session.send(tostring(command.text or ""), nil, command.files, command.images)
-			-- A refusal has to travel back, or the browser shows a message it sent and
-			-- then nothing at all. session.send declines while a turn is in flight.
+			local ok, why = session.send(tostring(command.text or ""), nil, command.files, command.images,
+				{ messageId = command.commandId })
+			-- Admission can queue a follow-up. Preserve the receipt across retries;
+			-- refusals must reach the composer so its draft is retained.
 			if not ok then
 				error(tostring(why or "could not send"), 0)
 			end
+			return why
+		elseif kind == "queue:remove" then
+			local ok, why = session.removeQueued(tostring(command.messageId or ""))
+			if not ok then error(tostring(why), 0) end
+			return session.queueSnapshot()
+		elseif kind == "queue:resume" then
+			local ok, why = session.resumeQueue()
+			if not ok then error(tostring(why), 0) end
+			return session.queueSnapshot()
 		elseif kind == "abort" then
 			session.abort()
 		elseif kind == "clear" then
@@ -296,6 +310,7 @@ return function(env)
 		local sessions = env.require("agent/session")
 		local providers = env.require("provider/registry")
 		local models = env.require("provider/models")
+		local metadata = env.require("net/bridge_metadata")
 		local registry = env.require("agent/registry")
 		local subagents = env.require("agent/subagent")
 		local usage = env.require("agent/usage")
@@ -306,11 +321,14 @@ return function(env)
 
 		local threads = {}
 		for _, session in ipairs(sessions.list()) do
+			local pending = session.queueSnapshot()
 			threads[#threads + 1] = {
 				id = session.id,
 				title = session.title,
 				place = session.placeName,
 				busy = session.busy == true,
+				queuedCount = pending.count,
+				queueHeld = pending.held,
 				turns = session.turns or 0,
 				updatedAt = session.updatedAt or 0,
 				active = session.id == sessions.activeId,
@@ -321,6 +339,12 @@ return function(env)
 		local providerList = {}
 		for _, record in ipairs(providers.list()) do
 			local health = record.health or {}
+			local ids, freeModels, modelInfo = models.list(record), {}, {}
+			for _, id in ipairs(ids) do
+				if models.isFree(record, id) then freeModels[#freeModels + 1] = id end
+				modelInfo[id] = metadata.model(record, id)
+			end
+			if record.model and not modelInfo[record.model] then modelInfo[record.model] = metadata.model(record) end
 			providerList[#providerList + 1] = {
 				id = record.id,
 				label = record.label,
@@ -330,7 +354,11 @@ return function(env)
 				preset = record.preset,
 				hasKey = util.trim(record.apiKey or "") ~= "",
 				model = record.model,
-				models = models.list(record),
+				models = ids,
+				modelInfo = modelInfo,
+				freeModels = freeModels,
+				free = models.isFree(record, record.model),
+				freeRoute = env.require("provider/free_route").status(record),
 				enabled = record.enabled ~= false,
 				health = {
 					ok = health.ok or 0,
@@ -341,31 +369,64 @@ return function(env)
 			}
 		end
 
-		local tools = {}
+		local tools, schemas = {}, {}
+		for _, definition in ipairs(registry.definitions()) do
+			schemas[definition["function"].name] = definition["function"].parameters
+		end
 		for _, tool in ipairs(registry.list()) do
 			tools[#tools + 1] = {
 				name = tool.name,
 				group = tool.group,
 				description = tool.description,
 				risk = tool.risk or "write",
-				parameters = tool.parameters,
+				parameters = schemas[tool.name] or tool.parameters,
 				available = registry.missingCapability(tool) == nil,
 				enabled = registry.groupEnabled(tool.group),
 				rule = permissions.ruleFor(tool.name) or "default",
+				effectiveRule = permissions.check(tool),
 			}
 		end
 
 		local subs = {}
 		for _, record in ipairs(subagents.list()) do
+			local live = record.status == "running" or record.status == "queued"
+			local access = {}
+			for group in pairs(subagents.PRESETS[record.preset] or {}) do access[#access + 1] = registry.groupLabel(group) end
+			table.sort(access)
+			local activity, chosen = {}, {}
+			local function addActivity(item)
+				if #activity >= 12 or chosen[item] then return end
+				chosen[item] = true
+				activity[#activity + 1] = { index = item.index, name = util.ellipsis(item.name or "Tool", 120), done = item.done == true,
+					ok = item.ok, interrupted = item.interrupted == true, ms = item.ms,
+					progress = item.progress and util.ellipsis(item.progress, 400), summary = item.summary and util.ellipsis(item.summary, 600) }
+			end
+			for _, item in ipairs(record.activity or {}) do if not item.done then addActivity(item) end end
+			for index = #(record.activity or {}), 1, -1 do addActivity(record.activity[index]) end
+			table.sort(activity, function(a, b) return (a.index or 0) < (b.index or 0) end)
+			local preview = record.preview
 			subs[#subs + 1] = {
 				id = record.id,
 				label = record.label,
-				task = record.task,
+				task = util.ellipsis(record.task or "", 2000), currentTask = record.currentTask and util.ellipsis(record.currentTask, 2000),
 				preset = record.preset,
+				toolAccess = subagents.PRESETS[record.preset] == nil and "Every available tool" or table.concat(access, ", "),
 				status = record.status,
 				ms = record.ms,
 				messages = record.messages,
-				report = record.report and util.ellipsis(record.report, 600) or nil,
+				report = record.report and util.ellipsis(record.report, 12000) or nil, reportExcerpt = record.report and #record.report > 12000 or false,
+				provider = record.provider, model = record.model, parentTitle = record.parentTitle,
+				elapsedMs = live and clock.since(record.startedAt or clock.ms()) or (record.ms or 0),
+				stopping = record.stopping == true, runs = record.runs or 1, canFollowup = not live and record.session ~= nil,
+				calls = math.max(0, (record.calls or 0) - (record.runCallBase or 0)), finishedCalls = math.max(0, (record.finishedCalls or 0) - (record.runFinishedBase or 0)),
+				currentTool = record.currentTool, statusText = record.statusText and util.ellipsis(record.statusText, 240),
+				latestText = record.latestText and util.ellipsis(record.latestText, 8000), latestReasoning = record.latestReasoning and util.ellipsis(record.latestReasoning, 4000),
+				textExcerpt = record.textExcerpt == true or record.latestText ~= nil and #record.latestText > 8000,
+				reasoningExcerpt = record.reasoningExcerpt == true or record.latestReasoning ~= nil and #record.latestReasoning > 4000,
+				preview = preview and { text = util.ellipsis(preview.text or "", 4000), reasoning = util.ellipsis(preview.reasoning or "", 2000),
+					limited = preview.limited == true, textExcerpt = preview.textExcerpt == true or #(preview.text or "") > 4000,
+					reasoningExcerpt = preview.reasoningExcerpt == true or #(preview.reasoning or "") > 2000 } or nil,
+				activity = activity, activityOmitted = math.max(0, #(record.activity or {}) - #activity),
 			}
 		end
 
@@ -404,6 +465,7 @@ return function(env)
 
 		return {
 			protocol = 2,
+			mcp = { schema = 1, available = true },
 			imageInput = true,
 			attachments = { inlineLimit = env.require("runtime/attachments").INLINE_LIMIT,
 				maxBytes = env.require("runtime/attachments").MAX_BYTES, available = caps.fs },
@@ -423,6 +485,8 @@ return function(env)
 				provider = activeRecord and activeRecord.label or nil,
 				model = activeRecord and activeRecord.model or nil,
 			},
+			context = metadata.context(current, activeRecord),
+			queue = current.queueSnapshot(),
 			usage = {
 				prompt = usage.session.prompt,
 				completion = usage.session.completion,
@@ -530,6 +594,18 @@ return function(env)
 				if not alive or mine ~= generation then return end
 				local info = hello and hello.ok and #hello.body <= 16384 and util.decode(hello.body)
 				local capabilities = type(info) == "table" and info.protocol == 2 and info.capabilities
+				local instance = type(info) == "table" and info.protocol == 2 and info.instance
+				if type(instance) == "string" and #instance > 0 and #instance <= 160 then
+					if bridgeInstance and bridgeInstance ~= instance then
+						local mcp = env.loadedModules and env.loadedModules["net/mcp"]
+						if mcp then mcp.clear() end
+						-- Automatic worker updates keep manual credentials. A new worker
+						-- still needs a complete state, without resending any user action.
+						lastStateJson, lastStateAt = nil, 0
+						snapshotPending = snapshotOf(attach())
+					end
+					bridgeInstance = instance
+				end
 				local inbox = type(capabilities) == "table" and capabilities.agentInbox
 				if mobile and type(inbox) == "table" and inbox.waitHeader == "X-UAI-Poll-Wait-Ms" then timeout = 5 end
 				local backend = type(capabilities) == "table" and capabilities.opencode
@@ -610,10 +686,13 @@ return function(env)
 
 	local function shutdown()
 		generation = generation + 1
+		local mcp = env.loadedModules and env.loadedModules["net/mcp"]
+		if mcp then mcp.clear() end
 		alive = false
 		M.running = false
 		M.online = false
 		opencode, nextHello = nil, 0
+		bridgeInstance = nil
 		opencodeModels = {}
 		syncRuntime()
 		if detach then pcall(detach) end

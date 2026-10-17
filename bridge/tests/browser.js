@@ -6,6 +6,7 @@ const {spawn}=require('node:child_process');
 const http=require('node:http');
 const {once}=require('node:events');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const {navigation}=require('./helpers/browser-ui');
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 (async()=>{
   const reserve=http.createServer();reserve.listen(0,'127.0.0.1');await once(reserve,'listening');const port=reserve.address().port;await new Promise(r=>reserve.close(r));
@@ -25,7 +26,8 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
     browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1280,height:800}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(base+'/#t='+token);await page.locator('#app').waitFor({state:'visible'});await page.waitForFunction(()=>document.querySelector('#modelLabel').textContent==='test-model');
     await page.locator('.starter').first().click();assert.match(await page.locator('#input').inputValue(),/Explore this game/);
-    for(const name of ['providers','tools','agents','loops','logs','settings','cowork','chat']){await page.locator(`#sidebar [data-page="${name}"]`).first().click();await sleep(30);}
+    const {navigate}=navigation(page);
+    for(const name of ['providers','tools','agents','loops','logs','settings','cowork','chat']){await navigate(name);await sleep(30);}
     await page.locator('#modelButton').click();assert.equal(await page.locator('#modal .model-list button').count(),2);await page.locator('#modalClose').click();
     upstream=http.createServer((req,res)=>{res.writeHead(200,{'content-type':'text/event-stream'});res.write('data: {"choices":[{"delta":{"content":"Real streaming "}}]}\n\n');setTimeout(()=>res.end('data: {"choices":[{"delta":{"content":"works."}}]}\n\ndata: [DONE]\n\n'),300);});
     upstream.listen(0,'127.0.0.1');await once(upstream,'listening');

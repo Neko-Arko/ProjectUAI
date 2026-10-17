@@ -12,11 +12,11 @@ return function(env)
 		{
 			name = "scripting_docs",
 			risk = "read",
-			description = "Read the bundled guide for developing Roblox scripts quickly with UAI. Start with quickstart, then only task-relevant sections: paths/tool arguments, inspection/decompilation, Luau, execution/cleanup, UI scripts, debugging, projects, editor/actions and verification. Reuse retained sections. No network, filesystem access or execution required.",
+			description = "Read the offline guide to the live Roblox environment and script development. Start with quickstart; select environment/capabilities, native workflows, shared state/concurrency, executor APIs with sUNC references, paths, inspection, Luau, cleanup, UI, debugging, projects, editor or verification as needed. Reuse retained sections. No network, filesystem access or execution required.",
 			parameters = {
 				type = "object",
 				properties = {
-					section = { type = "string", enum = { "index", "quickstart", "task_routing", "paths_and_tool_calls", "inspection", "luau", "execution_and_cleanup", "ui_scripts", "debugging", "projects", "editor_and_actions", "verification", "tool_reference", "maintaining_the_guide" }, description = "index lists topics; quickstart supplies the short normal workflow. Read other sections only as needed." },
+					section = { type = "string", enum = { "index", "quickstart", "environment_model", "capabilities_and_permissions", "task_routing", "paths_and_tool_calls", "inspection", "native_workflows", "shared_state_and_concurrency", "luau", "executor_apis", "execution_and_cleanup", "ui_scripts", "debugging", "projects", "editor_and_actions", "verification", "tool_reference", "maintaining_the_guide" }, description = "index lists topics; quickstart supplies the normal workflow. Read relevant sections and their continuations, not the whole guide as setup." },
 					offset = { type = "integer", minimum = 1, description = "Continue the same section from the returned nextOffset until eof." },
 					limit = { type = "integer", minimum = 256, maximum = 16000, description = "Bytes in this page, also bounded by the result budget. Default 3500." },
 				},
@@ -26,7 +26,7 @@ return function(env)
 				local docs = env.require("runtime/script_development_docs")
 				local section = args.section or "index"
 				if section == "index" then
-					local rows = { "Project UAI scripting guide", "Guide: " .. docs.url,
+					local rows = { "Project UAI environment and scripting guide", "Guide: " .. docs.url,
 						"Read quickstart once, then select only sections needed for this task. Reuse retained instructions.", "Sections:" }
 					for _, key in ipairs(docs.order) do rows[#rows + 1] = key .. " - " .. docs.titles[key] end
 					rows[#rows + 1] = "Pages use one-based UTF-8 byte offsets. Continue with nextOffset as offset until eof; do not read all topics by default."

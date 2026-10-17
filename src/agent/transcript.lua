@@ -19,6 +19,7 @@ return function(env)
 		["subagent:text"] = "activity", ["subagent:tool"] = "activity",
 		["subagent:tool:done"] = "activity", ["request:retry"] = "activity",
 		["provider:switch"] = "activity",
+		["model:route"] = "activity",
 	}
 	M.limits = { events = 896, bytes = 1572864, field = FIELD_CAP, budgets = BUDGETS }
 	function M.durable(kind) return KINDS[kind] ~= nil end

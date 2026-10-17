@@ -8,7 +8,7 @@ function stored(storage,key){try{return window[storage].getItem(key);}catch{retu
 const fromHash=location.hash.match(/(?:#|&)t=([a-f0-9]{64})(?:$|&)/i);
 let token=fromHash?.[1]?.toLowerCase()||stored('sessionStorage','uai.token')||stored('localStorage','uai.token')||'';
 if(fromHash)history.replaceState(null,'',location.pathname);
-let state={},bridgeUpdate={},page='chat',stream,busy=false,connected=false,sending=false,sessionId=null,events=[],uploads=[],instance=stored('sessionStorage','uai.instance');
+let state={},bridgeUpdate={},page='chat',stream,busy=false,connected=false,sending=false,stopping=false,sessionId=null,events=[],uploads=[],instance=stored('sessionStorage','uai.instance');
 let drafts={};try{const value=JSON.parse(stored('sessionStorage','uai.drafts')||'{}');if(value&&typeof value==='object'&&!Array.isArray(value))drafts=value;}catch{}
 const tools=new Map(),dirtyDrafts=new Set();
 let toastTimer,draftTimer,storageWarning=false,renderingSnapshot=false,eventBytes=0,sendOperation=null,connectionRetry,readingFiles=0,modalRefresh=null,panelRefreshPending=false,panelPointerActive=false,panelPointerTimer;
@@ -70,6 +70,7 @@ function action(type,fields){return command(type,fields).catch(err=>toast(err.me
 let modalContext=null,modalCloseTimer,modalBackdropStart=false;
 function modal(title,build,options={}){
   const dialog=$('modal'),previous=modalContext;
+  previous?.cleanup?.();
   clearTimeout(modalCloseTimer);dialog.classList.remove('closing');
   // Replacing a dialog retains the original invoker, never a removed child.
   modalContext={opener:previous?.opener||document.activeElement,pending:false,closing:false};
@@ -118,6 +119,7 @@ function outsideModal(event){const r=$('modal').getBoundingClientRect();return e
 $('modal').addEventListener('close',()=>{
   if($('modal').open)return;
   const context=modalContext;modalContext=null;modalRefresh=null;$('modalNotice').textContent='';
+  context?.cleanup?.();
   queueMicrotask(()=>{if($('modal').open||modalContext)return;flushPanelRefresh();if(context?.restore===false)return;
     const opener=context?.opener,key=opener?.dataset?.focusKey,replacement=key&&[...document.querySelectorAll('[data-focus-key]')].find(n=>n.dataset.focusKey===key);
     const target=$('app').hidden?$('gate-token'):(opener?.isConnected?opener:replacement);
@@ -190,9 +192,11 @@ function picturesBusy(){return !!(window.UAI&&UAI.pictures&&UAI.pictures.busy())
 function setBusy(value){busy=!!value;refresh();}
 function refresh(){
   const generating=busy;
-  $('stop').hidden=!generating;$('send').hidden=generating;
-  $('stop').disabled=sendPhase==='stopping'||!connected;
-  const blocked=sending||sendPhase!=='idle'||readingFiles>0||draftLoads.has(sessionId)||!connected||picturesBusy()||UAI.pictures?.hasErrors();
+  const canQueue=!!state.queue,queueing=canQueue&&(generating||state.queue.count>0);
+  $('stop').hidden=!generating;$('send').hidden=generating&&!canQueue;
+  $('send').title=queueing?'Queue follow-up':'Send message';$('send').setAttribute('aria-label',$('send').title);
+  $('stop').disabled=stopping||!connected;
+  const blocked=stopping||sending||sendPhase!=='idle'||readingFiles>0||draftLoads.has(sessionId)||!connected||picturesBusy()||UAI.pictures?.hasErrors()||canQueue&&state.queue.count>=state.queue.limit;
   $('send').disabled=blocked||!hasContent();
   $('attachPictures').hidden=!UAI.pictures?.enabled();
   $('transcript').setAttribute('aria-busy',String(generating||sendPhase!=='idle'));
@@ -202,11 +206,12 @@ function refresh(){
   $('localConnection').textContent=link==='online'?'Connected locally':'Draft kept here';
   $('connectionBanner').hidden=connected||page==='cowork';
   $('connectionMessage').textContent=link==='online'?'One last step: connect Roblox to this bridge.':'Connection interrupted. Keep the bridge terminal open; your draft is safe here.';
-  $('composerHint').textContent=UAI.pictures?.hasErrors()?'Retry or remove the picture that could not be attached.':picturesBusy()?'Preparing images…':readingFiles?'Reading attached files…':draftLoads.has(sessionId)?'Restoring your draft…':sendPhase!=='idle'?(OP_LABEL[sendPhase]||'Working…'):'Enter to send · Shift+Enter for a new line';
+  $('composerHint').textContent=UAI.pictures?.hasErrors()?'Retry or remove the picture that could not be attached.':picturesBusy()?'Preparing images…':readingFiles?'Reading attached files…':draftLoads.has(sessionId)?'Restoring your draft…':stopping?'Stopping the current turn…':sendPhase!=='idle'?(OP_LABEL[sendPhase]||'Working…'):queueing?'Enter to queue a follow-up · Stop ends the current turn':'Enter to send · Shift+Enter for a new line';
   $('deliveryNotice').hidden=sendPhase!=='uncertain';
   $('deliveryMessage').textContent=sendOperation?.lost?'Delivery could not be confirmed. Review your conversation before sending again.':'Still waiting for a delivery receipt. Your draft is safe.';
   $('deliveryReview').hidden=!sendOperation?.lost;
-  if(sendPhase!=='idle')announce(OP_LABEL[sendPhase]||'Working…');
+  if(stopping)announce('Stopping the current turn…');
+  else if(sendPhase!=='idle')announce(OP_LABEL[sendPhase]||'Working…');
   else if(link==='offline'||link==='disconnected')announce('Bridge reconnecting…');
   else if(!connected)announce('Game offline');
   else announce(state.agent?.status||'Ready');
@@ -236,23 +241,51 @@ function armButton(btn,confirmLabel,fn){
   };
 }
 function stick(){const t=$('transcript');return t.scrollHeight-t.scrollTop-t.clientHeight<120;}
-function append(node){const pinned=!renderingSnapshot&&stick();const root=$('transcript');root.querySelector('.welcome')?.remove();root.append(node);while(root.children.length>450){const old=root.firstElementChild;if(old.contains(document.activeElement))break;old.remove();}if(pinned)scrollToEnd();}
-function message(who,text,model){const node=el('article','message '+who),byline=el('div','byline');byline.append(el('span',null,who==='user'?(state.player||'You'):'Assistant'),el('small','message-model',model||''));const body=el('div','body');if(who==='user')body.textContent=text;else body.innerHTML=md(text);node.append(byline,body);const result={node,body};if(who==='user')decorateMessage(result,text);append(node);return result;}
+let composerMotion,composerFrame;
+const composerReducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+composerReducedMotion.addEventListener('change',()=>{if(composerReducedMotion.matches){composerMotion?.cancel();cancelAnimationFrame(composerFrame);}});
+function chatLayout(empty){
+  const next=empty?'empty':'thread',previous=document.body.dataset.chat;
+  if(previous===next)return;
+  const composer=$('composer'),animate=previous&&!renderingSnapshot&&page==='chat'&&!$('app').hidden&&!composerReducedMotion.matches;
+  const before=animate?composer.getBoundingClientRect():null;
+  composerMotion?.cancel();cancelAnimationFrame(composerFrame);document.body.dataset.chat=next;$('suggestions').hidden=!empty;
+  if(before){
+    // Measure after the welcome/message DOM has reached its new layout.
+    composerFrame=requestAnimationFrame(()=>{
+      if(page!=='chat'||$('app').hidden||composerReducedMotion.matches)return;
+      const after=composer.getBoundingClientRect(),distance=before.top-after.top;
+      if(Math.abs(distance)>2)composerMotion=composer.animate([{transform:`translateY(${distance}px)`},{transform:'translateY(0)'}],{duration:460,easing:'cubic-bezier(.22,1,.36,1)'});
+    });
+  }
+}
+function append(node){const pinned=!renderingSnapshot&&stick();const root=$('transcript');chatLayout(false);root.querySelector('.welcome')?.remove();if(renderingSnapshot)node.classList.add('restored');root.append(node);while(root.children.length>450){const old=root.firstElementChild;if(old.contains(document.activeElement))break;old.remove();}if(pinned)scrollToEnd();}
+function message(who,text,model){
+  const node=el('article','message '+who),byline=el('div','byline');
+  if(who==='agent'){const mark=el('span','answer-mark');mark.setAttribute('aria-hidden','true');byline.append(mark);}
+  byline.append(el('span','message-author',who==='user'?(state.player||'You'):'Cowork'),el('small','message-model',model||''));
+  const body=el('div','body');if(who==='user')body.textContent=text;else body.innerHTML=md(text);node.append(byline,body);
+  const result={node,body};if(who==='user')decorateMessage(result,text);append(node);return result;
+}
 function decorateMessage(message,text,model){
   message.node._uaiText=text;
   if(model)message.node.querySelector('.message-model').textContent=model;
   if(message.node.querySelector('.message-actions'))return;
-  const actions=el('span','message-actions'),copy=button('',()=>copyText(message.node._uaiText),'icon-button');copy.append(icon('copy'));copy.title='Copy message';copy.setAttribute('aria-label','Copy message');actions.append(copy);message.node.querySelector('.byline').append(actions);
+  const actions=el('span','message-actions'),copy=button('',()=>copyText(message.node._uaiText),'icon-button');copy.append(icon('copy'));copy.title='Copy message';copy.setAttribute('aria-label','Copy message');actions.append(copy);
+  if(message.node.classList.contains('agent')){const footer=el('div','message-footer');copy.append(el('span',null,'Copy'));footer.append(actions);message.node.append(footer);}
+  else message.node.querySelector('.byline').append(actions);
 }
 function welcome(){
-  if(events.some(e=>e.kind==='user'||e.kind==='assistant:text')||[...$('transcript').children].some(node=>!node.classList.contains('welcome')))return;
+  const empty=!busy&&!state.queue?.count&&!events.some(e=>e.kind==='user'||e.kind==='assistant:text')&&![...$('transcript').children].some(node=>!node.classList.contains('welcome'));
+  chatLayout(empty);if(!empty){$('transcript').querySelector('.welcome')?.remove();return;}
   const signature=JSON.stringify([state.player,state.place?.name,state.providers?.length,connected]);
   const previous=$('transcript').querySelector('.welcome');if(previous?.dataset.signature===signature||previous?.contains(document.activeElement))return;
   const node=el('section','welcome');
   node.dataset.signature=signature;
-  node.append(el('p','welcome-greeting',state.player?'Hello, '+state.player+'.':'Your workspace is ready.'),el('h1',null,'What are we working on?'),el('p','welcome-lead','Start with an idea. Work through the details together.'));
+  node.append(el('p','welcome-greeting',state.player?'Hello, '+state.player+'.':'A little space for your next idea.'),el('h1',null,"What's on your mind?"));
   if(state.place?.name){const context=el('div','welcome-context');context.append(el('span','status-dot'),el('span',null,state.place.name));node.append(context);}
-  const grid=el('div','starters');starters.forEach(([title,detail,prompt])=>{const item=button('',()=>insert(prompt),'starter'),copy=el('span');copy.append(el('strong',null,title),el('small',null,detail));item.append(copy);grid.append(item);});node.append(grid);
+  const suggestions=$('suggestions');
+  if(!suggestions.children.length)starters.forEach(([title,detail,prompt],index)=>{const item=button('',()=>insert(prompt),'starter');item.title=prompt;item.append(icon(['explore','spark','activity','player'][index]),el('span',null,title));suggestions.append(item);});
   if(!connected)node.append(button('Connect Roblox to get started',()=>show('cowork'),'welcome-action'));
   else if(!state.providers?.length)node.append(button('Add a provider to get started',()=>providerEditor(),'welcome-action'));
   $('transcript').replaceChildren(node);
@@ -260,7 +293,6 @@ function welcome(){
 const starters=[['Explore this game','Find your bearings in the world.','Explore this game. Inspect the workspace and tell me what is here, how it is organised, and what we could do next.'],['Create something','Turn an idea into a working script.','Help me build a Luau script for this game. First inspect the relevant game context, then ask what I would like to create.'],['Check performance','Understand FPS, memory, and latency.','Check client performance, memory usage, and network latency. Explain the results and suggest practical improvements.'],['Inspect my character',"See your character’s current state.",'Inspect my character and explain its position, humanoid state, and any useful attributes or attached scripts.']];
 function insert(text){show('chat');$('input').value+=($('input').value?'\n\n':'')+text;grow();$('input').focus();}
 function metric(value,label){const n=el('div');n.append(el('strong',null,typeof value==='number'?value.toLocaleString():value),el('small',null,label));return n;}
-function thinking(text){const node=el('details','thinking');node.append(el('summary',null,'Thinking'));const body=el('div','body');body.innerHTML=md(text);node.append(body);append(node);return body;}
 function deadlineHelp(root,message,status){
   if(root.querySelector('.deadline-help'))return;
   const link=el('a','deadline-help','Get help and updates on Discord');link.href='https://discord.gg/9xYyyYuKap';link.target='_blank';link.rel='noopener noreferrer';root.append(link);
@@ -274,6 +306,7 @@ function codeListing(text,label){
 }
 function openTool(e){
   const wrapper=el('section','tool-call'),node=el('details','tool'),head=el('summary');
+  node.dataset.status='running';
   const raw=typeof e.arguments==='string'?e.arguments:JSON.stringify(e.arguments||{});
   let args;try{args=JSON.parse(raw);}catch{}
   const preview=el('span','arguments',args?.path||args?.query||args?.url||raw);
@@ -304,7 +337,7 @@ function renderEvent(e){
   if(e.sessionId&&sessionId&&e.sessionId!==sessionId)return;
   const pinned=!renderingSnapshot&&stick();
   switch(e.kind){
-    case 'user':{const m=message('user',e.text||'');if(window.UAI&&UAI.pictures)UAI.pictures.correlateUser(m,e);break;}
+    case 'user':{const m=message('user',e.text||'');renderer.anchorUser(e,m.node);if(window.UAI&&UAI.pictures)UAI.pictures.correlateUser(m,e);break;}
     case 'assistant:text':renderer.commitText(e);break;
     case 'assistant:reasoning':renderer.commitReasoning(e);break;
     case 'tool:call':case 'subagent:tool':openTool(e);break;
@@ -316,6 +349,7 @@ function renderEvent(e){
     case 'turn:end':case 'abort':if(sendOperation&&sendOperation.sessionId===sessionId)sendOperation.sawTurn=true;clearTimeout(awaitTurnTimer);if(sendPhase!=='uncertain')sendPhase='idle';renderer.endTurn(sessionId,e.kind==='abort');setBusy(false);break;
     case 'cleared':events=[];renderer.reset();tools.clear();if(window.UAI&&UAI.pictures)UAI.pictures.clearSession(sessionId);$('transcript').replaceChildren();welcome();break;
     case 'provider:switch':append(el('div','note','Switched provider to '+e.to));break;
+    case 'model:route':append(el('div','note',e.text||('Automatic free routing selected '+e.model+'. Turn it off in Settings → Agent → Automatic free routing.')));break;
     case 'request:retry':append(el('div','note',`Retrying ${e.provider||'provider'} · ${e.reason||''}`));break;
     case 'subagent:start':append(el('div','note','Subagent · '+(e.task||e.label||'')));break;
     case 'subagent:done':append(el('div','note','Subagent finished · '+(e.label||'')));break;
@@ -337,7 +371,6 @@ function resendLast(target){
 const renderer=window.UAIStreamRenderer.create({
   md, escape:UAIMarkdown.escape,
   createAgentMessage:model=>message('agent','',model),
-  createThinking:text=>thinking(text||''),
   getSession:()=>sessionId,
   defaultModel:()=>state.agent?.model,
   isPinned:stick,
@@ -365,12 +398,12 @@ function apply(e){
   if(e.kind==='bridge:state'){
     const next=e.state||{};changeSession(next.sessionId);state=next;renderState();
     if(!state.agent?.busy)for(const row of tools.values())if(row.restored){
-      row.restored=false;row.verdict.textContent='No saved result';
+      row.restored=false;row.node.dataset.status='unknown';row.verdict.textContent='No saved result';
       row.staleNote=el('p','muted','No result was kept in this transcript.');row.body.append(row.staleNote);
     }
     return;
   }
-  if(e.kind==='bridge:game'){const changed=connected!==!!e.connected;connected=!!e.connected;setBusy(state.agent?.busy);welcome();if(changed&&page==='cowork')requestPanelRefresh();return;}
+  if(e.kind==='bridge:game'){const changed=connected!==!!e.connected;connected=!!e.connected;setBusy(state.agent?.busy);renderQueue();welcome();if(changed&&page==='cowork')requestPanelRefresh();return;}
   if(e.kind==='inference:start'){renderer.start(e);return;}
   if(e.kind==='inference:delta'){renderer.delta(e);return;}
   if(e.kind==='inference:done'){renderer.done(e);return;}
@@ -408,15 +441,34 @@ function applyTheme(colors){
 function renderState(){
   applyTheme(state.theme||{});
   const ui=state.settings?.ui||{};
-  document.documentElement.style.setProperty('--reading',({narrow:'640px',medium:'780px',wide:'920px'})[ui.transcriptWidth]||'860px');
-  document.documentElement.style.setProperty('--chat-font-size',(14*Math.max(.85,Math.min(1.4,ui.fontScale||1)))+'px');
+  document.documentElement.style.setProperty('--reading',({narrow:'640px',medium:'780px',wide:'920px'})[ui.transcriptWidth]||'780px');
+  document.documentElement.style.setProperty('--chat-font-size',(16*Math.max(.85,Math.min(1.4,ui.fontScale||1)))+'px');
   document.body.dataset.reasoning=ui.showReasoning===false?'hidden':'visible';document.body.dataset.density=ui.density||'comfortable';document.body.dataset.codeTheme=ui.codeTheme||UAI.theme.resolved();
   $('playerName').textContent=state.player||'you';$('providerName').textContent=state.agent?.provider||'No provider connected';$('modelLabel').textContent=state.agent?.model||'Select model';$('runtimeBadge').textContent=state.runtime==='web'?'Web · streaming':'Game runtime';
   $('modelButton').setAttribute('aria-label',state.agent?.model?'Select model, current model '+state.agent.model:'Select model');
+  const activeProvider=(state.providers||[]).find(p=>p.id===state.activeProvider),freeModel=isFreeModel(activeProvider,state.agent?.model);
+  $('modelButton').classList.toggle('is-free',freeModel);$('modelFree').hidden=!freeModel;
+  renderContext();
   $('runtimeBadge').dataset.runtime=state.runtime||'game';$('playerInitial').textContent=(state.player||'U').slice(0,1).toUpperCase();
   const permission=({readonly:'Read only',ask:'Ask first',auto:'Auto',full:'Allow all'})[state.permissions?.mode]||'Ask first';$('permissionBadge').querySelector('span').textContent=permission;
   setBusy(state.agent?.busy);
-  renderThreads();renderQuestions();renderStrips();welcome();if($('modal').open)modalRefresh?.();if(page!=='chat')requestPanelRefresh();
+  renderThreads();renderQuestions();renderStrips();renderQueue();welcome();if($('modal').open)modalRefresh?.();if(page!=='chat')requestPanelRefresh();
+}
+function renderQueue(){
+  const root=$('queuedMessages'),queue=state.queue||{},items=Array.isArray(queue.items)?queue.items:[];
+  const hadFocus=root.contains(document.activeElement);root.hidden=!items.length;if(!items.length){root.replaceChildren();delete root.dataset.signature;if(hadFocus)$('input').focus({preventScroll:true});return;}
+  const signature=JSON.stringify([sessionId,queue,connected]);if(root.dataset.signature===signature)return;root.dataset.signature=signature;
+  const focused=root.contains(document.activeElement)?document.activeElement?.dataset.focusKey:null,oldRows=new Map([...root.querySelectorAll('.queued-item')].map(row=>[row.dataset.messageId,row]));
+  let heading=root.querySelector('.queued-heading'),list=root.querySelector('.queued-list');
+  if(!heading){heading=el('div','queued-heading');heading.append(el('strong'),el('span','spacer'));list=el('div','queued-list');root.append(heading,list);}
+  heading.querySelector('strong').textContent=queue.held?'Follow-ups paused':items.length+' follow-up'+(items.length===1?'':'s')+' queued';
+  let resume=heading.querySelector('button');if(queue.held&&!resume){resume=button('Resume queue',async()=>{resume.dataset.pending='true';resume.disabled=true;try{await command('queue:resume');}catch(error){toast(error.message);}finally{delete resume.dataset.pending;if(resume.isConnected)resume.disabled=!connected;}},'outline','queue:resume');heading.append(resume);}if(resume){resume.hidden=!queue.held;resume.disabled=!connected||resume.dataset.pending==='true';}
+  let reason=root.querySelector('.queue-reason');if(queue.held&&queue.reason){if(!reason){reason=el('p','queue-reason');root.insertBefore(reason,list);}reason.textContent=queue.reason;}else reason?.remove();
+  const wanted=new Set(items.map(item=>String(item.id)));for(const [id,row]of oldRows)if(!wanted.has(id))row.remove();
+  items.forEach((item,index)=>{const id=String(item.id);let row=oldRows.get(id);if(!row){row=el('div','queued-item');row.dataset.messageId=id;const copy=el('div','queued-copy'),text=el('p'),status=el('small');copy.append(text,status);const remove=button('Remove',async()=>{const origin=sessionId;row.dataset.removing='true';remove.disabled=true;try{await command('queue:remove',{messageId:id});if(sessionId===origin&&[document.body,remove].includes(document.activeElement))$('input').focus({preventScroll:true});}catch(error){toast(error.message);}finally{delete row.dataset.removing;if(remove.isConnected)remove.disabled=!connected;}},'queue-remove','queue:remove:'+id);row.append(copy,remove);}
+    row.querySelector('p').textContent=item.text||'Attached input';const images=Array.isArray(item.images)?item.images.length:0;row.querySelector('small').textContent=(item.state==='preparing'?'Preparing attachments':queue.held?'Waiting for resume':'Waiting for the current turn')+(images?' · '+images+' image'+(images===1?'':'s'):'');row.querySelector('button').disabled=!connected||row.dataset.removing==='true';if(list.children[index]!==row)list.insertBefore(row,list.children[index]||null);
+  });
+  if(focused&&![...root.querySelectorAll('button')].some(node=>node===document.activeElement)){const replacement=[...root.querySelectorAll('button')].find(node=>node.dataset.focusKey===focused)||root.querySelector('button:not([hidden])')||$('input');replacement.focus({preventScroll:true});}
 }
 function renderThreads(){
   const search=$('threadSearch').value.toLowerCase(),root=$('threads'),signature=JSON.stringify([search,state.threads]);
@@ -427,7 +479,7 @@ function renderThreads(){
   for(const [name,list]of groups){root.append(el('div','place-heading',name));for(const thread of list){
     const row=el('div','thread'+(thread.active?' active':''));row.dataset.id=thread.id;
     const open=button((thread.busy?'◌ ':'')+(thread.title||'New chat'),()=>openConversation(thread.id));open.title=thread.title||'New chat';if(thread.active)open.setAttribute('aria-current','true');
-    const more=button('···',()=>threadMenu(thread),'thread-menu');more.setAttribute('aria-label','Options for '+(thread.title||'New chat'));row.append(open,more);root.append(row);
+    const more=button('···',()=>threadMenu(thread),'thread-menu');more.setAttribute('aria-label','Options for '+(thread.title||'New chat'));row.append(open);if(thread.queuedCount>0){const queued=el('span','thread-queued',String(thread.queuedCount));queued.title=thread.queuedCount+' queued'+(thread.queueHeld?' · paused':'');queued.setAttribute('aria-label',queued.title);row.append(queued);}row.append(more);root.append(row);
     if(thread.id===focusId)(menu?more:open).focus({preventScroll:true});
   }}
   if(!groups.size)root.append(el('p','history-empty',search?'No matching conversations.':'Your conversations will appear here.'));
@@ -487,7 +539,34 @@ function renderQuestions(){
   });
   if(focused){const target=focused.isConnected?focused:root.querySelector('button,input,[tabindex="0"]')||$('input');if(document.activeElement!==target)target.focus({preventScroll:true});if(selection&&target===focused)focused.setSelectionRange(...selection);}
 }
-function show(next){page=next;document.body.dataset.page=page;closeSidebar();$('chatPage').hidden=page!=='chat';$('panel').hidden=page==='chat';$('pageTitle').textContent=({chat:'Chat',cowork:'Connection',agents:'Subagents',providers:'Providers',tools:'Tools',loops:'Chat loops',logs:'Activity',memory:'Memory & skills',settings:'Settings'})[page]||page;document.querySelectorAll('button[data-page]').forEach(b=>{b.classList.toggle('selected',b.dataset.page===page);if(b.dataset.page===page)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});if(page==='chat'){welcome();resizeComposer();}else{renderPanel();$('panel').classList.remove('panel-enter');requestAnimationFrame(()=>$('panel').classList.add('panel-enter'));}refresh();(page==='chat'?$('input'):$('panel')).focus({preventScroll:true});}
+const workspaceViews={cowork:['Connection','Bring Roblox, your tools, and this conversation together.'],providers:['Providers','Choose the models and connections you work with.'],tools:['Tools','Browse available tools and control what they can do.'],agents:['Subagents','Follow delegated work and inspect its results.'],loops:['Chat loops','Manage recurring conversations and game workflows.'],memory:['Memory & skills','Keep useful context and reusable workflows close.'],logs:['Activity','Review requests, execution details, and diagnostic messages.']};
+let workspaceOpener=null,workspaceRestore=true,workspaceBackdropStart=false;
+function markPage(){document.querySelectorAll('button[data-page]').forEach(b=>{b.classList.toggle('selected',b.dataset.page===page);if(b.dataset.page===page)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});}
+function show(next){
+  if(next==='settings'){openSettings();return;}if(next!=='chat'&&!workspaceViews[next])return;
+  const dialog=$('workspaceModal');if(next!=='chat'&&!dialog.open)workspaceOpener=document.activeElement;
+  page=next;document.body.dataset.page=page;closeSidebar();$('chatPage').hidden=false;$('panel').hidden=page==='chat';$('pageTitle').textContent='Chat';markPage();
+  if(page==='chat'){if(dialog.open){workspaceRestore=false;dialog.close();}welcome();resizeComposer();$('input').focus({preventScroll:true});}
+  else{
+    const [title,description]=workspaceViews[page];$('workspaceTitle').textContent=title;$('workspaceDescription').textContent=description;dialog.dataset.page=page;
+    renderPanel();if(!dialog.open){workspaceRestore=true;dialog.showModal();}else $('panel').scrollTop=0;
+    $('workspaceTabs').querySelector('[aria-current=page]')?.scrollIntoView({block:'nearest',inline:'nearest'});
+    $('workspaceTitle').focus({preventScroll:true});
+  }refresh();
+}
+function closeWorkspace(restore=true){workspaceRestore=restore;if($('workspaceModal').open)$('workspaceModal').close();}
+for(const [id,[label]]of Object.entries(workspaceViews)){const tab=button(label,()=>show(id));tab.dataset.page=id;$('workspaceTabs').append(tab);}
+$('workspaceTabs').append(button('Settings',()=>show('settings')));
+$('workspaceClose').onclick=()=>closeWorkspace();$('workspaceDone').onclick=()=>show('chat');
+$('workspaceModal').addEventListener('cancel',event=>{event.preventDefault();closeWorkspace();});
+$('workspaceModal').addEventListener('pointerdown',event=>{workspaceBackdropStart=event.target===$('workspaceModal')&&outsideWorkspace(event);});
+$('workspaceModal').addEventListener('click',event=>{if(workspaceBackdropStart&&event.target===$('workspaceModal')&&outsideWorkspace(event))closeWorkspace();workspaceBackdropStart=false;});
+function outsideWorkspace(event){const r=$('workspaceModal').getBoundingClientRect();return event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom;}
+$('workspaceModal').addEventListener('close',()=>{
+  if($('workspaceModal').open)return;const opener=workspaceOpener,restore=workspaceRestore;workspaceOpener=null;page='chat';document.body.dataset.page='chat';$('panel').hidden=true;markPage();welcome();resizeComposer();refresh();
+  if($('app').hidden||$('modal').open)return;
+  const target=restore&&opener?.isConnected&&opener.getClientRects().length?opener:restore?$('sidebarToggle'):$('input');if(!target.disabled)target.focus({preventScroll:true});
+});
 async function openConversation(id){
   try{await command(id?'thread':'thread:new',id?{id}:{});show('chat');}catch(error){toast(error.message);}
 }
@@ -502,15 +581,14 @@ function buildPanel(root){root.replaceChildren();
     root.append(el('p','panel-description','Manage your connections, check their health, and choose which provider powers your conversation.'));
     for(const p of state.providers||[]){const c=card(root),active=state.activeProvider===p.id;c.classList.add('provider-card');c.dataset.active=String(active);
       const header=el('div','provider-heading');header.append(el('h2',null,p.label),el('span','pill',active?'Active provider':p.enabled===false?'Disabled':'Available'));c.append(header,el('p','provider-url',p.baseUrl||'No endpoint configured'));
-      const model=el('div','provider-model');model.append(el('span','eyebrow','CURRENT MODEL'),el('strong',null,p.model||'No model selected'));c.append(model);
+      const model=el('div','provider-model');model.append(el('span','eyebrow','CURRENT MODEL'),el('strong',null,p.model||'No model selected'));if(isFreeModel(p,p.model)){model.classList.add('is-free');model.append(el('span','free-label','Free'));}c.append(model);if(freeRouteText(p))c.append(el('p','free-route',freeRouteText(p)));
       const row=el('div','provider-actions'),health=el('span','provider-health',`${p.health?.ok||0} successful · ${p.health?.fail||0} failed`),use=button(active?'Active':'Use',()=>action('provider',{id:p.id}),active?'selected':'outline','provider:'+p.id+':use');use.setAttribute('aria-pressed',String(active));use.disabled=!connected;
       row.append(health,el('span','spacer'),button('Test connection',async()=>{try{const result=await command('provider:test',{id:p.id});toast(result.text+' · '+result.ms+' ms');}catch(error){toast(error.message);}},null,'provider:'+p.id+':test'),use,button('Edit',()=>providerEditor(p),'outline','provider:'+p.id+':edit'));c.append(row);if(p.health?.lastError)c.append(el('p','provider-error',p.health.lastError));}
   }
   else if(page==='tools'){const filter=el('input');filter.type='search';filter.placeholder='Search tools';filter.setAttribute('aria-label','Search tools');filter.value=toolFilter;filter.oninput=()=>{toolFilter=filter.value;renderToolCards(list);};heading(root,'Tools',filter);root.append(el('p','panel-description','Explore the actions available in your game. Review permissions or run a tool directly.'));const list=el('div','tool-grid');root.append(list);renderToolCards(list);}
-  else if(page==='agents'){heading(root,'Subagents');root.append(el('p','panel-description','Follow delegated work, review results, and stop a task when you need to.'));for(const a of state.subagents||[]){const c=card(root);c.classList.add('agent-card');const head=el('div','item-heading');head.append(el('h3',null,a.label||a.id),el('span','pill',a.status));c.append(head,el('p',null,a.task));if(a.report){const report=el('details','report');report.append(el('summary',null,'View report'),el('pre','json-output',a.report));c.append(report);}if(['running','queued'].includes(a.status))c.append(button('Stop',()=>action('subagent:stop',{id:a.id}),'danger outline'));}}
+  else if(page==='agents'){heading(root,'Subagents');root.append(el('p','panel-description','Follow delegated work, review results, and stop a task when you need to.'));for(const a of state.subagents||[]){const c=card(root);c.classList.add('agent-card');const head=el('div','item-heading');head.append(el('h3',null,a.label||a.id),el('span','pill',agentStatus(a)));c.append(head,el('p','agent-task-excerpt',a.currentTask||a.task));const facts=[a.provider,a.model,agentElapsed(a.elapsedMs??a.ms)];c.append(el('small','agent-card-meta',facts.filter(Boolean).join(' · ')));const actions=el('div','agent-card-actions');actions.append(button('Preview',()=>agentDetails(a.id),'outline','agent:'+a.id+':preview'));if(['running','queued'].includes(a.status))actions.append(button('Stop',()=>action('subagent:stop',{id:a.id}),'danger outline'));c.append(actions);}}
   else if(page==='loops'){heading(root,'Chat loops',button('Start chatbot',()=>runTool('chat_bot',{instructions:'Be friendly, casual, and helpful.'}),'primary'));root.append(el('p','panel-description','Set up a repeating conversation and keep track of what is running.'));const row=el('div','loop-launchers');for(const [name,title,detail]of [['quiz_bot','Run a quiz','Host questions and keep score.'],['auto_chat','Auto chat','Send messages on a schedule.'],['auto_reply','Auto reply','Respond to incoming messages.']]){const launch=button('',()=>runTool(name),'loop-launcher');launch.append(el('strong',null,title),el('small',null,detail));row.append(launch);}root.append(row);for(const l of state.loops||[]){const c=card(root);c.classList.add('loop-card');const head=el('div','item-heading');head.append(el('h3',null,l.kind==='bot'?'Chatbot':l.kind),el('span','pill',l.state));c.append(head,el('p','muted',`${l.channel} · ${l.sent}/${l.count} messages sent`));if(l.reason)c.append(el('small',null,l.reason));for(const score of Object.values(l.scores||{}))c.append(el('div','score-row',`${score.name}: ${score.points}`));if(l.state==='running')c.append(button('Stop',()=>action('loops:stop',{id:l.id}),'danger outline'));}}
   else if(page==='logs'){heading(root,'Activity',button('Clear logs',()=>action('logs:clear'),'outline'));root.append(el('p','panel-description','Requests, connection events, and diagnostic messages from your workspace.'));const filter=field(root,'Filter activity',logFilter);filter.type='search';filter.placeholder='Search by message, provider, or endpoint';const list=el('div','activity-list');root.append(list);filter.oninput=()=>{logFilter=filter.value;renderLogs(list);};renderLogs(list);}
-  else if(page==='settings'){renderSettings(root);}
 }
 function renderToolCards(root){root.replaceChildren();for(const t of state.tools||[]){if(!`${t.name} ${t.description}`.toLowerCase().includes(toolFilter.toLowerCase()))continue;const c=card(root),copy=el('div','catalog-copy'),head=el('div','item-heading');head.append(el('h3',null,t.name),el('span','pill',t.risk||'Tool'));copy.append(head,el('p',null,t.description));if(!t.available)copy.append(el('small','unavailable','Unavailable on this executor'));const row=el('div','tool-actions');const rule=select(row,'Permission',['default','ask','allow','deny'],t.rule||'default');rule.onchange=()=>action('tool:rule',{name:t.name,rule:rule.value});row.append(button('Run…',()=>runTool(t.name),'outline'),button(t.enabled?'Disable group':'Enable group',()=>action('tool:group',{group:t.group,enabled:!t.enabled})));c.append(copy,row);}if(toolFilter&&!root.childElementCount)root.append(el('p','model-empty','No tools match your search.'));}
 function renderLogs(root){root.replaceChildren();const query=logFilter.trim().toLowerCase();
@@ -594,8 +672,10 @@ function providerEditor(provider){modal(provider?'Edit provider':'Add provider',
   const presets=(state.presets||[]).map(p=>[p.id,p.label]);if(!presets.some(p=>p[0]==='custom'))presets.push(['custom','Custom']);
   const preset=select(fields,'Preset',presets,provider?.preset||'custom'),label=field(fields,'Name',provider?.label||''),url=field(fields,'Base URL',provider?.baseUrl||'');
   url.parentElement.classList.add('field-wide');url.autocapitalize='off';url.spellcheck=false;url.placeholder='https://your-provider.example/v1';
-  const apiStyle=select(fields,'API',[['openai','OpenAI compatible'],['anthropic','Anthropic Messages']],provider?.api||'openai');
-  const auth=select(fields,'Authentication',[['bearer','Bearer token'],['x-api-key','x-api-key header'],['api-key','api-key header'],['both','Bearer + x-api-key'],['none','No authentication']],provider?.authStyle||'bearer');
+  const apiStyle=select(fields,'API',[['openai','OpenAI compatible'],['anthropic','Anthropic Messages'],['gemini','Gemini generateContent']],provider?.api||'openai');
+  const defaultAuth=()=>apiStyle.value==='gemini'&&!/\/go\/v1(?:\/|$)/i.test(url.value)?'x-goog-api-key':'bearer';
+  const auth=select(fields,'Authentication',[['bearer','Bearer token'],['x-api-key','x-api-key header'],['api-key','api-key header'],['x-goog-api-key','Google API key header'],['both','Bearer + x-api-key'],['none','No authentication']],provider?.authStyle||defaultAuth());
+  apiStyle.onchange=()=>{if(apiStyle.value==='gemini'||auth.value==='x-goog-api-key')auth.value=defaultAuth();};
   const credentials=el('section','dialog-section');credentials.append(el('h3',null,'Credentials and model'));form.append(credentials);
   const key=field(credentials,provider?.hasKey?'API key (blank keeps current key)':'API key','','password');key.autocomplete='new-password';key.spellcheck=false;key.autocapitalize='off';
   const model=field(credentials,'Model',provider?.model||'');model.spellcheck=false;model.placeholder='Exact model ID from your provider';
@@ -617,30 +697,134 @@ function providerEditor(provider){modal(provider?'Edit provider':'Add provider',
     disclosure.textContent=go?'This is the OpenCode Go subscription endpoint. Use your Go API key here. Go requests use this endpoint directly, including in Cowork.':openCode?(retired?'This OpenCode proxy route has retired. ':'')+'OpenCode free models use the direct desktop workaround. Free models can also use an installed OpenCode CLI through Cowork. Mobile free models are unsupported.':proxy?'This AgentRouter endpoint uses the Project UAI proxy. Requests and API keys pass through it, with a shared limit of 90,000 requests per day. The Base URL remains editable.':vendor?'If AgentRouter explicitly refuses the client identity, UAI can retry through the Project UAI proxy. Requests and API keys then pass through that proxy, which has a shared daily limit of 90,000 requests.':'';
     if(!disclosure.hidden)deadlineHelp(disclosure);
   }
-  preset.onchange=()=>{const p=state.presets?.find(p=>p.id===preset.value);if(p){label.value=p.label||'';url.value=p.baseUrl||'';apiStyle.value=p.api||'openai';auth.value=p.authStyle||'bearer';}describeEndpoint();};url.oninput=describeEndpoint;describeEndpoint();
+  preset.onchange=()=>{const p=state.presets?.find(p=>p.id===preset.value);if(p){label.value=p.label||'';url.value=p.baseUrl||'';apiStyle.value=p.api||'openai';auth.value=p.authStyle||defaultAuth();}describeEndpoint();};url.oninput=describeEndpoint;describeEndpoint();
   form.onsubmit=event=>{event.preventDefault();const value={id:provider?.id,preset:preset.value,label:label.value.trim(),baseUrl:url.value.trim(),api:apiStyle.value,authStyle:auth.value,model:model.value.trim()};if(key.value)value.apiKey=key.value;modalCommand('provider:save',{provider:value});};
   if(provider){const del=button('Delete',()=>{},'danger outline');armButton(del,'Confirm delete?',()=>modalCommand('provider:remove',{id:provider.id}));modalActions(del);}
   const save=el('button','primary','Save');save.type='submit';save.setAttribute('form',form.id);modalActions(el('span','spacer'),modalCancel(),save);
 },{description:'Connect the provider you want to use in this workspace.',size:'wide'});}
-function models(){modal('Models',root=>{
+function isFreeModel(provider,id){
+  if(!id)return false;
+  if(Array.isArray(provider?.freeModels))return provider.freeModels.includes(id);
+  if(provider?.free===true&&id===provider.model)return true;
+  const metadata=provider?.modelInfo?.[id]||provider?.modelMetadata?.[id];
+  if(metadata?.free===true)return true;
+  return /(?:^|[-_:/])free(?:$|[-_:/])|^big-pickle$/i.test(id);
+}
+function freeRouteText(provider){const route=provider?.freeRoute;if(!route)return '';if(route.supported&&route.enabled===false)return 'Automatic free routing is off. Requests keep provider Auto. Change this in Settings → Agent → Automatic free routing.';if(route.running)return 'Checking available models for a faster response…';if(route.ready&&route.model)return 'Auto route: '+route.model+(Number.isFinite(route.ms)?' · '+(route.ms/1000).toFixed(1)+' s probe':'');return '';}
+function tokenCount(value){if(!Number.isFinite(value)||value<0)return 'Unknown';return value>=1000000?(value/1000000).toFixed(value%1000000===0?0:1)+'M':value>=1000?(value/1000).toFixed(value%1000===0?0:1)+'K':Math.round(value).toLocaleString();}
+function contextSnapshot(){const value=state.context;if(!value||!Number.isFinite(value.usedTokens)||value.usedTokens<0||value.sessionId&&value.sessionId!==sessionId)return null;return value;}
+function contextRatio(value){return value?.windowTokens>0?value.usedTokens/value.windowTokens:null;}
+function renderContext(){
+  const value=contextSnapshot(),control=$('contextButton');control.hidden=!value;if(!value)return;
+  const ratio=contextRatio(value),percent=ratio===null?'?':Math.round(ratio*100)+'%';
+  control.style.setProperty('--context-used',Math.max(0,Math.min(1,ratio||0))*360+'deg');
+  control.dataset.level=ratio>=1?'full':value.compactionTokens>0&&value.usedTokens>=value.compactionTokens||ratio>=.8?'high':'normal';
+  $('contextPercent').textContent=percent;control.title=ratio===null?'Context window size is unknown':percent+' of context used';control.setAttribute('aria-label',control.title+'. View context details');
+}
+function contextDetails(){modal('Context window',root=>{
+  root.className='context-details';const summary=el('div','context-overview'),total=el('strong'),caption=el('span'),meter=el('div','context-meter'),fill=el('span'),threshold=el('i');meter.append(fill,threshold);summary.append(total,caption);root.append(summary,meter);
+  const note=el('p','context-note'),breakdown=el('div','context-breakdown');root.append(note,breakdown);
+  const values=new Map();for(const [key,label]of [['systemTokens','Instructions & tools'],['messageTokens','Conversation'],['summaryTokens','Compacted history'],['remaining','Remaining capacity']]){const row=el('div'),count=el('strong');row.append(el('span',null,label),count);breakdown.append(row);values.set(key,count);}
+  const compact=el('p','field-help'),model=el('p','field-help');root.append(compact,model);
+  function paint(){const value=contextSnapshot();if(!value){total.textContent='Unavailable';caption.textContent='Connect your conversation to see context usage.';meter.hidden=true;breakdown.hidden=true;note.textContent='';compact.textContent='';model.textContent='';return;}
+    meter.hidden=false;breakdown.hidden=false;const ratio=contextRatio(value);total.textContent=tokenCount(value.usedTokens);caption.textContent='of '+tokenCount(value.windowTokens)+' tokens';
+    fill.style.width=Math.max(0,Math.min(1,ratio||0))*100+'%';meter.dataset.level=ratio>=1?'full':ratio>=.8?'high':'normal';
+    threshold.hidden=!(value.compactionTokens>0&&value.windowTokens>0);threshold.style.left=Math.max(0,Math.min(1,(value.compactionTokens||0)/(value.windowTokens||1)))*100+'%';
+    note.textContent=value.partial?'Partial estimate. Instruction and tool overhead is still being prepared.':value.calibrated?'Estimated from this conversation, calibrated with provider usage.':'Estimated from this conversation. The provider’s actual token count can differ.';
+    for(const [key,node]of values)node.textContent=key==='remaining'?(value.windowTokens>0?tokenCount(Math.max(0,value.windowTokens-value.usedTokens)):'Unknown'):tokenCount(value[key]);
+    compact.textContent=value.compactionTokens>0?'History compaction starts near '+tokenCount(value.compactionTokens)+' tokens.'+(threshold.hidden?'':' The marker shows that threshold.'):'The model’s context limit is not known yet.';
+    model.textContent=value.model||state.agent?.model||'';
+  }modalRefresh=paint;paint();
+},{description:'See how much room this conversation has left.',size:'compact'});}
+function models(){modal('Models & reasoning',root=>{
   root.className='model-picker';const filters=el('div','model-filters');root.append(filters);
-  const provider=select(filters,'Provider',(state.providers||[]).map(p=>[p.id,p.label]),state.activeProvider),search=field(filters,'Search models','');search.type='search';search.placeholder='Filter by model name';
+  const provider=select(filters,'Provider',(state.providers||[]).map(p=>[p.id,p.label]),state.activeProvider),search=field(filters,'Search models','');search.type='search';search.placeholder='Search by model name';search.autofocus=true;
+  provider.parentElement.classList.add('model-provider');search.parentElement.classList.add('model-search');filters.prepend(search.parentElement);
   const meta=el('div','model-meta'),count=el('span','muted'),freeLabel=el('label','row'),free=el('input');free.type='checkbox';freeLabel.append(free,document.createTextNode('Free only'));meta.append(count,freeLabel);root.append(meta);
-  const list=el('div','model-list'),empty=el('div','model-empty');root.append(list,empty);
+  const routeStatus=el('p','free-route');root.append(routeStatus);
+  const workspace=el('div','model-workspace'),results=el('div','model-results'),list=el('div','model-list'),empty=el('div','model-empty'),detail=el('section','model-detail');results.append(list,empty);workspace.append(results,detail);root.append(workspace);
+  const selectedEyebrow=el('span','eyebrow','CURRENT CHOICE'),selectedName=el('h3'),selectedProvider=el('p','model-detail-provider'),capabilities=el('div','model-capabilities');detail.append(selectedEyebrow,selectedName,selectedProvider,capabilities);
+  const reasoning=el('div','model-reasoning'),reasoningTitle=el('h4',null,'Reasoning effort'),efforts=el('div','effort-options'),reasoningHelp=el('p','field-help');efforts.setAttribute('role','group');efforts.setAttribute('aria-label','Reasoning effort');reasoning.append(reasoningTitle,efforts,reasoningHelp);detail.append(reasoning);
+  const sampling=el('div','model-sampling'),samplingTitle=el('h4',null,'Temperature');sampling.append(samplingTitle);
+  const handling=select(sampling,'Temperature handling',[['auto','Automatic'],['send','Send temperature'],['omit','Omit temperature']],'auto');
+  const temperature=field(sampling,'Temperature',state.settings?.agent?.temperature??.4,'number');temperature.min=0;temperature.max=2;temperature.step=.1;temperature.required=true;
+  const samplingHelp=el('p','field-help');sampling.append(samplingHelp);detail.append(sampling);
+  handling.onchange=()=>{const model=state.providers?.find(p=>p.id===provider.value)?.model;if(model)modalTask(()=>command('model:temperature',{model,value:handling.value}),{success:'Temperature handling saved.'});};
+  temperature.onchange=()=>{if(temperature.reportValidity())modalTask(()=>command('setting',{path:'agent.temperature',value:Number(temperature.value)}),{success:'Temperature saved.'});};
+  const effortLabels={off:'Provider default',low:'Low',medium:'Medium',high:'High',xhigh:'Extra high',max:'Max'};
+  function paintDetail(p){
+    const id=p?.model||'',info=p?.modelInfo?.[id]||{},signature=JSON.stringify([p?.id,id,info,state.settings?.agent?.effort,state.settings?.agent?.temperature,connected,!!modalContext?.pending,!!modalContext?.uncertain]);
+    if(detail.dataset.signature===signature)return;detail.dataset.signature=signature;
+    selectedName.textContent=id||'Choose a model';selectedProvider.textContent=p?.label||'Add a provider to get started';
+    capabilities.replaceChildren();for(const [label,value]of [['Context window',info.contextWindow],['Max output',info.maxOutputTokens]]){const row=el('div');row.append(el('span',null,label),el('strong',null,tokenCount(value)));capabilities.append(row);}
+    const levels=Array.isArray(info.efforts)?info.efforts.filter(level=>typeof level==='string'&&effortLabels[level]):[];
+    const current=info.effectiveEffort||state.settings?.agent?.effort,old=new Map([...efforts.children].map(n=>[n.dataset.effort,n]));
+    for(const [level,node]of old)if(!levels.includes(level))node.remove();
+    for(const [index,level]of levels.entries()){let choice=old.get(level);if(!choice){choice=button(effortLabels[level],()=>modalTask(()=>command('setting',{path:'agent.effort',value:level}),{success:'Reasoning effort saved.'}),'effort-choice');choice.dataset.effort=level;}choice.classList.toggle('selected',current===level);choice.setAttribute('aria-pressed',String(current===level));choice.disabled=!connected||!!modalContext?.pending||!!modalContext?.uncertain;if(efforts.children[index]!==choice)efforts.insertBefore(choice,efforts.children[index]||null);}
+    efforts.hidden=!levels.length;reasoningTitle.textContent=levels.length?'Reasoning effort':info.reasoning===false?'Standard response':'Reasoning';
+    reasoningHelp.textContent=levels.length?(info.effortSource==='manual'?'Using your custom reasoning settings. ':info.effortSource==='global'?'This model uses the shared reasoning preference. ':'')+'More effort can improve difficult answers and take longer. Provider default leaves the choice to the provider.':info.reasoning===false?'This model does not advertise reasoning controls.':info.reasoning===true?'This model manages its reasoning automatically.':'No documented reasoning control for this model.';
+    sampling.hidden=typeof info.temperatureAllowed!=='boolean';
+    if(!sampling.hidden){const locked=!connected||!!modalContext?.pending||!!modalContext?.uncertain;handling.disabled=locked;temperature.disabled=locked||!info.temperatureAllowed;
+      if(document.activeElement!==handling)handling.value=info.temperatureOverride||'auto';
+      if(document.activeElement!==temperature)temperature.value=state.settings?.agent?.temperature??.4;
+      samplingHelp.textContent=info.temperatureSource==='manual'?'Your model override '+(info.temperatureAllowed?'sends the shared temperature.':'omits temperature from requests.'):info.temperatureSource==='learned'?'This provider has rejected temperature for this model. Automatic leaves it out.':!info.temperatureAllowed?'This model does not use a custom temperature. Automatic leaves it out.':info.temperatureSource==='documented'?'This model supports temperature. Lower values give more consistent responses.':'No temperature restriction is known for this model. Automatic sends the shared value.';
+    }
+  }
   function paint(){
-    const p=state.providers?.find(p=>p.id===provider.value),ids=(p?.models||[]).filter(id=>id.toLowerCase().includes(search.value.toLowerCase())&&(!free.checked||/free|big-pickle/i.test(id)));
+    const p=state.providers?.find(p=>p.id===provider.value),ids=(p?.models||[]).filter(id=>id.toLowerCase().includes(search.value.toLowerCase())&&(!free.checked||isFreeModel(p,id)));
+    routeStatus.textContent=freeRouteText(p);routeStatus.hidden=!routeStatus.textContent;
     count.textContent=ids.length+' model'+(ids.length===1?'':'s');empty.hidden=!!ids.length;empty.textContent=!state.providers?.length?'Add a provider to choose a model.':search.value||free.checked?'No models match these filters.':'No models available yet. Refresh the list, or enter an exact model ID in your provider settings.';
     const focused=list.contains(document.activeElement)?document.activeElement:null,existing=new Map([...list.children].map(n=>[n.dataset.model,n])),wanted=new Set(ids);
     for(const [id,node]of existing)if(!wanted.has(id))node.remove();
-    ids.forEach((id,index)=>{let node=existing.get(id);if(!node){node=button('',()=>modalTask(()=>command('model',{provider:provider.value,model:id}),{success:'Model selection saved.'}));node.append(el('span','model-name',id),el('span','model-check','Selected'));}node.dataset.model=id;node.classList.toggle('selected',p.model===id);node.setAttribute('aria-pressed',String(p.model===id));node.setAttribute('aria-label',id);node.querySelector('.model-check').hidden=p.model!==id;node.disabled=!connected||!!modalContext?.pending||!!modalContext?.uncertain;if(list.children[index]!==node)list.insertBefore(node,list.children[index]||null);});
+    ids.forEach((id,index)=>{let node=existing.get(id);if(!node){node=button('',()=>modalTask(()=>command('model',{provider:provider.value,model:id}),{success:'Model selection saved.'}));const head=el('span','model-row-head');head.append(el('span','model-name',id),el('span','free-label','Free'),el('span','model-check','Selected'));node.append(head,el('span','model-row-meta'));}const isFree=isFreeModel(p,id),info=p?.modelInfo?.[id]||{};node.dataset.model=id;node.classList.toggle('selected',p.model===id);node.classList.toggle('is-free',isFree);node.setAttribute('aria-pressed',String(p.model===id));node.setAttribute('aria-label',id+(isFree?', free':''));node.querySelector('.free-label').hidden=!isFree;node.querySelector('.model-check').hidden=p.model!==id;const meta=node.querySelector('.model-row-meta'),parts=[];if(info.contextWindow>0)parts.push(tokenCount(info.contextWindow)+' context');if(info.reasoning===true)parts.push('Reasoning');if(info.maxOutputTokens>0)parts.push(tokenCount(info.maxOutputTokens)+' output');meta.textContent=parts.join(' · ');meta.hidden=!parts.length;node.disabled=!connected||!!modalContext?.pending||!!modalContext?.uncertain;if(list.children[index]!==node)list.insertBefore(node,list.children[index]||null);});
     if(focused&&document.activeElement!==focused)(focused.isConnected?focused:search).focus({preventScroll:true});
+    paintDetail(p);
   }
   provider.onchange=paint;search.oninput=paint;free.onchange=paint;paint();
-  const effort=select(root,'Reasoning effort',['low','medium','high','xhigh','max'],state.settings?.agent?.effort||'high');effort.onchange=()=>modalTask(()=>command('setting',{path:'agent.effort',value:effort.value}),{success:'Reasoning effort saved.'});
-  modalRefresh=()=>{paint();if(document.activeElement!==effort)effort.value=state.settings?.agent?.effort||'high';};
+  modalRefresh=paint;
   modalActions(button('Refresh models',()=>modalTask(()=>command('models:discover',{provider:provider.value}),{success:'Model list refreshed.'}),'outline'),button('Manage providers',()=>{closeModal(true,false);show('providers');}),el('span','spacer'),modalCancel('Done'));
-},{description:'Choose a model and reasoning effort for your conversation.'});}
+},{description:'Find the right model and tune how it thinks.',size:'models'});}
 function emptyState(root,symbol,title,detail,control){const n=el('section','empty-state');n.append(el('h2',null,title),el('p',null,detail));if(control)n.append(control);root.append(n);}
+function agentElapsed(ms){if(!Number.isFinite(ms))return '';const seconds=Math.max(0,Math.floor(ms/1000));return seconds<60?seconds+'s':Math.floor(seconds/60)+'m '+seconds%60+'s';}
+function agentStatus(agent){return agent?.stopping?'Stopping':({queued:'Queued',running:'Working',done:'Completed',failed:'Failed',stopped:'Stopped'})[agent?.status]||'Unavailable';}
+function agentDetails(id){
+  const initial=state.subagents?.find(agent=>agent.id===id);if(!initial)return;
+  modal(initial.label||id,root=>{
+    root.className='agent-preview';const context=modalContext;let section='overview',submitting=false,stoppingAgent=false,lastRecord=null,receivedAt=Date.now();
+    const summary=el('div','agent-preview-summary'),status=el('strong'),current=el('p'),meta=el('span');summary.append(status,current,meta);root.append(summary);
+    const tabs=el('nav','agent-preview-tabs'),panels=el('div','agent-preview-panels'),views=new Map();tabs.setAttribute('aria-label','Subagent preview sections');root.append(tabs,panels);
+    for(const [key,title]of [['overview','Overview'],['tools','Tools'],['task','Task & access']]){const panel=el('section','agent-preview-page'),tab=button(title,()=>{section=key;paint();panels.scrollTop=0;});tab.dataset.section=key;tabs.append(tab);views.set(key,panel);panels.append(panel);}
+    const output=views.get('overview'),messageTitle=el('h3',null,'Latest message'),message=el('div','body'),thoughts=el('details','agent-thoughts'),thoughtTitle=el('summary',null,'Latest reasoning'),reasoning=el('div','body'),resultTitle=el('h3',null,'Report'),result=el('div','body agent-result');thoughts.append(thoughtTitle,reasoning);output.append(messageTitle,message,thoughts,resultTitle,result);
+    const activity=views.get('tools'),activityHint=el('p','field-help'),activityList=el('div','agent-activity-list');activity.append(activityHint,activityList);
+    const task=views.get('task'),taskText=el('p','agent-full-task'),access=el('dl','agent-access');task.append(el('h3',null,'Current task'),taskText,access);
+    const form=el('form','agent-followup'),input=el('textarea'),hint=el('p','field-help'),send=el('button','primary','Send follow-up');input.placeholder='A question or next task…';input.rows=2;input.maxLength=24000;input.setAttribute('aria-label','Subagent follow-up');send.type='submit';form.append(input,el('div','agent-followup-actions'));form.lastChild.append(hint,send);root.append(form);
+    const stop=button('Stop subagent',async()=>{if(stoppingAgent)return;stoppingAgent=true;paint();try{await command('subagent:stop',{id});}catch(error){toast(error.message);}finally{stoppingAgent=false;if(context===modalContext)paint();}},'danger outline');
+    const copy=button('Copy report',()=>copyText(state.subagents?.find(agent=>agent.id===id)?.report||''),'outline');modalActions(stop,el('span','spacer'),copy,modalCancel('Done'));
+    function reading(node){const selection=document.getSelection();return node.contains(document.activeElement)||selection&&!selection.isCollapsed&&(node.contains(selection.anchorNode)||node.contains(selection.focusNode));}
+    function rich(node,text){if(node.dataset.source===text||reading(node))return;node.innerHTML=md(text);node.dataset.source=text;}
+    function plain(node,text){if(node.textContent!==text&&!reading(node))node.textContent=text;}
+    function paint(){
+      if(context!==modalContext)return;const position=panels.scrollTop,bodyPosition=root.scrollTop,a=state.subagents?.find(agent=>agent.id===id),live=['running','queued'].includes(a?.status);if(a!==lastRecord){lastRecord=a;receivedAt=Date.now();}
+      status.textContent=agentStatus(a);summary.dataset.status=a?.status||'unavailable';
+      const pending=Math.max(0,(a?.calls||0)-(a?.finishedCalls||0));current.textContent=!a?'This subagent is no longer retained.':a.stopping?'Finishing the current step before stopping':pending?(pending>1?pending+' tool calls in progress':'Running '+(a.currentTool||'a tool')):a.preview?.text?'Writing a response':a.preview?.reasoning?'Reasoning':a.statusText||(a.reportExcerpt?'Report available as an excerpt':live?'Waiting for the next step':'Ready to review');
+      meta.textContent=[a?.provider,a?.model,agentElapsed((a?.elapsedMs??a?.ms??0)+(live?Date.now()-receivedAt:0)),a?`${a.finishedCalls||0} of ${a.calls||0} tool calls finished`:''].filter(Boolean).join(' · ');
+      for(const [key,panel]of views){panel.hidden=key!==section;const tab=tabs.querySelector('[data-section="'+key+'"]');tab.setAttribute('aria-current',key===section?'page':'false');}
+      const latest=a?.preview?.text||a?.latestText||'',reason=a?.preview?.reasoning||a?.latestReasoning||'';
+      messageTitle.textContent=(a?.preview?.text?'Live message':'Latest message')+((a?.preview?.textExcerpt||a?.textExcerpt)?' · excerpt':'');rich(message,latest||(live?'No message delivered yet.':'No intermediate message was delivered.'));
+      thoughts.hidden=!reason;thoughtTitle.textContent='Latest reasoning'+((a?.preview?.reasoningExcerpt||a?.reasoningExcerpt)?' · excerpt':'');rich(reasoning,reason);
+      resultTitle.hidden=result.hidden=!a?.report;resultTitle.textContent=a?.reportExcerpt?'Report · excerpt':'Report';rich(result,a?.report||'');
+      const entries=a?.activity||[],oldRows=new Map([...activityList.children].map(node=>[node.dataset.call,node]));activityHint.textContent=entries.length?(a.activityOmitted?'Earlier tool activity is omitted. ':'')+'Open a call to inspect its progress or result.':'Tool calls appear here when the subagent starts using them.';
+      const wanted=new Set(entries.map((item,index)=>String(item.index??index)));for(const [key,node]of oldRows)if(!wanted.has(key)&&!reading(node))node.remove();
+      entries.forEach((item,index)=>{const key=String(item.index??index);let row=oldRows.get(key);if(!row){row=el('details','agent-tool');row.dataset.call=key;row.append(el('summary'),el('p'));activityList.append(row);}const outcome=item.interrupted?'No result':item.done?(item.ok?'Finished':'Failed'):'In progress';row.dataset.status=item.interrupted?'stopped':item.done?(item.ok?'done':'failed'):'running';plain(row.querySelector('summary'),item.name+' · '+outcome+(Number.isFinite(item.ms)?' · '+agentElapsed(item.ms):''));plain(row.querySelector('p'),item.done?(item.summary||item.progress||'No result text was retained.'):(item.progress||'Waiting for progress.'));if(activityList.children[index]!==row)activityList.insertBefore(row,activityList.children[index]||null);});
+      plain(taskText,a?.currentTask||a?.task||'');const facts=[['Provider',a?.provider||'Not selected'],['Model',a?.model||'Not selected'],['Tools',a?.toolAccess||a?.preset||'Inherited'],['Parent conversation',a?.parentTitle||'Original conversation'],['Run',String(a?.runs||1)],['Reference',id]];const signature=JSON.stringify(facts);if(access.dataset.signature!==signature&&!reading(access)){access.replaceChildren();for(const [key,value]of facts)access.append(el('dt',null,key),el('dd',null,value));access.dataset.signature=signature;}
+      form.hidden=!a||!Object.hasOwn(a,'canFollowup');send.disabled=submitting||!connected||!a?.canFollowup||!input.value.trim();hint.textContent=submitting?'Sending follow-up…':live?'Draft now; send when this run finishes.':a?.canFollowup?'Continue with the same context and tool access.':'This subagent’s context has been released.';
+      stop.hidden=!live;stop.disabled=!connected||stoppingAgent||a?.stopping;stop.textContent=stoppingAgent||a?.stopping?'Stopping…':'Stop subagent';copy.disabled=!a?.report;
+      panels.scrollTop=position;root.scrollTop=bodyPosition;
+    }
+    input.oninput=paint;form.onsubmit=async event=>{event.preventDefault();const a=state.subagents?.find(agent=>agent.id===id),text=input.value;if(submitting||!a?.canFollowup||!text.trim())return;submitting=true;paint();try{await command('subagent:followup',{id,text:text.trim()});if(context===modalContext&&input.value===text)input.value='';toast('Follow-up sent.');}catch(error){toast(error.message);}finally{submitting=false;if(context===modalContext)paint();}};
+    modalRefresh=paint;const timer=setInterval(paint,1000);context.cleanup=()=>clearInterval(timer);paint();
+  },{description:'Follow the work and continue the same context.',size:'agent'});
+}
 function panelIsEditing(){
   if($('modal').open||panelPointerActive)return true;
   const root=$('panel'),active=document.activeElement;if(root.querySelector('.setting[data-state="saving"]')||(root.contains(active)&&active.matches('input,textarea,select')))return true;
@@ -652,6 +836,7 @@ function renderPanel(){
   const root=$('panel'),position=root.scrollTop,active=root.contains(document.activeElement)?document.activeElement:null,focusKey=active?.dataset.focusKey,open=new Set([...root.querySelectorAll('details[open]')].map(d=>d.querySelector('summary')?.textContent));panelRefreshPending=false;
   const errors=new Map([...root.querySelectorAll('.setting[data-state="error"]')].map(row=>{const input=row.querySelector('[data-setting]');return [input.dataset.setting,{value:input.value,checked:input.checked,message:row.querySelector('.save-status').textContent}];}));
   buildPanel(root);
+  $('workspaceStatus').textContent=connected?'Roblox connected · '+(state.place?.name||'Workspace ready'):link==='online'?'Bridge ready · waiting for Roblox':'Bridge reconnecting';
   for(const input of root.querySelectorAll('[data-setting]')){const error=errors.get(input.dataset.setting);if(error){input.value=error.value;if(input.type==='checkbox')input.checked=error.checked;const row=input.closest('.setting');row.dataset.state='error';row.querySelector('.save-status').textContent=error.message;}}
   if(page==='providers'){
     if(!state.providers?.length)emptyState(root,'providers','Choose who you think with.','Connect an AI provider and choose a model to start working in your game.',button('Add provider',()=>providerEditor(),'primary'));
@@ -669,8 +854,9 @@ function renderPanel(){
 
 let installSource=stored('localStorage','uai.installSource')||'executor';
 function renderCowork(root){
-  heading(root,'Connection',connected?button('Open chat',()=>show('chat'),'primary'):button('Setup instructions',()=>{const guide=$('connectionGuide');guide.open=true;guide.scrollIntoView({block:'start',behavior:'smooth'});},'outline'));
-  root.append(el('p','panel-description',connected?'Your browser and Roblox are working together. Keep the bridge running while you work.':'Connect the bridge to Roblox to bring your conversation and tools into this workspace.'));
+  const hero=el('section','connection-hero'),copy=el('div'),eyebrow=el('p','connection-eyebrow');hero.dataset.connected=String(connected);eyebrow.append(el('span','status-dot'),document.createTextNode(connected?'CONNECTED':'READY TO CONNECT'));
+  copy.append(eyebrow,el('h2',null,connected?'Your workspace is connected.':'One connection. Your whole workspace.'),el('p',null,connected?(state.place?.name||'Roblox')+' is connected to this browser. Your conversations, tools, and changes stay in sync.':'Load Project UAI in Roblox, then connect it to this bridge to start working together.'));
+  const actions=el('div','connection-hero-actions');actions.append(connected?button('Open chat',()=>show('chat'),'primary'):button('View setup steps',()=>{const guide=$('connectionGuide');guide.open=true;guide.scrollIntoView({block:'start',behavior:'smooth'});},'primary'),button('Copy bridge token',()=>copyText(token),'outline'));hero.append(copy,actions);root.append(hero);
   const path=el('div','connection-path');path.setAttribute('aria-label','Browser, bridge, and Roblox connection status');
   for(const [name,detail,symbol,ready]of [['This browser','Open and ready','chat',true],['Local bridge',link==='online'?'Running on port '+location.port:'Reconnecting…','bridge',link==='online'],['Roblox',connected?(state.place?.name||'Connected'):'Waiting to connect','player',connected]]){
     const n=el('div','connection-node');n.dataset.ready=String(ready);n.append(el('span','status-dot'),el('strong',null,name),el('small',null,detail));path.append(n);
@@ -712,18 +898,53 @@ const SETTING_CHOICES={
 const SETTING_RANGES={'ui.fontScale':[.85,1.4,.05],'agent.temperature':[0,2,.1],'agent.toolConcurrency':[1,8,1],
   'agent.maxTurns':[1,1000,1],'agent.toolTimeout':[1,86400,1],'agent.requestTimeout':[1,86400,1],'agent.retries':[1,10,1],
   'agent.contextTokens':[1000,2000000,1],'agent.contextFraction':[.3,.95,.05],'agent.maxTokens':[1,1000000,1]};
-function renderSettings(root){
-  heading(root,'Settings');root.append(el('p','panel-description','Personalize this browser and manage the settings shared with Roblox.'));
-  const appearance=card(root,'Browser appearance');appearance.classList.add('settings-section');
-  const theme=select(appearance,'Theme',[['system','Follow this computer'],['light','Light'],['dark','Dark'],['game','Match Roblox']],UAI.theme.get());theme.onchange=()=>UAI.theme.set(theme.value);
-  appearance.append(el('small','setup-detail','Saved in this browser. Match Roblox uses your game’s palette.'));
-  const permissions=card(root,'Permissions'),modes=el('div','segments');permissions.classList.add('settings-section');
-  for(const [mode,name]of [['readonly','Read only'],['ask','Ask first'],['auto','Auto'],['full','Allow all']]){const n=button(name,()=>action('permission-mode',{mode}),state.permissions?.mode===mode?'selected':'','permission:'+mode);n.setAttribute('aria-pressed',String(state.permissions?.mode===mode));n.disabled=!connected;modes.append(n);}permissions.append(modes,el('small','setup-detail','Ask first lets you review actions that change your game.'));
-  for(const [section,values]of Object.entries(state.settings||{})){
-    const details=el('details','card settings-section');details.append(el('summary',null,({ui:'Workspace appearance',agent:'Agent behavior',logs:'Logging',iy:'Infinite Yield',identity:'Provider identity'})[section]||section));
+function openSettings(initial='general'){
+  modal('Settings',root=>{
+    root.className='settings-layout';const nav=el('nav','settings-nav'),content=el('div','settings-content');nav.setAttribute('aria-label','Settings sections');root.append(nav,content);
+    const panels=new Map(),tabs=new Map(),choices=[['general','General'],['appearance','Appearance'],['agent','Agent'],['mcp','MCP'],['advanced','Advanced'],['data','Data']];
+    for(const [id,title]of choices){
+      const panel=el('section','settings-page');panel.id='settings-'+id;panel.hidden=true;panel.setAttribute('aria-labelledby','settings-tab-'+id);content.append(panel);panels.set(id,panel);
+      const tab=button(title,()=>activate(id),'settings-tab');tab.id='settings-tab-'+id;tab.setAttribute('aria-controls',panel.id);nav.append(tab);tabs.set(id,tab);
+    }
+    function activate(id){for(const [key,panel]of panels){panel.hidden=key!==id;const tab=tabs.get(key);tab.classList.toggle('selected',key===id);if(key===id)tab.setAttribute('aria-current','true');else tab.removeAttribute('aria-current');}content.scrollTop=0;if(id==='mcp')loadMcp();}
+    const general=panels.get('general');general.append(el('h3',null,'Make yourself at home'),el('p','settings-intro','Your browser, your workspace. Changes save as you go.'));
+    const appearance=card(general,'Browser theme'),themeChoices=el('div','theme-choices');appearance.append(themeChoices);
+    for(const [id,title]of [['light','Light'],['dark','Dark'],['system','System'],['game','Roblox']]){const choice=button('',()=>{UAI.theme.set(id);sync();},'theme-choice');choice.dataset.themeChoice=id;const preview=el('span','theme-preview');preview.setAttribute('aria-hidden','true');preview.append(el('i'),el('i'),el('i'));choice.append(preview,el('span',null,title));themeChoices.append(choice);}
+    appearance.append(el('small','setup-detail','Saved in this browser. Roblox follows your game’s palette.'));
+    const permissions=card(general,'Permissions'),modes=el('div','segments permission-modes');
+    for(const [mode,name]of [['readonly','Read only'],['ask','Ask first'],['auto','Auto'],['full','Allow all']]){const n=button(name,()=>modalTask(()=>command('permission-mode',{mode}),{success:'Permission mode saved.'}),'','permission:'+mode);n.dataset.permission=mode;modes.append(n);}permissions.append(modes,el('small','setup-detail','Ask first lets you review actions that change your game.'));
+    panels.get('appearance').append(el('h3',null,'Conversation appearance'),el('p','settings-intro','Tune reading comfort and the details shown in your conversations.'));
+    panels.get('agent').append(el('h3',null,'Agent behavior'),el('p','settings-intro','Set the instructions and limits shared with Roblox.'));
+    panels.get('advanced').append(el('h3',null,'Advanced settings'),el('p','settings-intro','Connection, logging, and provider preferences shared with Roblox.'));
+    for(const [section,values]of Object.entries(state.settings||{})){
+      const destination=panels.get(section==='ui'?'appearance':section==='agent'?'agent':'advanced');
+      const details=el('section','settings-section');details.append(el('h4',null,({ui:'Display',agent:'Agent',logs:'Logging',iy:'Infinite Yield',identity:'Provider identity',bridge:'Bridge',relay:'Relay'})[section]||section));
+      renderSettingFields(details,section,values);if(details.childElementCount>1)destination.append(details);
+    }
+    const extras=panels.get('data');extras.append(el('h3',null,'Your configuration'),el('p','settings-intro','Move your configuration between installations. Full exports include API keys.'));
+    const row=el('div','row');row.append(button('Export full config',()=>modalTask(async()=>{const data=await command('config:export');download('uai-config.json',data.text,'application/json');},{success:'Configuration exported.'}),'outline'),button('Import full config',importConfig,'outline'));extras.append(row);
+    const mcpRoot=panels.get('mcp');mcpRoot.append(el('h3',null,'Connect your AI tools'),el('p','settings-intro','Give your desktop AI harness access to the tools in your Roblox workspace.'));
+    const mcpStatus=el('div','mcp-status'),mcpControls=el('div','mcp-controls');mcpRoot.append(mcpStatus,mcpControls);let mcpLoading=false,mcpLoaded=false;
+    async function loadMcp(force=false){
+      if(mcpLoading||(mcpLoaded&&!force))return;mcpLoading=true;mcpStatus.textContent='Checking MCP connection…';
+      try{const data=await api('/mcp/config');if(!root.isConnected)return;mcpLoaded=true;renderMcp(mcpStatus,mcpControls,data,()=>loadMcp(true));}
+      catch(error){if(root.isConnected){mcpStatus.replaceChildren(el('p','form-error',error.message),button('Try again',()=>loadMcp(true),'outline'));}}
+      finally{mcpLoading=false;}
+    }
+    function sync(){
+      for(const choice of themeChoices.children){const selected=choice.dataset.themeChoice===UAI.theme.get();choice.classList.toggle('selected',selected);choice.setAttribute('aria-pressed',String(selected));}
+      for(const choice of modes.children){const selected=choice.dataset.permission===state.permissions?.mode;choice.classList.toggle('selected',selected);choice.setAttribute('aria-pressed',String(selected));choice.disabled=!connected||!!modalContext?.pending;}
+      for(const input of root.querySelectorAll('[data-setting]')){if(document.activeElement===input||['saving','error'].includes(input.closest('.setting').dataset.state))continue;const [section,key]=input.dataset.setting.split('.'),value=state.settings?.[section]?.[key];input.disabled=!connected||!!modalContext?.pending||!!modalContext?.uncertain;if(value===undefined)continue;if(input.type==='checkbox')input.checked=!!value;else input.value=value;}
+    }
+    modalRefresh=sync;sync();activate(panels.has(initial)?initial:'general');modalActions(modalCancel('Done'));
+  },{size:'settings',focusHeading:true});
+}
+function renderSettingFields(details,section,values){
     for(const [key,value]of Object.entries(values)){
       if(['lastSeenVersion','lastSeenChangelog','panel'].includes(key)||(section==='ui'&&key==='reduceMotion')||(section==='bridge'&&key==='requestTimeout')||typeof value==='object')continue;
-      const path=section+'.'+key,row=el('label','setting'),caption=el('span',null,key.replace(/([A-Z])/g,' $1').replace(/^./,c=>c.toUpperCase())),status=el('small','save-status');status.setAttribute('aria-live','polite');caption.append(status);row.append(caption);
+      const path=section+'.'+key,row=el('label','setting'),caption=el('span',null,path==='agent.autoFreeRouting'?'Automatic free routing':key.replace(/([A-Z])/g,' $1').replace(/^./,c=>c.toUpperCase())),status=el('small','save-status');status.setAttribute('aria-live','polite');
+      if(path==='agent.autoFreeRouting')caption.append(el('small','field-help','Choose a recently verified free model for included HCNSEC access when its model is Auto. Off keeps provider Auto and stops new local routing probes; an active request continues.'));
+      caption.append(status);row.append(caption);
       let input;
       if(typeof value==='boolean'){input=el('input');input.type='checkbox';input.checked=value;}
       else if(SETTING_CHOICES[path]){input=el('select');for(const item of SETTING_CHOICES[path]){const [id,title]=Array.isArray(item)?item:[item,item[0].toUpperCase()+item.slice(1)];const option=el('option',null,title);option.value=id;input.append(option);}input.value=value;}
@@ -739,10 +960,40 @@ function renderSettings(root){
         finally{queueMicrotask(flushPanelRefresh);}
       };
       row.append(input);details.append(row);
-    }if(details.childElementCount>1)root.append(details);
+    }
+}
+function renderMcp(status,root,data,refresh){
+  status.replaceChildren();const summary=el('div','mcp-status-line');summary.append(el('span','status-dot'),el('strong',null,data.available?'Ready for your harness':data.connected?'Update the UAI script':'Waiting for Roblox'),button('Refresh',refresh,'outline'));status.dataset.ready=String(!!data.available);status.append(summary,el('small',null,data.available?(data.tools||0)+' tools available. Your workspace permissions apply.':data.connected?'Reload the latest UAI script to enable MCP tools.':'Load UAI in Roblox and connect this bridge to expose your tools.'));
+  root.replaceChildren();const endpoint=el('div','mcp-endpoint');endpoint.append(el('span','eyebrow','SERVER URL'),el('code',null,data.endpoint));root.append(endpoint);
+  const harness=select(root,'Harness',[['claude','Claude Desktop / Claude Code'],['cursor','Cursor'],['vscode','VS Code / Copilot'],['opencode','OpenCode'],['codex','Codex'],['http','Streamable HTTP']], 'claude');
+  const location=el('p','field-help'),preview=el('pre','mcp-config');preview.setAttribute('aria-label','MCP configuration preview');root.append(location,preview);
+  function config(secret,format=harness.value){
+    const env={UAI_BRIDGE_TOKEN:secret?token:'YOUR_BRIDGE_TOKEN'},stdio={command:data.stdio?.command||'node',args:data.stdio?.args||[],...(!data.stdio?.discovery?{env}:{})};
+    if(format==='http')return JSON.stringify({mcpServers:{projectuai:{url:data.endpoint,headers:{Authorization:'Bearer '+env.UAI_BRIDGE_TOKEN}}}},null,2);
+    if(format==='vscode')return JSON.stringify({servers:{projectuai:{type:'stdio',...stdio}}},null,2);
+    if(format==='opencode')return JSON.stringify({mcp:{projectuai:{type:'local',command:[stdio.command,...stdio.args],...(!data.stdio?.discovery?{environment:env}:{}),enabled:true}}},null,2);
+    if(format==='codex')return '[mcp_servers.projectuai]\ncommand = '+JSON.stringify(stdio.command)+'\nargs = '+JSON.stringify(stdio.args)+'\ntool_timeout_sec = 300\n'+(!data.stdio?.discovery?'\n[mcp_servers.projectuai.env]\nUAI_BRIDGE_TOKEN = '+JSON.stringify(env.UAI_BRIDGE_TOKEN)+'\n':'');
+    return JSON.stringify({mcpServers:{projectuai:stdio}},null,2);
   }
-  const extras=card(root,'Configuration');extras.classList.add('settings-section');extras.append(el('p','muted','Move your full configuration between installations. Exports include your API keys.'));
-  const row=el('div','row');row.append(button('Export full config',async()=>{try{const data=await command('config:export');download('uai-config.json',data.text,'application/json');}catch(e){toast(e.message);}},'outline'),button('Import full config',importConfig,'outline'));extras.append(row);
+  function paint(){location.textContent=({claude:'Add to claude_desktop_config.json, or your project’s .mcp.json for Claude Code.',cursor:'Add to .cursor/mcp.json in your project, or your global Cursor MCP settings.',vscode:'Add to .vscode/mcp.json in your workspace.',opencode:'Add this MCP entry to opencode.json.',codex:'Add to ~/.codex/config.toml.',http:'Use this URL and Authorization header with a Streamable HTTP client.'})[harness.value];preview.textContent=config(false);}
+  function setupPrompt(){
+    const readTools=['client_status','place_info'].filter(name=>(state.tools||[]).some(tool=>tool.name===name));
+    const discoveryHttp=data.stdio?.discovery&&harness.value==='http';
+    return 'Connect your harness to my local Project UAI MCP server and verify the connection.\n\n'+
+      'Inspect your harness and its supported MCP configuration first. Preserve all unrelated settings and existing MCP entries. Register this server as projectuai. Prefer stdio for broad compatibility; use Streamable HTTP if your harness supports it.\n\n'+
+      'Exact stdio command: '+JSON.stringify(data.stdio?.command||'node')+'\nExact stdio arguments: '+JSON.stringify(data.stdio?.args||[])+'\n'+
+      (data.stdio?.discovery?'The desktop app supplies credentials through local discovery; do not add a token environment variable.\n':'Stdio environment: '+JSON.stringify({UAI_BRIDGE_TOKEN:token})+'\n')+
+      'Streamable HTTP endpoint: '+data.endpoint+'\n'+
+      (harness.value==='http'&&!data.stdio?.discovery?'HTTP authorization: Bearer '+token+'\n':'')+
+      '\nConfiguration for '+(discoveryHttp?'universal stdio with desktop discovery':harness.selectedOptions[0].textContent)+':\n'+config(true,discoveryHttp?'claude':harness.value)+'\n\n'+
+      'Write the configuration using the syntax your harness supports, without replacing unrelated entries. Reload or restart the MCP connection as needed. Initialize the server, list its tools, and verify Roblox is connected. Run only '+(readTools.length?'a harmless read-only check such as '+readTools.join(' or '):'an advertised read-only status or place-information tool')+' to verify it; do not run code or mutate the game as a setup test.\n\n'+
+      'Report the configuration location, discovered tool count, and actual verification result. Keep credentials out of your report. If you cannot access local configuration or MCP tools, explain that limitation and provide the exact remaining steps instead of claiming success.';
+  }
+  harness.onchange=paint;paint();const actions=el('div','row mcp-setup-actions');actions.append(button('Copy setup prompt',()=>copyText(setupPrompt()),'primary'),button('Copy configuration',()=>copyText(config(true)),'outline'));root.prepend(actions,el('p','field-help','Paste the setup prompt into your agent to connect it for you.'));
+  root.append(el('p','field-help',data.stdio?.discovery?'Desktop stdio connects through local discovery. HTTP configuration includes this bridge’s token.':'Copy includes this bridge’s token. Keep the configuration private. Restart or refresh your harness after saving it.'));
+  const sessions=data.sessions||[];const clients=card(root,'Connected harnesses');
+  if(!sessions.length)clients.append(el('p','muted','No harness connected yet.'));
+  else for(const client of sessions){const row=el('div','mcp-client');row.append(el('strong',null,client.clientName||'MCP client'),el('small',null,(client.activeCalls||0)+' active calls'));clients.append(row);}
 }
 function importConfig(){modal('Import configuration',root=>{
   const form=el('form','dialog-form');form.id='modalForm';root.append(form);
@@ -753,7 +1004,7 @@ function importConfig(){modal('Import configuration',root=>{
   const submit=el('button','primary','Import configuration');submit.type='submit';submit.setAttribute('form',form.id);modalActions(modalCancel(),submit);
 },{description:'This replaces your saved settings and provider credentials. Stop running work before importing.',size:'wide'});}
 async function submit(){
-  if(sending||sendPhase!=='idle'||readingFiles||draftLoads.has(sessionId)||busy||!connected)return;
+  if(stopping||sending||sendPhase!=='idle'||readingFiles||draftLoads.has(sessionId)||(busy&&!state.queue)||!connected||state.queue?.count>=state.queue?.limit)return;
   const text=$('input').value;
   const pictureIds=UAI.pictures.ids();
   if(!text.trim()&&!uploads.length&&!pictureIds.length)return;
@@ -785,8 +1036,8 @@ async function submit(){
     // Correlate before POST: the game can emit its user event before the receipt.
     if(pictureIds.length)UAI.pictures.attachToCommand(operation.commandId,pictureIds);
     operation.submitted=true;persistOperation();
-    await command('send',fields);
-    await clearSentDraft(operation);forgetOperation();armAwaitTurn(operation);
+    const admitted=await command('send',fields);
+    await clearSentDraft(operation);forgetOperation();if(admitted?.queued){setPhase('idle');toast('Follow-up queued.');}else armAwaitTurn(operation);
   }catch(e){
     toast(e.message);
     if(operation.submitted&&e.uncertain){setPhase('uncertain');persistOperation();}
@@ -865,11 +1116,12 @@ async function attachFiles(source){
   }}finally{readingFiles--;refresh();}
 }
 function download(name,text,type){const url=URL.createObjectURL(new Blob([text],{type}));const a=el('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-$('send').onclick=submit;$('stop').onclick=async()=>{if(sendPhase==='stopping')return;setPhase('stopping');try{await command('abort');}catch(e){toast(e.message);}finally{setPhase(sendOperation?.submitted?'uncertain':'idle');}};armButton($('clear'),'Confirm clear',()=>action('clear'));
+$('send').onclick=submit;$('stop').onclick=async()=>{if(stopping)return;stopping=true;refresh();try{await command('abort');}catch(e){toast(e.message);}finally{stopping=false;refresh();}};armButton($('clear'),'Confirm clear',()=>action('clear'));
 $('input').oninput=grow;
 $('input').onpaste=pasteInput;
 $('input').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();submit();}};
 $('newThread').onclick=$('newConversation').onclick=()=>openConversation();$('modelButton').onclick=models;
+$('contextButton').onclick=contextDetails;
 $('attach').onclick=()=>$('fileInput').click();$('fileInput').onchange=attachFiles;
 $('attachPictures').onclick=()=>{if(window.UAI&&UAI.pictures)UAI.pictures.openPicker();};
 $('themeToggle').onclick=()=>{if(window.UAI&&UAI.theme)UAI.theme.toggle();};
@@ -888,6 +1140,10 @@ $('options').onclick=()=>modal('Conversation options',root=>{
   root.append(el('h3','dialog-section-title','Start with an idea'));const prompts=el('div','prompt-options');for(const [title,,prompt]of starters)prompts.append(button(title,()=>{closeModal(true,false);insert(prompt);},'outline'));root.append(prompts);modalActions(modalCancel('Done'));
 },{description:'Tune this conversation or pick a starting point.',size:'compact'});
 $('sidebarToggle').onclick=()=>{const mobile=innerWidth<=768;document.body.classList.toggle(mobile?'sidebar-open':'sidebar-hidden');syncSidebar();if(mobile&&document.body.classList.contains('sidebar-open'))$('closeSidebar').focus();};
+$('headerMenu').addEventListener('toggle',()=>{$('headerMenu').querySelector('summary').setAttribute('aria-expanded',String($('headerMenu').open));});
+document.addEventListener('pointerdown',event=>{if(!$('headerMenu').contains(event.target))$('headerMenu').open=false;});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&$('headerMenu').open){$('headerMenu').open=false;$('headerMenu').querySelector('summary').focus();}});
+$('headerMenu').addEventListener('click',event=>{const action=event.target.closest('button');if(action&&action.id!=='clear'){$('headerMenu').open=false;if(action.id==='exportChat')$('headerMenu').querySelector('summary').focus();}});
 document.addEventListener('keydown',e=>{
   if(innerWidth>768||!document.body.classList.contains('sidebar-open')||$('modal').open)return;
   if(e.key==='Escape'){e.preventDefault();closeSidebar(true);}
@@ -898,7 +1154,7 @@ document.addEventListener('keydown',e=>{
     else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
   }
 });
-$('closeSidebar').onclick=()=>closeSidebar(true);
+$('closeSidebar').onclick=()=>{if(innerWidth>768)document.body.classList.add('sidebar-hidden');closeSidebar(true);$('sidebarToggle').focus();};
 $('searchThreads').onclick=()=>{$('threadSearch').hidden=!$('threadSearch').hidden;$('searchThreads').setAttribute('aria-expanded',String(!$('threadSearch').hidden));if(!$('threadSearch').hidden)$('threadSearch').focus();};
 $('threadSearch').oninput=renderThreads;document.querySelectorAll('button[data-page]').forEach(b=>b.onclick=()=>show(b.dataset.page));
 $('panel').addEventListener('focusout',()=>queueMicrotask(flushPanelRefresh));
@@ -936,7 +1192,7 @@ document.addEventListener('uai:theme',themeChanged);themeChanged();
 window.addEventListener('resize',()=>{syncSidebar();resizeComposer();});syncSidebar();
 window.addEventListener('pagehide',()=>{saveDraft();persistDrafts();});
 function showGate(reason=''){
-  saveDraft();persistDrafts();stream?.close();clearTimeout(connectionRetry);closeSidebar();if($('modal').open)closeModal(true,false);
+  saveDraft();persistDrafts();stream?.close();clearTimeout(connectionRetry);closeSidebar();if($('modal').open)closeModal(true,false);closeWorkspace(false);
   connected=false;link='disconnected';$('app').hidden=true;$('gate').hidden=false;$('gate-error').textContent=reason;
   $('gate-connect').disabled=false;refresh();$('gate-token').focus({preventScroll:true});
 }

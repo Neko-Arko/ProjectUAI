@@ -16,8 +16,8 @@ return function(env)
 
 	-- context  the input window, in tokens.
 	-- output   the ceiling on a single reply, in tokens.
-	-- sampling false only where temperature/top_p/top_k are *rejected* rather than
-	--          ignored. Absent means "send them", which is what every other model
+	-- sampling false where temperature/top_p/top_k are rejected or documented as
+	--          unsupported. Absent means "send them", which is what every other model
 	--          in this client has always had.
 	-- effort   the levels `output_config.effort` accepts, cheapest first, or absent
 	--          where the model has no effort control.
@@ -30,6 +30,20 @@ return function(env)
 	local FOUR = { "low", "medium", "high", "max" }
 
 	local TRAITS = {
+		["gemini-2.5-pro"] = { effort = { "low", "medium", "high" }, thinking = "gemini-budget", thinkingMax = 32768 },
+		["gemini-2.5-flash"] = { effort = { "low", "medium", "high" }, thinking = "gemini-budget", thinkingMax = 24576 },
+		["gemini-2.5-flash-image"] = {},
+		["gemini-3-pro"] = { effort = { "low", "high" }, thinking = "gemini-level", default = "high" },
+		["gemini-3-pro-image"] = {},
+		["gemini-3.1-pro"] = { effort = { "low", "medium", "high" }, thinking = "gemini-level", default = "high" },
+		["gemini-3-flash"] = { effort = { "minimal", "low", "medium", "high" }, thinking = "gemini-level", default = "high" },
+		["gemini-3.1-flash-lite"] = { effort = { "minimal", "low", "medium", "high" }, thinking = "gemini-level", default = "minimal" },
+		-- Google's native API reference explicitly retires sampling on 3.6 Flash
+		-- and newer Flash models. Unknown future families retain default handling.
+		["gemini-3.6-flash"] = { sampling = false, effort = { "low", "medium", "high" }, thinking = "gemini-level" },
+		["gemini-3.7-flash"] = { sampling = false, effort = { "low", "medium", "high" }, thinking = "gemini-level" },
+		["gemini-3.8-flash"] = { sampling = false, effort = { "low", "medium", "high" }, thinking = "gemini-level", default = "medium" },
+		["gemini-4-argon"] = { sampling = false, effort = { "low", "medium", "high" }, thinking = "gemini-level", default = "medium" },
 		["claude-fable-5-1"] = { context = 1000000, output = 128000, sampling = false,
 			effort = FIVE, thinking = "adaptive", default = "high", alwaysThinks = true },
 		["claude-mythos-5-1"] = { context = 1000000, output = 128000, sampling = false,
@@ -132,7 +146,7 @@ return function(env)
 	-- The nearest level this model actually has, never rounding up: asking for
 	-- "xhigh" on a scale that stops at "high" must land on "high" rather than
 	-- spending "max", because the setting is a ceiling the user chose.
-	local RANK = { low = 1, medium = 2, high = 3, xhigh = 4, max = 5 }
+	local RANK = { minimal = 0, low = 1, medium = 2, high = 3, xhigh = 4, max = 5 }
 
 	function M.nearestEffort(model, wanted)
 		local levels = M.effortLevels(model)

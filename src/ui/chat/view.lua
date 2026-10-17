@@ -652,6 +652,11 @@ return function(env)
 					text = string.format("%s failed, trying %s", tostring(event.from), tostring(event.to)),
 				}, order)
 				follow()
+			elseif event.kind == "model:route" then
+				local into, order = target()
+				message.notice(into, { tone = "info", text = event.text or ("Automatic free routing selected "
+					.. tostring(event.model) .. ". Turn it off in Settings → Agent → Automatic free routing.") }, order)
+				follow()
 			elseif event.kind == "compact" then
 				local into, order = target()
 				local before, after = tonumber(event.before), tonumber(event.after)

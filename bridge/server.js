@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 'use strict';
 
+// Harness-launched stdio mode connects to the existing bridge; it must never
+// create a supervisor or bind a second desktop port.
+if (process.argv.includes('--mcp-stdio')) {
+  require('./mcp-stdio').run();
+  return;
+}
+
 // Keep one owned parent process while verified releases replace only its idle
 // worker. Downloaded start.txt and the desktop use this same entry point.
 if (process.env.UAI_BRIDGE_WORKER !== '1' || typeof process.send !== 'function') {
@@ -35,6 +42,7 @@ const { createPictureStore } = require('./picture-store');
 const RELEASE = require('./release');
 const { help, DISCORD } = require('./support');
 const { createOpenCode } = require('./opencode');
+const { createMcp } = require('./mcp');
 
 const args = process.argv.slice(2);
 function flag(name, fallback) {
@@ -112,6 +120,12 @@ const state = {
   lastSeen: 0,      // when the game last touched any /api/agent route
   connected: false,
 };
+
+const mcp = createMcp({ version: RELEASE.version, getState: () => state.agentState,
+  connected: () => state.connected,
+  enqueue: command => enqueue(command, undefined, command.type === 'mcp:close'), receipt: id => commands.get(id),
+  cancelCommand, readBody,
+});
 
 // Security headers applied to static, API, SSE, and error responses. The CSP is
 // same-origin only (no remote CDN) with blob: for locally fetched thumbnails.
@@ -257,7 +271,7 @@ function admitSubmission() {
 // rather than polled: the game is already waiting when the message arrives. The
 // fingerprintSource (defaults to the command) drives idempotency; pictureIds are
 // part of it. Only compact image references cross the game boundary.
-function enqueue(command, fingerprintSource) {
+function enqueue(command, fingerprintSource, control = false) {
   const id = command.commandId || crypto.randomUUID();
   if (typeof id !== 'string' || !/^[\w-]{8,100}$/.test(id)) throw new Error('Invalid command ID');
   const fingerprint = fingerprintOf({ ...(fingerprintSource || command), commandId: id });
@@ -265,10 +279,12 @@ function enqueue(command, fingerprintSource) {
     if (commands.get(id).fingerprint !== fingerprint) { const e = new Error('Command ID belongs to another action'); e.status = 400; throw e; }
     return { id, created: false };
   }
-  admitSubmission();
+  if (!control) admitSubmission();
   const bytes = Buffer.byteLength(JSON.stringify(command));
-  if (commandBytes + bytes > COMMAND_BYTES) { const e = new Error('Command queue is full; let pending work finish first'); e.status = 503; throw e; }
-  if (commands.size >= 10000) { const e = new Error('Command capacity reached; retry shortly'); e.status = 503; throw e; }
+  // Reserve a small, bounded lane for internal MCP cancellation/cleanup. A full
+  // user-command queue must not prevent stopping the work that filled it.
+  if (commandBytes + bytes > COMMAND_BYTES + (control ? 65536 : 0)) { const e = new Error('Command queue is full; let pending work finish first'); e.status = 503; throw e; }
+  if (commands.size >= 10000 + (control ? 128 : 0)) { const e = new Error('Command capacity reached; retry shortly'); e.status = 503; throw e; }
   const { pictureIds, ...clean } = command; // never crosses the game boundary
   const queued = { ...clean, commandId: id };
   commands.set(id, { command: queued, state: 'queued', fingerprint, bytes });
@@ -280,6 +296,22 @@ function enqueue(command, fingerprintSource) {
   for (const c of state.inbox.slice(0, 32)) commands.get(c.commandId).delivered = true;
   sendJson(waiter.res, 200, { commands: state.inbox.slice(0, 32) });
   return { id, created: true };
+}
+
+function cancelCommand(id, cancellation) {
+  const entry = commands.get(id);
+  if (!entry || !['queued', 'running'].includes(entry.state)) return;
+  // An undelivered call can be removed outright. Once delivered, preserve the
+  // receipt and send a cooperative cancellation addressed to this call only.
+  if (entry.state === 'queued' && !entry.delivered) {
+    state.inbox = state.inbox.filter(command => command.commandId !== id);
+    entry.state = 'failed'; entry.finishedAt = Date.now();
+    commandBytes -= entry.bytes || 0; entry.bytes = 0;
+    retainResult(entry, { id, ok: false, error: 'MCP call cancelled before delivery' });
+    entry.command = { commandId: id };
+  } else {
+    try { enqueue(cancellation, undefined, true); } catch { /* Capacity does not imply the running action was undone. */ }
+  }
 }
 
 // Validated image references shared by /api/send and /api/command send.
@@ -677,6 +709,7 @@ const server = http.createServer(async (req, res) => {
       sendText(res, 403, 'forbidden'); return;
     }
     route = decoded;
+    if (route === '/mcp') route = '/api/mcp';
   } catch {
     sendText(res, 400, 'bad request');
     return;
@@ -684,7 +717,8 @@ const server = http.createServer(async (req, res) => {
 
   // Held inbox/SSE connections are reconnectable, but any body in flight and
   // any finite response must finish before the idle handshake can succeed.
-  if (route.startsWith('/api/') && !['/api/stream', '/api/agent/inbox', '/api/hello'].includes(route)) {
+  if (route.startsWith('/api/') && !['/api/stream', '/api/agent/inbox', '/api/hello'].includes(route) &&
+      !(route === '/api/mcp' && req.method === 'GET')) {
     activeRequests++;
     let finished = false;
     const release = () => { if (!finished) { finished = true; activeRequests--; } };
@@ -732,9 +766,26 @@ const server = http.createServer(async (req, res) => {
 
   const post = req.method === 'POST';
   try {
-    if (route === '/api/hello' && req.method === 'GET') {
+    if (route === '/api/mcp') {
+      // Apply exact local hosts for MCP even outside native desktop mode.
+      if (!new Set([`${HOST}:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`]).has(req.headers.host)) {
+        sendText(res, 403, 'bad host'); return;
+      }
+      for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value);
+      await mcp.handle(req, res);
+    } else if (route === '/api/mcp/config' && req.method === 'GET') {
+      const desktopExecutable = process.env.UAI_DESKTOP_EXECUTABLE;
+      const nativeCommand = DESKTOP && typeof desktopExecutable === 'string' && path.isAbsolute(desktopExecutable) && /\.exe$/i.test(desktopExecutable);
+      sendJson(res, 200, { ...mcp.capability(), endpoint: `http://${HOST}:${PORT}/mcp`,
+        protocols: mcp.protocols, sessions: mcp.connections(),
+        stdio: { command: nativeCommand ? desktopExecutable : process.execPath,
+          args: [...(nativeCommand ? [] : [path.join(__dirname, 'server.js')]), '--mcp-stdio', '--url', `http://${HOST}:${PORT}`],
+          tokenEnv: 'UAI_BRIDGE_TOKEN', discovery: DESKTOP },
+      });
+    } else if (route === '/api/hello' && req.method === 'GET') {
       const capabilities = { browserStream: { schema: 1, replay: true }, agentInbox: { waitHeader: 'X-UAI-Poll-Wait-Ms', maxWaitMs: HOLD_MS } };
       capabilities.opencode = opencode.capability();
+      capabilities.mcp = mcp.capability();
       if (!LEGACY) capabilities.pictures = { mode: 'provider-image-content', version: 2 };
       sendJson(res, 200, {
         ok: true, connected: state.connected, protocol: 2, instance: inference.instance,
@@ -938,6 +989,7 @@ let stopping = false;
 function shutdown() {
   if (stopping) return;
   stopping = true;
+  mcp.close();
   inference.close();
   pictures?.close();
   server.closeAllConnections();
@@ -947,7 +999,7 @@ function shutdown() {
 }
 for (const event of ['SIGINT', 'SIGTERM']) process.on(event, shutdown);
 function updateBusy() {
-  if (activeRequests || activeUploads || inference.pending() || pictures?.hasLivePictures()) return true;
+  if (activeRequests || activeUploads || mcp.pending() || inference.pending() || pictures?.hasLivePictures()) return true;
   // Keep terminal receipts for their normal retention period, so an update
   // cannot race a browser's command reconciliation or the game's result poll.
   for (const entry of commands.values()) {

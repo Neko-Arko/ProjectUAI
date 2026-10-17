@@ -176,4 +176,22 @@ case("clearing history closes an open monitor even when its register is hidden",
 	f.healthy(); panel.scroll.instance:Destroy(); f.close()
 end)
 
+case("preview tabs preserve a follow-up draft during activity and resume retained context", function()
+	local f, agents, record, panel, modal, find, finish = setup()
+	local box = find("AgentFollowupInput"):FindFirstChildOfClass("TextBox")
+	box.Text = "Check this next"; box:CaptureFocus(); box.CursorPosition, box.SelectionStart = 8, 3
+	record.session.emit("assistant:preview", { text = "An updated live preview" }); settle(f.h, 0.2)
+	check("live updates retain the focused follow-up field and selection", box:IsFocused() and box.Text == "Check this next" and box.CursorPosition == 8 and box.SelectionStart == 3)
+	check("a running subagent cannot receive another run", not find("SendAgentFollowup").Active)
+	f.h.click(find("AgentTab_tools")); settle(f.h, 0.1)
+	check("Tools tab exposes activity without replacing the draft", find("AgentActivity").Visible and not find("AgentMessages").Visible and box.Text == "Check this next")
+	f.h.click(find("AgentTab_task")); settle(f.h, 0.1)
+	check("task and granted tools have their own view", find("AgentTaskDetails").Visible and not find("AgentActivity").Visible)
+	f.h.click(find("AgentTab_overview")); finish()
+	check("the completed context enables the drafted follow-up", find("SendAgentFollowup").Active and find("AgentReport").Visible)
+	f.h.click(find("SendAgentFollowup")); settle(f.h, 0.2)
+	check("follow-up reuses the same record and clears only admitted input", agents.get(record.id) == record and record.runs == 2 and record.currentTask == "Check this next" and box.Text == "")
+	f.healthy(); panel.scroll.instance:Destroy(); f.close()
+end)
+
 suite.finish()

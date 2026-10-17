@@ -207,12 +207,6 @@ return function(env)
 		if #tools > 0 then body.tools = tools end
 		if request.stream then body.stream = true end
 
-		local temperature = request.temperature
-		if temperature == nil then temperature = config.get("agent.temperature", 0.4) end
-		if temperature and traits.allowsSampling(record.model) then
-			body.temperature = temperature
-		end
-
 		-- Reasoning. Adaptive is the only shape the current generations accept: a
 		-- fixed `budget_tokens` was removed after 4.6 and answers 400 on everything
 		-- since. `display` is the part that matters to a client with a transcript --
@@ -233,6 +227,7 @@ return function(env)
 
 		for key, value in pairs(record.params or {}) do body[key] = value end
 		for key, value in pairs(request.extra or {}) do body[key] = value end
+		env.require("provider/sampling").apply(record, request, body)
 		openai.enforceOutputCeiling(record, body, request.outputCeiling)
 		-- This adapter has no WebSocket path; SSE here still arrives over HTTP.
 		return body
@@ -498,6 +493,7 @@ return function(env)
 	end
 
 	function M.complete(record, request)
+		local owns = env.require("provider/sampling").owner(record)
 		local problem = registry.protocolProblem(record)
 		if problem then return nil, problem end
 		request = util.copy(request or {})
@@ -537,7 +533,7 @@ return function(env)
 		local skip429 = (#pool > 1) and { [429] = true } or nil
 
 		local function fire(payload)
-			if registry.compatibilityKey(record) ~= requestScope then return nil, "aborted" end
+			if not owns() or registry.compatibilityKey(record) ~= requestScope then return nil, "aborted" end
 			if clock.ms() >= deadline then return nil, "deadline: request budget expired" end
 			local requestStarted = clock.ms()
 			local res, err = http.send({
@@ -592,6 +588,11 @@ return function(env)
 		end
 
 		local res, err = fireWithRotation(body)
+		if request.aborted and request.aborted() then return nil, "aborted" end
+		if not http.terminal(err) and env.require("provider/sampling").repair(record, body, res, M.errorText(res, err), requestScope, owns) then
+			if request.onRetry then request.onRetry({ attempt = 1, attempts = 2, wait = 0, reason = "omitted unsupported temperature", status = res.status }) end
+			res, err = fireWithRotation(body)
+		end
 
 		-- max_tokens is mandatory on this API and its limit is per model, so a reply
 		-- ceiling chosen for the widest Claude is a hard 400 on a narrower one -- and

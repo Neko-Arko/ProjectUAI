@@ -20,6 +20,16 @@ return function(env)
 	local M = {
 		changed = signal.new("providers"),
 	}
+	local requestSnapshots = setmetatable({}, { __mode = "k" })
+
+	-- Per-request model routing must not replace a saved provider when an adapter
+	-- learns a limit. Its owner merges scoped lessons after the request settles.
+	function M.requestSnapshot(record)
+		local snapshot = M.shareKeyRotation(record, util.deepCopy(record))
+		snapshot.health = record.health
+		requestSnapshots[snapshot] = true
+		return snapshot
+	end
 
 	-- Key pool ------------------------------------------------------------
 	--
@@ -161,6 +171,7 @@ return function(env)
 		if key == "" or style == "none" then return {} end
 		if style == "x-api-key" then return { ["x-api-key"] = key } end
 		if style == "api-key" then return { ["api-key"] = key } end
+		if style == "x-goog-api-key" then return { ["x-goog-api-key"] = key } end
 		if style == "both" then
 			return { ["Authorization"] = "Bearer " .. key, ["x-api-key"] = key }
 		end
@@ -172,19 +183,18 @@ return function(env)
 	end
 
 	function M.protocolProblem(record, opts)
-		if record.api ~= nil and record.api ~= "openai" and record.api ~= "anthropic" then
-			return "choose Chat completions or Anthropic messages; this API protocol is not implemented"
-		end
-		if not (opts and opts.discovery) and M.opencodeGoProtocol(record) == "gemini" then
-			return "Gemini on OpenCode Go requires Google's native API, which this client does not support; choose another Go model"
+		if record.api ~= nil and record.api ~= "openai" and record.api ~= "anthropic" and record.api ~= "gemini" then
+			return "choose Chat completions, Anthropic messages or Google Gemini; this API protocol is not implemented"
 		end
 		local parsed = urls.parse(M.normaliseBaseUrl(record.baseUrl))
 		local path = parsed and parsed.path:gsub("/+$", "") or ""
 		if path:match("/api/chat$") or path:match("/api/generate$") then
 			return "Ollama's native /api routes use a different protocol; use its OpenAI-compatible base URL, usually http://127.0.0.1:11434/v1"
 		end
-		if (path:match("/responses$") and not M.isOpencodeGo(record)) or path:match(":generateContent$") or path:match("/generateContent$") then
-			return "this route uses a different API; use the provider's Chat Completions or Anthropic Messages endpoint"
+		if (path:match("/responses$") and not M.isOpencodeGo(record))
+			or (path:match(":generateContent$") or path:match(":streamGenerateContent$") or path:match("/generateContent$"))
+				and record.api ~= "gemini" and M.opencodeGoProtocol(record) ~= "gemini" then
+			return "this route uses a different API; select the matching Chat completions, Anthropic messages or Google Gemini protocol"
 		end
 	end
 
@@ -198,7 +208,7 @@ return function(env)
 		if not parsed then return nil end
 		local path = parsed.path:gsub("/+$", "")
 		local base = path:match("^(.*)/chat/completions$") or path:match("^(.*)/messages$") or path:match("^(.*)/models$")
-			or path:match("^(.*)/responses$")
+			or path:match("^(.*)/responses$") or path:match("^(.*)/models/[^/]+:generateContent$") or path:match("^(.*)/models/[^/]+:streamGenerateContent$")
 		return parsed, base or path
 	end
 
@@ -551,6 +561,7 @@ return function(env)
 	end
 
 	function M.save(record, opts)
+		if requestSnapshots[record] then return true end
 		opts = opts or {}
 		record.baseUrl = M.normaliseBaseUrl(record.baseUrl)
 		if M.requiresClaude(record) then record.claudeUa = true end

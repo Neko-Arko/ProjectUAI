@@ -9,7 +9,7 @@
 return function(env)
 	local M = {}
 
-	-- authStyle: bearer | x-api-key | api-key | both | none
+	-- authStyle: bearer | x-api-key | x-goog-api-key | api-key | both | none
 	--   both sends Authorization and x-api-key together, which is what several
 	--   self-hosted relays expect and what the reference client did unconditionally.
 	-- Reachability is derived from the configured URL, including custom endpoints.
@@ -27,7 +27,7 @@ return function(env)
 			-- Keep included access available after the recommended providers.
 			featured = true,
 			featuredOrder = 4,
-			note = "Free AI for the Project UAI community, powered by HCNSEC. No account, payment or personal API key is needed. Thank you for your continued use and support of Project UAI. The auto model routes to available capacity; replies can be fast or slow, and shared availability or limits can change. More free providers may become available soon. Join us for updates and help: https://discord.gg/9xYyyYuKap",
+			note = "Free AI for the Project UAI community, powered by HCNSEC. No account, payment or personal API key is needed. Thank you for your continued use and support of Project UAI. Auto measures tool-capable models in the background and prefers a verified route below ten seconds. Real response times vary with your prompt and shared capacity. More free providers may become available soon. Join us for updates and help: https://discord.gg/9xYyyYuKap",
 			noteHighlight = "No account, payment or personal API key is needed.",
 		},
 		{
@@ -101,7 +101,7 @@ return function(env)
 			claudeUa = false,
 			featured = true,
 			featuredOrder = 5,
-			note = "Paid OpenCode Go access uses your own subscribed workspace key and the separate Go endpoint. Review the workspace Privacy region setting if Go requires Global regions. Fetch models from Go; DeepSeek uses Chat, GPT/Grok/Muse use Responses, and Claude/Minimax/Qwen use Messages automatically. Gemini's native API is not supported. Go uses keyed requests; the desktop-only free CLI catalog is separate. A successful model list does not verify your subscription.",
+			note = "Paid OpenCode Go access uses your own subscribed workspace key and the separate Go endpoint. Review the workspace Privacy region setting if Go requires Global regions. Fetch models from Go; DeepSeek uses Chat, GPT/Grok/Muse use Responses, Claude/Minimax/Qwen use Messages, and Gemini uses its native API automatically. Go uses keyed requests; the desktop-only free CLI catalog is separate. A successful model list does not verify your subscription.",
 		},
 		{
 			id = "azure-foundry",
@@ -142,14 +142,12 @@ return function(env)
 		{
 			id = "google",
 			label = "Google Gemini",
-			-- Google's OpenAI-compatible surface rather than generateContent: it speaks
-			-- /chat/completions and /models, so it needs no adapter of its own. The
-			-- path is part of the base URL here, which normaliseBaseUrl leaves alone.
-			baseUrl = "https://generativelanguage.googleapis.com/v1beta/openai",
-			authStyle = "bearer",
+			baseUrl = "https://generativelanguage.googleapis.com/v1beta",
+			authStyle = "x-goog-api-key",
+			api = "gemini",
 			keyHint = "AIza...",
 			docs = "https://aistudio.google.com/apikey",
-			note = "Gemini through Google's OpenAI-compatible endpoint. Tool calling works. The native generateContent API is not implemented.",
+			note = "Gemini's native generateContent API supports text, tool calls, image input through the bridge, reasoning summaries and signed multi-step tool replay. Fetch models with your Google AI Studio key. Existing OpenAI-compatible connections remain supported.",
 		},
 		{
 			id = "groq",

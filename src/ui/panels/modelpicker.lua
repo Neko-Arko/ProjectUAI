@@ -9,6 +9,8 @@ return function(env)
 	local providers = env.require("provider/registry")
 	local models = env.require("provider/models")
 	local traits = env.require("provider/traits")
+	local freeRoute = env.require("provider/free_route")
+	local sampling = env.require("provider/sampling")
 	local M = {}
 	local opened
 
@@ -74,6 +76,8 @@ return function(env)
 		local effort = P.column(root, { name = "Section_ReasoningEffort", anchor = Vector2.new(0, 1),
 			position = UDim2.fromScale(0, 1), size = UDim2.new(1, 0, 0, control + theme.text.caption.height + theme.space.sm),
 			gap = theme.space.xs })
+		local temperaturePanel = P.column(root, { name = "Section_Temperature", anchor = Vector2.new(0, 1),
+			position = UDim2.fromScale(0, 1), size = UDim2.new(1, 0, 0, 0), gap = theme.space.xs })
 
 		filterRows = function()
 			local visible = 0
@@ -92,6 +96,7 @@ return function(env)
 
 		renderEffort = function()
 			for _, child in ipairs(effort:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
+			for _, child in ipairs(temperaturePanel:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
 			local record = providers.active()
 			local levels = record and traits.effortLevels(record.model)
 			-- A manual reasoning claim is honored by both request adapters. Offer
@@ -115,12 +120,43 @@ return function(env)
 			local height = levels and (control + theme.text.caption.height + theme.space.sm) or 0
 			effort.Visible = levels ~= nil
 			effort.Size = UDim2.new(1, 0, 0, height)
+			temperaturePanel.Visible = record ~= nil
+			local temperatureHeight = record and control + theme.text.caption.height * 2 + theme.space.sm or 0
+			temperaturePanel.Size = UDim2.new(1, 0, 0, temperatureHeight)
+			effort.Position = UDim2.new(0, 0, 1, -temperatureHeight - (height > 0 and theme.space.sm or 0))
+			if record then
+				local id, policy = record.model, sampling.state(record)
+				local mode = ({ auto = "Automatic", send = "Send", omit = "Omit" })[policy.override] or "Automatic"
+				P.button(temperaturePanel, { name = "ModelTemperature", text = "Temperature: " .. mode .. (policy.allowed and (" · " .. tostring(config.get("agent.temperature", 0.4))) or " · omitted"),
+					fill = true, size = "sm", layoutOrder = 1, onClick = function(button)
+						overlay.menu({ target = button.instance, title = "Temperature for " .. id, options = {
+							{ label = "Automatic", value = "auto", selected = policy.override == "auto", detail = "Use known model and provider support" },
+							{ label = "Send temperature", value = "send", selected = policy.override == "send" },
+							{ label = "Omit temperature", value = "omit", selected = policy.override == "omit" },
+							{ divider = true }, { label = "Edit shared temperature value", value = "value" },
+						}, onSelect = function(value)
+							if value == "value" then
+								overlay.prompt({ title = "Temperature", description = "Shared value from 0 to 2. Models set to omit do not send it.", value = tostring(config.get("agent.temperature", 0.4)), confirmText = "Save", onConfirm = function(text)
+									local number = tonumber(text)
+									if not number or number ~= number or number < 0 or number > 2 then overlay.toast("Enter a temperature from 0 to 2", "warn", 3); return end
+									config.set("agent.temperature", number); notify()
+								end })
+							else local ok, why = sampling.set(id, value); if not ok then overlay.toast(tostring(why), "warn", 3) else notify() end end
+						end })
+					end })
+				local description = policy.source == "manual" and "Using your override for this model."
+					or policy.source == "learned" and "This provider rejected temperature; Automatic omits it."
+					or not policy.allowed and "This model does not use a custom temperature."
+					or "Lower values give more consistent responses."
+				P.text(temperaturePanel, { name = "TemperatureSupport", text = description, role = "caption", color = theme.color.textTertiary,
+					wrap = true, size = UDim2.new(1, 0, 0, theme.text.caption.height * 2), layoutOrder = 2 })
+			end
 			if fit then fit() end
 		end
 		fit = function()
 			if modal.closed or fitting then return end
 			fitting = true
-			local height = effort.Size.Y.Offset
+			local height = effort.Size.Y.Offset + temperaturePanel.Size.Y.Offset + (effort.Visible and temperaturePanel.Visible and theme.space.sm or 0)
 			local room = math.max(0, modal.scroll.viewportSize().Y)
 			local footerSpace = height > 0 and height + theme.space.md or 0
 			local natural = math.max(1, visibleCount) * (control + theme.space.hair) + theme.space.sm
@@ -147,15 +183,20 @@ return function(env)
 			local record = providers.active()
 			providerLabel.Text = record and record.label or "Add a provider"
 			local known = record and models.list(record) or {}
-			local nextSignature = (record and record.id or "") .. "\0" .. table.concat(known, "\0")
+			local labels = {}
+			for _, id in ipairs(known) do labels[#labels + 1] = id .. tostring(models.isFree(record, id)) end
+			local nextSignature = (record and record.id or "") .. "\0" .. table.concat(labels, "\0")
 			if signature ~= nextSignature then
 				for _, entry in ipairs(rows) do entry.button.instance:Destroy() end
 				rows = {}
 				list.instance.CanvasPosition = Vector2.new(0, 0)
 				for index, id in ipairs(known) do
 					local selected = id == record.model
+					local free = models.isFree(record, id)
 					local button = P.rowButton(list.instance, { name = "Model_" .. id, height = control,
 						selected = selected, bgSelected = theme.color.surfaceActive, radius = theme.radius.sm,
+						stroke = free, strokeColor = free and theme.color.success or nil,
+						strokeFocusColor = free and theme.color.success or nil, strokeWidth = free and 2 or nil,
 						padding = { x = theme.space.sm }, gap = theme.space.sm, layoutOrder = index,
 						onClick = function() providers.setModel(record.id, id); notify() end })
 					local label = button.label(id, 1, selected and theme.color.text or theme.color.textSecondary, "small")
@@ -163,7 +204,7 @@ return function(env)
 					local meta = P.text(button.row, { text = badge or "", role = "caption", color = theme.color.textTertiary, auto = "X", layoutOrder = 2 })
 					local mark = button.icon("check", 3, theme.color.accentHot)
 					mark.Visible = selected
-					rows[#rows + 1] = { id = id, free = models.isFree(record, id), button = button, label = label, mark = mark, meta = meta }
+					rows[#rows + 1] = { id = id, free = free, button = button, label = label, mark = mark, meta = meta }
 				end
 				signature = nextSignature
 			end
@@ -172,14 +213,27 @@ return function(env)
 				entry.button.setSelected(selected)
 				entry.label.TextColor3 = selected and theme.color.text or theme.color.textSecondary
 				entry.mark.Visible = selected == true
-				entry.meta.Text = traits.badge(entry.id, record) or ""
+				local badge = traits.badge(entry.id, record)
+				entry.label.Text = entry.id
+				entry.meta.Text = entry.free and ("Free" .. (badge and " | " .. badge or "")) or (badge or "")
+				entry.meta.TextColor3 = entry.free and theme.color.success or theme.color.textTertiary
+				if entry.id == "auto" then
+					local route = freeRoute.status(record)
+					if route.supported and route.enabled == false then
+						entry.label.Text, entry.meta.Text = "Auto (provider routing)", "Free | Automatic routing off"
+					elseif freeRoute.eligible(record) then
+						entry.label.Text = "Auto (fastest verified)"
+						entry.meta.Text = route.ms and string.format("Free | %.1fs probe", route.ms / 1000)
+							or (route.running and "Free | Measuring" or "Free")
+					end
+				end
 			end
 			filterRows()
 			renderEffort()
 			local chrome = modal.card.Size.Y.Offset - modal.scroll.instance.Size.Y.Offset
 			modalProps.height = math.min(theme.size.modelPickerHeight, chrome + listTop
 				+ math.min(math.max(#rows, 2), 7) * (control + theme.space.hair) + theme.space.lg
-				+ (effort.Visible and effort.Size.Y.Offset + theme.space.md or 0))
+				+ effort.Size.Y.Offset + temperaturePanel.Size.Y.Offset + theme.space.md + (effort.Visible and temperaturePanel.Visible and theme.space.sm or 0))
 			modal.relayout()
 			fit()
 		end
@@ -238,10 +292,17 @@ return function(env)
 			end })
 		P.button(modal.footer, { name = "PickerDone", text = "Done", variant = "primary", size = "sm", layoutOrder = 3,
 			onClick = function() modal.close() end })
-		local unsubscribe = providers.changed:connect(function(kind) if kind ~= "health" then render() end end)
+		local unsubscribe = providers.changed:connect(function(kind)
+			if kind ~= "health" then
+				render()
+				local record = providers.active()
+				if record then freeRoute.refresh(record) end
+			end
+		end)
+		local unsubscribeRoute = freeRoute.changed:connect(render)
 		local unsubscribeConfig = config.changed:connect(function(path)
 			if path == nil or path == "agent" or path == "agent.effort" or path == "agent.forceReasoning"
-				or path == "agent.forceContext" then render() end
+				or path == "agent.forceContext" or path == "agent.forceSampling" or path == "agent.temperature" or path == "agent.autoFreeRouting" then render() end
 		end)
 		local unsubscribeResponsive = responsive.changed:connect(function()
 			if modal.closed then return end
@@ -258,8 +319,10 @@ return function(env)
 			for _, entry in ipairs(rows) do entry.button.instance.Size = UDim2.new(1, 0, 0, control) end
 			render()
 		end)
-		modal.scrim.Destroying:Connect(function() unsubscribe(); unsubscribeConfig(); unsubscribeResponsive() end)
+		modal.scrim.Destroying:Connect(function() unsubscribe(); unsubscribeRoute(); unsubscribeConfig(); unsubscribeResponsive() end)
 		render()
+		local record = providers.active()
+		if record then freeRoute.refresh(record) end
 		modal.render = render
 		return modal
 	end

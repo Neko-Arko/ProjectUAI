@@ -170,6 +170,7 @@ return function(env)
 
 		local maps = {
 			{ "agent.forceReasoning", { boolean = true } },
+			{ "agent.forceSampling", { boolean = true } },
 			{ "agent.forceContext", { number = true } },
 			{ "agent.disabledGroups", { boolean = true } },
 			{ "permissions.rules", { string = true } },

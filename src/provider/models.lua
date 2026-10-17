@@ -6,9 +6,8 @@
 --   1. what the user added by hand, which always wins because they typed it
 --   2. what GET /v1/models reported, cached for the session
 --
--- Nothing is filtered out of a provider's answer. A local server that also serves
--- embedding models will list them; hiding entries would mean guessing which ones
--- are chat models, which is the thing this module refuses to do.
+-- Generic lists retain all IDs. Google's native catalog explicitly declares
+-- supportedGenerationMethods, so its non-generation entries can be excluded.
 return function(env)
 	local util = env.require("runtime/util")
 	local clock = env.require("runtime/clock")
@@ -148,6 +147,10 @@ return function(env)
 		local key, token, scope = keyFor(record), {}, scopeFor(record)
 		pending[key] = token
 		local snapshot = registry.shareKeyRotation(record, util.deepCopy(record))
+		local nativeGemini = env.require("provider/chat").styleOf(snapshot) == "gemini"
+		if nativeGemini and (snapshot.query and snapshot.query.alt ~= nil or tostring(snapshot.baseUrl):find("[?&]alt=")) then
+			snapshot.query = util.copy(snapshot.query or {}); snapshot.query.alt = "json"
+		end
 		local url = registry.endpoint(snapshot, "/models")
 		local headers = env.require("provider/chat").headers(snapshot)
 		local deadline = clock.ms() + math.max(1, math.min(300, tonumber(opts.timeout) or 120)) * 1000
@@ -182,6 +185,26 @@ return function(env)
 		end
 		if res and not cli then decoded, decodeError = util.decode(res.body) end
 		err = err or decodeError
+		local partial = false
+		if nativeGemini and res and res.ok and type(decoded) == "table" and type(decoded.models) == "table" then
+			local rows, tokens, pages = {}, {}, 1
+			for index, row in ipairs(decoded.models) do if index > 10000 then partial = true; break end; rows[#rows + 1] = row end
+			local pageToken = decoded.nextPageToken
+			while type(pageToken) == "string" and pageToken ~= "" and pages < 10 and #rows < 10000 do
+				if #pageToken > 4096 or tokens[pageToken] then err = "invalid Gemini model pagination"; res = nil; break end
+				if pending[key] ~= token or not same(scope, scopeFor(record)) then break end
+				tokens[pageToken], pages = true, pages + 1
+				local page = util.copy(snapshot); page.query = util.copy(snapshot.query or {}); page.query.pageToken = pageToken
+				url = registry.endpoint(page, "/models")
+				res, err = fetch()
+				local nextPage = res and res.ok and util.decode(res.body)
+				if type(nextPage) ~= "table" or type(nextPage.models) ~= "table" then err = err or "could not read the next Gemini model page"; res = nil; break end
+				for _, row in ipairs(nextPage.models) do if #rows >= 10000 then partial = true; break end; rows[#rows + 1] = row end
+				pageToken = nextPage.nextPageToken
+			end
+			partial = partial or type(pageToken) == "string" and pageToken ~= ""
+			decoded.models = rows
+		end
 
 		if pending[key] ~= token or not same(scope, scopeFor(record)) then
 			if pending[key] == token then pending[key] = nil end
@@ -216,6 +239,14 @@ return function(env)
 					id = row.id or row.name or row.model
 				end
 				id = type(id) == "string" and util.trim(id) or ""
+				if nativeGemini then
+					id = id:gsub("^models/", "")
+					if type(row) == "table" and type(row.supportedGenerationMethods) == "table" then
+						local generates = false
+						for _, method in ipairs(row.supportedGenerationMethods) do if method == "generateContent" or method == "streamGenerateContent" then generates = true end end
+						if not generates then id = "" end
+					end
+				end
 				if id ~= "" and not seen[id] then
 					seen[id] = true
 					found[#found + 1] = id
@@ -231,6 +262,7 @@ return function(env)
 			return {}, support.error("the endpoint returned an empty list -- add a model by hand")
 		end
 		local note = string.format("%d model%s from %s", #found, #found == 1 and "" or "s", cli and "OpenCode CLI through Project UAI Bridge" or urls.display(url))
+		if partial then note = note .. "; catalog page limit reached, additional IDs may be entered manually" end
 		if registry.isOpencodeGo(record) then note = note .. "; public list -- subscription access is checked when you send" end
 		return found, note
 	end

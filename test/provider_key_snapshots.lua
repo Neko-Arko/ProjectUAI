@@ -119,7 +119,7 @@ end)
 
 case("model proxy recovery retains one key and the following completion uses the next", function()
 	local f = F.new(); local record = recordFor(f)
-	record.baseUrl = "https://opencode.ai/zen/v1"
+	record.baseUrl = "https://agentrouter.org/v1"
 	local seen, urls = {}, {}
 	f.h.http.handler = function(entry)
 		seen[#seen + 1], urls[#urls + 1] = credential(f, entry.headers), entry.url
@@ -130,8 +130,8 @@ case("model proxy recovery retains one key and the following completion uses the
 	end
 	local found = f.run(function() return f.env.require("provider/models").discover(record, { force = true }) end)
 	check("one discovery recovery reuses its selected credential", found[1] == "fixture-model" and table.concat(seen, ",") == "A,A"
-		and urls[1] == "https://opencode.ai/zen/v1/models"
-		and urls[2] == "https://puai-proxy.davidzk.tech/opencode/v1/models")
+		and urls[1] == "https://agentrouter.org/v1/models"
+		and urls[2] == "https://puai-proxy.davidzk.tech/agentrouter/v1/models")
 	local result = f.run(function() return f.env.require("provider/chat").complete(record, request()) end)
 	check("the next logical operation receives B", result and result.content == "ready" and table.concat(seen, ",") == "A,A,B")
 	f.healthy(); f.close()

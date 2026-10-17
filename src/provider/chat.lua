@@ -1,8 +1,8 @@
 -- Picks the wire protocol for a provider record.
 --
--- Two adapters implement the same contract -- provider/openai for anything speaking
--- /chat/completions, provider/anthropic for the Messages API -- and this is the only
--- place that decides which one a record uses. Everything above it (the agent loop,
+-- Adapters implement one contract: OpenAI Chat, Anthropic Messages and native
+-- Google Gemini. This is the only place that decides which one a record uses.
+-- Everything above it (the agent loop,
 -- the transcript, the connection test) is written against one shape and does not
 -- know there is a choice.
 --
@@ -15,16 +15,19 @@ return function(env)
 	M.STYLES = {
 		{ value = "openai", label = "Chat completions" },
 		{ value = "anthropic", label = "Anthropic messages" },
+		{ value = "gemini", label = "Google Gemini" },
 	}
 
 	function M.styleOf(record)
 		local protocol = env.require("provider/registry").opencodeGoProtocol(record)
-		if protocol then return protocol == "anthropic" and "anthropic" or "openai" end
+		if protocol then return protocol == "gemini" and "gemini" or protocol == "anthropic" and "anthropic" or "openai" end
+		if record and record.api == "gemini" then return "gemini" end
 		return (tostring(record and record.api or "openai") == "anthropic")
 			and "anthropic" or "openai"
 	end
 
 	function M.adapterFor(record)
+		if M.styleOf(record) == "gemini" then return env.require("provider/gemini") end
 		if M.styleOf(record) == "anthropic" then
 			return env.require("provider/anthropic")
 		end

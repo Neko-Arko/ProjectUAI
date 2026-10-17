@@ -38,6 +38,7 @@ return function(env)
 	local AUTH_OPTIONS = {
 		{ value = "bearer", label = "Bearer" },
 		{ value = "x-api-key", label = "x-api-key" },
+		{ value = "x-goog-api-key", label = "x-goog-api-key" },
 		{ value = "api-key", label = "api-key" },
 		{ value = "both", label = "Both" },
 		{ value = "none", label = "None" },
@@ -444,8 +445,7 @@ return function(env)
 		end)
 		proxyNote = R.paragraph(urlColumn, "", { name = "ProxyFallbackNotice", layoutOrder = 10 })
 
-		row("Protocol", "Choose the API exposed by the server. Most local servers offer Chat completions; "
-			.. "Anthropic and compatible gateways may offer Messages. Other native APIs need an adapter.",
+		row("Protocol", "Choose the API exposed by the server: Chat completions, Anthropic Messages, or Google's native Gemini API.",
 			function(column)
 				protocolControl = C.segmented(column, {
 					name = "Protocol",
@@ -678,6 +678,7 @@ return function(env)
 			for _, id in ipairs(knownModels()) do
 				local badge = traits.badge(id, editing)
 				local bits = {}
+				if models.isFree(editing, id) then bits[#bits + 1] = "Free" end
 				if badge then bits[#bits + 1] = badge end
 				if not own[id] then bits[#bits + 1] = "from /models" end
 				options[#options + 1] = {
@@ -685,6 +686,7 @@ return function(env)
 					value = "model:" .. id,
 					detail = #bits > 0 and table.concat(bits, "  \194\183  ") or nil,
 					selected = id == editing.model,
+					free = models.isFree(editing, id),
 				}
 			end
 			if #options > 0 then options[#options + 1] = { divider = true } end
@@ -1251,6 +1253,7 @@ return function(env)
 			for _, id in ipairs(models.list(record)) do
 				local badge = traits.badge(id, record)
 				local bits = {}
+				if models.isFree(record, id) then bits[#bits + 1] = "Free" end
 				if badge then bits[#bits + 1] = badge end
 				if not own[id] then bits[#bits + 1] = "from /models" end
 				options[#options + 1] = {
@@ -1258,6 +1261,7 @@ return function(env)
 					value = "model:" .. id,
 					detail = #bits > 0 and table.concat(bits, "  \194\183  ") or nil,
 					selected = id == record.model,
+					free = models.isFree(record, id),
 				}
 			end
 			if #options > 0 then options[#options + 1] = { divider = true } end
@@ -1443,7 +1447,7 @@ return function(env)
 				name = "Model",
 				title = "Model",
 				description = communityKey.isApplied(record)
-					and "The provider's auto router selects available capacity for you. You can also fetch the current models and choose one."
+					and "Auto measures available models in the background and prefers a verified tool-capable route below ten seconds. Speed varies with your prompt and shared capacity. Choose a specific model to keep it fixed."
 					or "Models come from the endpoint or your manual entries. Fetch the current list if none are known yet.",
 				layoutOrder = order(),
 			})
@@ -1456,7 +1460,7 @@ return function(env)
 						or "No published context window for this id."),
 				options = (function()
 					local out = {}
-					for _, id in ipairs(known) do out[#out + 1] = { value = id, label = id } end
+					for _, id in ipairs(known) do out[#out + 1] = { value = id, label = id, free = models.isFree(record, id) } end
 					if #out == 0 then
 						out[#out + 1] = { value = record.model, label = record.model ~= "" and record.model or "none" }
 					end
@@ -1480,11 +1484,14 @@ return function(env)
 			local own = {}
 			for _, id in ipairs(record.models or {}) do own[id] = true end
 			for index, id in ipairs(known) do
+				local free = models.isFree(record, id)
 				local row = P.rowButton(modelSection, {
 					name = "Model_" .. tostring(index),
 					height = theme.size.rowSmall,
 					padding = { x = theme.space.sm },
 					radius = theme.radius.sm,
+					stroke = free, strokeColor = free and theme.color.success or nil,
+					strokeFocusColor = free and theme.color.success or nil, strokeWidth = free and 2 or nil,
 					selected = id == record.model,
 					layoutOrder = 100 + index,
 					onClick = function()

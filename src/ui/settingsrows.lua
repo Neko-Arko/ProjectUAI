@@ -367,6 +367,7 @@ return function(env)
 						value = option.value,
 						detail = option.detail,
 						selected = option.value == current,
+						free = option.free,
 					}
 				end
 				env.require("ui/overlay").menu({

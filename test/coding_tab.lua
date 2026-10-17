@@ -57,7 +57,7 @@ case("native editing keeps its caret, raw selection and per-file position", func
 	box.Text = "local alpha = 1\nprint(alpha)"; f.h.sched.advance(0.1)
 	box.CursorPosition = 1; assert(editor.find("alpha"))
 	check("Find selects exact source bytes", box.Text:sub(box.SelectionStart, box.CursorPosition - 1) == "alpha")
-	check("native selection has a visible highlight", f.h.byName("SourceSelection", editor.root).Visible)
+	check("native selection uses the same visible text layer as hit testing", box.TextTransparency == 0 and not f.h.byName("SyntaxLine", editor.root).Visible and not f.h.byName("SourceCaret", editor.root).Visible)
 	local cursor, selection = box.CursorPosition, box.SelectionStart
 	local other = assert(store.create("Other.lua", "return false", { select = true }))
 	assert(store.select(doc.id))
@@ -70,6 +70,39 @@ case("native editing keeps its caret, raw selection and per-file position", func
 	editor.closeFind(); check("closing Find restores editor focus", f.h.services.UserInputService:GetFocusedTextBox() == box)
 	editor.setVisible(false); assert(store.select(other.id)); editor.setVisible(true)
 	check("hidden views keep the active source", box.Text == "return false")
+	f.healthy(); editor.destroy(); f.close()
+end)
+
+case("native line metrics and drag selection do not shift the editor canvas", function()
+	local f = ui(680, 460); local store = f.env.require("runtime/code_store")
+	assert(store.update(store.activeId(), string.rep("\tlocal value = '你好'\n", 140)))
+	local editor = f.env.require("ui/code/editor").new(f.host); local box = editor.box
+	local single, multiple = f.h.byName("SourceSingleLineMetrics", editor.root), f.h.byName("SourceLineMetrics", editor.root)
+	check("native metric probes cannot intercept editing", not single.Active and not multiple.Selectable and not multiple.TextEditable and single.TextTransparency == 1)
+	-- Simulate native font bounds with a fractional line advance, which differs
+	-- from the legacy TextService estimate. Engine rendering itself stays a live check.
+	single.TextBounds = f.h.sandbox.Vector2.new(16, 17)
+	multiple.TextBounds = f.h.sandbox.Vector2.new(16, 17 + 32 * 18.25)
+	f.h.sched.advance(0.1); box:CaptureFocus(); editor.gotoLine(100)
+	local caret = f.h.byName("SourceCaret", editor.root)
+	check("long-file overlays use measured native advance without rounding drift", math.abs(caret.Position.Y.Offset - f.env.require("ui/theme").space.sm - 99 * 18.25) < 0.001)
+	local before = editor.scroll.CanvasPosition
+	box.InputBegan:Fire({ UserInputType = f.h.sandbox.Enum.UserInputType.MouseButton1 })
+	box.SelectionStart, box.CursorPosition = box.CursorPosition, #box.Text + 1
+	check("holding selection does not let caret-follow move the canvas", editor.scroll.CanvasPosition.X == before.X and editor.scroll.CanvasPosition.Y == before.Y)
+	check("dragging shows native source and hides duplicate selection layers", box.TextTransparency == 0 and not caret.Visible and not f.h.byName("SyntaxLine", editor.root).Visible)
+	f.h.services.UserInputService.InputEnded:Fire({ UserInputType = f.h.sandbox.Enum.UserInputType.MouseButton1 })
+	check("selected range stays native after release", box.TextTransparency == 0)
+	box.SelectionStart = -1
+	check("collapsing selection restores syntax", box.TextTransparency == 1 and f.h.byName("SyntaxLine", editor.root).Visible)
+	local touch = { UserInputType = f.h.sandbox.Enum.UserInputType.Touch }
+	box.InputBegan:Fire(touch)
+	f.h.services.UserInputService.InputEnded:Fire({ UserInputType = touch.UserInputType })
+	check("another finger ending cannot release the active selection gesture", box.TextTransparency == 0)
+	f.h.services.UserInputService.WindowFocusReleased:Fire()
+	check("window focus loss releases a missed pointer-up", box.TextTransparency == 1)
+	box.InputBegan:Fire(touch); editor.setVisible(false); editor.setVisible(true)
+	check("hiding the editor clears a pending drag", box.TextTransparency == 1)
 	f.healthy(); editor.destroy(); f.close()
 end)
 

@@ -15,6 +15,43 @@ const { makePng, makeJpeg, makeWebp, makeAnimatedWebp, pngChunk, PNG_SIG } = req
 
 const sha = buf => crypto.createHash('sha256').update(buf).digest('hex');
 
+test('Gemini hydrates only explicit image parts with delivered, scoped references', () => {
+  const store = createPictureStore(), id = picId(), bytes = makePng(3, 4);
+  store.stage({ id, ...owner, name: 'scene.png', bytes });
+  const ref = store.reference(id, owner).url;
+  const body = { contents: [{ role: 'user', parts: [{ text: ref }, { fileData: { mimeType: 'image/jpeg', fileUri: ref } }] },
+    { role: 'model', parts: [{ functionCall: { name: 'inspect', args: { text: ref } }, thoughtSignature: 'opaque' }] }] };
+  assert.throws(() => store.providerBody(JSON.stringify(body), owner.sessionId), /delivered message/);
+  store.markQueued([id], 'send-1');
+  const hydrated = JSON.parse(store.providerBody(JSON.stringify(body), owner.sessionId));
+  assert.deepEqual(hydrated.contents[0].parts[1], { inlineData: { mimeType: 'image/png', data: bytes.toString('base64') } });
+  assert.deepEqual(hydrated.contents[0].parts[0], { text: ref });
+  assert.deepEqual(hydrated.contents[1], body.contents[1]);
+  assert.throws(() => store.providerBody(JSON.stringify(body), 'different-session'), /does not belong/);
+  const tampered = JSON.stringify(body).replaceAll(ref, ref.slice(0, -1) + (ref.endsWith('a') ? 'b' : 'a'));
+  assert.throws(() => store.providerBody(tampered, owner.sessionId), /does not belong/);
+  body.contents[0].role = 'model';
+  assert.throws(() => store.providerBody(JSON.stringify(body), owner.sessionId), /Invalid image reference/);
+  store.close();
+});
+
+test('Gemini tool-result turns do not demote a required image to expired history', () => {
+  const store = createPictureStore(), id = picId();
+  store.stage({ id, ...owner, name: 'scene.png', bytes: makePng(2, 2) });
+  const ref = store.reference(id, owner).url;
+  store.markQueued([id], 'send-2'); store.markStatus(id, 'expired');
+  const body = { contents: [{ role: 'user', parts: [{ fileData: { mimeType: 'image/png', fileUri: ref } }] },
+    { role: 'model', parts: [{ functionCall: { name: 'inspect', args: {} } }] },
+    { role: 'user', parts: [{ functionResponse: { name: 'inspect', response: { result: 'ok' } } }] }] };
+  assert.throws(() => store.providerBody(JSON.stringify(body), owner.sessionId), /attached image has expired/);
+  body.contents.push({ role: 'user', parts: [{ text: 'Continue without the picture' }] });
+  const hydrated = JSON.parse(store.providerBody(JSON.stringify(body), owner.sessionId));
+  assert.match(hydrated.contents[0].parts[0].text, /earlier image/);
+  assert.equal(hydrated.contents[0].parts[0].type, undefined);
+  assert.deepEqual(hydrated.contents[2], body.contents[2]);
+  store.close();
+});
+
 test('valid PNG/JPEG/WebP stage with correct mediaType, dimensions, and digest', () => {
   const store = createPictureStore();
   const png = makePng(10, 20);

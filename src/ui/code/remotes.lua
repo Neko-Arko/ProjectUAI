@@ -21,10 +21,10 @@ return function(env)
 	local M = {}
 	function M.new(parent, navigate)
 		local root, surface, surfaceScroll = common.surface(parent, { name = "NativeRemotes", size = UDim2.fromScale(1, 1), clip = true },
-			function() return common.barHeight() * 4 + theme.text.caption.height * 4 + theme.space.sm + theme.space.md + common.controlHeight() * 3 end)
+			function() return common.barHeight() * 5 + theme.text.caption.height * 4 + theme.space.sm + theme.space.md + common.controlHeight() * 3 end)
 		local view = capture.view
 		view.filter = store.workspace.remoteFilter or view.filter or ""
-		view.section, view.expanded = view.section or "arguments", view.expanded or {}
+		view.section, view.expanded = view.section or "summary", view.expanded or {}
 		view.drafts = view.drafts or {}
 		view.filters = view.filters or {}
 		view.mode = view.mode or "Incoming events"
@@ -36,12 +36,12 @@ return function(env)
 		local handle = { root = surface, surfaceScroll = surfaceScroll, alive = true, visible = true }
 		local header = common.toolbar(root)
 		local statusButton, startButton, stopButton, menuButton, refresh, refreshDetail, layout, perform
-		local guardedRefresh, showFilter, cataloguePage
+		local guardedRefresh, showFilter, cataloguePage, search, searchGeneration, paintCapture
 		local info = P.text(root, { name = "CaptureCoverage", text = "Capture is stopped", role = "caption", wrap = true })
 		local body = P.frame(root, { name = "CaptureBody" })
 		local listHost, detailHost = P.frame(body, { name = "Calls", clip = true }), P.frame(body, { name = "CallDetail", clip = true })
 		local listBar, detailBar = common.toolbar(listHost), common.toolbar(detailHost)
-		local list, valueView, newCalls, recordHeader, sectionTabs, listTabs, scopeButton, modeButton
+		local list, valueView, newCalls, recordHeader, sectionTabs, listTabs, scopeButton, modeButton, lifetimeButton
 		local catalogue, catalogueGeneration, catalogueBusy, movingList = nil, 0, false, false
 		local selected = view.record
 		local sourceGeneration = 0
@@ -54,6 +54,21 @@ return function(env)
 			table.sort(ordered, function(a, b) return a.at < b.at end); for i = 1, math.max(0, #ordered - 20) do view.drafts[ordered[i].key] = nil end
 		end
 		local function state() return capture.state() end
+		local outcomeNames = { pending = "Waiting for result", forwarded = "Sent", returned = "Returned", received = "Received", errored = "Error", blocked = "Blocked", completion_unobserved = "Result unavailable" }
+		local function resetFilters()
+			view.filters, view.filter, view.follow, view.before = {}, "", true, nil
+			store.preference("remoteFilter", "")
+			if search then search.set("") end
+			forms.discardDraft("calls-filter")
+			if view.listMode == "remotes" then cataloguePage() else refresh() end
+		end
+		local function onlyRemote()
+			local id = selected and selected.remoteId or view.remoteId
+			if not id then return end
+			view.filters, view.filter, view.follow, view.before, view.listMode, view.detail = { remote_id = id }, "", true, nil, "calls", false
+			store.preference("remoteFilter", ""); if search then search.set("") end
+			forms.discardDraft("calls-filter"); refresh()
+		end
 		local function optionsForRecord()
 			if not selected then return nil end
 			if selected.offline and view.reboundId then return { remoteId = view.reboundId, method = selected.method, arguments = view.argumentDraft or selected.arguments } end
@@ -141,7 +156,7 @@ return function(env)
 		local function more(button)
 			local choices = { { label = "Capture settings / Start…", value = "start" }, { label = "Capture coverage", value = "coverage" }, { label = "Traffic rules…", value = "rules" }, { label = "Export retained calls", value = "export" }, { label = "Import offline capture…", value = "import" }, { label = "Clear retained calls", value = "clear" }, { label = "Show excluded remotes", value = "excluded" }, { label = "Reset admission filters", value = "filterReset" } }
 			if selected or view.remoteId then
-				for _, pair in ipairs({ { "Reveal remote in Explorer", "reveal" }, { "Exclude exact remote from recording", "exclude" }, { "Restore exact remote recording", "include" }, { "Copy reference", "reference" }, { "Ask AI about this", "ask" } }) do choices[#choices + 1] = { label = pair[1], value = pair[2] } end
+				for _, pair in ipairs({ { "Only show calls to this remote", "onlyRemote" }, { "Reveal remote in Explorer", "reveal" }, { "Exclude exact remote from recording", "exclude" }, { "Restore exact remote recording", "include" }, { "Copy reference", "reference" }, { "Ask AI about this", "ask" } }) do choices[#choices + 1] = { label = pair[1], value = pair[2] } end
 			end
 			if selected then
 				for _, pair in ipairs({ { "Copy diagnostic record", "diagnostic" }, { "Inspect caller", "callerInspect" }, { "Open caller source", "caller" },
@@ -161,6 +176,8 @@ return function(env)
 				if action == "start" then configure()
 				elseif action == "pauseResume" then common.message(capture.control(capture.status == "paused" and "resume" or "pause", capture.sessionId, capture.revision))
 				elseif action == "viewFilter" then showFilter()
+				elseif action == "onlyRemote" then onlyRemote()
+				elseif action == "resetViewFilter" then resetFilters()
 				elseif action == "calls" or action == "remotes" or action == "latest" then
 					view.listMode, view.detail = action == "remotes" and "remotes" or "calls", false
 					if action == "latest" then view.follow, view.before = true, nil end
@@ -221,7 +238,7 @@ return function(env)
 			if selected and selected.direction == "incoming" then common.copy(util.encode(selected)) else reviewScript(false) end
 		end
 
-		statusButton = header.add("Stopped", function() more(statusButton) end, { flex = true, trailing = false })
+		statusButton = header.add("Stopped", function() perform("coverage") end, { flex = true, trailing = false, name = "RemoteCaptureStatus" })
 		startButton = header.add("Start", function()
 			if capture.status == "running" then common.message(capture.control("pause", capture.sessionId, capture.revision))
 			elseif capture.status == "paused" then common.message(capture.control("resume", capture.sessionId, capture.revision)) else start() end
@@ -239,17 +256,23 @@ return function(env)
 		modeButton = configBar.add("Both directions", function(button)
 			common.menu(button, "Capture direction", { { label = "Incoming and outgoing", value = "Incoming and outgoing" }, { label = "Outgoing calls", value = "Outgoing calls" }, { label = "Incoming events", value = "Incoming events" }, { label = "UAI calls only", value = "UAI calls" } }, function(value) view.mode = value; refresh() end)
 		end, { dropdown = true, name = "RemoteCaptureMode", tight = true })
+		lifetimeButton = configBar.add("30 seconds", function(button)
+			common.menu(button, "Capture duration", { { label = "30 seconds", value = 30 }, { label = "60 seconds", value = 60 }, { label = "5 minutes", value = 300 }, { label = "Until stopped", value = "persistent" } }, function(value)
+				view.persistent = value == "persistent"; if not view.persistent then view.duration = value end; refresh()
+			end)
+		end, { dropdown = true, name = "RemoteCaptureDuration", tight = true })
 		configBar.add("", configure, { icon = "sliders", iconOnly = true, name = "RemoteCaptureSettings" })
 		showFilter = function()
-			local definitions = { { key = "name", label = "Remote name", default = view.filter } }
+			local definitions = { { key = "name", label = "Remote name", default = view.filter }, { key = "remote_id", label = "Exact remote reference (optional)", default = view.filters.remote_id or "" } }
 			for _, item in ipairs({ { "direction", "Direction", { "All", "outgoing", "incoming" } }, { "method", "Method", { "All", "FireServer", "InvokeServer", "OnClientEvent" } }, { "origin", "Origin", { "All", "hooked_unknown", "unknown", "uai", "replay", "game", "executor", "server" } }, { "outcome", "Outcome", { "All", "pending", "forwarded", "returned", "received", "errored", "blocked", "completion_unobserved" } } }) do
 				definitions[#definitions + 1] = { key = item[1], label = item[2], type = "choice", choices = item[3], default = view.filters[item[1]] or "All" }
 			end
 			forms.form("Filter retained calls", definitions, function(data)
-				view.filter = data.name; store.preference("remoteFilter", data.name)
+				view.filter = data.name; store.preference("remoteFilter", data.name); if search then search.set(data.name) end
+				view.filters.remote_id = util.trim(data.remote_id) ~= "" and util.trim(data.remote_id) or nil
 				for _, key in ipairs({ "direction", "method", "origin", "outcome" }) do view.filters[key] = data[key] ~= "All" and data[key] or nil end
 				view.follow, view.before, view.listMode = true, nil, "calls"; refresh(); return true
-			end, { key = "calls-filter" })
+			end, { key = "calls-filter", description = "Filter retained calls without changing what the capture records." })
 		end
 		cataloguePage = function(morePage)
 			catalogueGeneration = catalogueGeneration + 1; local generation = catalogueGeneration
@@ -279,8 +302,8 @@ return function(env)
 			listBar.root.Position, listBar.root.Size = UDim2.new(1, -width, 0, 0), UDim2.fromOffset(width, common.barHeight())
 		end
 		listHost:GetPropertyChangedSignal("AbsoluteSize"):Connect(layoutListHeader)
-		local searchGeneration = 0
-		local search = P.field(listHost, { name = "RemoteSearch", placeholder = "Search remotes", role = "small", text = view.filter, onChange = function(text)
+		searchGeneration = 0
+		search = P.field(listHost, { name = "RemoteSearch", placeholder = "Search remote names", role = "small", text = view.filter, onChange = function(text)
 			view.filter = text; store.workspace.remoteFilter = text; searchGeneration = searchGeneration + 1; local generation = searchGeneration
 			clock.delay(0.15, function()
 				if not handle.alive or not handle.visible or generation ~= searchGeneration then return end
@@ -292,7 +315,11 @@ return function(env)
 		search.shell.Position, search.shell.Size = UDim2.fromOffset(searchInset, common.barHeight() + theme.space.xxs), UDim2.new(1, -searchInset * 2 - filterSize - common.gap(), 0, filterSize)
 		local filterButton = common.button(listHost, { name = "FilterRemoteCalls", text = "", icon = "sliders", tight = true, fill = true, variant = "ghost", onClick = showFilter })
 		filterButton.instance.Position, filterButton.instance.Size = UDim2.new(1, -searchInset - filterSize, 0, common.barHeight() + theme.space.xxs), UDim2.fromOffset(filterSize, filterSize)
-		local listTop = common.barHeight() * 2 + theme.space.sm
+		local filterBar = common.toolbar(listHost, { name = "RemoteViewFilters", divider = false })
+		filterBar.root.Position = UDim2.fromOffset(0, common.barHeight() * 2 + theme.space.xxs)
+		local filterSummary = filterBar.add("All retained calls", showFilter, { flex = true, name = "RemoteFilterSummary", tight = true })
+		local resetButton = filterBar.add("Reset", resetFilters, { name = "ResetRemoteFilters", tight = true })
+		local listTop = common.barHeight() * 3 + theme.space.sm
 		local function selectRow(row)
 			if row.older then view.follow, view.before = false, row.older; refresh(); return end
 			if row.more then cataloguePage(true); return end
@@ -308,7 +335,7 @@ return function(env)
 			saveDraft(); selected = record
 			local draft = view.drafts[row.id]
 			view.record, view.remoteId, view.argumentDraft, view.reboundId = selected, selected.remoteId, draft and draft.graph, draft and draft.reboundId
-			view.section, view.detail, view.follow, view.before = "arguments", true, false, view.before or records.sequence + 1
+			view.section, view.detail, view.follow, view.before = "summary", true, false, view.before or records.sequence + 1
 			refreshDetail(); refresh(); layout()
 		end
 		list = common.virtualList(listHost, { name = "RemoteCallList", position = UDim2.fromOffset(0, listTop), size = UDim2.new(1, 0, 1, -listTop),
@@ -339,13 +366,13 @@ return function(env)
 			if not selected then return end
 			local object = selected.remoteId and refs.resolve(selected.remoteId)
 			local path = object and refs.describe(object).displayPath or selected.pathAtCapture or selected.name or "Remote"
-			recordHeader.Text = "#" .. selected.sequence .. " · " .. selected.method .. " · " .. selected.outcome .. (selected.offline and " · offline" or "") .. "\n" .. path
+			recordHeader.Text = "#" .. selected.sequence .. " · " .. selected.method .. " · " .. (outcomeNames[selected.outcome] or selected.outcome) .. (selected.offline and " · offline" or "") .. "\n" .. path
 		end
 		refreshDetail = function()
 			if valueView then valueView.destroy(); valueView = nil end; common.clear(valueHost)
 			local outgoing = selected ~= nil and selected.direction == "outgoing"
 			if not outgoing and (view.section == "code" or view.section == "draft") then view.section = "arguments" end
-			local sections = { { id = "arguments", label = "Arguments" }, { id = "results", label = "Results" }, { id = "caller", label = "Caller" } }
+			local sections = { { id = "summary", label = "Summary" }, { id = "arguments", label = "Arguments" .. (selected and " (" .. selected.arguments.count .. ")" or "") }, { id = "results", label = "Results" .. (selected and selected.results and " (" .. selected.results.count .. ")" or "") }, { id = "caller", label = "Caller" } }
 			if outgoing then sections[#sections + 1] = { id = "code", label = "Code" }; sections[#sections + 1] = { id = "draft", label = "Replay draft" } end
 			sectionTabs.set(sections, view.section)
 			copyButton.setText(outgoing and "Copy code" or "Copy record")
@@ -356,10 +383,38 @@ return function(env)
 				local title = object and "Ready to observe this remote" or "Remote spy"
 				local empty = P.scroll(valueHost, { name = "RemoteEmptyState", padding = theme.space.sm, gap = theme.space.sm })
 				P.text(empty.instance, { text = title, role = "heading", wrap = true, auto = "Y", layoutOrder = 1 })
-				P.text(empty.instance, { text = object and "Selected remote is the capture scope. Open capture settings to begin recording." or "Choose a remote or an explicit subtree, then start a 30-second observation from capture settings. Capture settings also enable outgoing hooks.", role = "small", wrap = true, auto = "Y", layoutOrder = 2, color = theme.color.textSecondary })
+				P.text(empty.instance, { text = object and "This remote is selected as the capture scope. Choose the direction and duration above, then start recording." or "Browse the game’s remotes, or choose an Explorer selection or subtree as the capture scope. Incoming observes events; outgoing captures calls made by the client.", role = "small", wrap = true, auto = "Y", layoutOrder = 2, color = theme.color.textSecondary })
+				if object then
+					common.button(empty.instance, { name = "ObserveSelectedRemote", text = "Capture settings", fill = true, layoutOrder = 3, onClick = configure })
+					common.button(empty.instance, { name = "ShowSelectedRemoteCalls", text = "Show retained calls for this remote", fill = true, layoutOrder = 4, onClick = onlyRemote })
+				else
+					common.button(empty.instance, { name = "BrowseGameRemotes", text = "Browse game remotes", fill = true, layoutOrder = 3, onClick = function() perform("remotes") end })
+				end
 				return
 			end
 			describeSelected()
+			if view.section == "summary" then
+				local summary = P.scroll(valueHost, { name = "RemoteCallSummary", padding = theme.space.sm, gap = theme.space.sm })
+				local order = 0
+				local function line(label, text, color)
+					order = order + 1
+					P.text(summary.instance, { text = label .. ": " .. tostring(text), role = "small", wrap = true, auto = "Y", layoutOrder = order, color = color or theme.color.textSecondary })
+				end
+				line("Remote", selected.pathAtCapture or selected.name or selected.remoteId)
+				line("Direction", selected.direction == "incoming" and "Server to client" or "Client to server")
+				line("Outcome", outcomeNames[selected.outcome] or selected.outcome, selected.outcome == "errored" and theme.color.danger or theme.color.text)
+				if selected.ms then line("Duration", tostring(math.floor(selected.ms + 0.5)) .. " ms") end
+				line("Arguments", selected.arguments.count .. (selected.arguments.complete == false and " · incomplete snapshot" or " · complete snapshot"))
+				line("Return values", selected.results and tostring(selected.results.count) or selected.outcome == "pending" and "Waiting for the call to finish" or "Not observed")
+				line("Origin", selected.origin or "Unknown")
+				if selected.error then line("Error", selected.error, theme.color.danger) end
+				if selected.offline then line("Offline capture", "Rebind the replay draft to a current remote before replaying.") end
+				line("Reference", selected.id .. " · revision " .. selected.revision)
+				common.button(summary.instance, { name = "ShowSelectedRemoteCalls", text = "Only calls to this remote", fill = true, layoutOrder = 20, onClick = onlyRemote })
+				common.button(summary.instance, { name = "RevealCapturedRemote", text = "Reveal remote in Explorer", fill = true, layoutOrder = 21, enabled = not selected.offline, onClick = function() perform("reveal") end })
+				if selected.caller and selected.caller.scriptId then common.button(summary.instance, { name = "OpenCapturedCaller", text = "Open calling script", fill = true, layoutOrder = 22, onClick = function() perform("caller") end }) end
+				return
+			end
 			if view.section == "code" then
 				local source, why = generatedCode()
 				valueView = env.require("ui/code/preview").new(valueHost, source or ("-- " .. tostring(why)), "RemoteGeneratedCode"); return
@@ -376,12 +431,12 @@ return function(env)
 			end
 			valueView = tree.new(valueHost, { graph = graph, expanded = view.expanded, editable = view.section == "draft", key = selected.id, reveal = navigate, onChange = function(value) view.argumentDraft = value; saveDraft() end })
 		end
-		refresh = function()
-			if not handle.alive or not handle.visible then return end
-			local current = state()
+		paintCapture = function(current)
+			current = current or state()
 			local active = current.status == "running" or current.status == "paused" or current.status == "starting"
 			local names = { idle = "Stopped", stopped = "Stopped", expired = "Expired", starting = "Starting…", running = "Recording", paused = "Paused", faulted = "Failed", disposed = "Stopped" }
-			statusButton.setText((names[current.status] or current.status) .. (#capture.rules > 0 and (" · " .. #capture.rules .. " rules") or ""))
+			local remaining = active and current.expiresAt and math.max(0, math.ceil((current.expiresAt - clock.ms()) / 1000))
+			statusButton.setText((names[current.status] or current.status) .. (remaining and (" · " .. remaining .. "s left") or "") .. (#capture.rules > 0 and (" · " .. #capture.rules .. " rules") or ""))
 			startButton.setText(current.status == "running" and "Pause" or current.status == "paused" and "Resume" or "Start")
 			startButton.setEnabled(current.status ~= "starting")
 			stopButton.setEnabled(active or #capture.rules > 0)
@@ -389,12 +444,33 @@ return function(env)
 			local modeNames = { ["Incoming and outgoing"] = "Both directions", ["Outgoing calls"] = "Outgoing", ["Incoming events"] = "Incoming", ["UAI calls"] = "UAI only" }
 			modeButton.setText(modeNames[view.mode] or view.mode); modeButton.setEnabled(not active)
 			local modes = { uai = "UAI calls only", incoming = "Incoming events", outgoing = "Outgoing calls", combined = "Incoming + outgoing" }
-			local summary = active and (modes[current.mode] .. " · " .. current.monitored .. " incoming remotes · " .. current.retained .. " calls") or ("Ready · " .. (scopeNames[view.scope] or view.scope) .. " · " .. (modeNames[view.mode] or view.mode))
+			if active then
+				modeButton.setText(modes[current.mode] or current.mode)
+				local scoped = current.rootId and refs.resolve(current.rootId) or #current.scopeIds == 1 and refs.resolve(current.scopeIds[1])
+				scopeButton.setText(scoped == game and "All remotes" or scoped and scoped.Name or (#current.scopeIds .. " selected remotes"))
+			end
+			lifetimeButton.setText(active and (remaining and (remaining .. "s left") or "Until stopped") or view.persistent and "Until stopped" or (tostring(view.duration or 30) .. " seconds"))
+			lifetimeButton.setEnabled(not active)
+			local summary = active and ((modes[current.mode] or current.mode) .. " · " .. current.monitored .. " incoming remotes · " .. current.retained .. " retained calls") or ("Ready · " .. (scopeNames[view.scope] or view.scope) .. " · " .. (modeNames[view.mode] or view.mode) .. " · " .. current.retained .. " retained calls")
+			if current.status == "paused" then summary = (remaining and "Recording paused; the duration timer continues. " or "Recording paused. Resume to observe new calls. ") .. summary end
+			if current.status == "expired" then summary = "Capture duration ended. " .. current.retained .. " calls retained for inspection." end
+			local filtered = util.count(current.filter.exclude) + util.count(current.filter.include) + (current.filter.method and 1 or 0)
+			if filtered > 0 then summary = summary .. " · admission filters active" end
 			if current.omitted > 0 then summary = summary .. " · " .. current.omitted .. " omitted" end
 			if current.counters.evicted > 0 then summary = summary .. " · " .. current.counters.evicted .. " old calls evicted" end
 			if current.status == "faulted" then summary = tostring(capture.reason or "Capture failed. Open settings to choose another backend.") end
 			if not active and current.coverage.wrapperStatus:find("retained", 1, true) then summary = summary .. " · Forwarding wrappers retained; recording/rules off" end
 			info.Text = summary
+		end
+		refresh = function()
+			if not handle.alive or not handle.visible then return end
+			local current = state()
+			local active = current.status == "running" or current.status == "paused" or current.status == "starting"
+			paintCapture(current)
+			local filterCount = (view.filter ~= "" and 1 or 0) + util.count(view.filters)
+			local filterLabel = view.filters.remote_id and "This remote" or view.filters.outcome and (outcomeNames[view.filters.outcome] or view.filters.outcome) or view.filters.direction and (view.filters.direction == "incoming" and "Incoming" or "Outgoing") or "Filtered calls"
+			filterSummary.setText(view.listMode == "remotes" and (view.filter == "" and "All game remotes" or "Filtered remotes") or filterCount > 0 and (filterLabel .. " · " .. filterCount .. " filter" .. (filterCount == 1 and "" or "s")) or "All retained calls")
+			filterSummary.setEnabled(view.listMode == "calls"); resetButton.instance.Visible = filterCount > 0
 			listTabs.set({ { id = "calls", label = "Calls" }, { id = "remotes", label = "Remotes" } }, view.listMode)
 			local items, why = {}, nil
 			if view.listMode == "remotes" then
@@ -413,7 +489,7 @@ return function(env)
 					if page.hasOlder then items[#items + 1] = { id = "older:" .. page.first, older = page.first, label = "Load older calls…", description = "Earlier matching calls" } end
 					for _, row in ipairs(page.items) do
 						row.label = row.name or "Remote"
-						row.description = (row.direction == "incoming" and "← " or "→ ") .. row.method .. " · " .. row.argumentCount .. " args · " .. row.outcome .. " · " .. (row.origin or "unknown")
+						row.description = (row.direction == "incoming" and "Incoming · " or "Outgoing · ") .. row.method .. " · " .. row.argumentCount .. " args · " .. (outcomeNames[row.outcome] or row.outcome) .. (row.complete == false and " · partial" or "")
 						row.selected = selected and row.id == selected.id; items[#items + 1] = row
 					end
 				end
@@ -436,7 +512,7 @@ return function(env)
 				if not live then recordHeader.Text = "This call expired or was cleared.\nIts replay draft is still available."
 				elseif live.revision ~= selected.revision then
 					selected, view.record = live, live
-					if view.section == "results" then refreshDetail() else describeSelected() end
+					if view.section == "results" or view.section == "summary" then refreshDetail() else describeSelected() end
 				end
 			end
 		end
@@ -463,8 +539,8 @@ return function(env)
 		-- times a second for as long as capture traffic continues. Report each
 		-- distinct failure once and keep the rest of the panel usable.
 		local lastRefreshError
-		guardedRefresh = function()
-			local ok, err = pcall(refresh)
+		guardedRefresh = function(captureOnly)
+			local ok, err = pcall(captureOnly and paintCapture or refresh)
 			if ok then return end
 			local message = tostring(err)
 			if message ~= lastRefreshError then
@@ -478,6 +554,9 @@ return function(env)
 			clock.delay(0.1, function() queued = false; if handle.alive and handle.visible then guardedRefresh() end end)
 		end
 		local offRecords, offCapture = records.changed:connect(queue), capture.changed:connect(queue)
+		local statusTick = clock.interval(1, function()
+			if handle.alive and handle.visible and capture.expiresAt then guardedRefresh(true) end
+		end)
 		root:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
 		function handle.setVisible(visible)
 			if handle.visible == visible then return end
@@ -495,7 +574,7 @@ return function(env)
 			if not handle.alive then return false end
 			handle.alive = false; catalogueGeneration = catalogueGeneration + 1
 			cancelSource()
-			saveDraft(); view.record = selected; offRecords(); offCapture(); divider.destroy()
+			saveDraft(); view.record = selected; offRecords(); offCapture(); statusTick(); divider.destroy()
 			if valueView then valueView.destroy() end; return true
 		end
 		function handle.destroy() if cleanup() then surface:Destroy() end end

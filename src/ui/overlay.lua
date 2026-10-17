@@ -1134,7 +1134,7 @@ return function(env)
 	-- Anchored menu ----------------------------------------------------------
 
 	-- Opens below the target, or above it when there is not enough room. Options are
-	-- { label, value, detail, selected, tone }. A custom header supplies both its
+	-- { label, value, detail, selected, tone, free }. A custom header supplies both its
 	-- height and render callback so the reserved space matches its contents.
 	function M.menu(props)
 		props = props or {}
@@ -1344,8 +1344,9 @@ return function(env)
 				button.LayoutOrder = index
 				button.Selectable = true
 				P.corner(button, theme.radius.md)
-				local focusStroke = P.stroke(button, theme.color.accentBorder)
-				focusStroke.Transparency = 1
+				local focusStroke = P.stroke(button, option.free and theme.color.success or theme.color.accentBorder, option.free and 2 or nil)
+				focusStroke.Transparency = option.free and 0 or 1
+				button:SetAttribute("UAIFreeModel", option.free == true)
 
 				local row = P.row(button, {
 					size = UDim2.fromScale(1, 1),
@@ -1438,7 +1439,7 @@ return function(env)
 						BackgroundTransparency = active and 0 or 1,
 						BackgroundColor3 = (pressed or option.selected) and theme.color.surfaceActive or theme.color.surfaceHover,
 					})
-					P.animate(focusStroke, "hover", { Transparency = focused and 0 or 1 })
+					P.animate(focusStroke, "hover", { Transparency = (focused or option.free) and 0 or 1 })
 				end
 				button.MouseEnter:Connect(function() hovered = true paint() end)
 				button.MouseLeave:Connect(function() hovered = false pressed = false paint() end)

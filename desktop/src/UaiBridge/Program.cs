@@ -9,6 +9,8 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "--mcp-stdio")
+            return McpHost.RunAsync(args[1..]).GetAwaiter().GetResult();
         DesktopUpdater.Configure(args);
         // Offline verification uses this executable as a controlled Node probe.
         if (args is ["--version"] && Environment.GetEnvironmentVariable("UAI_TEST_NODE_VERSION") is { } fixture)

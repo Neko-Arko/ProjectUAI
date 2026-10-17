@@ -1,5 +1,51 @@
 # Changelog
 
+## 3.3.0 — October 17, 2026 — MCP, bridge redesign and queued follow-ups
+
+- Connect Claude Code, Codex, Cursor, OpenCode and other MCP clients to UAI's
+  Roblox tools over authenticated Streamable HTTP or stdio. The standalone
+  desktop executable supports `--mcp-stdio` and discovers the running bridge.
+  Tool calls use normal UAI permissions and isolated sessions, with cancellation
+  and receipts that prevent replaying uncertain effects.
+- Copy an agent setup prompt from Settings → MCP, with the detected connection
+  details and instructions to configure and verify the connection.
+- Rebuild the bridge workspace and assistant responses. Open Connection,
+  Settings and the other management screens as modal workspaces. Improve
+  model selection and reasoning controls, show context estimates and compaction
+  limits, and remove superseded styles.
+- Send follow-up messages while the agent works in Roblox or the bridge. Queue
+  them in order for a safe boundary after the current response or tool batch,
+  with visible pending status and a separate Stop action.
+- Adaptively route included HCNSEC access using small verified tool probes and a
+  ten-second request target. Keep provider `auto` when no compatible fast route
+  is known; real user prompts are never raced or replayed to measure speed.
+  Automatic free routing is enabled by default and can be disabled under
+  Settings → Agent → Automatic free routing. A routed request names the selected
+  model and points to that setting; disabling it preserves already active work.
+- Give free models noticeable rounded green outlines in Roblox and the bridge.
+- Support Google's native Gemini protocol, including paginated model discovery,
+  image inputs, tool calls/results, thinking controls and scoped signature replay.
+  Route OpenCode Go Gemini models through the same adapter.
+- Choose Auto, Send or Omit for each model's temperature policy. Honor documented
+  restrictions and remember explicit unsupported-temperature refusals within the
+  provider/model scope without treating ordinary range errors as compatibility.
+- Inspect subagent progress, task, tool activity and results in richer preview
+  modals in Roblox and the bridge, with contextual follow-ups for finished work.
+- Expand the environment guide with capabilities, permissions, native workflows,
+  shared state, cleanup and official sUNC references. Strengthen main and worker
+  instructions while loading detailed guidance on demand.
+- Prevent removed pictures from returning when an in-flight upload completes.
+- Select scripts or actions in Code Library and remove them with one batch
+  confirmation. Preserve hidden selections and reject stale deletion previews.
+- Improve Explorer subtree navigation, search, multi-selection and field-value
+  inspection. Give Remote Spy visible capture duration, scope, filters and call
+  summaries with direct caller and Explorer actions.
+- Use native text and selection together while dragging or selecting code.
+  Calibrate syntax line spacing from native font bounds and stop caret-follow
+  scrolling from shifting the canvas during a drag.
+- Set client, bridge and Windows desktop to 3.3.0. UI LIB and SDK stay at 1.3.0
+  and 1.0.0. See [focused verification](docs/TESTING_3.3.0.md).
+
 ## 3.2.0 — October 15, 2026 — Project UAI Free and OpenCode desktop
 
 - Start empty provider setups with Project UAI Free, using included public HCNSEC

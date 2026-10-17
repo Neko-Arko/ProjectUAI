@@ -20,6 +20,16 @@ return function(env)
 
 	local M = {}
 
+	local function routeNotice(session, record)
+		if session.headless then return end
+		if not env.require("provider/free_route").isRouted(record) then session.freeRouteNotice = nil; return end
+		local key = providers.compatibilityKey(record)
+		if session.freeRouteNotice == key then return end
+		session.freeRouteNotice = key
+		session.emit("model:route", { model = record.model, provider = record.label,
+			text = "Automatic free routing selected " .. record.model .. ". Turn it off in Settings \226\134\146 Agent \226\134\146 Automatic free routing." })
+	end
+
 	local function stopped(session)
 		session.emit("abort", {})
 		session.emit("status", { text = "Ready" })
@@ -117,6 +127,8 @@ return function(env)
 				if aborted() then return nil, "aborted" end
 				local function prepare()
 					local request = requestFor(record)
+					local routed = env.require("provider/free_route").select(record, request)
+					if routed ~= record then record = routed; request = requestFor(record) end
 					-- Hooks may edit nested messages and schemas. Keep those changes out
 					-- of saved history, registered tools and later provider attempts.
 					if hooks.count("preRequest") > 0 then request = util.deepCopy(request) end
@@ -155,7 +167,11 @@ return function(env)
 					outputCeiling = math.max(1, available - margin)
 					maxTokens = math.min(maxTokens, outputCeiling)
 				end
-				local preview = stream.new(session, record.model, aborted)
+				local function requestAborted() return aborted() or not env.require("provider/free_route").current(record) end
+				if requestAborted() then return nil, "aborted" end
+				routeNotice(session, record)
+				if requestAborted() then return nil, "aborted" end
+				local preview = stream.new(session, record.model, requestAborted)
 
 				session.emit("request:start", {
 					streamId = preview.id,
@@ -178,7 +194,7 @@ return function(env)
 					maxTokens = maxTokens,
 					outputCeiling = outputCeiling,
 					extra = payload.request.extra,
-					aborted = aborted,
+					aborted = requestAborted,
 					onRetry = function(info)
 						if aborted() then return end
 						session.emit("request:retry", {
@@ -197,6 +213,7 @@ return function(env)
 					end,
 				})
 				preview.close()
+				env.require("provider/free_route").observe(record, result, clock.since(started))
 
 				if aborted() then return nil, "aborted" end
 				if result then
@@ -250,21 +267,29 @@ return function(env)
 				{ role = "user", content = transcript },
 			}
 			local maxTokens = math.min(512, math.max(16, math.floor((maxBytes or 2048) / 4)))
+			record = env.require("provider/free_route").select(record, { messages = messages, maxTokens = maxTokens })
 			local window = env.require("provider/traits").contextWindow(record.model, record)
 			if window then
 				local available = math.floor(window - usage.estimateMessages(messages) - 64)
 				if available < 16 then return nil end
 				maxTokens = math.min(maxTokens, available)
 			end
+			if session.toolEpoch ~= epoch or session.aborted() or not env.require("provider/free_route").current(record) then return nil end
+			routeNotice(session, record)
+			if session.toolEpoch ~= epoch or session.aborted() then return nil end
 			session.emit("status", { text = "Compacting context" })
+			local started = clock.ms()
 			local result = chat.complete(record, { session = session,
 				messages = messages,
 				temperature = 0,
 				maxTokens = maxTokens,
 				outputCeiling = maxTokens,
 				attempts = 1,
-				aborted = function() return session.toolEpoch ~= epoch or session.aborted() end,
+				aborted = function()
+					return session.toolEpoch ~= epoch or session.aborted() or not env.require("provider/free_route").current(record)
+				end,
 			})
+			env.require("provider/free_route").observe(record, result, clock.since(started))
 			if session.toolEpoch ~= epoch or session.aborted() then return nil end
 			if result then
 				usage.record(result.usage, result.model or record.model, {
@@ -279,6 +304,7 @@ return function(env)
 
 	-- Runs one user prompt to completion. Returns the assistant's final text.
 	function M.run(session, text, images)
+		session.freeRouteNotice = nil
 		local ctx = session.ctx
 		local maxTurns = session.maxTurns or config.get("agent.maxTurns", 24)
 		local repeatLimit = config.get("agent.repeatLimit", 3)
@@ -324,7 +350,9 @@ return function(env)
 			if session.aborted() then
 				return stopped(session)
 			end
-			if deadline and clock.ms() > deadline then
+			if session.consumeQueued and session.consumeQueued(true, deadline) > 0 then lastSignature, streak = "", 0 end
+			if session.aborted() then return stopped(session) end
+			if deadline and clock.ms() >= deadline then
 				session.emit("error", { message = "This turn ran out of time.", fatal = false })
 				return failed(session, "I ran out of time on this turn. Ask me to continue if you want me to keep going.")
 			end
@@ -374,6 +402,7 @@ return function(env)
 			local summary = ctx.compact(summarise, { model = record and record.model, record = record, aborted = compactionAborted })
 			if summary then session.emit("compact", { summary = summary, before = before, after = ctx.tokens() }) end
 			if compactionAborted() then return stopped(session) end
+			if session.consumeQueued and session.consumeQueued(false, deadline) > 0 then request = requestFor(record); lastSignature, streak = "", 0 end
 			local result, err, usedRecord, accounting = complete(session, requestFor, function(refusedRecord)
 				if session.aborted() then return false end
 				local prior = ctx.tokens()
@@ -411,7 +440,8 @@ return function(env)
 				displayed = displayed .. "\n\n[The provider filtered part of this reply.]"
 			end
 			if util.trim(displayed) ~= "" then
-				session.emit("assistant:text", { text = displayed, final = #result.toolCalls == 0 and coordination == nil, requestId = result.requestId, streamId = result.streamId, model = result.model })
+				session.emit("assistant:text", { text = displayed, final = #result.toolCalls == 0 and coordination == nil
+					and not (session.hasQueued and session.hasQueued()), requestId = result.requestId, streamId = result.streamId, model = result.model })
 			end
 			session.emit("assistant:complete", { streamId = result.streamId })
 
@@ -423,7 +453,16 @@ return function(env)
 			ctx.pushAssistant(result)
 
 			if #result.toolCalls == 0 then
-				if coordination then
+				if not unlimited and turn >= maxTurns and session.hasQueued and session.hasQueued() then break end
+				local followups = session.consumeQueued and session.consumeQueued(true, deadline) or 0
+				if session.aborted() then return stopped(session) end
+				if deadline and clock.ms() >= deadline and session.hasQueued and session.hasQueued() then
+					session.emit("error", { message = "This turn ran out of time.", fatal = false })
+					return failed(session, "I ran out of time on this turn. Your queued follow-ups are waiting for Resume.")
+				end
+				if followups > 0 then
+					lastSignature, streak = "", 0
+				elseif coordination then
 					-- A continuation message keeps Messages-compatible request order;
 					-- it is not a user transcript event or a permanent system directive.
 					ctx.push({ role = "user", content = coordination, internal = true })

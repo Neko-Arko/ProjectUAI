@@ -1,6 +1,6 @@
 # Native client features and limits
 
-Current native feature contract for **3.0.0**, October 13, 2026.
+Current native feature contract for **3.3.0**, October 17, 2026.
 Internal APIs are described in
 [SPEC.md](../SPEC.md); verification and native-device scenarios are in
 [CODE_WORKSPACE_TESTING.md](CODE_WORKSPACE_TESTING.md).
@@ -9,12 +9,11 @@ In-game release notes are under **App menu → What's new**, also available from
 **About → What's new**. Reload the updated native bundle to see the latest notes.
 Revised notes restore the unread marker even when the client version stays the same.
 
-Version 3.0.0 reuses exact-source outlines and syntax checks, adds filename-only
-discovery and focused project-test selectors, and makes useful result pages
-available with fewer repeated reads. HTTP/web snapshots keep continuations on
-the same response. Shared validation, observed write outcomes, input cleanup,
-capture retention and scheduling received focused changes. See the
-[release notes](../CHANGELOG.md) and [audit records](AUDIT_3.0.0_SCRIPTING.md).
+Version 3.3.0 adds MCP access through the bridge, queued follow-ups, native Gemini
+support and temperature controls. Code Library gains batch cleanup; Explorer,
+Remote Spy, code selection and subagent previews receive focused improvements.
+See the [release notes](../CHANGELOG.md) and
+[verification record](TESTING_3.3.0.md).
 
 The [script development manual](SCRIPT_DEVELOPMENT.md) is also bundled for
 models through the read-only `scripting_docs` tool. Its quickstart leads into
@@ -29,19 +28,37 @@ return usable entries with an explicit warning.
 New configurations use Low reasoning effort. Saved choices remain effective in
 **Settings → Agent → Effort**. The model modal edits this same global setting for
 documented reasoners and models with **Options → Reasoning support** enabled.
-Provider default is available there too. Controls update when settings change.
+Provider default is available there too. Temperature offers Automatic, Send and
+Omit for the selected model; its numeric value is shared across models. Automatic
+uses documented support and provider rejections. Controls update when settings change.
 Thinking estimates describe visible text; clipped
 traces say **Excerpt**. Folded traces defer Markdown formatting and measurement
 until opened, reuse parsed text during resizing, and retain plain text if formatting
 fails. Provider stream errors retain useful bounded details without
 retrying an uncertain dispatch. See [provider behavior](PROVIDER_COMPATIBILITY.md)
-and the [release verification record](TESTING_3.0.0.md).
+and the [release verification record](TESTING_3.3.0.md).
 
 New access settings default to **Allow everything**, allowing reads, writes and
 execution unless an explicit tool rule says otherwise. Saved access modes and
 rules are preserved. The composer chip names the active mode.
 Live reasoning and answer previews disclose their limits independently, and
 game-folder discovery checks each unreadable candidate only once.
+
+Send stays available while a conversation works. Follow-ups enter a visible queue
+and are consumed in order between complete model/tool exchanges. The pending bar
+opens a review modal where individual messages can be removed. Up to 16 messages
+can wait; attachment preparation reserves their order before reading bytes. Stop
+ends active work and holds messages that have not been consumed. Use Resume after
+reviewing them to continue. Ordinary saved conversations restore pending text and
+compact attachment references in a held state; unavailable attachments must be
+reattached. Ephemeral conversations do not persist this queue.
+
+**Settings → Agent → Automatic free routing** is enabled by default. Included
+HCNSEC access with model `auto` may choose a compatible model from recent measured
+probes. A conversation notice names the chosen model and points back to this
+setting. Disable it to keep future requests on the saved provider/model; an
+already dispatched request continues. Choosing an explicit model also prevents
+automatic selection. The provider's own `auto` routing remains its responsibility.
 
 The profile menu's ProjectUAI entry and support modal use the client's frame-drawn
 brand mark, which needs no image download. What's New remains a separate entry.
@@ -57,7 +74,10 @@ provider lines together.
 
 Subagent **Details** is a live monitor with the current step, provider/model,
 tool progress and results, latest delivered text and reasoning, elapsed time,
-final report and Stop. Existing cards update in place at most ten times per
+final report and Stop. Overview, Tools, and Task & access tabs separate output,
+call details, and the task with its granted tool groups. A follow-up draft survives
+live updates and tab changes. Send it after the run ends to reuse the retained
+context; Stop remains a separate action. Existing cards update in place at most ten times per
 second; hidden register views suspend drawing. Activity and message previews
 are bounded. Streaming output appears when delivered; buffered connections
 cannot show text before their response arrives.
@@ -178,6 +198,13 @@ states and partial/truncated/unreadable counts. Unknown totals stay unknown.
 Visible Select mode and menus provide touch/gamepad alternatives to modifier keys.
 Actual navigation, focus and hit targets still require native-device verification.
 
+The root menu names the current subtree and lists its ancestors; Up and Focus
+subtree provide direct navigation. Filters, Clear search, Select multiple and
+Clear selection are visible controls. Search results are flat, so expanded tree
+branches do not duplicate matches. Searches and the chosen root survive switching
+destinations and rebuilding the panel. Inspector search matches field names and
+displayed values, and field menus can copy a value or its name without editing.
+
 ## Code and source
 
 Documents, revisions, source history, proposals and saved actions are shared by UI
@@ -186,6 +213,12 @@ caret, multiline selection and match highlights. Unchanged shifted lines reuse
 syntax spans and widths. Long lines use chunked measurement and horizontal windows.
 Syntax checks are coalesced/cancellable. Typing emits small revision events; delayed
 autosave, rather than every keystroke, serializes the workspace.
+Library retains up to 50 scripts and 50 saved actions. Use Select to choose several
+entries, or Select matches after a search, then Delete selected for one confirmation.
+The count includes selections hidden by search, and selections survive a panel
+rebuild. Done clears the selection. Removal checks every selected source, name,
+saved version and pending proposal before changing anything; a stale confirmation
+deletes nothing. Unselected actions and workspace files remain available.
 Unvirtualized Markdown blocks above 32,000 bytes and unknown languages use escaped
 plain text; the editor/reader keep their bounded syntax windows.
 
@@ -310,6 +343,19 @@ acceptance. Export freezes record content and sequence boundaries before paging;
 later traffic cannot enter the snapshot. Split files receive a completion manifest
 only after verified writes. Offline imports are inert and require explicit rebind
 and fresh replay review.
+
+The capture toolbar exposes duration presets and a live countdown. Its active
+scope and direction reflect the running capture, including captures started by a
+tool. Pause explains that a timed capture still expires; expiry retains recorded
+calls. The status control opens actual backend coverage. Retained-call filters
+show a summary and Reset action, and any captured remote can narrow the list to
+its exact reference without changing capture admission or traffic rules.
+
+Selecting a call opens a Summary with direction, outcome, argument/return counts,
+duration, origin, errors, and the record reference. It updates as a pending call
+finishes. Arguments and Results tabs include their counts; direct actions filter
+that remote, reveal it in Explorer, or open an identified calling script. Narrow
+views keep the filter strip and list on the existing scrollable workspace surface.
 
 ## Named resource budgets
 

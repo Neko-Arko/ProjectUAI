@@ -148,14 +148,14 @@ return function(env)
 		local renderLimits = function() end
 
 		local function reportModal(record)
-			local monitor = { record = record, dirty = true, rows = {} }
+			local monitor = { record = record, dirty = true, rows = {}, section = "overview" }
 			local function cleanup()
 				monitors[monitor] = nil
 				monitor.record, monitor.rows, record = nil, nil, nil
 			end
 			local modal = overlay.modal({
 				title = record.label,
-				description = "Live activity and the latest delivered messages",
+				description = "Follow the work, inspect its output, and continue the same context.",
 				width = theme.size.modalWide,
 				scroll = true,
 				height = theme.size.dialogTall,
@@ -169,13 +169,23 @@ return function(env)
 				return P.text(host, { name = name, text = "", role = role or "small",
 					color = theme.color.textSecondary, wrap = true, auto = "Y", layoutOrder = order })
 			end
+			local tabs = P.row(modal.content, { name = "AgentPreviewTabs", size = UDim2.new(1, 0, 0, 0), auto = "Y", wrap = true, gap = theme.space.xs, layoutOrder = 0 })
+			local tabButtons = {}
+			for index, section in ipairs({ { "overview", "Overview" }, { "tools", "Tools" }, { "task", "Task & access" } }) do
+				local id = section[1]
+				tabButtons[id] = P.button(tabs, { name = "AgentTab_" .. id, text = section[2], size = "sm", variant = id == monitor.section and "secondary" or "ghost", layoutOrder = index,
+					onClick = function() monitor.section = id; monitor.update(); modal.scroll.instance.CanvasPosition = Vector2.new(0, 0) end })
+			end
 			local summary = P.card(modal.content, { name = "AgentLiveStatus", layoutOrder = 1, gap = theme.space.xs })
 			local stateLabel = textBlock(summary, "CurrentStep", "bodyStrong", 1)
 			local metaLabel = textBlock(summary, "LiveMeta", "caption", 2)
 			local providerLabel = textBlock(summary, "Provider", "caption", 3)
 			local deliveryLabel = textBlock(summary, "Delivery", "caption", 4)
 			local workLabel = textBlock(summary, "CurrentProgress", "small", 5)
-			local _, taskLabel = C.keyValue(modal.content, { key = "Task", value = record.currentTask or record.task, layoutOrder = 2 })
+			local taskSection = P.card(modal.content, { name = "AgentTaskDetails", layoutOrder = 2, gap = theme.space.sm })
+			local _, taskLabel = C.keyValue(taskSection, { key = "Task", value = record.currentTask or record.task, layoutOrder = 1 })
+			C.keyValue(taskSection, { key = "Id", value = tostring(record.id), role = "monoSmall", layoutOrder = 2 })
+			C.keyValue(taskSection, { key = "Tools", value = describePreset(record.preset), layoutOrder = 3 })
 			local messages = P.card(modal.content, { name = "AgentMessages", layoutOrder = 3, gap = theme.space.xs })
 			local messageTitle = textBlock(messages, "MessageTitle", "label", 1)
 			local messageLabel = textBlock(messages, "LatestMessage", "small", 2)
@@ -190,19 +200,36 @@ return function(env)
 			setText(textBlock(report, "ReportTitle", "label", 1), "Report")
 			local reportLabel = textBlock(report, "Report", "small", 2)
 			local followLabel = textBlock(report, "FollowUp", "caption", 3)
-			C.keyValue(modal.content, { key = "Id", value = tostring(record.id), role = "monoSmall", layoutOrder = 6 })
-			C.keyValue(modal.content, { key = "Tools", value = describePreset(record.preset), layoutOrder = 7 })
+			local followCard = P.card(modal.content, { name = "AgentFollowup", layoutOrder = 6, gap = theme.space.xs })
+			setText(textBlock(followCard, "FollowupTitle", "label", 1), "Continue this subagent")
+			local followHint = textBlock(followCard, "FollowupHint", "caption", 2)
+			local sendButton, submitting = nil, false
+			local followInput = P.field(followCard, { name = "AgentFollowupInput", placeholder = "A question or next task…", multiline = true,
+				height = theme.size.control * 2, layoutOrder = 3, onChange = function(value)
+					if sendButton then sendButton.setEnabled(record ~= nil and not isLive(record) and record.session ~= nil and not submitting and util.trim(value) ~= "") end
+				end })
 			local stopButton = P.button(modal.footer, {
 				name = "StopAgent", text = "Stop", variant = "danger", size = "sm", layoutOrder = 1,
 				onClick = function()
 					if record and subagent.stop(record.id) then overlay.toast("Asked it to stop. It finishes the step it is on.", "info", 3) end
 				end,
 			})
+			sendButton = P.button(modal.footer, { name = "SendAgentFollowup", text = "Send follow-up", variant = "secondary", size = "sm", layoutOrder = 2,
+				enabled = false, onClick = function()
+					if not record or submitting or isLive(record) or not record.session then return end
+					local text = util.trim(followInput.get()); if text == "" then return end
+					submitting = true; sendButton.setEnabled(false)
+					local accepted, why = subagent.startFollowUp({ id = record.id, task = text })
+					submitting = false
+					if accepted then followInput.set(""); monitor.section = "overview"
+					else overlay.toast(tostring(why), "warn", 4) end
+					monitor.update()
+				end })
 			P.button(modal.footer, {
 				text = "Close",
 				variant = "primary",
 				size = "sm",
-				layoutOrder = 2,
+				layoutOrder = 3,
 				onClick = function() modal.close() end,
 			})
 			function monitor.tick()
@@ -218,6 +245,12 @@ return function(env)
 				monitor.dirty = false
 				local live = isLive(record)
 				local status = STATUS[record.status] or STATUS.done
+				local position = modal.scroll.instance.CanvasPosition
+				for id, button in pairs(tabButtons) do button.setVariant(id == monitor.section and "secondary" or "ghost") end
+				taskSection.Visible = monitor.section == "task"
+				messages.Visible = monitor.section == "overview"
+				activity.Visible = monitor.section == "tools"
+				followCard.Visible = monitor.section == "overview"
 				setText(taskLabel, record.currentTask or record.task)
 				setText(stateLabel, live and currentNote(record) or status.label)
 				stateLabel.TextColor3 = theme.color[status.colour]
@@ -280,7 +313,7 @@ return function(env)
 				for key, row in pairs(monitor.rows) do
 					if not retained[key] then row.root:Destroy(); monitor.rows[key] = nil end
 				end
-				report.Visible = not live
+				report.Visible = not live and monitor.section == "overview"
 				setText(reportLabel, record.report or "Nothing was reported.")
 				setText(followLabel, record.session and "Open for a follow-up. Ask the agent to continue this subagent by its Id."
 					or "This subagent's context has been released.")
@@ -288,6 +321,11 @@ return function(env)
 				stopButton.setText(record.stopping and "Stopping" or "Stop")
 				local enabled = live and not record.stopping
 				if stopButton.enabled ~= enabled then stopButton.setEnabled(enabled) end
+				setText(followHint, live and "Draft your next task while this subagent works. Send it after the current run finishes."
+					or record.session and "Open for a follow-up using the same context and tool access." or "This subagent’s context has been released.")
+				sendButton.instance.Visible = record.session ~= nil
+				sendButton.setEnabled(not live and record.session ~= nil and not submitting and util.trim(followInput.get()) ~= "")
+				modal.scroll.instance.CanvasPosition = position
 			end
 			monitor.update()
 			return modal

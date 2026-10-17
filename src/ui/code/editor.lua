@@ -1,6 +1,6 @@
 -- A native TextBox owns editing, hit testing, selection and IME. Its raw text
--- stays separate from the syntax layer; visible caret/selection follow native
--- byte offsets so focusing the editor never removes the syntax colours.
+-- stays separate from the syntax layer. Dragging or selecting shows the native
+-- text/selection together, so a separately measured overlay cannot shift it.
 return function(env)
 	local P = env.require("ui/primitives")
 	local theme = env.require("ui/theme")
@@ -30,18 +30,36 @@ return function(env)
 		box.TextTransparency, box.TextStrokeTransparency = 0, 1
 		box.CursorPosition, box.SelectionStart = -1, -1
 		if role.face then pcall(function() box.FontFace = role.face end) end
+		-- Font bounds and native line advance are different measurements. Read a
+		-- long native sample to retain fractional spacing instead of accumulating
+		-- a rounded single-line estimate down the document. These cannot take input.
+		local function probe(name, value)
+			local node = box:Clone()
+			node.Name, node.Text, node.TextTransparency = name, value, 1
+			node.Active, node.Selectable, node.TextEditable = false, false, false
+			node.Position, node.Size = UDim2.fromOffset(-2000, 0), UDim2.fromOffset(1000, 2000)
+			node.Parent = root
+			return node
+		end
+		local singleProbe = probe("SourceSingleLineMetrics", "Mg")
+		local linesProbe = probe("SourceLineMetrics", "Mg" .. string.rep("\nMg", 32))
 		local gutter = P.frame(scroll.instance, { name = "Gutter", bg = theme.color.codeBar, zIndex = 4 })
 		P.frame(gutter, { name = "GutterRule", size = UDim2.new(0, theme.stroke.hair, 1, 0), position = UDim2.new(1, -theme.stroke.hair, 0, 0), bg = theme.color.codeBorder, zIndex = 5 })
 		local caret = P.frame(scroll.instance, { name = "SourceCaret", bg = theme.color.codeText, size = UDim2.fromOffset(2, role.height), zIndex = 4, visible = false })
 		caret.Active, caret.Selectable = false, false
 		local handle = { root = root, box = box, scroll = scroll.instance, alive = true, syntax = "", visible = true }
 		local document, ignore, focused, cache, pending = nil, false, false, nil, false
+		local selectionPointer
 		local restoring, layingOut = false, false
 		local pool, lineHeight, width, gutterWidth = {}, role.height, 0, theme.size.codeGutter
 		local measurements, widthCounts, maxLineWidth = {}, {}, 0
 		local searchState = { query = "", options = { caseSensitive = true }, items = {}, total = 0, current = 0 }
 		local caretMovedAt = clock.ms()
 		local findBar, findField, findCount
+		local function nativeSelection()
+			return focused and (selectionPointer ~= nil or (box.CursorPosition > 0 and box.SelectionStart > 0
+				and box.CursorPosition ~= box.SelectionStart))
+		end
 		local function pinSource()
 			sources.release(handle)
 			if document and document.sourceId and handle.visible then
@@ -60,7 +78,7 @@ return function(env)
 		end
 		local function blinkCaret()
 			local offset = box.CursorPosition
-			local visible = focused and handle.visible and document ~= nil and offset > 0 and (clock.ms() - caretMovedAt) % 1000 < 550
+			local visible = focused and not nativeSelection() and handle.visible and document ~= nil and offset > 0 and (clock.ms() - caretMovedAt) % 1000 < 550
 			if caret.Visible ~= visible then caret.Visible = visible end
 		end
 		local function drawCaret()
@@ -98,22 +116,18 @@ return function(env)
 			gutter.Position = UDim2.fromOffset(x, 0); gutter.Size = UDim2.fromOffset(gutterWidth, math.max(scroll.instance.AbsoluteSize.Y, #cache.lines * lineHeight + theme.space.sm * 2))
 			local first = math.max(1, math.floor(y / lineHeight) + 1 - theme.size.codeOverscan)
 			local count = math.min(160, math.ceil(math.max(1, scroll.instance.AbsoluteSize.Y) / lineHeight) + theme.size.codeOverscan * 2)
-			local cursor, anchor = box.CursorPosition, box.SelectionStart
-			local selecting = focused and cursor > 0 and anchor > 0 and cursor ~= anchor
-			local selectionFirst, selectionLast = math.min(cursor, anchor), math.max(cursor, anchor)
+			local native = nativeSelection()
 			for slot = 1, count do
 				local row = pool[slot]
 				if not row then
 					row = { number = P.text(gutter, { text = "", role = "mono", color = theme.color.codeGutter, align = "Right", zIndex = 5 }),
-						text = P.text(scroll.instance, { name = "SyntaxLine", text = "", role = "mono", color = theme.color.codeText, rich = true, zIndex = 2 }),
-						selection = P.frame(scroll.instance, { name = "SourceSelection", bg = theme.mix(theme.color.codeSurface, theme.color.accent, 0.38), zIndex = 1, visible = false }) }
+						text = P.text(scroll.instance, { name = "SyntaxLine", text = "", role = "mono", color = theme.color.codeText, rich = true, zIndex = 2 }) }
 					row.text.RichText = true; row.text.TextYAlignment, row.number.TextYAlignment = Enum.TextYAlignment.Top, Enum.TextYAlignment.Top
 					row.text.Active, row.number.Active = false, false
-					row.selection.Active, row.selection.Selectable = false, false
 					pool[slot] = row
 				end
 				local index = first + slot - 1; local value = cache.lines[index]
-				row.number.Visible, row.text.Visible, row.selection.Visible = value ~= nil, value ~= nil, false
+				row.number.Visible, row.text.Visible = value ~= nil, value ~= nil and not native
 				for _, mark in ipairs(row.matches or {}) do mark.Visible = false end
 				if value then
 					local top = theme.space.sm + (index - 1) * lineHeight
@@ -135,24 +149,17 @@ return function(env)
 							local mark = row.matches[painted]
 							if not mark then mark = P.frame(scroll.instance, { name = "SearchMatch", bg = theme.mix(theme.color.codeSurface, theme.color.accent, 0.25), zIndex = 1 }); mark.Active = false; row.matches[painted] = mark end
 							local left, right = advance(index, math.max(start, match.first)), advance(index, math.min(finish, match.after))
-							mark.Position, mark.Size, mark.Visible = UDim2.fromOffset(gutterWidth + theme.space.sm + left, top), UDim2.fromOffset(math.max(3, right - left), lineHeight), true
+							mark.Position, mark.Size, mark.Visible = UDim2.fromOffset(gutterWidth + theme.space.sm + left, top), UDim2.fromOffset(math.max(3, right - left), lineHeight), not native
 						end
 					end
 					for i = painted + 1, #row.matches do row.matches[i].Visible = false end
-					if selecting and selectionFirst <= finish and selectionLast > start then
-						local left = advance(index, math.max(start, selectionFirst))
-						local right = advance(index, math.min(finish, selectionLast))
-						if selectionLast > finish then right = right + math.max(6, role.size * 0.6) end
-						row.selection.Position = UDim2.fromOffset(gutterWidth + theme.space.sm + left, top)
-						row.selection.Size, row.selection.Visible = UDim2.fromOffset(math.max(2, right - left), lineHeight), true
-					end
 				end
 			end
 			for i = count + 1, #pool do
-				pool[i].number.Visible, pool[i].text.Visible, pool[i].selection.Visible = false, false, false
+				pool[i].number.Visible, pool[i].text.Visible = false, false
 				for _, mark in ipairs(pool[i].matches or {}) do mark.Visible = false end
 			end
-			box.TextTransparency = #box.Text == 0 and 0 or 1
+			box.TextTransparency = (native or #box.Text == 0) and 0 or 1
 			drawCaret()
 		end
 		local function layout()
@@ -178,10 +185,11 @@ return function(env)
 					matchCount()
 				end
 			end
-			-- Match the native line advance, including its fractional spacing. A
-			-- rounded-up theme height drifts by hundreds of pixels in a long file.
-			local measured = P.measureText("Mg", { role = "mono", line = 1 }).Y
-			lineHeight = math.max(1, measured * box.LineHeight)
+			local nativeAdvance = (linesProbe.TextBounds.Y - singleProbe.TextBounds.Y) / 32
+			local measured = P.measureText("Mg\nMg", { role = "mono", line = 1 }).Y
+				- P.measureText("Mg", { role = "mono", line = 1 }).Y
+			lineHeight = nativeAdvance >= role.size * 0.5 and nativeAdvance <= role.size * 4
+				and nativeAdvance or math.max(1, measured * box.LineHeight)
 			gutterWidth = math.max(theme.size.codeGutter, P.measureText(tostring(#cache.lines), { role = "mono" }).X + theme.space.lg)
 			width = math.max(1, scroll.instance.AbsoluteSize.X - gutterWidth - theme.space.lg)
 			width = math.max(width, maxLineWidth + theme.space.lg)
@@ -198,6 +206,8 @@ return function(env)
 			if pending then return end; pending = true
 			clock.delay(0.015, function() pending = false; if handle.alive and handle.visible then layout(); if handle.revealCursor then handle.revealCursor() end end end)
 		end
+		singleProbe:GetPropertyChangedSignal("TextBounds"):Connect(queue)
+		linesProbe:GetPropertyChangedSignal("TextBounds"):Connect(queue)
 		local syntaxGeneration, syntaxWorker = 0, nil
 		local function checkSyntax()
 			syntaxGeneration = syntaxGeneration + 1; local generation = syntaxGeneration
@@ -218,7 +228,7 @@ return function(env)
 			end)
 		end
 		box:GetPropertyChangedSignal("Text"):Connect(function()
-			box.TextTransparency = #box.Text == 0 and 0 or 1
+			box.TextTransparency = (nativeSelection() or #box.Text == 0) and 0 or 1
 			caretMovedAt = clock.ms()
 			if ignore or not document then return end
 			local updated, why = store.update(document.id, box.Text, { origin = "typing" })
@@ -226,9 +236,21 @@ return function(env)
 			queue(); checkSyntax()
 		end)
 		box.Focused:Connect(function() focused = true; caretMovedAt = clock.ms(); draw() end)
-		box.FocusLost:Connect(function() focused = false; saveView(); draw() end)
+		box.FocusLost:Connect(function() focused = false; selectionPointer = nil; saveView(); draw() end)
+		box.InputBegan:Connect(function(input)
+			if not selectionPointer and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+				selectionPointer = input; draw()
+			end
+		end)
+		local selectionEnded = env.uis.InputEnded:Connect(function(input)
+			if selectionPointer and (input == selectionPointer or (selectionPointer.UserInputType == Enum.UserInputType.MouseButton1
+				and input.UserInputType == Enum.UserInputType.MouseButton1)) then
+				selectionPointer = nil; draw()
+			end
+		end)
+		local selectionFocusLost = env.uis.WindowFocusReleased:Connect(function() selectionPointer = nil; draw() end)
 		local function revealCursor()
-			if restoring or not focused or not handle.visible or not document or box.CursorPosition < 1 then return end
+			if restoring or selectionPointer or not focused or not handle.visible or not document or box.CursorPosition < 1 then return end
 			if not cache then return end
 			local line = lineAt(box.CursorPosition)
 			local x = gutterWidth + theme.space.sm + advance(line, box.CursorPosition)
@@ -247,6 +269,7 @@ return function(env)
 		root:GetPropertyChangedSignal("AbsoluteSize"):Connect(queue)
 		function handle.select(doc, requestedView)
 			if not requestedView then saveView() end
+			selectionPointer = nil
 			restoring = true; document = doc
 			pinSource()
 			local view = doc and util.copy(store.view(doc.id))
@@ -385,10 +408,11 @@ return function(env)
 			if not handle.alive then return end; saveView(); handle.alive = false; syntaxGeneration = syntaxGeneration + 1
 			sources.release(handle)
 			if syntaxWorker and task.cancel then pcall(task.cancel, syntaxWorker) end
-			blink:Disconnect(); findInput:Disconnect(); off(); root:Destroy()
+			blink:Disconnect(); findInput:Disconnect(); selectionEnded:Disconnect(); selectionFocusLost:Disconnect(); off(); root:Destroy()
 		end
 		function handle.setVisible(visible)
 			if handle.visible == visible then return end
+			selectionPointer = nil
 			handle.visible = visible
 			pinSource()
 			if visible then handle.needsLayout = nil; layout(); checkSyntax()

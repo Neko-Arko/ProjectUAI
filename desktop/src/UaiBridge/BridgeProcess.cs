@@ -19,7 +19,7 @@ internal sealed class BridgeProcess : IAsyncDisposable
     public string State { get; private set; } = "Stopped";
     public string Detail { get; private set; } = "Ready when you are.";
     public string UpdateState { get; private set; } = "current";
-    public string BridgeVersion { get; private set; } = "3.2.0";
+    public string BridgeVersion { get; private set; } = DesktopUpdater.CurrentVersion;
     public string OpenCodeState { get; private set; } = "stopped";
     public string OpenCodeDetail => OpenCodeState switch
     {
@@ -71,6 +71,7 @@ internal sealed class BridgeProcess : IAsyncDisposable
             process.StartInfo.ArgumentList.Add(server);
             process.StartInfo.ArgumentList.Add("--desktop");
             process.StartInfo.Environment["UAI_BRIDGE_INSTALLATION_ID"] = Path.Combine(DesktopUpdater.InstallationRoot, "bridge", "server.js");
+            process.StartInfo.Environment["UAI_DESKTOP_EXECUTABLE"] = Environment.ProcessPath;
             process.Exited += (_, _) =>
             {
                 if (ReferenceEquals(child, process) && !stopping)

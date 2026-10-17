@@ -3,7 +3,7 @@
 Use UAI in your browser while Roblox runs your tools and keeps the conversation.
 Run both on the same computer. The [Windows desktop app](../desktop/README.md)
 detects installed Node.js and offers a verified download if needed. Open the
-single **UAI-Bridge-3.2.0-win-x64.exe** download, complete Node setup, click **Start
+single **UAI-Bridge-3.3.0-win-x64.exe** download, complete Node setup, click **Start
 Cowork**, and load the updated UAI script. The browser opens and Roblox connects
 automatically on dedicated port **28791**. No terminal or token copying is needed.
 
@@ -15,6 +15,12 @@ availability updates and new free options. Project UAI Free is the default for
 users without a provider; thank you for continuing to use and support Project UAI.
 
 ## OpenCode on desktop
+
+For external harnesses that should run Roblox tools directly, the bridge also
+provides native MCP over Streamable HTTP and stdio. Open **Settings → MCP** for
+connection details, or follow the [MCP setup guide](MCP.md) for Claude Code,
+Codex, Cursor, OpenCode and command-based MCP clients. Roblox retains permission
+decisions and executes tools in isolated external sessions.
 
 The existing direct desktop workaround remains supported. Version 3.2 also adds
 an optional native route through an **already installed OpenCode CLI**. Install
@@ -93,12 +99,12 @@ Failed downloads or startup keep a working version. Git checkouts and executor
 download packages are never overwritten; updates live in a per-install user cache.
 
 Publish `dist/bridge-release.json` and `dist/uai-bridge-package.json` on the same
-official `v3.2.0` or `bridge-v3.2.0` GitHub release. Generate them with
+official `v3.3.0` or `bridge-v3.3.0` GitHub release. Generate them with
 `node tools/build_bridge.js` after reviewing final bridge/web inputs, inspect
 the outputs, then run `node tools/build_bridge.js --check` and focused tests.
 Later releases must bump `bridge/release.js` and use the matching release tag.
-The release builder embeds OpenCode/support helpers into the original permitted
-root filenames so installed 3.1 updaters can verify and activate 3.2. Checkout,
+The release builder embeds OpenCode, MCP and support helpers into the original
+permitted root filenames so installed 3.1 updaters can verify and activate 3.3. Checkout,
 executor downloads and desktop payloads retain the separate source modules.
 
 The [desktop app](../desktop/README.md) independently downloads its own release
@@ -108,6 +114,9 @@ and applies it on restart. An old 1.0 desktop ZIP needs one manual upgrade first
 
 - **Chat** follows the active Roblox conversation. Use the sidebar to find or
   start conversations; draft text and code files stay with their conversation.
+  An empty conversation centers the prompt and composer, with quick ideas below.
+  Live answers format as they arrive; new text fades in while completed paragraphs
+  and code remain steady. Thinking and tool details open when you want to read them.
 - **Runtime follows the connection.** Successful authenticated bridge contact
   selects Web automatically, with live responses when the provider supports
   streaming. Disconnecting restores Game for subsequent requests. Roblox owns
@@ -126,7 +135,36 @@ and applies it on restart. An old 1.0 desktop ZIP needs one manual upgrade first
   bridge, 4096 × 4096 and 12 megapixels. Animated images are not supported.
 - **Stop** cancels the current turn. Closing or refreshing the browser does not.
   If delivery is unclear, use **Check delivery** before sending again.
-- **Settings → Browser appearance** offers system, light, dark, and Match Roblox.
+- **Follow-ups** can be sent while an answer is running. They wait visibly above
+  the composer and enter the conversation in order at a safe turn boundary.
+  Remove a pending message or use Resume queue after Stop, a failure, or a budget
+  limit pauses the queue. Stop stays separate from the follow-up send action.
+- **Connection, Providers, Tools, Subagents, Chat loops, Memory & skills, and
+  Activity** open in a modal workspace above your conversation. Switch views in
+  its top navigation; nested provider and tool dialogs return to the same view.
+  Connection shows the browser, bridge, and Roblox status with guided setup and
+  quick access to the bridge token. Close the workspace to return to your draft.
+- **Settings** opens a focused modal above your conversation. General offers
+  Light, Dark, System, and Roblox theme previews. Appearance, Agent, Advanced,
+  and Data organize your remaining preferences; changes save as you go.
+  **Settings → MCP → Copy setup prompt** gives your desktop agent the detected
+  connection details and instructions to configure and verify MCP for you.
+  The MCP section also offers configuration snippets for individual harnesses.
+  Free models have a rounded green border and Free label in the picker, the
+  composer, and provider summaries. Available auto-routing probe status is
+  displayed without promising the same latency on future requests.
+  The model picker pairs searchable model cards with context/output limits and
+  the selected model’s supported reasoning controls. Temperature handling can
+  follow known model/provider support automatically or explicitly send/omit the
+  shared value for a model. Provider setup supports Gemini generateContent as
+  well as OpenAI-compatible and Anthropic Messages APIs. The composer’s context ring
+  opens a token breakdown and compaction threshold; partial estimates and unknown
+  context limits are labelled explicitly.
+  **Subagents → Preview** opens live output, expandable tool progress/results,
+  and task/access details in separate tabs. Reading position, open calls and
+  follow-up drafts survive live updates. When the run finishes, send a follow-up
+  into its retained context or copy its report; Stop remains independent.
+  Browser previews retain bounded excerpts and up to 12 active/recent tool calls.
   Conversation text scaling keeps sidebar labels compact. Dialogs keep their
   headings and actions available while long forms scroll, and restore focus
   when dismissed. Client animations are permanently enabled; browser system
@@ -199,7 +237,7 @@ short screens with full drafts, long task lists and model names, live question a
 selection updates, dialog errors, keyboard focus, contrast, and forced colors.
 Inspect the saved screenshots as well as checking geometry. These fixtures do not
 replace a live executor check. See the [UI audit](UI_AUDIT.md) for the findings.
-The [3.2.0 verification record](../docs/TESTING_3.2.0.md) records the current
+The [3.3.0 verification record](../docs/TESTING_3.3.0.md) records the current
 bridge release checks; the entire native suite is not part of this pass.
 
 Protocol remains version 2. `/api/hello` advertises optional picture and normalized

@@ -8,19 +8,24 @@
 
   function createPictures(deps) {
     let token = deps.token, supported = false, policy, running = 0, generation = 0;
-    const records = new Map(), messages = new Map(), waiting = [];
+    const records = new Map(), messages = new Map(), waiting = [], dismissed = new Set(), deleting = new Map();
     const current = () => [...records.values()].filter(r => r.sessionId === deps.getSession());
     const drafts = () => current().filter(r => !r.commandId);
     const headers = sid => ({ Authorization: 'Bearer ' + token, 'X-UAI-Browser-Id': deps.browserId, 'X-UAI-Session-Id': sid });
     const notify = () => deps.onChange?.();
     const meta = r => Object.fromEntries(['id', 'sessionId', 'name', 'mediaType', 'bytes', 'width', 'height', 'sha256', 'status', 'commandId', 'expiresAt'].map(k => [k, r[k]]));
     function persist() {
-      try { sessionStorage.setItem('uai.pictures', JSON.stringify([...records.values()].slice(-128).map(meta))); } catch { /* previews still work in memory */ }
+      try {
+        sessionStorage.setItem('uai.pictures', JSON.stringify([...records.values()].slice(-128).map(meta)));
+        sessionStorage.setItem('uai.pictures.dismissed', JSON.stringify([...dismissed]));
+      } catch { /* previews still work in memory */ }
     }
     try {
+      const removed = JSON.parse(sessionStorage.getItem('uai.pictures.dismissed') || '[]');
+      for (const id of Array.isArray(removed) ? removed.slice(-512) : []) if (typeof id === 'string' && /^pic_[\w-]{8,64}$/.test(id)) dismissed.add(id);
       const saved = JSON.parse(sessionStorage.getItem('uai.pictures') || '[]');
       for (const value of Array.isArray(saved) ? saved.slice(-128) : []) {
-        if (value && /^pic_[\w-]{8,64}$/.test(value.id) && typeof value.sessionId === 'string') records.set(value.id, { ...value, status: ['queued', 'acked', 'staged'].includes(value.status) ? value.status : 'expired' });
+        if (value && !dismissed.has(value.id) && /^pic_[\w-]{8,64}$/.test(value.id) && typeof value.sessionId === 'string') records.set(value.id, { ...value, status: ['queued', 'acked', 'staged'].includes(value.status) ? value.status : 'expired' });
       }
     } catch { /* invalid browser storage is disposable */ }
 
@@ -79,7 +84,7 @@
     async function upload(rec) {
       try {
         const dims = await measure(rec.file);
-        if (!records.has(rec.id)) return;
+        if (records.get(rec.id) !== rec) return;
         if (dims.width > policy.maxWidth || dims.height > policy.maxHeight || dims.width * dims.height > policy.maxPixels) throw Error('This image is too large. Resize it to fit within ' + policy.maxWidth + ' × ' + policy.maxHeight + ' and 12 megapixels.');
         Object.assign(rec, dims, { status: 'uploading' }); render(); notify();
         const result = await new Promise((resolve, reject) => {
@@ -100,23 +105,39 @@
           xhr.onabort = () => reject(Error('Upload cancelled.'));
           xhr.send(rec.file);
         });
-        if (records.has(rec.id)) Object.assign(rec, result, { progress: 100, error: null });
+        if (records.get(rec.id) === rec) Object.assign(rec, result, { progress: 100, error: null });
       } catch (error) {
-        if (records.has(rec.id)) { rec.status = 'failed'; rec.error = error.message; }
+        if (records.get(rec.id) === rec) { rec.status = 'failed'; rec.error = error.message; }
       } finally { rec.xhr = null; }
     }
 
+    function rememberDismissed(id) {
+      dismissed.add(id);
+      while (dismissed.size > 512) dismissed.delete(dismissed.values().next().value);
+    }
+    function discardServer(id, sid) {
+      if (!supported || typeof sid !== 'string') return;
+      const previous = deleting.get(id);
+      if (previous) { previous.again = true; return; }
+      const removal = { again: false }; deleting.set(id, removal);
+      fetch('/api/pictures/' + id, { method: 'DELETE', headers: headers(sid), signal: AbortSignal.timeout(10000) })
+        .catch(() => {}).finally(() => {
+          deleting.delete(id);
+          if (removal.again) discardServer(id, sid);
+        });
+    }
     function remove(rec, tellServer = true) {
+      rememberDismissed(rec.id);
       records.delete(rec.id); rec.xhr?.abort();
       if (rec.url) URL.revokeObjectURL(rec.url); rec.url = null; rec.file = null;
-      if (tellServer && supported) fetch('/api/pictures/' + rec.id, { method: 'DELETE', headers: headers(rec.sessionId), signal: AbortSignal.timeout(10000) }).catch(() => {});
+      if (tellServer) discardServer(rec.id, rec.sessionId);
       persist();
     }
 
     function retry(rec) {
       if (!rec.file) { remove(rec); render(); openPicker(); return; }
-      if (rec.status === 'expired') { records.delete(rec.id); rec.id = newId(); records.set(rec.id, rec); }
-      rec.status = 'reading'; rec.error = null; rec.commandId = null; waiting.push(rec); render(); notify(); pump();
+      if (rec.status === 'expired') { rememberDismissed(rec.id); records.delete(rec.id); rec.id = newId(); records.set(rec.id, rec); }
+      rec.status = 'reading'; rec.error = null; rec.commandId = null; rec.expiresAt = null; waiting.push(rec); render(); persist(); notify(); pump();
     }
 
     function render() {
@@ -194,6 +215,10 @@
     function handleEvent(event) {
       if (event.browserId && event.browserId !== deps.browserId) return;
       if (!/^pic_[\w-]{8,64}$/.test(event.id || '')) return;
+      // An upload can commit after its XHR is aborted and its first DELETE.
+      // Ignore that late notification (including replay after a reload), and
+      // release any bytes which arrived after the original cleanup request.
+      if (dismissed.has(event.id)) { if (event.status === 'staged') discardServer(event.id, event.sessionId); return; }
       let rec = records.get(event.id);
       if (!rec) { if (records.size >= 128) return; rec = {}; records.set(event.id, rec); }
       const uploading = rec.status === 'reading' || rec.status === 'uploading', previousStatus = rec.status;

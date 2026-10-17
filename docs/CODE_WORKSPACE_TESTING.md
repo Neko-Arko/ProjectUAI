@@ -101,6 +101,11 @@ gamepad focus behavior in Roblox; offline fixtures do not measure native frames.
 1. Open Code; create, type, rename, switch, close and reopen scripts from Library.
    Read the just-typed draft with `code_read` before autosave. Identity/source
    survive rotation, navigation and theme/layout rebuild. Closing does not delete.
+   At the 50-script limit, use Select and Select matches across two searches. Check
+   the hidden-selection count, rebuild the panel, and delete the chosen entries
+   with one confirmation. Edit or rename one selected script, save a version, or
+   add a proposal while confirmation is open: the whole batch must be retained.
+   Confirm again and verify unselected scripts/actions and disk files survive.
 2. Exercise 2,000 lines, CJK/emoji, tabs, CRLF, quotes, long bracket strings/comments
    and long horizontal lines. Scroll both axes and edit near the bottom. The gutter
    aligns, the caret stays visible, and highlighting never changes raw source.
@@ -135,7 +140,12 @@ and an externally changing attribute.
 3. Test Ctrl/Command toggles, Shift ranges and visible Select mode for touch/gamepad.
    Selection caps at 20; multiple differing fields say Mixed. Test explicit attribute
    types, nil/absent/empty/unreadable distinctions, full CFrame and enum domains.
-4. Open a draft, change its live field, then Apply: report conflict and retain the
+4. Search with a matching parent and child while the parent is expanded: each
+   match must appear once. Switch destinations and rebuild the panel: preserve the
+   search and root. Check Up, Focus subtree and the ancestor menu, then Select
+   multiple and Clear selection without modifier keys. Filter an Inspector field
+   by its value and copy both the value and field name without writing.
+   Open a draft, change its live field, then Apply: report conflict and retain the
    draft/newer value. Apply a fresh batch and Undo after observed readback. A conflict
    anywhere prevents all Undo writes. Inject partial write/readback/recovery failures
    and report unresolved changes honestly.
@@ -160,6 +170,8 @@ and an externally changing attribute.
    backend, monitored/omitted count, owner and duration; UI and tools default to 30
    seconds. No selected remote means default Start remains idle. Select all-game,
    exact selection or primary subtree scope explicitly before widening capture.
+   Check the visible duration selector, countdown, actual active scope and Pause
+   explanation. A timed paused capture still expires and keeps retained calls.
 2. Capture zero args, one nil, an empty table, `false, nil, "text", nil`, supported
    Roblox types, aliases/cycles, sparse tables, binary data and oversized strings.
    Inspect graph/byte pages. Incomplete/opaque/cyclic/sparse data cannot replay as
@@ -167,6 +179,10 @@ and an externally changing attribute.
 3. Edit a pending call's replay draft and let its outcome arrive: the draft remains.
    Scroll away during a burst; Latest explicitly resumes following. Exercise name,
    direction, method, origin and outcome filters. Admission exclusion never blocks traffic.
+   Inspect the Summary as a late result or error arrives. Use Only calls to this
+   remote and Reset; those view filters must preserve every recorded call and
+   leave capture admission/rules unchanged. `luajit test/remotes_ui.lua` covers
+   these controls, timer cleanup, and narrow/short geometry with synthetic events.
 4. Prepare a replay, change target/rules/record revision, cancel before dispatch and
    repeat its plan ID. An accepted plan sends once. A dispatched timeout remains
    outstanding; no retry. Bound source expires with its runtime; portable source

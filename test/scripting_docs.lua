@@ -22,7 +22,7 @@ end
 allowed.index = nil
 check("schema has no stale section names", next(allowed) == nil)
 local requests, roots = #h.http.log, #h.coreGui:GetChildren()
-for _, name in ipairs({ "quickstart", "paths_and_tool_calls", "ui_scripts" }) do
+for _, name in ipairs({ "quickstart", "environment_model", "native_workflows", "executor_apis", "paths_and_tool_calls", "ui_scripts" }) do
 	local offset, count, parts = 1, 0, {}
 	repeat
 		local result = tool.run({ section = name, offset = offset, limit = 257 })

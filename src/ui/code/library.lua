@@ -95,42 +95,89 @@ return function(env)
 		local root = P.frame(parent, { name = "CodeLibrary", size = UDim2.fromScale(1, 1) })
 		local query = store.workspace.libraryQuery or ""
 		local bar = common.toolbar(root)
-		local mode, search, list
-		local function remove(row)
-			local item = row.kind == "document" and store.resolve(row.id) or store.action(row.id)
-			if not item then return end
-			local revision = item.revision
-			overlay.confirm({ title = "Delete " .. item.name .. "?",
-				description = row.kind == "document"
-					and "This removes the saved script and its history from the library. Workspace files stay on disk."
-					or "This removes the saved action from the library.",
-				danger = true, confirmText = "Delete", onConfirm = function()
-					local current = row.kind == "document" and store.resolve(row.id) or store.action(row.id)
-					if not current or current.revision ~= revision then common.message(nil, "This entry changed; review it before deleting."); return end
-					if row.kind == "document" then common.message(store.delete(row.id)) else common.message(store.deleteAction(row.id)) end
+		local mode, search, list, selectButton, newButton, allButton, clearButton, deleteButton, selectionInfo, render
+		local alive = true
+		local selected = store.workspace.librarySelection or {}
+		store.workspace.librarySelection = selected
+		local selecting = store.workspace.librarySelecting == true
+		local function key(row) return row.kind .. ":" .. row.id end
+		local function chosen()
+			local out = {}
+			for _, item in ipairs(store.list()) do if selected["document:" .. item.id] then out[#out + 1] = { kind = "document", id = item.id } end end
+			for _, item in ipairs(store.actions()) do if selected["action:" .. item.id] then out[#out + 1] = { kind = "action", id = item.id } end end
+			return out
+		end
+		local function clearSelection()
+			for id in pairs(selected) do selected[id] = nil end
+		end
+		local function remove(rows)
+			local plan, why = store.prepareDelete(rows)
+			if not common.message(plan, why) then return end
+			local names = {}
+			for index, entry in ipairs(plan.entries) do
+				if index <= 8 then names[#names + 1] = (entry.kind == "document" and "Script: " or "Action: ") .. entry.name end
+			end
+			if plan.count > 8 then names[#names + 1] = "and " .. (plan.count - 8) .. " more selected entries" end
+			local summary = plan.documents .. " scripts and " .. plan.actions .. " actions"
+			overlay.confirm({ title = plan.count == 1 and ("Delete " .. plan.entries[1].name .. "?") or ("Delete " .. plan.count .. " selected entries?"),
+				description = summary .. ". Script source, saved versions and pending proposals are removed. Workspace files stay on disk. This cannot be undone.\n\n" .. table.concat(names, "\n"),
+				danger = true, confirmText = plan.count == 1 and "Delete" or ("Delete " .. plan.count), onConfirm = function()
+					local result, errorText = store.deletePrepared(plan)
+					if not common.message(result, errorText) then return end
+					for _, entry in ipairs(plan.entries) do selected[key(entry)] = nil end
+					render(); overlay.toast("Deleted " .. summary .. ".", "good")
 				end })
 		end
-		local function render()
-			if not list then return end
-			local items, needle = {}, query:lower()
-			for _, doc in ipairs(store.list()) do if doc.name:lower():find(needle, 1, true) then items[#items + 1] = { kind = "document", id = doc.id, label = "Script · " .. doc.name .. " · r" .. doc.revision .. " · " .. #doc.source .. " bytes" } end end
-			for _, action in ipairs(store.actions()) do if action.name:lower():find(needle, 1, true) then items[#items + 1] = { kind = "action", id = action.id, label = "Action · " .. action.name .. " · " .. #action.inputs .. " inputs · r" .. action.revision } end end
+		render = function()
+			if not alive or not list then return end
+			local items, present, needle = {}, {}, query:lower()
+			local function add(kind, item, label)
+				local id = kind .. ":" .. item.id; present[id] = true
+				if item.name:lower():find(needle, 1, true) then items[#items + 1] = { kind = kind, id = item.id, label = label, selected = selecting and selected[id] == true } end
+			end
+			for _, doc in ipairs(store.list()) do add("document", doc, "Script · " .. doc.name .. " · r" .. doc.revision .. " · " .. #doc.source .. " bytes") end
+			for _, action in ipairs(store.actions()) do add("action", action, "Action · " .. action.name .. " · " .. #action.inputs .. " inputs · r" .. action.revision) end
+			for id in pairs(selected) do if not present[id] then selected[id] = nil end end
 			list.set(items, true)
 			local scripts, acts = #store.list(), #store.actions()
 			mode.setText(scripts .. "/" .. limits.documents .. " scripts · " .. acts .. "/" .. limits.actions .. " actions")
+			local count, visible = #chosen(), 0
+			for _, row in ipairs(items) do if row.selected then visible = visible + 1 end end
+			selectButton.setText(selecting and "Done" or "Select")
+			mode.instance.Visible, newButton.instance.Visible = not selecting, not selecting
+			allButton.instance.Visible, clearButton.instance.Visible, deleteButton.instance.Visible = selecting, selecting, selecting
+			allButton.setText(query == "" and "Select all" or "Select matches")
+			allButton.setEnabled(#items > 0); clearButton.setEnabled(count > 0); deleteButton.setEnabled(count > 0)
+			deleteButton.setText("Delete selected (" .. count .. ")")
+			search.instance.PlaceholderText = selecting and "Search names; hidden selections stay selected" or "Search script and action names"
+			selectionInfo.Text = selecting and (count .. " selected" .. (count > visible and (" · " .. (count - visible) .. " hidden by search") or "") .. ". Select rows, then delete once.")
+				or ((scripts == limits.documents or acts == limits.actions) and "Library limit reached. Use Select to remove several entries with one confirmation." or "Use Select to remove several scripts or actions at once.")
 		end
 		mode = bar.add("Scripts & actions", function() end, { flex = true })
-		bar.add("New", function()
+		selectButton = bar.add("Select", function()
+			selecting = not selecting; store.workspace.librarySelecting = selecting
+			if not selecting then clearSelection() end
+			render()
+		end, { name = "LibrarySelect" })
+		newButton = bar.add("New", function()
 			forms.form("New script", { { key = "name", label = "Name", required = true, default = "Untitled.lua" } }, function(data)
 				local doc, why = store.create(data.name, "", { select = true }); if not doc then return nil, why end; navigate("Editor"); return true
 			end)
 		end, { icon = "plus" })
+		allButton = bar.add("Select all", function() for _, row in ipairs(list.items) do selected[key(row)] = true end; render() end, { name = "LibrarySelectAll" })
+		clearButton = bar.add("Clear", function() clearSelection(); render() end, { name = "LibraryClearSelection" })
+		deleteButton = bar.add("Delete selected (0)", function() remove(chosen()) end, { name = "LibraryDeleteSelected", variant = "danger" })
 		search = P.field(root, { name = "LibrarySearch", placeholder = "Search script and action names", text = query, onChange = function(value) query = value; store.workspace.libraryQuery = value; render() end })
 		search.shell.Position, search.shell.Size = UDim2.fromOffset(common.inset(), common.barHeight() + theme.space.xs), UDim2.new(1, -common.inset() * 2, 0, common.controlHeight())
-		local top = common.barHeight() * 2 + theme.space.sm
+		local infoTop = common.barHeight() * 2 + theme.space.sm
+		selectionInfo = P.text(root, { name = "LibrarySelectionInfo", text = "", role = "caption", color = theme.color.textSecondary, truncate = true,
+			position = UDim2.fromOffset(common.inset(), infoTop), size = UDim2.new(1, -common.inset() * 2, 0, theme.text.caption.height) })
+		local top = infoTop + theme.text.caption.height + theme.space.sm
 		list = common.virtualList(root, { position = UDim2.fromOffset(0, top), size = UDim2.new(1, 0, 1, -top),
-			onClose = remove,
+			key = key, closable = function() return not selecting end,
+			onClose = function(row) remove({ row }) end,
 			onSelect = function(row, _, button)
+			if selecting then local id = key(row); selected[id] = not selected[id] or nil; render(); return end
 			local item = row.kind == "document" and store.resolve(row.id) or store.action(row.id); if not item then render(); return end
 			local options = row.kind == "document" and { { label = "Open script", value = "open" }, { label = "Rename", value = "rename" }, { label = "Save as action", value = "save" }, { label = "Export source", value = "export" }, { label = "Delete script", value = "delete" } }
 				or { { label = "Run with inputs", value = "run" }, { label = "Inspect / edit source snapshot", value = "open" }, { label = "Update from active script…", value = "save" }, { label = "Delete action", value = "delete" } }
@@ -143,12 +190,12 @@ return function(env)
 				elseif action == "save" then M.saveAction(row.kind == "document" and item or store.active(), row.kind == "action" and item or nil)
 				elseif action == "rename" then forms.form("Rename script", { { key = "name", label = "Name", default = item.name, required = true } }, function(data) return store.rename(item.id, data.name) end)
 				elseif action == "export" then common.work(function() return env.require("runtime/native_exports").write(item.source, "exports/" .. store.id("script") .. ".lua") end, function(result) common.copy(result.path); overlay.toast("Exported " .. result.path, "good") end)
-				elseif action == "delete" then remove(row) end
+				elseif action == "delete" then remove({ row }) end
 			end)
 		end })
 		local off = store.changed:connect(function(event) if event.kind ~= "source" then render() end end)
 		local handle = { root = root, list = list, render = render }
-		function handle.destroy() store.workspace.libraryY = list.root.CanvasPosition.Y; off(); root:Destroy() end
+		function handle.destroy() alive = false; store.workspace.libraryY = list.root.CanvasPosition.Y; off(); root:Destroy() end
 		render(); list.root.CanvasPosition = Vector2.new(0, store.workspace.libraryY or 0); return handle
 	end
 	return M

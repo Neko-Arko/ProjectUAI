@@ -19,6 +19,48 @@ return function(env)
 	local CATEGORY_ORDER = { "added", "improved", "fixed" }
 	local ENTRIES = {
 		{
+			version = "3.3.0",
+			revision = "2026-10-17-mcp-gemini-followups",
+			date = "October 17, 2026",
+			title = "MCP, bridge redesign and queued follow-ups",
+			highlights = "Connect your external agent to Roblox with MCP, use the rebuilt bridge, and send follow-ups while UAI works. Free access learns compatible fast routes.",
+			sections = {
+				{ category = "added", label = "MCP connections", items = {
+					"Use UAI's Roblox tools from Claude Code, Codex, Cursor, OpenCode and other MCP clients through the desktop bridge. HTTP and stdio connections retain normal UAI permissions and isolated tool sessions.",
+					"Copy an agent setup prompt from Settings → MCP. It includes the detected connection details and asks your agent to configure and verify its connection.",
+				} },
+				{ category = "added", label = "Follow-ups while working", items = {
+					"Send follow-up messages in Roblox or the bridge while the agent is running. They queue in order for the next safe response or tool boundary. Pending messages stay visible and Stop remains a separate action.",
+				} },
+				{ category = "added", label = "Gemini and temperature controls", items = {
+					"Use native Gemini model discovery, image inputs, tool calls and results, thinking controls and saved signature replay, including OpenCode Go Gemini models.",
+					"Choose Auto, Send or Omit temperature for each model. Auto honors documented restrictions and learns explicit provider refusals without retrying ordinary range errors.",
+				} },
+				{ category = "improved", label = "Subagents and environment guidance", items = {
+					"Review each subagent's task, progress, tools and results in richer preview modals, and send a contextual follow-up when its work finishes.",
+					"Use a detailed environment guide covering capabilities, permissions, native workflows, shared state and cleanup, with official sUNC references. Stronger main and worker instructions load detailed guidance on demand.",
+				} },
+				{ category = "improved", label = "Bridge workspace", items = {
+					"Use a rebuilt workspace with Connection, Settings and management screens in modals, clearer assistant responses and improved model and reasoning controls. Context usage shows estimated messages, system/tools, summary and the compaction point.",
+					"Find free models by their rounded green outlines in both Roblox and the bridge.",
+				} },
+				{ category = "improved", label = "Adaptive free routing", items = {
+					"Included HCNSEC access measures small synthetic tool requests and prefers compatible fast models, targeting requests under ten seconds. Unknown or incompatible routes retain provider auto; your messages are never raced to benchmark models.",
+					"Automatic free routing is on by default. Routed requests show the selected model and where to disable it: Settings → Agent → Automatic free routing. Turning it off applies to future requests without stopping active work.",
+				} },
+				{ category = "fixed", label = "Picture attachments", items = {
+					"Removing an uploading picture keeps it removed when the upload or a delayed event finishes, including after a browser reload.",
+				} },
+				{ category = "improved", label = "Code workspace", items = {
+					"Select several Library scripts or actions and delete them with one confirmation. Changed items are checked before the whole batch is removed.",
+					"Navigate Explorer subtrees, search, select multiple instances and inspect field values with clearer controls. Remote Spy makes capture duration, scope, filters, call details and caller navigation visible.",
+				} },
+				{ category = "fixed", label = "Editor selection", items = {
+					"Native text and selection share one layer while dragging or selecting code. Syntax returns when selection collapses. Native line measurements reduce vertical drift, and caret-follow yields during a drag.",
+				} },
+			},
+		},
+		{
 			version = "3.2.0",
 			revision = "2026-10-16-intro-tour",
 			date = "October 15, 2026",

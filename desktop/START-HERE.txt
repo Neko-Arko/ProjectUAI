@@ -1,6 +1,6 @@
-UAI BRIDGE 3.2.0 — WINDOWS 10/11 (64-BIT)
+UAI BRIDGE 3.3.0 — WINDOWS 10/11 (64-BIT)
 
-1. Download UAI-Bridge-3.2.0-win-x64.exe and open it directly.
+1. Download UAI-Bridge-3.3.0-win-x64.exe and open it directly.
 2. If Node.js is missing, choose Download Node.js or use
    the manual installation link. Then click Start Cowork.
 3. Load the updated Project UAI script in Roblox. It connects automatically.
@@ -31,6 +31,10 @@ bridge updates preserve pairing; manually restarting the app rotates its token.
 The executable includes the matching client as part of its embedded files.
 Use the updated Project UAI loader in your executor.
 Roblox must remain running. The app does not launch Roblox or an executor.
+
+To connect a local coding agent, open Settings > MCP in Cowork and choose
+Copy setup prompt. The desktop executable also supports --mcp-stdio for
+harnesses that launch local MCP commands. Roblox retains tool permissions.
 
 If Roblox is not connecting, open UAI > Cowork. Turn on "Find desktop app
 automatically" and turn off "Manual bridge enabled". Discovery checks port

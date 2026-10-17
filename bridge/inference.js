@@ -91,6 +91,21 @@ function createInference({ publish = () => {}, maxBytes = 16 * 1024 * 1024,
   function normalize(frame, job) {
     const out = [];
     if (!frame || typeof frame !== 'object') return out;
+    // Gemini parts can mix visible text, thought summaries and complete calls.
+    // Signatures and all other raw fields stay solely in the native response.
+    if (Array.isArray(frame.candidates)) {
+      const parts = frame.candidates[0]?.content?.parts;
+      for (const part of Array.isArray(parts) ? parts : []) {
+        if (typeof part?.text === 'string' && part.text) out.push({ channel: part.thought === true ? 'reasoning' : 'text', text: part.text });
+        if (part?.functionCall && typeof part.functionCall === 'object') {
+          const call = part.functionCall, summary = {};
+          if (typeof call.name === 'string') summary.name = call.name.slice(0, 200);
+          if (call.args && typeof call.args === 'object') summary.argsDelta = JSON.stringify(call.args).slice(0, 4096);
+          if (Object.keys(summary).length) out.push({ channel: 'tool', text: summary });
+        }
+      }
+      return out;
+    }
     // OpenCode's Responses lane uses typed events and its own completion
     // marker. These previews never replace the raw body consumed by Roblox.
     if (frame.type === 'response.output_text.delta' && typeof frame.delta === 'string') {
@@ -159,10 +174,15 @@ function createInference({ publish = () => {}, maxBytes = 16 * 1024 * 1024,
   function onFrame(job, parsed) {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
     if (job.model == null && typeof parsed.model === 'string') job.model = parsed.model;
+    if (typeof parsed.modelVersion === 'string') job.model = parsed.modelVersion.slice(0, 300);
     if (parsed.type === 'message_start' && parsed.message && typeof parsed.message.model === 'string') job.model = parsed.message.model;
     if (parsed.response && typeof parsed.response.model === 'string') job.model = parsed.response.model;
     if (parsed.type === 'message_stop') job.sseDone = true;
     if (parsed.type === 'response.completed' && parsed.response && typeof parsed.response === 'object') job.sseDone = true;
+    // Google ends with finishReason rather than a [DONE] event. The adapter
+    // interprets refusal/length semantics from the retained original body.
+    if (typeof parsed.candidates?.[0]?.finishReason === 'string' && parsed.candidates[0].finishReason) job.sseDone = true;
+    if (typeof parsed.promptFeedback?.blockReason === 'string' && parsed.promptFeedback.blockReason) job.sseDone = true;
     for (const delta of normalize(parsed, job)) {
       if (delta.channel === 'text') job.sawText = true;
       if (delta.channel === 'reasoning') job.sawReasoning = true;

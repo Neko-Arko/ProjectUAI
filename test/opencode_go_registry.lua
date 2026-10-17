@@ -42,8 +42,8 @@ case("documented Go protocols select model families without rewriting Zen", func
 		check("Go family protocol " .. model, registry.opencodeGoProtocol(record) == protocol)
 	end
 	record.model = "gemini-4-argon-contributor"
-	check("native Gemini is explained before inference", has(registry.protocolProblem(record), "native API"))
-	check("unsupported selection does not prevent fetching other models", registry.protocolProblem(record, { discovery = true }) == nil)
+	check("native Gemini selects its implemented adapter", registry.protocolProblem(record) == nil and f.env.require("provider/chat").styleOf(record) == "gemini")
+	check("Gemini selection permits the shared Go model list", registry.protocolProblem(record, { discovery = true }) == nil)
 	record.model, record.baseUrl = "gpt-5.4", "https://opencode.ai/zen/go/v1/responses"
 	check("full Go Responses route is allowed", registry.protocolProblem(record) == nil)
 	record.baseUrl = "https://opencode.ai/zen/v1"

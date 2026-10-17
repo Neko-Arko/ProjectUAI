@@ -8,22 +8,23 @@
   <link rel="icon" type="image/svg+xml" href="icon.svg">
   <script src="theme.js"></script>
   <link rel="stylesheet" href="style.css">
+  <link rel="preload" href="fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
 </head>
-<body>
+<body class="sidebar-hidden">
   <main id="gate" hidden>
     <div class="gate-intro">
-      <a class="wordmark" href="/">Cowork</a>
-      <div><span class="eyebrow">YOUR CONNECTED WORKSPACE</span><h1>Build from<br>where you are.</h1><p>Chat, write code, and work with your game. Your conversation and tools stay together across Roblox and the browser.</p><div class="gate-features"><span>One conversation</span><span>Live responses</span><span>Your game’s tools</span></div></div>
+      <a class="wordmark" href="/">Cowork <span class="workspace-label">Local</span></a>
       <span class="gate-local"><span class="status-dot"></span> Runs locally on your computer</span>
     </div>
     <form id="gate-form" class="gate-card">
-      <h2>Connect to Cowork</h2>
+      <p class="welcome-greeting">A little closer to your next idea.</p>
+      <h1>Connect to Cowork</h1>
       <p>Open the link printed in your bridge terminal, or paste its token below.</p>
       <label for="gate-token">Bridge token</label>
       <input id="gate-token" type="password" autocomplete="off" spellcheck="false" autocapitalize="off" required placeholder="Paste the token from your terminal">
       <button id="gate-connect" class="primary" type="submit">Connect to bridge</button>
       <p id="gate-error" class="form-error" role="alert"></p>
-      <p><a href="https://discord.gg/9xYyyYuKap" target="_blank" rel="noopener noreferrer">Discord help and updates</a></p>
+      <p class="gate-support"><a href="https://discord.gg/9xYyyYuKap" target="_blank" rel="noopener noreferrer">Discord help and updates</a></p>
       <details class="gate-help"><summary>First time connecting?</summary><ol><li>Install Node.js 18 or newer on this computer.</li><li>In Roblox, open <strong>UAI → Cowork → Download bridge files</strong>.</li><li>Open a terminal in your executor workspace and run <code>node UAI/bridge/start.txt</code>.</li><li>Open the printed link. Paste the same token into Roblox’s Cowork panel and turn <strong>Enabled</strong> on.</li></ol><p>Keep Roblox and the terminal open while you work.</p></details>
     </form>
   </main>
@@ -33,17 +34,20 @@
     <aside id="sidebar" aria-label="Workspace navigation">
       <div class="sidebar-top">
         <div class="wordmark">Cowork <span class="workspace-label">Local</span></div>
-        <button id="newThread" class="icon-button" title="New conversation" aria-label="New conversation"><svg class="icon" aria-hidden="true"><use href="icons.svg#plus"></use></svg></button>
+        <button id="newThread" class="icon-button" title="New conversation" aria-label="New conversation" hidden><svg class="icon" aria-hidden="true"><use href="icons.svg#plus"></use></svg></button>
         <button id="closeSidebar" class="icon-button" aria-label="Close sidebar"><svg class="icon" aria-hidden="true"><use href="icons.svg#close"></use></svg></button>
       </div>
       <div class="segments main-segments" aria-label="Workspace view">
         <button data-page="chat" class="selected" aria-current="page">Chat</button>
-        <button data-page="cowork">Connection</button>
       </div>
       <button id="newConversation" class="outline">New conversation</button>
-      <details class="more-nav" open>
+      <div class="history-heading"><span class="eyebrow">Conversations</span><button id="searchThreads" class="icon-button" title="Search conversations" aria-label="Search conversations" aria-controls="threadSearch" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="icons.svg#search"></use></svg></button></div>
+      <input id="threadSearch" type="search" placeholder="Find a conversation…" aria-label="Search conversations" hidden>
+      <div id="threads" class="history"></div>
+      <details class="more-nav">
         <summary>Workspace</summary>
         <nav aria-label="Workspace tools">
+          <button data-page="cowork">Connection</button>
           <button data-page="providers">Providers</button>
           <button data-page="tools">Tools</button>
           <button data-page="agents">Subagents</button>
@@ -53,25 +57,31 @@
           <button data-page="settings">Settings</button>
         </nav>
       </details>
-      <div class="history-heading"><span class="eyebrow">CONVERSATIONS</span><button id="searchThreads" class="icon-button" title="Search conversations" aria-label="Search conversations" aria-controls="threadSearch" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="icons.svg#search"></use></svg></button></div>
-      <input id="threadSearch" type="search" placeholder="Find a conversation…" aria-label="Search conversations" hidden>
-      <div id="threads" class="history"></div>
-      <a class="connection-link" href="https://discord.gg/9xYyyYuKap" target="_blank" rel="noopener noreferrer">Join the Project UAI Discord</a>
-      <button id="connectionLink" class="connection-link" data-page="cowork"><span class="status-dot"></span><span id="connectionLabel">Connect your game</span></button>
-      <button id="profile" data-page="settings"><span class="avatar" id="playerInitial" aria-hidden="true">U</span><span><strong id="playerName">Your workspace</strong><small id="providerName">No provider connected</small></span><svg class="icon" aria-hidden="true"><use href="icons.svg#settings"></use></svg></button>
+      <div class="sidebar-footer">
+        <button id="connectionLink" class="connection-link" data-page="cowork"><span class="status-dot"></span><span id="connectionLabel">Connect your game</span></button>
+        <button id="profile" data-page="settings"><span class="avatar" id="playerInitial" aria-hidden="true">U</span><span><strong id="playerName">Your workspace</strong><small id="providerName">No provider connected</small></span><svg class="icon" aria-hidden="true"><use href="icons.svg#settings"></use></svg></button>
+        <a class="sidebar-help" href="https://discord.gg/9xYyyYuKap" target="_blank" rel="noopener noreferrer">Help &amp; updates</a>
+      </div>
     </aside>
 
     <div class="workspace" id="workspace">
       <header class="topbar">
         <button id="sidebarToggle" class="icon-button" aria-label="Toggle sidebar" aria-controls="sidebar" aria-expanded="true"><svg class="icon" aria-hidden="true"><use href="icons.svg#sidebar"></use></svg></button>
-        <span class="header-divider" aria-hidden="true"></span><strong id="pageTitle">Chat</strong>
-        <span id="status" class="muted" role="status" aria-live="polite">Connecting…</span>
+        <button id="headerBrand" class="header-brand" data-page="chat">Cowork</button>
+        <strong id="pageTitle">Chat</strong>
+        <span id="status" class="sr-only" role="status" aria-live="polite">Connecting…</span>
         <span class="spacer"></span>
-        <button id="runtimeBadge" class="runtime-badge" data-page="cowork">Game runtime</button>
         <button id="themeToggle" class="icon-button" aria-label="Toggle theme" title="Toggle theme"><svg class="icon" aria-hidden="true"><use href="icons.svg#theme"></use></svg></button>
+        <button id="settingsButton" class="icon-button" data-page="settings" aria-label="Settings" title="Settings"><svg class="icon" aria-hidden="true"><use href="icons.svg#settings"></use></svg></button>
         <button id="setupHelp" class="icon-button" aria-label="Bridge setup guide" title="Setup guide"><svg class="icon" aria-hidden="true"><use href="icons.svg#help"></use></svg></button>
-        <button id="exportChat" class="icon-button chat-action" aria-label="Export conversation" title="Export conversation"><svg class="icon" aria-hidden="true"><use href="icons.svg#download"></use></svg></button>
-        <button id="clear" class="icon-button chat-action" aria-label="Clear conversation" title="Clear conversation"><svg class="icon" aria-hidden="true"><use href="icons.svg#trash"></use></svg></button>
+        <details id="headerMenu" class="header-menu">
+          <summary aria-label="Workspace actions" title="Workspace actions" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="icons.svg#more"></use></svg></summary>
+          <div class="header-menu-content">
+            <button id="runtimeBadge" class="runtime-badge" data-page="cowork">Game runtime</button>
+            <button id="exportChat" class="chat-action" aria-label="Export conversation">Export conversation</button>
+            <button id="clear" class="chat-action danger" aria-label="Clear conversation">Clear conversation</button>
+          </div>
+        </details>
       </header>
       <div id="connectionBanner" class="connection-banner" hidden><span id="connectionMessage"></span><button id="connectionAction">Open setup guide <span aria-hidden="true">→</span></button></div>
       <section id="chatPage" aria-label="Conversation">
@@ -83,6 +93,7 @@
         <div id="questions"></div>
         <div id="deliveryNotice" class="delivery-notice" hidden><span id="deliveryMessage" role="status"></span><button id="deliveryCheck">Check delivery</button><button id="deliveryReview" hidden>Review draft</button></div>
         <footer class="composer-wrap">
+          <section id="queuedMessages" class="queued-messages" aria-label="Queued follow-ups" hidden></section>
           <div class="composer" id="composer">
             <div class="composer-content">
               <div id="pictureTray" class="picture-tray" hidden></div>
@@ -95,26 +106,32 @@
               <button id="attachPictures" class="icon-button" aria-label="Attach pictures" title="Attach images for your model" hidden><svg class="icon" aria-hidden="true"><use href="icons.svg#image"></use></svg></button>
               <input id="pictureInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden>
               <span class="toolbar-divider" aria-hidden="true"></span>
-              <button id="modelButton" aria-label="Select model"><span class="dot"></span><span id="modelLabel">Select model</span><svg class="icon small" aria-hidden="true"><use href="icons.svg#chevron"></use></svg></button>
+              <button id="modelButton" aria-label="Select model"><span class="dot"></span><span id="modelLabel">Select model</span><span id="modelFree" class="free-label" hidden>Free</span><svg class="icon small" aria-hidden="true"><use href="icons.svg#chevron"></use></svg></button>
               <button id="permissionBadge" class="permission-badge" title="Change permission mode"><svg class="icon small" aria-hidden="true"><use href="icons.svg#shield"></use></svg><span>Ask first</span></button>
               <span class="spacer"></span>
+              <button id="contextButton" class="context-button" hidden aria-label="Context window" title="Context window"><span class="context-ring" aria-hidden="true"></span><span id="contextPercent"></span></button>
               <button id="options" class="icon-button" aria-label="Composer options" title="Composer options"><svg class="icon" aria-hidden="true"><use href="icons.svg#more"></use></svg></button>
-              <div class="send-slot"><button id="send" class="primary" aria-label="Send message" title="Send message"><svg class="icon" aria-hidden="true"><use href="icons.svg#arrow"></use></svg></button><button id="stop" class="stop" hidden aria-label="Stop turn" title="Stop turn"><span aria-hidden="true"></span></button></div>
+              <div class="send-slot"><button id="stop" class="stop" hidden aria-label="Stop turn" title="Stop turn"><span aria-hidden="true"></span></button><button id="send" class="primary" aria-label="Send message" title="Send message"><svg class="icon" aria-hidden="true"><use href="icons.svg#arrow"></use></svg></button></div>
             </div>
           </div>
+          <div id="suggestions" class="suggestions" aria-label="Ideas to get started" hidden></div>
           <div class="composer-caption"><small id="composerHint">Enter to send · Shift+Enter for a new line</small><small class="local-caption"><span class="status-dot"></span><span id="localConnection">Local workspace</span></small></div>
         </footer>
       </section>
-      <main id="panel" tabindex="-1" hidden></main>
     </div>
   </div>
 
+  <dialog id="workspaceModal" aria-labelledby="workspaceTitle" aria-describedby="workspaceDescription">
+    <div class="workspace-head"><div><p class="eyebrow">WORKSPACE</p><h2 id="workspaceTitle" tabindex="-1"></h2><p id="workspaceDescription"></p></div><button id="workspaceClose" class="icon-button" aria-label="Close workspace"><svg class="icon" aria-hidden="true"><use href="icons.svg#close"></use></svg></button></div>
+    <nav id="workspaceTabs" aria-label="Workspace views"></nav>
+    <main id="panel" tabindex="-1" hidden></main>
+    <footer class="workspace-footer"><span id="workspaceStatus"></span><button id="workspaceDone" class="outline">Back to chat</button></footer>
+  </dialog>
   <dialog id="modal" aria-labelledby="modalTitle" aria-describedby="modalDescription">
     <div class="modal-head"><div class="modal-heading"><h2 id="modalTitle" tabindex="-1"></h2><p id="modalDescription" hidden></p></div><button id="modalClose" class="icon-button" aria-label="Close dialog"><svg class="icon" aria-hidden="true"><use href="icons.svg#close"></use></svg></button></div>
     <div id="modalBody"></div>
     <div id="modalNotice" class="modal-notice" role="status" aria-live="polite" aria-atomic="true"></div>
-    <p><a class="deadline-help" href="https://discord.gg/9xYyyYuKap" target="_blank" rel="noopener noreferrer">Discord help and updates</a></p>
-    <div id="modalFooter" class="modal-footer"></div>
+    <div class="modal-bottom"><p class="modal-support"><a href="https://discord.gg/9xYyyYuKap" target="_blank" rel="noopener noreferrer">Help &amp; updates</a></p><div id="modalFooter" class="modal-footer"></div></div>
   </dialog>
   <div id="toast" role="status" aria-live="polite" hidden></div>
   <noscript><p class="noscript">Enable JavaScript to use the local bridge.</p></noscript>

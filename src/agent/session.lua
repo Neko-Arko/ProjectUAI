@@ -190,6 +190,38 @@ return function(env)
 			-- the list lives here so two conversations cannot overwrite each other's.
 			todos = {},
 		}
+		local queue = env.require("agent/message_queue").new(session, function() M.listChanged:fire() end)
+		local callbacks, runPrepared, startReady
+		local function preparing() session.preparing = queue.preparing() and true or nil end
+		local function validateFiles(files, needTools)
+			if #files == 0 and not needTools then return true end
+			local readable = false
+			for _, tool in ipairs(env.require("agent/registry").definitions({ only = session.toolFilter,
+				groups = session.toolGroups, exclude = session.toolExclude })) do
+				if tool["function"].name == "file_read" then readable = true; break end
+			end
+			if not readable then return nil, "Enable the Files tools and file storage to send long inputs as files." end
+			for _, file in ipairs(files) do
+				local content, err = fsx.readUser(file.path)
+				if not content or #content ~= file.bytes then return nil, "attachment is missing or changed: " .. file.path .. ". " .. tostring(err or "Attach it again.") end
+			end
+			return true
+		end
+		local function takeReady(deadline)
+			local head = queue.peek()
+			if not head or head.state ~= "queued" or queue.held() then return nil end
+			if head.needsValidation then
+				local ok, valid, why = pcall(function()
+					if #head.images > 0 and not env.require("net/bridge_connection").enabled() then return nil, "Connect the web bridge to resume these images" end
+					return validateFiles(head.files)
+				end)
+				if not head.active or queue.peek() ~= head then return nil end
+				if not ok or not valid then queue.hold(ok and why or "Unable to verify queued attachments"); return nil end
+				head.needsValidation = false
+			end
+			if session.aborted() or deadline and clock.ms() >= deadline then return nil end
+			return queue.take()
+		end
 
 		session.transcript = transcript.new(session)
 		session.appendLog = session.transcript.append
@@ -205,6 +237,9 @@ return function(env)
 			payload.at = clock.ms()
 			session.updatedAt = payload.at
 			if kind == "status" then session.status = payload.text or session.status end
+			if session.acceptingMessages and (kind == "error" or kind == "turn:end" and payload.failed) then
+				session.turnFailure = payload.message or payload.text or "The current turn failed"
+			end
 			if kind == "request:start" then session.liveRequest, session.livePreview = payload, nil
 			elseif kind == "assistant:preview" then session.livePreview = payload
 			elseif kind == "request:done" then session.liveRequest = nil; if payload.error then session.livePreview = nil end
@@ -247,15 +282,72 @@ return function(env)
 			}
 		end
 
-		-- Runs on its own thread so the interface stays responsive, and guards
-		-- against re-entry: two prompts in flight would interleave tool results
-		-- into one transcript.
-		--
-		-- Two conversations may run at once, though -- that is the point of threads --
-		-- so everything in here that reaches outside the session has to name it.
-		function session.send(text, onDone, files, images)
+		function session.queueSnapshot() return queue.snapshot() end
+		function session.serialiseQueue() return queue.serialise() end
+		function session.restoreQueue(saved) return queue.restore(saved) end
+		function session.removeQueued(id)
+			local ok, why = queue.remove(id)
+			preparing()
+			if ok then session.persist() end
+			if ok then startReady() end
+			return ok, why
+		end
+		function session.hasQueued() return queue.pending() > 0 end
+		-- Called only after a complete assistant/tool exchange, never while its
+		-- inference or native tools are running. A preparing head retains order.
+		function session.consumeQueued(waitForPreparation, deadline)
+			local count = 0
+			while count < 16 and not session.aborted() and not queue.held() do
+				if deadline and clock.ms() >= deadline then break end
+				local head = queue.peek()
+				if not head then break end
+				if head.state == "preparing" then
+					if not waitForPreparation then break end
+					clock.wait(0.03)
+				else
+					local entry = takeReady(deadline)
+					if not entry then break end
+					if entry.onDone and callbacks then callbacks[#callbacks + 1] = { id = entry.id, fn = entry.onDone } end
+					session.ctx.pushUser(entry.text, entry.images)
+					session.emit("user", { text = entry.text, messageId = entry.id, queued = true })
+					queue.consumed(entry)
+					count = count + 1
+				end
+			end
+			if count > 0 then session.persist() end
+			return count
+		end
+		function session.resumeQueue()
+			if not alive or session.removed then return false, "conversation no longer exists" end
+			if session.clearingMessages then return false, "conversation is being cleared" end
+			if session.cancellingMessages then return false, "conversation is being stopped" end
+			if session.busy then return false, "The current turn is still working" end
+			if queue.pending() == 0 then return false, "No queued messages to resume" end
+			if running >= 8 then return false, "Eight native session workers are already active; wait for a turn to finish" end
+			queue.release()
+			if not queue.peek() or queue.peek().state == "preparing" or session.busy then return true end
+			return startReady()
+		end
+
+		-- A single worker owns context and tools. Further sends reserve a pending
+		-- message and join that worker only at a safe response/tool boundary.
+		function session.send(text, onDone, files, images, options)
 			if not alive then return false, "client is unloaded" end
+			if session.removed then return false, "conversation no longer exists" end
+			if session.clearingMessages then return false, "conversation is being cleared" end
+			if session.cancellingMessages then return false, "conversation is being stopped" end
+			if onDone ~= nil and type(onDone) ~= "function" then return false, "completion callback must be a function" end
+			if options ~= nil and type(options) ~= "table" then return false, "invalid send options" end
+			options = options or {}
+			for key in pairs(options) do if key ~= "messageId" then return false, "unknown send option: " .. tostring(key) end end
+			if options.messageId ~= nil and type(options.messageId) ~= "string" then return false, "invalid message id" end
+			local id = options.messageId or util.uid("message")
+			local receipt = queue.receipt(id)
+			if receipt then return true, receipt end
+			if session.busy and (not session.acceptingMessages or session.abortFlag) then return false, "Wait for the current operation to finish stopping" end
+			if not session.busy and running >= 8 then return false, "Eight native session workers are already active; wait for a turn to finish" end
 			text = tostring(text or "")
+			if #text > attachments.MAX_BYTES then return false, "attachments support up to 10 MiB; split this input into smaller files" end
 			local validated, imageError = env.require("runtime/images").validate(images, session.id)
 			if not validated then return false, imageError end
 			images = validated
@@ -263,59 +355,92 @@ return function(env)
 			local clean = util.trim(text)
 			if clean == "" and #images > 0 then clean = "Please look at the attached " .. (#images == 1 and "image." or "images."); text = clean end
 			if clean == "" then return false, "nothing to send" end
-			if session.busy or session.preparing then return false, "already working" end
-			if session.removed then return false, "conversation no longer exists" end
 			files = files or {}
 			if type(files) ~= "table" or not util.isArray(files) or #files > 32 then return false, "invalid attachment list" end
+			local references = {}
+			for _, file in ipairs(files) do
+				if type(file) ~= "table" or type(file.path) ~= "string" or #file.path == 0 or #file.path > 1000
+					or type(file.bytes) ~= "number" or file.bytes ~= file.bytes or file.bytes < 0 or file.bytes % 1 ~= 0
+					or file.bytes > attachments.MAX_BYTES then return false, "invalid attachment reference" end
+				references[#references + 1] = { path = file.path, bytes = file.bytes }
+			end
+			files = references
 
 			local title = util.ellipsis(clean, 42)
+			local resumeHeld = not session.busy and queue.held()
+			local entry, reserveError = queue.reserve(clean, files, images, onDone, id, session.busy or queue.pending() > 0, #text)
+			if not entry then return false, reserveError end
+			files = entry.files
+			preparing()
 			-- This boundary also covers Quick Chat, bridge clients and host scripts.
 			-- Never turn a failed upload into an enormous inference request.
 			if #text > PASTE_CAP or #files > 0 then
-				local preparation = {}
-				session.preparing = preparation
 				local ok, prepared, why = pcall(function()
-					local readable = false
-					for _, tool in ipairs(env.require("agent/registry").definitions({ only = session.toolFilter,
-						groups = session.toolGroups, exclude = session.toolExclude })) do
-						if tool["function"].name == "file_read" then readable = true; break end
-					end
-					if not readable then return nil, "Enable the Files tools and file storage to send long inputs as files." end
-					for _, file in ipairs(files) do
-						if type(file) ~= "table" or type(file.path) ~= "string" or type(file.bytes) ~= "number" then return nil, "invalid attachment reference" end
-						local content, err = fsx.readUser(file.path)
-						if not content or #content ~= file.bytes then return nil, "attachment is missing or changed: " .. file.path .. ". " .. tostring(err or "Attach it again.") end
-					end
+					local valid, validationError = validateFiles(files, #text > PASTE_CAP)
+					if not valid then return nil, validationError end
 					if #text <= PASTE_CAP then return clean end
-					local entry, err = attachments.save(text)
-					if not entry then return nil, err end
-					return attachments.reference(entry) .. "\n\nRead this file for the user's complete input, including any request at the end."
+					local saved, err = attachments.save(text)
+					if not saved then return nil, err end
+					if #entry.files >= 32 then return nil, "A message supports up to 32 file attachments" end
+					entry.files[#entry.files + 1] = { path = saved.path, bytes = saved.bytes }
+					return attachments.reference(saved) .. "\n\nRead this file for the user's complete input, including any request at the end."
 				end)
-				if session.preparing ~= preparation then return false, "message preparation was cancelled; your draft was kept" end
-				session.preparing = nil
-				if not ok or not prepared then return false, ok and why or tostring(prepared) end
+				if not entry.active then preparing(); return false, "message preparation was cancelled; your draft was kept" end
+				if not ok or not prepared then
+					local failure = ok and why or tostring(prepared)
+					queue.reject(entry, failure); preparing(); startReady(); return false, failure
+				end
 				clean = prepared
 			end
+			local accepted, commitError = queue.commit(entry, clean)
+			preparing()
+			if not accepted then queue.reject(entry, commitError); preparing(); startReady(); return false, commitError end
+			if session.title == "New chat" and not session.named then session.title = title end
+			session.persist()
+			if not session.busy and not queue.held() then startReady()
+			elseif not session.busy and resumeHeld then session.resumeQueue() end
+			return true, accepted
+		end
 
-			if not alive or running >= 8 then return false, "Eight native session workers are already active; wait for a turn to finish" end
+		startReady = function()
+			if not alive or session.removed or session.clearingMessages or session.busy or queue.held() then return false end
+			local head = queue.peek()
+			if not head or head.state ~= "queued" then return false end
+			local started, why = runPrepared()
+			if not started then queue.hold(why) end
+			return started, why
+		end
+
+		runPrepared = function()
+			if not alive or session.removed then return false, "conversation no longer exists" end
+			if session.busy then return false, "already working" end
+			if running >= 8 then return false, "Eight native session workers are already active; wait for a turn to finish" end
+			local head = queue.peek()
+			if not head or head.state ~= "queued" or queue.held() then return false, "The first queued message is still being prepared" end
 			running = running + 1
 			session.busy = true
+			session.acceptingMessages = true
+			session.turnFailure = nil
 			session.abortFlag = false
-			session.turns = session.turns + 1
 			session.toolEpoch = {}
-			if session.title == "New chat" and not session.named then
-				session.title = title
-			end
-			session.emit("user", { text = clean })
+			local completed = {}
+			callbacks = completed
 			-- The list is where "this one is still working" is visible while you are
 			-- reading another conversation, so a busy flag that moves is a list change.
 			M.listChanged:fire()
 
 			task.spawn(function()
 				local ok, reply = pcall(function()
-					return env.require("agent/loop").run(session, clean, images)
+					local entry = takeReady()
+					if not entry then return nil end
+					session.turns = session.turns + 1
+					if entry.onDone then completed[#completed + 1] = { id = entry.id, fn = entry.onDone } end
+					session.emit("user", { text = entry.text, messageId = entry.id, queued = entry.queued })
+					queue.consumed(entry)
+					return env.require("agent/loop").run(session, entry.text, entry.images)
 				end)
 				if not ok then session.abortFlag = true end
+				if not ok then session.turnFailure = "The native agent stopped after an internal error" end
 				-- A turn owns its background children through its terminal settlement,
 				-- including limits and provider failures. Intermediate tools do not end
 				-- that lifetime; normal completion has already collected their reports.
@@ -325,9 +450,11 @@ return function(env)
 					subagents.stopAll(session)
 					if unfinished then session.toolEpoch = {} end
 				end
-				running = math.max(0, running - 1)
-				session.busy = false
-				if session.removed or not alive then return end
+				session.acceptingMessages = false
+				if callbacks == completed then callbacks = nil end
+				local finalStatus = not ok and "failed" or session.abortFlag and "cancelled" or session.turnFailure and "failed" or "succeeded"
+				if queue.pending() > 0 and finalStatus ~= "succeeded" then queue.hold(finalStatus == "cancelled" and "Stopped before these follow-ups were applied" or session.turnFailure) end
+				if session.removed or not alive then running = math.max(0, running - 1); session.busy = false; return end
 				-- Only this conversation's prompts. It used to clear every pending
 				-- request in the client, so one conversation finishing a turn silently
 				-- denied whatever another was waiting on -- and a denied write is
@@ -345,28 +472,48 @@ return function(env)
 					session.emit("status", { text = "Ready" })
 				end
 				M.persist(session)
+				running = math.max(0, running - 1)
+				session.busy = false
 				M.listChanged:fire()
-				if onDone and not session.removed then pcall(onDone, reply) end
+				for _, callback in ipairs(completed) do
+					if not session.removed then pcall(callback.fn, reply, { messageId = callback.id,
+						status = finalStatus }) end
+				end
+				-- Terminal-event sends belong to the next turn. Start only after this
+				-- worker's cleanup and callbacks; a preparing head starts on commit.
+				startReady()
 			end)
 			return true
 		end
 
 		function session.abort()
+			if session.cancellingMessages then return false end
+			session.cancellingMessages = true
 			session.toolEpoch = {}
 			session.abortFlag = session.busy == true
+			local wasPreparing = queue.preparing()
+			queue.cancelPreparations("message preparation was cancelled; your draft was kept")
+			preparing()
+			if session.removed or not alive then
+				if not session.removed then session.persist() end
+				queue.clear(session.removed and "conversation removed" or "client unloaded")
+			else
+				queue.hold("Stopped before these follow-ups were applied")
+				session.persist()
+			end
 			local capture = env.loadedModules and env.loadedModules["runtime/remote_capture"]
 			if capture then capture.revokeAgent(session.id) end
 			local subagents = env.loadedModules and env.loadedModules["agent/subagent"]
 			local stoppedChildren = subagents and subagents.stopAll(session) or 0
-			if session.preparing then session.preparing = nil; return true end
 			local loops = env.loadedModules and env.loadedModules["runtime/chatloops"]
 			local stoppedLoops = loops and loops.stop(nil, session) or 0
-			if not session.busy then return stoppedLoops > 0 or stoppedChildren > 0 end
+			if not session.busy then session.cancellingMessages = nil; return wasPreparing or stoppedLoops > 0 or stoppedChildren > 0 end
 			session.abortFlag = true
 			session.emit("status", { text = "Stopping" })
 			permissions.denyAll("aborted", session)
 			local asks = env.loadedModules and env.loadedModules["ui/panels/ask"]
 			if asks then pcall(asks.sweep, session) end
+			session.cancellingMessages = nil
 			return true
 		end
 
@@ -401,6 +548,8 @@ return function(env)
 
 		function session.clear()
 			if session.busy then return false, "Stop this turn before clearing its conversation" end
+			session.clearingMessages = true
+			queue.clear("conversation cleared")
 			session.preparing = nil
 			attachments.clearUploads(session.id)
 			local loops = env.loadedModules and env.loadedModules["runtime/chatloops"]
@@ -419,6 +568,7 @@ return function(env)
 			session.emit("cleared", {})
 			session.emit("status", { text = "Ready" })
 			M.persist(session)
+			session.clearingMessages = nil
 		end
 
 		-- A title the user typed wins over the one derived from the first message, and
@@ -762,6 +912,7 @@ return function(env)
 			createdAt = session.createdAt,
 			turns = session.turns, opencodeSession = session.opencodeSession,
 			policy = policy,
+			queue = session.serialiseQueue(),
 			context = session.ctx.serialise(),
 			transcript = session.transcript.snapshot(),
 			transcriptState = session.transcript.metadata(),
@@ -829,10 +980,13 @@ return function(env)
 				session.createdAt = timestamp(data.createdAt)
 				session.updatedAt = timestamp(data.updatedAt)
 				session.turns = math.floor(timestamp(data.turns)); session.opencodeSession = data.opencodeSession
-				session.ctx.restore(data.context)
-				session.transcript.restore(data.transcript, session.ctx, data.transcriptState)
-				M.threads[session.id] = session
-				restored = restored + 1
+				local queueOk, queueError = session.restoreQueue(data.queue)
+				if queueOk then
+					session.ctx.restore(data.context)
+					session.transcript.restore(data.transcript, session.ctx, data.transcriptState)
+					M.threads[session.id] = session
+					restored = restored + 1
+				else log.warn("session", "skipped saved conversation with invalid follow-ups", queueError) end
 			end
 		end
 		if restored > 0 then

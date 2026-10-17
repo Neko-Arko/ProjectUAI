@@ -4,9 +4,17 @@ A universal AI agent that runs inside a Roblox client. It works in any game,
 with Chat Completions and Anthropic Messages endpoints, including compatible
 local servers and relays.
 
-**Version 3.2.0 — October 15, 2026: Project UAI Free and OpenCode desktop.**
+**Version 3.3.0 — October 17, 2026: MCP, a rebuilt bridge, and queued follow-ups.**
+Connect external agents to UAI's Roblox tools through the desktop bridge's MCP
+server. Copy a setup prompt from **Settings → MCP** to let your agent configure
+the connection. The rebuilt bridge adds a settings modal, clearer AI responses,
+model and reasoning controls, and a context-usage chart. Send follow-ups while
+the agent works in Roblox or the bridge; they join at the next safe boundary.
+
 Start chatting with **Project UAI Free** without supplying an API key. It is the
-default when no provider is configured and uses HCNSEC's shared `auto` router.
+default when no provider is configured. Its adaptive router measures small tool
+requests and prefers verified fast HCNSEC models when compatible; otherwise it
+keeps the provider's `auto` route. Free models have rounded green outlines.
 Thank you for continuing to use and support Project UAI. Capacity and response
 speed vary; more free providers may become available soon. Join
 [our Discord](https://discord.gg/9xYyyYuKap) for help, provider news and updates.
@@ -24,7 +32,7 @@ workspace. Go keeps its own catalog and routes; the optional free CLI backend
 does not intercept it. Subscription and workspace region refusals identify the
 setting to check. See [provider setup](docs/PROVIDER_COMPATIBILITY.md).
 
-Client, bridge and desktop are 3.2.0; UI LIB remains 1.3.0 and SDK 1.0.0.
+Client, bridge and desktop are 3.3.0; UI LIB remains 1.3.0 and SDK 1.0.0.
 Model pricing and context/reply limits use a refreshed provider-specific catalog;
 included Project UAI Free access is counted at zero cost.
 See the [release notes](CHANGELOG.md), [script development manual](docs/SCRIPT_DEVELOPMENT.md)
@@ -39,7 +47,7 @@ it. The model modal edits the same global effort setting, including for other
 models when **Options → Reasoning support** is enabled. The Thinking row estimates
 visible text only. A long retained trace is labelled
 **Excerpt**, not a 5,999-token model limit. See [provider behavior](docs/PROVIDER_COMPATIBILITY.md).
-Use the [3.2.0 verification record](docs/TESTING_3.2.0.md) for focused bridge checks
+Use the [3.3.0 verification record](docs/TESTING_3.3.0.md) for focused bridge checks
 and native follow-up. The earlier [3.0.0 audit ledger](docs/AUDIT_3.0.0.md) retains
 its module and tool coverage.
 
@@ -676,7 +684,7 @@ first two entirely.
 
 Cowork gives your Roblox conversation more room in the browser. Keep Roblox and
 its local bridge running on the same computer. The [Windows desktop launcher](desktop/README.md)
-is a single **UAI-Bridge-3.2.0-win-x64.exe** download. Open it directly,
+is a single **UAI-Bridge-3.3.0-win-x64.exe** download. Open it directly,
 complete Node setup if needed using **Download Node.js** or an existing
 installation, click **Start Cowork**, and load the updated UAI script. It discovers the app on dedicated port
 **28791** and reconnects automatically after app restarts. The executable includes
@@ -713,7 +721,7 @@ Stop cancels the original request without submitting it again.
 Bridge releases download automatically from GitHub and apply when work is idle.
 The desktop app also downloads its own updates and applies them on restart.
 Both verify package hashes and keep a working fallback. Existing desktop 1.0
-users need one manual download of the 3.2.0 executable to gain the updater.
+users need one manual download of the 3.3.0 executable to gain the updater.
 
 The browser includes conversations, provider/model controls, code attachments,
 permissions, tool forms, subagents, chat loops, memory, logs, exports and settings.

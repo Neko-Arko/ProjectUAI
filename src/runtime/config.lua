@@ -95,6 +95,8 @@ return function(env)
 			keepTurns = 14,
 			compaction = true,
 			stream = true,
+			-- Optional measured routing for included Free access with model auto.
+			autoFreeRouting = true,
 			temperature = 0.4,
 			-- Reasoning depth: sent as `reasoning_effort` on chat completions and as
 			-- `output_config.effort` on the Messages API. Start with low latency;
@@ -109,6 +111,7 @@ return function(env)
 			-- think gets the effort scale even where the table documents none.
 			forceReasoning = {},
 			forceContext = {},
+			forceSampling = {},
 			maxTokens = 128000,
 			-- Characters, not tokens, and it is the last word on how much of a tool
 			-- result reaches the model. Eight thousand rather than four so that the

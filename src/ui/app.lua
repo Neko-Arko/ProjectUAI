@@ -1581,6 +1581,9 @@ return function(env)
 		if M.sessionUnsubscribe then M.sessionUnsubscribe() end
 		M.sessionUnsubscribe = session.events:connect(function(event)
 			local panel = M.chatPanel
+			if panel and panel.composer and (event.kind:sub(1, 8) == "message:" or event.kind == "queue:state") then
+				panel.composer.syncQueue()
+			end
 			if event.kind == "status" then
 				-- "Ready" is the loop's own idle text and it is emitted from inside the
 				-- turn, one line after turn:end and before session.send clears the flag.

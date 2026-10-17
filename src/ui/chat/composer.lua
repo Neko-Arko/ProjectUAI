@@ -89,8 +89,8 @@ return function(env)
 		local sendButton
 		local function syncSend()
 			if alive() and sendButton then
-				sendButton.setEnabled(not pendingSends[draftId] and (composer.busy
-					or #composer.attachments > 0 or (composer.field and util.trim(composer.field.get()) ~= "")))
+				sendButton.setEnabled(not pendingSends[draftId] and (#composer.attachments > 0
+					or (composer.field and util.trim(composer.field.get()) ~= "")))
 			end
 		end
 
@@ -450,7 +450,7 @@ return function(env)
 		end
 
 		local function submit()
-			if not alive() or composer.busy or not draftId or pendingSends[draftId] then return false end
+			if not alive() or not draftId or pendingSends[draftId] then return false end
 			local id = draftId
 			if not sessions.threads[id] or sessions.current().id ~= id then return false end
 			local text = composer.field.get()
@@ -573,15 +573,23 @@ return function(env)
 			diameter = controlHeight,
 			radius = theme.radius.lg,
 			layoutOrder = 2,
-			onClick = function()
-				if composer.busy then
-					if props.onStop then props.onStop() end
-				else
-					submit()
-				end
-			end,
+			onClick = submit,
 		})
 		sendButton.instance.LayoutOrder = 2
+		local stopButton = P.iconButton(metaRow, {
+			name = "Stop", icon = "stop", variant = "danger", diameter = controlHeight,
+			radius = theme.radius.lg,
+			onClick = function() if props.onStop then props.onStop() end end,
+		})
+		stopButton.instance.Visible = false
+		local pendingButton = P.button(surface, {
+			name = "PendingMessages", text = "", variant = "ghost", size = "sm", fill = true,
+			onClick = function()
+				local session = sessions.threads[draftId]
+				if session then env.require("ui/chat/queue").open(session) end
+			end,
+		})
+		pendingButton.instance.Visible = false
 
 		local details = P.frame(shell, { name = "ComposerState", size = UDim2.fromOffset(0, 0), visible = false })
 		local permissionLabel = P.text(scopeRow, { name = "PermissionLabel", text = "", role = "caption", auto = "X", layoutOrder = 6 })
@@ -704,7 +712,8 @@ return function(env)
 			local expanded = stackedInput()
 			local width = math.max(surface.AbsoluteSize.X - inset * 2, 0)
 			local left = chipHeight + theme.space.xs
-			local right = controlHeight + chipHeight + controlGap * 2
+			local stopWidth = composer.busy and controlHeight + controlGap or 0
+			local right = controlHeight + chipHeight + controlGap * 2 + stopWidth
 			-- Size to the actual label, not a permanent 144px slot around 'big-pickle'.
 			local measured = math.max(P.measureText(modelLabel.Text, { role = "caption" }).X, modelLabel.TextBounds.X)
 			local wanted = math.ceil(measured) + theme.size.dot + theme.size.icon
@@ -719,9 +728,11 @@ return function(env)
 			plusButton.instance.AnchorPoint = Vector2.new(0, 0.5)
 			plusButton.instance.Position = UDim2.fromScale(0, 0.5)
 			moreButton.instance.AnchorPoint = Vector2.new(1, 0.5)
-			moreButton.instance.Position = UDim2.new(1, -(controlHeight + controlGap), 0.5, 0)
+			moreButton.instance.Position = UDim2.new(1, -(controlHeight + controlGap + stopWidth), 0.5, 0)
 			sendButton.instance.AnchorPoint = Vector2.new(1, 0.5)
 			sendButton.instance.Position = UDim2.fromScale(1, 0.5)
+			stopButton.instance.AnchorPoint = Vector2.new(1, 0.5)
+			stopButton.instance.Position = UDim2.new(1, -(controlHeight + controlGap), 0.5, 0)
 			fieldHolder.Position = UDim2.fromOffset(expanded and 0 or left, 0)
 			fieldHolder.Size = UDim2.new(1, expanded and 0
 				or -(left + right + (modelWidth > 0 and modelWidth + theme.space.sm or 0)), 0, promptHeight())
@@ -732,6 +743,11 @@ return function(env)
 			resizing = true
 			local top = inset
 			local room = parent.AbsoluteSize.Y
+			if pendingButton.instance.Visible then
+				pendingButton.instance.Position = UDim2.fromOffset(inset, top)
+				pendingButton.instance.Size = UDim2.new(1, -inset * 2, 0, chipHeight)
+				top = top + chipHeight + theme.space.xxs
+			end
 			-- Extra context yields to the typing row when any window is short.
 			-- Attachments also remain removable from Message options.
 			scopeScroll.instance.Visible = contextRequested and room >= controlHeight * 4 + theme.space.lg
@@ -882,16 +898,27 @@ return function(env)
 			draftId = session.id
 			draftViews[draftId] = draftView
 			restoreDraft()
+			composer.syncQueue()
+		end
+
+		function composer.syncQueue()
+			if not alive() then return end
+			local session = sessions.threads[draftId]
+			local pending = session and session.queueSnapshot()
+			local count = pending and pending.count or 0
+			pendingButton.instance.Visible = count > 0
+			pendingButton.setText(tostring(count) .. (pending and pending.held and " waiting · Review or resume" or " queued · Review"))
+			resizeComposer()
 		end
 
 		function composer.setBusy(value)
 			if not alive() then return end
 			composer.busy = value == true
 			if composer.mascot then pcall(composer.mascot.setBusy, composer.busy) end
-			sendButton.setIcon(composer.busy and "stop" or "send")
-			sendButton.setVariant(composer.busy and "danger" or "primary")
-			composer.field.instance.PlaceholderText = composer.busy and "Write a follow-up…"
+			stopButton.instance.Visible = composer.busy
+			composer.field.instance.PlaceholderText = composer.busy and "Queue a follow-up…"
 				or props.placeholder or "Message UAI…"
+			resizeComposer()
 			syncSend()
 		end
 
@@ -927,6 +954,7 @@ return function(env)
 			plusButton.instance.Size = UDim2.fromOffset(chipHeight, chipHeight)
 			moreButton.instance.Size = UDim2.fromOffset(chipHeight, chipHeight)
 			sendButton.instance.Size = UDim2.fromOffset(controlHeight, controlHeight)
+			stopButton.instance.Size = UDim2.fromOffset(controlHeight, controlHeight)
 			scopeRow.Size = UDim2.fromOffset(0, chipHeight)
 			mascotSlot.Size = UDim2.fromOffset(mascotSize, chipHeight)
 			for _, handle in ipairs(scopeChips) do

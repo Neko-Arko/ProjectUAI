@@ -1,10 +1,10 @@
 # Provider compatibility and WebSockets
 
-Applies to **3.2.0**, October 15, 2026.
+Applies to **3.3.0**, October 17, 2026.
 
-UAI implements **Chat Completions** and **Anthropic Messages**, plus a dedicated
-**Responses** path for supported OpenCode models. Local servers and other custom
-providers use the first two APIs. This is protocol compatibility, not a guarantee that
+UAI implements **Chat Completions**, **Anthropic Messages** and **Google Gemini**,
+plus a dedicated **Responses** path for supported OpenCode models. Custom
+providers can select their matching protocol. This is protocol compatibility, not a guarantee that
 every model, server version, account or proprietary API works.
 
 The compatibility checks use synthetic HTTP responses and socket events. They
@@ -71,8 +71,8 @@ Rebuild the client after any catalog change.
 
 PNG, JPEG and WebP attachments from the web bridge are delivered as actual image
 content: Chat Completions receives `image_url` data URLs, Messages receives
-base64 `image` blocks, and the OpenCode Responses path receives `input_image`
-blocks. Select a model and endpoint that support vision. Text-only
+base64 `image` blocks, Gemini receives native `inlineData`, and the OpenCode
+Responses path receives `input_image` blocks. Select a model and endpoint that support vision. Text-only
 models remain usable for conversations without image attachments.
 
 Reload the updated game client and restart the updated bridge to enable this
@@ -93,7 +93,7 @@ Leave **Gateway socket URL** empty for these ordinary HTTP connections.
 | vLLM | `http://127.0.0.1:8000/v1` | None by default; Bearer if `--api-key` is configured | A chat template, an appropriate tool-call parser and automatic tool choice enabled on the server. |
 | llama.cpp | `http://127.0.0.1:8080/v1` | None by default; Bearer if `--api-key` is configured | A compatible model/template, often with `--jinja`; parser support depends on the model. |
 | SGLang | `http://127.0.0.1:30000/v1` | None by default; Bearer when server auth is configured | The model's chat template and tool-call parser. |
-| Other compatible servers/proxies | Enter their documented base URL under Custom endpoint | Match the server configuration | Must implement one of UAI's two protocols, including tool-result replay for agent use. |
+| Other compatible servers/proxies | Enter their documented base URL under Custom endpoint | Match the server configuration | Must implement a supported protocol, including tool-result replay for agent use. |
 
 The local preset label does not decide reachability. UAI checks the actual URL:
 loopback, private IPv4/IPv6, `.localhost`, `.local` and single-label hosts require
@@ -104,19 +104,61 @@ reachable address and port. A server's bind address such as `0.0.0.0` is not the
 normal client address; use loopback or its actual interface address.
 
 Fetch models after the server is running, or enter its exact model/deployment id.
-UAI does not invent model names or hide embedding models returned by discovery.
+UAI does not invent model names. Generic discovery keeps embedding IDs; Google's
+native catalog explicitly identifies generation methods, so embedding-only entries
+are excluded there.
 An ordinary text reply does not prove tool support. Agent use also needs a model
 and context window large enough for the selected tools and conversation.
 
-Ollama's native `/api/chat` and `/api/generate`, Gemini `generateContent`, OpenAI
+Ollama's native `/api/chat` and `/api/generate`, OpenAI
 Realtime, generic Responses endpoints, legacy Completions, Bedrock's native API and other proprietary
 formats are not adapters in this client. Use a compatible surface or an external
 adapter. Known mismatched native paths produce an actionable diagnostic.
 
+## Native Google Gemini
+
+New **Google Gemini** connections use `https://generativelanguage.googleapis.com/v1beta`
+with the **Google Gemini** protocol and `x-goog-api-key` authentication. Existing
+connections to `/v1beta/openai` keep their saved Chat Completions protocol and Bearer
+authentication. Native discovery follows up to ten pages (10,000 entries), removes
+the `models/` resource prefix, and keeps models that declare generation support.
+
+The adapter sends native system instructions, JSON Schema function declarations,
+parallel function calls and ordered function responses. It accepts complete JSON
+responses and SSE, separates reasoning summaries from answer text, and counts
+thinking and cached input tokens. It rejects incomplete or failed streams before
+any returned tool can run. Native HTTP still receives a buffered body; bridge
+streaming can show incremental progress. These paths do not implement Google's
+separate Live, Interactions, audio/video generation or image-generation interfaces.
+
+Image input uses the existing session-owned bridge references. The bridge replaces
+them with `inlineData` immediately before the provider request; session history
+does not contain base64 picture data. Gemini's signed model parts persist with
+their exact signed boundaries and endpoint/model scope so a restored tool exchange
+can continue. Signatures from another model or endpoint are never reused.
+
+Documented Gemini 3 and Gemini 4 Argon effort controls map to native `thinkingLevel`; Gemini 2.5 uses
+`thinkingBudget`. **Provider default** omits the effort override. Gemini 3 native
+requests leave temperature at Google's recommended default unless explicitly set;
+the documented Gemini 3.6/3.7/3.8 Flash and Gemini 4 Argon models omit unsupported sampling parameters.
+The model's Temperature handling control can explicitly select Auto, Send or Omit.
+Provider `params` and request `extra` accept native fields such as
+`generationConfig.thinkingConfig`; the final output ceiling still applies.
+
+Protocol references reviewed on 2026-10-17:
+
+- [GenerateContent REST API](https://ai.google.dev/api/generate-content)
+- [Native API discovery schema](https://generativelanguage.googleapis.com/$discovery/rest?version=v1beta)
+- [Gemini 3 thinking and temperature guidance](https://ai.google.dev/gemini-api/docs/gemini-3)
+- [Gemini 3.8 thinking levels and parameter changes](https://ai.google.dev/gemini-api/docs/whats-new-gemini-3.8)
+- [Gemini 4 Argon thinking and parameter guidance](https://ai.google.dev/gemini-api/docs/latest-model)
+- [Thinking and signed response parts](https://ai.google.dev/gemini-api/docs/thinking)
+
 ## Preset routing matrix
 
 These are the catalog routes exercised by the offline preset matrix. Except for
-the classic Azure deployment API, the configured model id is sent in the request.
+the classic Azure deployment API, the configured model id is sent in the request
+body or Gemini model path.
 `/models` is discovered under the same base; if a service does not expose it or
 the key cannot list models, manual ids remain usable.
 
@@ -127,11 +169,11 @@ the key cannot list models, manual ids remain usable.
 | OpenAI | `api.openai.com/v1` | Chat Completions | Bearer |
 | OpenRouter | `openrouter.ai/api/v1` | Chat Completions | Bearer |
 | OpenCode Zen | `opencode.ai/zen/v1` | Chat Completions; dedicated Responses lane when required | Bearer |
-| OpenCode Go | `opencode.ai/inference/go/v1` | Model-specific Chat, Responses or Messages; native Gemini unsupported | Bearer |
+| OpenCode Go | `opencode.ai/inference/go/v1` | Model-specific Chat, Responses, Messages or Gemini | Bearer |
 | Azure AI Foundry | `<resource>.openai.azure.com/openai/v1` | Chat Completions | api-key |
 | Anthropic Messages | `api.anthropic.com/v1` | Messages | x-api-key |
 | Anthropic OpenAI compatibility | `api.anthropic.com/v1` | Chat Completions | x-api-key |
-| Google Gemini compatibility | `generativelanguage.googleapis.com/v1beta/openai` | Chat Completions | Bearer |
+| Google Gemini | `generativelanguage.googleapis.com/v1beta` | Native generateContent / streamGenerateContent | x-goog-api-key |
 | Groq | `api.groq.com/openai/v1` | Chat Completions | Bearer |
 | DeepSeek | `api.deepseek.com/v1` | Chat Completions | Bearer |
 | Together AI | `api.together.xyz/v1` | Chat Completions | Bearer |
@@ -155,6 +197,35 @@ using included public HCNSEC access and its verified `auto` router. No personal 
 key or model entry is required. Existing providers and private credentials stay
 intact. Choose **Use Project UAI Free** to add it later. Thank you for your continued
 use and support of Project UAI; more free providers may become available soon.
+
+**Settings → Agent → Automatic free routing** is enabled by default and optional.
+Turn it off to stop background measurements and retain the selected provider model
+for future requests. An accepted request finishes on its existing route. When UAI
+selects a measured model, a conversation notice names it and gives this setting path.
+The provider may still perform its own routing when its selected model is `auto`.
+
+With automatic free routing enabled, `auto` selected and the default Chat settings, UAI measures models in the
+background when you open the model picker or send an agent request. It discovers
+the live catalog, checks a small tool call and its result replay, and prefers the
+fastest verified candidate whose two responses each finished within ten seconds.
+The picker shows the latest synthetic probe time. The first request can use the
+provider's `auto` while measurements run; opening the picker warms selection
+without sending your conversation. Two workers check at most 32 advertised IDs;
+measurements last ten minutes and expire when connection/auth settings change.
+
+The selected model must have a known context window large enough for the prepared
+request and reply. Images, unknown context limits and explicit provider body,
+query or socket settings keep their existing route. Selecting a model by name or
+using a personal key keeps that choice fixed. A slow or failed real response
+removes that candidate for later selections; it never launches a duplicate of
+the current prompt. The saved selector remains `auto`, and scoped API limit
+lessons still persist. Free choices have green rounded borders in model menus.
+
+**Ten seconds is a selection target, not a guarantee for a real request.** Longer
+prompts, tool catalogs, reasoning and shared load can take longer. Native probes
+use the active direct/relay lane and contain only a synthetic connectivity tool;
+they never execute it or include conversation data. See
+[the measured HCNSEC results](FREE_ROUTING_VALIDATION.md).
 Shared capacity changes, so requests may be fast, slow, rate limited or unavailable.
 Help, availability updates and community news: https://discord.gg/9xYyyYuKap.
 
@@ -201,7 +272,7 @@ behavior has not been verified.
 | DeepSeek | `/chat/completions` |
 | GPT, Grok, Muse | `/responses` |
 | Claude, Minimax, Qwen | `/messages` |
-| Gemini | Native API not implemented; select another model |
+| Gemini | `/models/<model>:generateContent` or `:streamGenerateContent?alt=sse` |
 
 The supported families route automatically without changing the saved API choice.
 Requests retain the Go base, selected key, query parameters, identifiable

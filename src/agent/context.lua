@@ -102,6 +102,8 @@ return function(env)
 				-- see ctx.serialise -- so a reloaded conversation falls back to the
 				-- reconstructed form, which the API accepts.
 				raw = result.raw,
+				geminiParts = result.geminiParts and util.deepCopy(result.geminiParts),
+				geminiScope = result.geminiScope,
 				model = result.model,
 				provider = result.provider,
 				ms = result.ms,
@@ -481,6 +483,10 @@ return function(env)
 					name = message.name,
 					internal = message.internal,
 					reasoning = message.reasoning,
+					-- Gemini validates signed model parts on tool-result replay. Keep
+					-- their original boundaries and route scope across client reloads.
+					geminiParts = message.geminiParts,
+					geminiScope = message.geminiScope,
 					at = message.at,
 				}
 			end

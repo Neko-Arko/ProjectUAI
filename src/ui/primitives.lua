@@ -669,7 +669,7 @@ return function(env)
 			clip = props.clip,
 			flex = props.flex,
 		})
-		local outline = P.stroke(button, props.strokeColor or theme.color.borderSubtle)
+		local outline = P.stroke(button, props.strokeColor or theme.color.borderSubtle, props.strokeWidth)
 		outline.Transparency = props.stroke and 0 or 1
 
 		local inner = P.row
@@ -701,7 +701,7 @@ return function(env)
 				BackgroundTransparency = target and 0 or 1,
 			})
 			P.animate(outline, motion, {
-				Color = focused and theme.color.accent or (props.strokeColor or theme.color.borderSubtle),
+				Color = focused and (props.strokeFocusColor or theme.color.accent) or (props.strokeColor or theme.color.borderSubtle),
 				Transparency = (focused or props.stroke) and 0 or 1,
 			})
 		end

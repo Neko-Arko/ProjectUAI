@@ -274,16 +274,6 @@ return function(env)
 			body.tools = M.capTools(body.tools, toolCeiling, registry.isOpencode(record))
 		end
 
-		-- Sampling parameters are rejected outright by the current Claude generations
-		-- rather than ignored, so a model documented to refuse one is never sent it.
-		-- Every other model keeps the behaviour it has always had, because
-		-- withholding a parameter a gateway would have honoured is its own bug.
-		local temperature = request.temperature
-		if temperature == nil then temperature = config.get("agent.temperature", 0.4) end
-		if temperature and traits.allowsSampling(record.model) then
-			body.temperature = temperature
-		end
-
 		local maxTokens = M.cappedMaxTokens(record, request.maxTokens or config.get("agent.maxTokens", 4096))
 		if maxTokens and maxTokens > 0 then body.max_tokens = maxTokens end
 
@@ -300,6 +290,7 @@ return function(env)
 
 		for key, value in pairs(record.params or {}) do body[key] = value end
 		for key, value in pairs(request.extra or {}) do body[key] = value end
+		env.require("provider/sampling").apply(record, request, body)
 		M.enforceOutputCeiling(record, body, request.outputCeiling)
 		if not body.stream then body.stream_options = nil end
 		return body
@@ -546,7 +537,7 @@ return function(env)
 			tokens = math.min(tokens, previousTokens)
 		end
 		record.maxTokensCap = { model = record.model, tokens = tokens, scope = scope }
-		registry.save(record, { force = true })
+		if registry.get(record.id) == record then registry.save(record, { force = true }) end
 	end
 	function M.toolCeiling(record)
 		if not record then return nil end
@@ -571,7 +562,7 @@ return function(env)
 			limit = math.min(limit, previousLimit)
 		end
 		record.toolsCap = { model = record.model, limit = limit, scope = scope }
-		registry.save(record, { force = true })
+		if registry.get(record.id) == record then registry.save(record, { force = true }) end
 	end
 
 	function M.toolCeilingFromMessage(message)
@@ -737,7 +728,8 @@ return function(env)
 		},
 		{
 			match = "temperature",
-			apply = function(body)
+			apply = function(body, message)
+				if message and not env.require("provider/sampling").isRejection(message) then return nil end
 				if body.temperature ~= nil then
 					body.temperature = nil
 					return "dropped temperature"
@@ -1000,7 +992,7 @@ return function(env)
 		record.repairScope = scope
 		for _, key in ipairs(record.repairs or {}) do
 			for _, entry in ipairs(REPAIRS) do
-				if entry.match == key then entry.apply(body) end
+				if entry.match == key and (key ~= "temperature" or env.require("provider/sampling").state(record).override ~= "send") then entry.apply(body) end
 			end
 		end
 	end
@@ -1014,7 +1006,7 @@ return function(env)
 			if existing == key then return end
 		end
 		record.repairs[#record.repairs + 1] = key
-		registry.save(record, { force = true })
+		if registry.get(record.id) == record then registry.save(record, { force = true }) end
 	end
 
 	-- Performs one completion against one provider. Returns result, nil on success
@@ -1043,6 +1035,7 @@ return function(env)
 	end
 
 	function M.complete(record, request)
+		local owns = env.require("provider/sampling").owner(record)
 		local problem = registry.protocolProblem(record)
 		if problem then return nil, problem end
 		request = util.copy(request or {})
@@ -1094,7 +1087,7 @@ return function(env)
 		local skip429 = (#pool > 1) and { [429] = true } or nil
 
 		local function fire(payload)
-			if registry.compatibilityKey(record) ~= requestScope then return nil, "aborted" end
+			if not owns() or registry.compatibilityKey(record) ~= requestScope then return nil, "aborted" end
 			if deadline and clock.ms() >= deadline then return nil, "deadline: request budget expired" end
 			-- A socket is only used when the record names one and the host has
 			-- WebSocket support; otherwise the SSE body arrives whole over HTTP.
@@ -1178,18 +1171,20 @@ return function(env)
 		end
 
 		local res, err = fireWithRotation(body)
+		if not owns() or registry.compatibilityKey(record) ~= requestScope or (request.aborted and request.aborted()) then return nil, "aborted" end
 		-- Some Zen models only speak the Responses protocol: /chat/completions
 		-- answers ModelProtocolUnsupported for them. Switch lanes and retry there.
 		-- Preserve the direct desktop workaround when the bridge is absent.
 		-- Mobile free-tier refusals are terminal; the retired proxy is never tried.
-		if res and registry.compatibilityKey(record) == requestScope and responses.eligible(record)
+		if res and not res.terminal and not http.terminal(err) and registry.compatibilityKey(record) == requestScope and responses.eligible(record)
 			and (responses.isProtocolRefusal(res) or (not registry.isOpencodeGo(record) and responses.canRetryFreeTier(res))) then
 			log.info("provider", record.label .. ": chat route refused, retrying on the Responses lane")
 			if request.onRetry then
 				request.onRetry({ attempt = 1, attempts = 2, wait = 0, reason = "model may need the Responses protocol", status = res.status })
 			end
+			if not owns() or registry.compatibilityKey(record) ~= requestScope or (request.aborted and request.aborted()) then return nil, "aborted" end
 			local switched, switchErr, switchRes = responses.complete(record, request,
-				{ deadlineMs = deadline, key = currentKey, rotationsLeft = rotationsLeft })
+				{ deadlineMs = deadline, key = currentKey, rotationsLeft = rotationsLeft, owns = owns })
 			if switched then
 				remember(record, responses.key())
 				return switched, nil, switchRes
@@ -1206,7 +1201,8 @@ return function(env)
 		-- two backends cannot spin here forever; when the budget runs out the body
 		-- falls through to the normal failure path and the chain moves on.
 		local repairsLeft = 4
-		while res and (res.status == 400 or res.status == 422) and repairsLeft > 0 do
+		while res and not res.terminal and not http.terminal(err) and (res.status == 400 or res.status == 422) and repairsLeft > 0
+			and owns() and registry.compatibilityKey(record) == requestScope and not (request.aborted and request.aborted()) do
 			repairsLeft = repairsLeft - 1
 			local message = M.errorText(res, nil)
 			local note, key = repair(body, message)

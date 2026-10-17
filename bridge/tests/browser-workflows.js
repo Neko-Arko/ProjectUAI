@@ -5,6 +5,7 @@ const { spawn } = require('node:child_process');
 const http = require('node:http');
 const { once } = require('node:events');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { navigation } = require('./helpers/browser-ui');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 (async () => {
@@ -55,6 +56,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     await switchTo('s1');
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    const { navigate, openSidebar } = navigation(page);
     const errors = [], commands = [], receipts = new Map(), stagedUploads = new Map(), uploadResponses = new Map();
     let holdUploads = false, rejectUploads = false;
     page.on('pageerror', error => errors.push(error.message));
@@ -90,7 +92,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
       return commands[count - 1];
     };
     const openTool = async name => {
-      await page.locator('#sidebar [data-page="tools"]').click();
+      await navigate('tools');
       await page.locator('.tool-grid .card').filter({ has: page.getByRole('heading', { name, exact: true }) }).getByRole('button', { name: 'Run…', exact: true }).click();
     };
     const parameter = name => page.locator(`#modal [data-parameter="${name}"]`);
@@ -273,9 +275,9 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
     for (const width of [390, 320]) {
       await page.setViewportSize({ width, height: 844 });
-      await page.locator('#sidebarToggle').click();
+      await openSidebar();
       assert.equal(await page.locator('#sidebarToggle').getAttribute('aria-expanded'), 'true');
-      await page.locator('#sidebar [data-page="tools"]').click();
+      await navigate('tools');
       assert.equal(await page.locator('#sidebarToggle').getAttribute('aria-expanded'), 'false');
       await page.locator('.tool-grid .card').first().getByRole('button', { name: 'Run…', exact: true }).click();
       await parameter('code').fill('local long_line = "' + 'x'.repeat(400) + '"');

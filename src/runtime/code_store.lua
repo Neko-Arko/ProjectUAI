@@ -415,6 +415,59 @@ return function(env)
 		M.init(); for i, item in ipairs(state.actions) do if item.id == key then table.remove(state.actions, i); changed("action", nil, "user"); return true end end
 		return nil, "Action not found"
 	end
+	local function removalSignature(kind, item)
+		local signature = { name = item.name, revision = item.revision, versions = {}, proposals = {} }
+		if kind == "document" then
+			for _, version in ipairs(item.versions) do signature.versions[#signature.versions + 1] = version.id end
+			for _, proposal in ipairs(M.proposals(item.id)) do signature.proposals[#signature.proposals + 1] = proposal.id end
+		end
+		return util.encode(signature)
+	end
+	function M.prepareDelete(entries)
+		M.init()
+		if not boundedArray(entries, limits.documents + limits.actions) or #entries == 0 then return nil, "Select scripts or actions to delete." end
+		local plan = { entries = {}, documents = 0, actions = 0, count = #entries }
+		local seen = {}
+		for _, entry in ipairs(entries) do
+			if type(entry) ~= "table" or (entry.kind ~= "document" and entry.kind ~= "action") or type(entry.id) ~= "string" then return nil, "Invalid library selection." end
+			local key = entry.kind .. ":" .. entry.id
+			local item
+			if entry.kind == "document" then item = M.resolve(entry.id) else item = M.action(entry.id) end
+			if seen[key] or not item or item.id ~= entry.id then return nil, "The selection changed. Review the library and select again." end
+			seen[key] = true
+			plan.entries[#plan.entries + 1] = { kind = entry.kind, id = item.id, name = item.name, signature = removalSignature(entry.kind, item) }
+			if entry.kind == "document" then plan.documents = plan.documents + 1 else plan.actions = plan.actions + 1 end
+		end
+		return plan
+	end
+	function M.deletePrepared(plan)
+		local current, why = M.prepareDelete(type(plan) == "table" and plan.entries or nil)
+		if not current then return nil, why end
+		-- Validate the entire observed selection before changing any entry. A rename,
+		-- source edit, saved version or proposal arriving during confirmation aborts
+		-- the batch; callbacks only see the final, coherent workspace.
+		for index, entry in ipairs(current.entries) do
+			if entry.signature ~= plan.entries[index].signature then return nil, entry.name .. " changed. Nothing was deleted; review the selection and try again." end
+		end
+		local documents, actionIds = {}, {}
+		for _, entry in ipairs(current.entries) do
+			if entry.kind == "document" then documents[entry.id] = true else actionIds[entry.id] = true end
+		end
+		local sources = env.require("runtime/script_sources")
+		for index = #state.documents, 1, -1 do
+			local doc = state.documents[index]
+			if documents[doc.id] then
+				sources.release(doc); table.remove(state.documents, index)
+				views[doc.id], undo[doc.id], redo[doc.id], typing[doc.id] = nil, nil, nil, nil
+			end
+		end
+		for index = #state.openIds, 1, -1 do if documents[state.openIds[index]] then table.remove(state.openIds, index) end end
+		if documents[state.activeId] then state.activeId = state.openIds[#state.openIds] end
+		for index = #state.proposals, 1, -1 do if documents[state.proposals[index].documentId] then table.remove(state.proposals, index) end end
+		for index = #state.actions, 1, -1 do if actionIds[state.actions[index].id] then table.remove(state.actions, index) end end
+		changed("delete", nil, "user")
+		return { documents = current.documents, actions = current.actions, count = current.count }
+	end
 	function M.saveNow()
 		if not M.initialized then return true end
 		if not fs.enabled then status("session_only", "This host has no filesystem"); return false, "Session only" end

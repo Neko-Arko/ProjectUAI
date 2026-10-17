@@ -33,6 +33,9 @@ for _, id in ipairs({ "", "../config", "path/name", string.rep("a", 121) }) do
 	check("invalid path-like session id rejected: " .. id:sub(1, 16), sessions.open(id) == nil and sessions.newThread({ id = id }) == nil)
 end
 check("untracked and foreign sessions are rejected", sdk.request(sessions.create(), "hello") == nil and sdk.request({ id = session.id }, "hello") == nil)
+-- This process-lifetime cache is loaded lazily by the first inference. Measure
+-- request-owned subscriptions after initializing it, so it is not a false leak.
+uai.env.require("provider/free_route")
 local initialListeners, initialDisposals = session.events:count(), uai.env.require("runtime/dispose").count()
 local completions, firstEvent = 0, nil
 local request = assert(sdk.request(session, "hello", {
@@ -49,6 +52,16 @@ check("late completion subscription receives retained outcome once", completions
 local rejectedCallbacks = 0
 check("empty send returns rejection without calling completion", sdk.request(session, " ", { onComplete = function() rejectedCallbacks = rejectedCallbacks + 1 end }) == nil and rejectedCallbacks == 0)
 check("invalid callbacks and unknown options fail before dispatch", sdk.request(session, "x", { onComplete = true }) == nil and sdk.request(session, "x", { typo = true }) == nil)
+
+local held = assert(sessions.open("sdk-held", { ephemeral = true }))
+assert(held.restoreQueue({ version = 1, items = { { id = "earlier-follow-up", state = "queued", text = "Earlier instruction", files = {}, images = {} } } }))
+check("SDK cannot bind to an earlier held user message", sdk.request(held, "New SDK request") == nil and held.queueSnapshot().count == 1)
+local removeBeforeStart = session.events:connect(function(event)
+	if event.kind == "message:queued" then session.removeQueued(event.messageId) end
+end)
+local removedBeforeStart = assert(sdk.request(session, "Remove before dispatch"))
+check("a removed admission reports cancellation without waiting for a user event", removedBeforeStart.await(1).status == "cancelled" and not session.busy)
+removeBeforeStart()
 
 delay = 1
 local slow = assert(sdk.request(session, "slow", { onEvent = function() error("host callback fixture") end }))
@@ -71,8 +84,10 @@ uai.env.require("agent/loop").run = function() error("intentional loop failure")
 local crash = assert(sdk.request(session, "crash"))
 check("internal loop failure is not mistaken for cancellation", crash.await(5).status == "failed")
 uai.env.require("agent/loop").run = originalRun
-local previousRecords = uai.config.get("providers")
-uai.config.set("providers", {})
+local previousRecords = uai.env.require("runtime/util").deepCopy(uai.config.get("providers"))
+-- Replacing the whole provider section intentionally provisions Free. Explicit
+-- list removal exercises a real empty chain without triggering that reset path.
+uai.config.set("providers.list", {})
 local unavailable = assert(sdk.request(session, "no provider"))
 check("provider failure differs from successful acceptance", unavailable.await(5).status == "failed" and unavailable.result.error ~= nil)
 uai.config.set("providers", previousRecords)

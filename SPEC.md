@@ -1,8 +1,8 @@
 # Project UAI — contract
 
-Current client release: **3.2.0 — October 15, 2026**.
+Current client release: **3.3.0 — October 17, 2026**.
 
-Bridge and Windows desktop release 3.2.0 use verified automatic GitHub updates.
+Bridge and Windows desktop release 3.3.0 use verified automatic GitHub updates.
 Bridge worker replacement waits for idle work and retains its session token;
 desktop app updates stage for restart with a retained fallback. Desktop detects
 Node.js 18+ or downloads a verified LTS runtime per user instead of bundling Node.
@@ -274,7 +274,7 @@ OpenCode Go is a separate keyed preset at `https://opencode.ai/inference/go/v1`.
 Its legacy `/zen/go/v1` alias remains a Go route. Go model discovery and every
 inference protocol retain that route and cannot use the native free-model catalog.
 Documented model families select Chat (DeepSeek), Responses (GPT/Grok/Muse), or
-Messages (Claude/Minimax/Qwen); Gemini's native Go protocol is explicitly unsupported.
+Messages (Claude/Minimax/Qwen), or native Gemini (Gemini).
 Go uses an identifiable Project UAI User-Agent and stable session header, with
 explicit custom headers preserved. Ambiguous retired OpenCode proxy records still
 migrate to Zen; selecting Go is explicit. Errors distinguish retired-route 410,
@@ -292,7 +292,28 @@ tools to Roblox. Capability and catalog data cannot survive a changed connection
 
 Project UAI Free uses the existing intentionally distributed HCNSEC community key
 and the provider-supported `auto` router, verified through live discovery and tool
-inference. Empty startup/import/reset configurations receive this ready provider;
+inference. **Settings → Agent → Automatic free routing** (`agent.autoFreeRouting`)
+is optional and enabled by default. Disabling it cancels background measurements
+and preserves the selected provider model for future requests; accepted requests
+keep their original owner and route until completion. The provider's `auto` can
+still perform server-side routing. A retained `model:route` notice names each
+changed measured-model selection and gives the exact settings path to disable it.
+With this setting enabled, default Chat settings and saved `auto` selection, opening the
+model picker or preparing an agent request starts background latency measurements.
+At most two workers probe up to 32 live-discovered IDs with synthetic tool calls
+and tool-result replay, each with a ten-second deadline. No conversation or real
+tool execution enters a probe. The fastest fresh candidate whose two responses
+both finish below ten seconds is selected before prompt preparation when its
+documented context can hold the estimated request and reply. Images, unknown
+windows, explicit body/query/socket settings and manual/private-key selections
+retain their existing route. A cold or unmatched request uses `auto` immediately.
+Measurements expire after ten minutes and on connection/auth changes. Slow or
+failed user responses remove that candidate for subsequent requests; they never
+race or replay the current prompt. Synthetic latency is not a real-request SLA.
+Per-request selections retain the saved `auto`, preserve scoped adapter lessons,
+and cannot override later provider edits. Free model choices have a visible green
+rounded outline in the model picker and provider menus.
+Empty startup/import/reset configurations receive this ready provider;
 configured providers and credentials remain intact. Explicit removal stays removed
 for the current session. Public credentials remain masked in the UI. The welcome
 thanks users for continued support, explains variable shared availability and speed,
@@ -795,6 +816,23 @@ is an incomplete failed run.
 
 ## 6. Event stream
 
+Ordinary conversation sends may queue follow-ups while inference or a tool batch
+is running. One worker still owns each conversation. Up to 16 pending messages
+(128,000 prepared text bytes) reserve their order before attachment preparation;
+the loop consumes them only between complete assistant/tool exchanges. A final
+assistant response continues when follow-ups remain, within the existing turn
+and time budgets. A late terminal-event follow-up starts only after its prior
+worker has settled. SDK request handles retain their busy-admission contract.
+
+Queue receipts identify accepted messages. `message:queued`, `message:consumed`,
+`message:removed` and `queue:state` report pending changes; `user` is emitted when
+the message actually joins context. Stop, errors and exhausted budgets hold
+unconsumed messages for explicit Resume or a later idle send. Preparing inputs
+are cancelled with their composer draft retained. Prepared follow-ups in saved
+conversations restore held; reload never starts inference. Attachment references
+are revalidated before resuming. Queue review supports individual removal in
+Roblox and the bridge; Stop is separate from Send.
+
 `agent/loop` never touches the interface. It emits into `agent/session`, which
 fans out to subscribers. Every payload also carries `kind` and `at` (epoch ms),
 stamped by `session.emit`.
@@ -1194,7 +1232,11 @@ The Code workspace is owned by `runtime/code_store` and composed in
 are destinations within Code. Layout follows the available panel rectangle. Native
 TextBox editing owns source input, selection and IME; escaped line-state syntax
 highlighting, a visible caret, virtual labels and an independent gutter remain
-available during editing. Source
+available during ordinary editing. While dragging or selecting a range, the
+native TextBox renders its text, caret and selection together; syntax colors
+return when the range collapses. Native multiline font probes calibrate the
+syntax line advance without accumulated rounded-height drift. Cursor-follow
+scrolling yields to pointer selection. Source
 remains raw and unwrapped. Enter inserts a newline; Run is explicit.
 
 Documents have stable IDs, monotonic revisions and distinct open-view state. They
@@ -1204,9 +1246,9 @@ store documents, versions, proposals, action snapshots and small preferences.
 Legacy files are retained; damaged snapshots are copied to verified recovery files
 before replacement. Unreadable or future-format data prevents overwriting. Failed
 saves retain live drafts and report status. Build replacement preflight protects
-pending Code work. Initial limits are 24 documents, 10 open views, 256,000 UTF-8
+pending Code work. Limits are 50 documents, 10 open views, 256,000 UTF-8
 bytes per editable source, 12 versions per document within 4 MiB of source history,
-24 actions and three proposals per document. The serialized envelope is capped at
+50 actions and three proposals per document. The serialized envelope is capped at
 12 MiB; an oversized envelope preserves live source and reports a save failure.
 Larger inspected source, up to 2 MiB, uses a bounded snapshot reader; opening it
 does not create temporary files. Explicit exports retain verified file behavior.
@@ -1342,8 +1384,8 @@ checks justified by the change. Review each fix before rebuilding affected
 outputs and rerunning affected checks. Use native static checks, deterministic
 freshness checks and the official Luau compiler where applicable.
 
-The 3.2.0 plan and actual outcomes belong in
-[docs/TESTING_3.2.0.md](docs/TESTING_3.2.0.md). The entire native suite is not part
+The 3.3.0 plan and actual outcomes belong in
+[docs/TESTING_3.3.0.md](docs/TESTING_3.3.0.md). The entire native suite is not part
 of that release pass. `tools/test_native.js --verify-only` is a separate full-suite
 workflow, not a substitute for selected checks. The broader command reference
 below includes independent product/site workflows; it does not require running
@@ -1394,6 +1436,24 @@ orphan processes. Manual CLI behavior remains on its configured port (8790 by
 default). The desktop-only discovery POST rejects browser Origin/Fetch Metadata
 headers, non-loopback peers, incorrect Host and missing protocol headers. Native
 local programs share this trust boundary; ordinary API routes retain bearer auth.
+
+The desktop bridge also exposes UAI tools to external MCP harnesses at authenticated
+`/mcp` (`/api/mcp` alias), with Streamable HTTP and a stdio adapter. The desktop
+executable's `--mcp-stdio` entry owns an adapter process without opening another
+window; it discovers an already-running desktop bridge. Checkout users can run
+`node bridge/server.js --mcp-stdio`. Connection examples live in the browser's
+Settings modal and [bridge/MCP.md](bridge/MCP.md).
+
+MCP advertises schemas from the connected client's registry, excluding unavailable
+capabilities, disabled groups and effective denials. `net/mcp` executes through
+the normal dispatcher in isolated, ephemeral conversations without switching the
+active chat. Every connection retains its own tool epoch across successive calls;
+Stop, close, changed bridge credentials and unload invalidate its work. Call
+cancellation affects only that call. Approval prompts remain in Project UAI.
+The bridge retains request identities and receipts to avoid replaying uncertain
+effects; expired receipts never authorize another dispatch of that request ID.
+The host's tool deadlines and cancellation limits still apply. No model inference
+is required for MCP execution, and no mobile companion routes are added.
 
 `net/bridge_connection` holds the effective connection and temporary desktop
 credentials. `bridge.autoDiscover` defaults to true, probes every four seconds

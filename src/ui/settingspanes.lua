@@ -1122,6 +1122,11 @@ return function(env)
 		local build = builder(container)
 
 		local agent = build.section("Agent", "How hard it works before it stops and answers.")
+		R.toggle(agent, {
+			name = "AutomaticFreeRouting", label = "Automatic free routing",
+			hint = "Choose a recently verified free model for included HCNSEC access when its model is Auto. Off keeps provider Auto and stops new local routing probes; an active request continues.",
+			path = "agent.autoFreeRouting", value = config.get("agent.autoFreeRouting", true) ~= false,
+		})
 		R.number(agent, "Step limit", "Tool rounds allowed in one turn, unless the switch below removes it.",
 			"agent.maxTurns", 4, 60, 1)
 		R.toggle(agent, {

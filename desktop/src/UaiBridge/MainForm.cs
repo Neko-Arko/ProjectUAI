@@ -34,7 +34,7 @@ internal sealed class MainForm : Form
         var masthead = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = Padding.Empty };
         masthead.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); masthead.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200));
         masthead.Controls.Add(TextLabel("Cowork", 16, FontStyle.Bold, Palette.Ink), 0, 0);
-        var edition = TextLabel("DESKTOP  /  3.2.0", 9, FontStyle.Regular, Palette.Muted);
+        var edition = TextLabel($"DESKTOP  /  {DesktopUpdater.CurrentVersion}", 9, FontStyle.Regular, Palette.Muted);
         edition.TextAlign = ContentAlignment.TopRight; edition.Padding = new Padding(0, 7, 0, 0);
         masthead.Controls.Add(edition, 1, 0); layout.Controls.Add(masthead, 0, 0);
         var intro = Column(Palette.Canvas);

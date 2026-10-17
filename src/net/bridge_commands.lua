@@ -12,6 +12,15 @@ return function(env)
 			local result, err = env.require("runtime/attachments").upload(session.id, command)
 			if not result then error(err, 0) end
 			return result
+		elseif kind == "model:temperature" then
+			local ok, why = env.require("provider/sampling").set(command.model, command.value)
+			if not ok then error(why, 0) end
+		elseif kind == "subagent:followup" then
+			local text = util.trim(command.text or "")
+			if #text > 16000 then error("Follow-up is too long", 0) end
+			local record, why = env.require("agent/subagent").startFollowUp({ id = tostring(command.id or ""), task = text })
+			if not record then error(why, 0) end
+			return { id = record.id, status = record.status }
 		elseif kind == "runtime" then
 			if command.value ~= "game" and command.value ~= "web" then error("Unknown runtime", 0) end
 			if command.value ~= config.get("bridge.runtime", "game") then
@@ -33,7 +42,7 @@ return function(env)
 				["ui.transcriptWidth"] = { narrow = true, medium = true, wide = true },
 				["iy.mode"] = { off = true, hidden = true, visible = true },
 				["relay.mode"] = { auto = true, always = true, off = true },
-				["agent.effort"] = { low = true, medium = true, high = true, xhigh = true, max = true },
+				["agent.effort"] = { off = true, minimal = true, low = true, medium = true, high = true, xhigh = true, max = true },
 			}
 			if choices[path] and not choices[path][command.value] then error("Unsupported setting choice", 0) end
 			local ranges = { ["ui.fontScale"] = { 0.85, 1.4 }, ["agent.temperature"] = { 0, 2 },

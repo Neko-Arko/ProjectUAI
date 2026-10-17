@@ -33,7 +33,7 @@ local MATRIX = {
 	{ "azure-foundry", "https://YOUR-RESOURCE.openai.azure.com/openai/v1", "openai", "api-key" },
 	{ "anthropic-messages", "https://api.anthropic.com/v1", "anthropic", "x-api-key" },
 	{ "anthropic", "https://api.anthropic.com/v1", "openai", "x-api-key" },
-	{ "google", "https://generativelanguage.googleapis.com/v1beta/openai", "openai", "bearer" },
+	{ "google", "https://generativelanguage.googleapis.com/v1beta", "gemini", "x-goog-api-key" },
 	{ "groq", "https://api.groq.com/openai/v1", "openai", "bearer" },
 	{ "deepseek", "https://api.deepseek.com/v1", "openai", "bearer" },
 	{ "together", "https://api.together.xyz/v1", "openai", "bearer" },
@@ -62,6 +62,8 @@ end)
 for _, row in ipairs(MATRIX) do
 	case(row[1] .. " discovers, calls tools and replays results over JSON/SSE", function()
 		local f = F.new(); local record = recordFor(f, row[1]); local native = row[3] == "anthropic"
+		local gemini = row[3] == "gemini"
+		if gemini then record.model = "fixture-model" end
 		local posts, seenBodies = 0, {}
 		check("preset wire/auth", record.api == row[3] and record.authStyle == row[4])
 		f.h.http.handler = function(entry)
@@ -75,14 +77,19 @@ for _, row in ipairs(MATRIX) do
 				check("model discovery route", entry.url == row[2] .. "/models" .. (row[5] or ""))
 				return { StatusCode = 200, Body = f.h.json.encode({ data = { { id = record.model }, { id = "embedding-fixture" } } }) }
 			end
-			check("completion route", entry.url == row[2] .. (native and "/messages" or "/chat/completions") .. (row[5] or ""))
+			local route = gemini and ("/models/fixture-model:" .. (posts == 0 and "generateContent?alt=json" or "streamGenerateContent?alt=sse"))
+				or native and "/messages" or "/chat/completions"
+			check("completion route", entry.url == row[2] .. route .. (row[5] or ""))
 			posts = posts + 1
 			local body = f.h.json.decode(entry.body); seenBodies[posts] = body
-			check("model/deployment selection", row[1] == "azure" and body.model == nil or row[1] ~= "azure" and body.model == record.model)
-			check("effective Accept header", header(entry.headers, "Accept") == ((row[1] == "zen" or row[1] == "opencode-go") and "*/*" or (body.stream and "text/event-stream" or "application/json")))
+			check("model/deployment selection", (row[1] == "azure" or gemini) and body.model == nil or row[1] ~= "azure" and body.model == record.model)
+			check("effective Accept header", header(entry.headers, "Accept") == ((row[1] == "zen" or row[1] == "opencode-go") and "*/*" or ((body.stream or gemini and posts > 1) and "text/event-stream" or "application/json")))
 			check("tools reach the server", type(body.tools) == "table" and #body.tools > 0)
 			if row[1] == "ollama" then check("Ollama avoids unsupported defaults", body.tool_choice == nil and body.parallel_tool_calls == nil) end
 			if posts == 1 then
+				if gemini then return { StatusCode = 200, Body = f.h.json.encode({ modelVersion = record.model, candidates = { {
+					content = { role = "model", parts = { { text = "using a tool" }, { functionCall = { id = "call-fixture", name = "fixture_tool", args = { value = row[1] } }, thoughtSignature = "fixture-signature" } } },
+					finishReason = "STOP" } }, usageMetadata = { promptTokenCount = 17, candidatesTokenCount = 8 } }) } end
 				if native then
 					return { StatusCode = 200, Body = f.h.json.encode({ type = "message", role = "assistant", id = "fixture-message", model = record.model,
 						content = { { type = "text", text = "using a tool" }, { type = "tool_use", id = "call-fixture", name = "fixture_tool", input = { value = row[1] } } },
@@ -97,7 +104,10 @@ for _, row in ipairs(MATRIX) do
 			check("tool result retained on the next request", has(entry.body, "fixture result") and has(entry.body, "call-fixture"))
 			local chunks = {}
 			local function event(value) chunks[#chunks + 1] = "data: " .. f.h.json.encode(value) .. "\r\n\r\n" end
-			if native then
+			if gemini then
+				event({ candidates = { { content = { parts = { { text = "fixture reasoning", thought = true }, { text = "finished " .. row[1] } } }, finishReason = "STOP" } },
+					usageMetadata = { promptTokenCount = 20, candidatesTokenCount = 9 } })
+			elseif native then
 				event({ type = "message_start", message = { id = "final", model = record.model, usage = { input_tokens = 20, output_tokens = 0 } } })
 				event({ type = "content_block_start", index = 0, content_block = { type = "text", text = "" } })
 				event({ type = "content_block_delta", index = 0, delta = { type = "text_delta", text = "finished " .. row[1] } })
@@ -118,7 +128,8 @@ for _, row in ipairs(MATRIX) do
 		local call = first.toolCalls[1]
 		check("tool name/id/arguments survive", call.id == "call-fixture" and call["function"].name == "fixture_tool" and f.h.json.decode(call["function"].arguments).value == row[1])
 		local final, finalError = complete(f, record, { messages = { { role = "user", content = "use tool" },
-			{ role = "assistant", content = first.content, toolCalls = first.toolCalls }, { role = "tool", tool_call_id = call.id, content = "fixture result" } },
+			{ role = "assistant", content = first.content, toolCalls = first.toolCalls, geminiParts = first.geminiParts, geminiScope = first.geminiScope },
+			{ role = "tool", tool_call_id = call.id, content = "fixture result" } },
 			tools = TOOLS, stream = true, maxTokens = 256 })
 		check("SSE completion succeeded: " .. tostring(finalError), final ~= nil and final.content == "finished " .. row[1] and final.finish == "stop")
 		check("usage and streaming retained", final.streamed and final.usage.completion_tokens == 9)

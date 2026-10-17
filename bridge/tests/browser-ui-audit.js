@@ -6,6 +6,7 @@ const path = require('node:path');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const { startBridge } = require('./helpers/bridge');
 const { makePng } = require('./helpers/images');
+const { navigation } = require('./helpers/browser-ui');
 
 function rgb(value) {
   if (value.startsWith('#')) {
@@ -72,12 +73,7 @@ function contrast(foreground, background) {
       if (receiptDelay) await new Promise(resolve => setTimeout(resolve, receiptDelay));
       return route.fulfill({ json: { state: 'completed', result: error ? { ok: false, error, uncertain } : { ok: true, data: { ok: true } } } });
     });
-    const navigate = async name => {
-      // The resize event may arrive after setViewportSize resolves. The drawer
-      // class records the user's mobile intent even while aria-expanded catches up.
-      if (page.viewportSize().width <= 768 && !await page.locator('body').evaluate(node => node.classList.contains('sidebar-open'))) await page.locator('#sidebarToggle').click();
-      await page.locator(`#sidebar [data-page="${name}"]`).first().click();
-    };
+    const { navigate, openSidebar, openWorkspace } = navigation(page);
     const screenshot = async name => {
       if (!process.env.UAI_SCREENSHOTS) return;
       fs.mkdirSync(process.env.UAI_SCREENSHOTS, { recursive: true });
@@ -194,16 +190,20 @@ function contrast(foreground, background) {
     state.questions = [{ id: 'combined-question', question: 'Which garden should be changed?', options: ['Small garden', 'Large garden'] }];
     await push();
     if (!await page.locator('#taskStrip details').evaluate(node => node.open)) await page.locator('#taskStrip summary').click();
-    await page.locator('#transcript').evaluate(node => { node.scrollTop = 0; node.dispatchEvent(new Event('scroll')); });
-    const combinedTranscript = await bounds('#transcript'), combinedLatest = await bounds('#latest'), questions = await bounds('#questions');
-    assert.ok(combinedTranscript.height >= 64, 'combined strips must leave a real transcript scrollport');
-    assert.ok(combinedLatest.top >= combinedTranscript.top && combinedLatest.bottom <= combinedTranscript.bottom,
-      'latest must stay inside the transcript when tasks, questions and attachments coexist');
-    assert.ok(questions.height >= 64 && questions.top >= combinedTranscript.bottom - 1, 'questions must not overlap the transcript');
-    assert.equal(await page.locator('#chatPage').evaluate(node => getComputedStyle(node).overflowY), 'auto');
-    await page.locator('#chatPage').evaluate(node => { node.scrollTop = node.scrollHeight; });
-    await withinViewport('#send', 'Send remains reachable in the combined short-screen state');
-    await screenshot('bridge-audit-combined');
+    for (const size of [{ width: 844, height: 390 }, { width: 320, height: 480 }]) {
+      await page.setViewportSize(size);
+      await page.locator('#chatPage').evaluate(node => { node.scrollTop = 0; });
+      await page.locator('#transcript').evaluate(node => { node.scrollTop = 0; node.dispatchEvent(new Event('scroll')); });
+      const combinedTranscript = await bounds('#transcript'), combinedLatest = await bounds('#latest'), questions = await bounds('#questions'), combinedComposer = await bounds('#composer');
+      assert.ok(combinedTranscript.height >= 64, 'combined strips must leave a real transcript scrollport at ' + size.width);
+      assert.ok(combinedLatest.top >= combinedTranscript.top && combinedLatest.bottom <= combinedTranscript.bottom && combinedLatest.bottom <= combinedComposer.top,
+        'latest must stay inside the transcript and above the composer when tasks, questions and attachments coexist at ' + size.width);
+      assert.ok(questions.height >= 64 && questions.top >= combinedTranscript.bottom - 1, 'questions must not overlap the transcript');
+      assert.equal(await page.locator('#chatPage').evaluate(node => getComputedStyle(node).overflowY), 'auto');
+      await page.locator('#chatPage').evaluate(node => { node.scrollTop = node.scrollHeight; });
+      await withinViewport('#send', 'Send remains reachable in the combined short-screen state at ' + size.width);
+      await screenshot('bridge-audit-combined-' + size.width);
+    }
     state.todos = []; state.questions = []; await push();
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.locator('#input').fill('');
@@ -222,7 +222,7 @@ function contrast(foreground, background) {
     await page.locator('[data-focus-key="permission:readonly"]').click(); state.permissions.mode = 'readonly'; await push();
     assert.equal(await page.locator('[data-focus-key="permission:readonly"]').getAttribute('aria-pressed'), 'true');
     assert.equal(await activeKey(), 'permission:readonly');
-    await page.getByText('Agent behavior', { exact: true }).click();
+    await page.locator('#settings-tab-agent').click();
     const instructions = page.locator('[data-setting="agent.customInstructions"]');
     await instructions.fill('An unfinished instruction'); await instructions.evaluate(node => node.setSelectionRange(3, 11));
     state.usage.total += 100; await push();
@@ -230,6 +230,7 @@ function contrast(foreground, background) {
     assert.deepEqual(await instructions.evaluate(node => ({ focused: document.activeElement === node, start: node.selectionStart, end: node.selectionEnd })),
       { focused: true, start: 3, end: 11 }, 'live state updates must preserve active setting edits');
     // A deferred refresh must not remove a button between pointerdown and click.
+    await page.locator('#settings-tab-general').click();
     const permissionRequest = requestFor('permission-mode');
     const permissionButton = page.locator('[data-focus-key="permission:ask"]');
     await permissionButton.scrollIntoViewIfNeeded();
@@ -288,8 +289,10 @@ function contrast(foreground, background) {
     assert.equal(await page.evaluate(() => document.activeElement.dataset.model), 'alternate-model');
     await closeModal();
 
+    await page.locator('#headerMenu summary').click();
     await page.locator('#clear').click();
     assert.equal(await page.locator('#clear').getAttribute('aria-label'), 'Confirm clear', 'armed actions must expose their confirmation label');
+    await page.locator('#headerMenu summary').click();
 
     // Long content should wrap inside cards, dialogs and independently scrolling lists.
     state.providers[0].baseUrl = 'https://example.test/api/deployments/' + 'deployment'.repeat(18) + '/chat/completions';
@@ -304,7 +307,7 @@ function contrast(foreground, background) {
         assert.ok(panel.scrollWidth <= panel.clientWidth + 1, name + ' long content must not overflow at ' + width + 'px');
         assert.equal(await page.locator('#panel .card').evaluateAll(nodes => nodes.every(node => node.scrollWidth <= node.clientWidth + 1)), true);
       }
-      await page.locator('#sidebarToggle').click(); await page.locator('.thread-menu').click();
+      await openSidebar(); await page.locator('.thread-menu').click();
       const title = await bounds('#modalTitle'), close = await bounds('#modalClose'), modal = await bounds('#modal');
       assert.ok(title.scrollWidth <= title.clientWidth + 1 && title.right <= close.left + 1, 'long dialog title must leave room for Close');
       assert.ok(modal.scrollWidth <= modal.clientWidth + 1, 'long dialog title must not widen the modal');
@@ -329,7 +332,7 @@ function contrast(foreground, background) {
       const colors = await page.locator('.copy-code').last().evaluate(node => ({ foreground: getComputedStyle(node).color, background: getComputedStyle(node).backgroundColor }));
       assert.ok(contrast(colors.foreground, colors.background) >= 4.5, codeTheme + ' code Copy hover must be readable in ' + theme + ' browser theme');
     }
-    await navigate('settings'); await page.getByText('Workspace appearance', { exact: true }).click();
+    await navigate('settings'); await page.locator('#settings-tab-appearance').click();
     const saveError = 'Fixture: this change could not be saved.';
     commandError = saveError; await page.locator('[data-setting="ui.density"]').selectOption('compact');
     await page.waitForFunction(() => document.querySelector('.setting[data-state=error] .save-status')?.textContent.includes('could not be saved'));
@@ -357,7 +360,7 @@ function contrast(foreground, background) {
 
     // Choosing a conversation from a panel must close mobile navigation and open Chat.
     const threadRequest = requestFor('thread');
-    await page.locator('#sidebarToggle').click(); await page.locator('.thread > button').first().click();
+    await openSidebar(); await page.locator('.thread > button').first().click();
     assert.equal((await threadRequest).postDataJSON().id, 'audit');
     await page.waitForFunction(() => document.body.dataset.page === 'chat');
     assert.equal(await page.locator('#sidebarToggle').getAttribute('aria-expanded'), 'false');
@@ -386,8 +389,8 @@ function contrast(foreground, background) {
       if (kind === 'provider') { await navigate('providers'); await page.getByRole('button', { name: 'Add provider', exact: true }).click(); }
       if (kind === 'model') { await navigate('chat'); await page.locator('#modelButton').click(); }
       if (kind === 'options') { await navigate('chat'); await page.locator('#options').click(); }
-      if (kind === 'thread') { if (page.viewportSize().width <= 768) await page.locator('#sidebarToggle').click(); await page.locator('.thread-menu').click(); }
-      if (kind === 'import') { await navigate('settings'); await page.getByRole('button', { name: 'Import full config', exact: true }).click(); }
+      if (kind === 'thread') { await openSidebar(); await page.locator('.thread-menu').click(); }
+      if (kind === 'import') { await navigate('settings'); await page.locator('#settings-tab-data').click(); await page.getByRole('button', { name: 'Import full config', exact: true }).click(); }
       if (kind === 'tool') { await navigate('tools'); await page.getByRole('button', { name: 'Run…', exact: true }).click(); }
     };
     for (const size of [{ width: 1440, height: 960 }, { width: 390, height: 844 }, { width: 320, height: 480 }, { width: 844, height: 390 }]) {
@@ -407,11 +410,11 @@ function contrast(foreground, background) {
       }
     }
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.locator('#sidebarToggle').click();
+    await openWorkspace();
     assert.equal(await page.locator('.more-nav nav button').first().evaluate(node => parseFloat(getComputedStyle(node).fontSize)), 12, 'game font scaling must not enlarge mobile navigation');
     assert.ok(await page.locator('.more-nav nav button').first().evaluate(node => node.getBoundingClientRect().height) >= 38, 'compact labels keep usable touch targets');
     await screenshot('bridge-310-mobile-sidebar');await page.locator('#closeSidebar').click();
-    await navigate('settings');await page.getByText('Workspace appearance', { exact: true }).click();
+    await navigate('settings');await page.locator('#settings-tab-appearance').click();
     assert.equal(await page.locator('[data-setting="ui.reduceMotion"]').count(), 0, 'the script animation setting is no longer exposed');
     assert.equal(await page.locator('[data-setting="bridge.requestTimeout"]').count(), 0, 'legacy connection snapshots cannot reintroduce the timeout setting');
     await openDialog('provider');
@@ -428,7 +431,7 @@ function contrast(foreground, background) {
     await closeModal();await openDialog('model');
     await page.waitForTimeout(850);receiptDelay = 0;
     assert.equal(commandCount, before + 1, 'a pending form submits once');
-    assert.equal(await page.locator('#modalTitle').textContent(), 'Models', 'an old save cannot dismiss a replacement modal');
+    assert.equal(await page.locator('#modalTitle').textContent(), 'Models & reasoning', 'an old save cannot dismiss a replacement modal');
     assert.equal(await page.locator('#modal').evaluate(node => node.open), true);
     await closeModal();
     assert.equal(await page.evaluate(() => document.activeElement.id), 'modelButton', 'closing restores the original dialog invoker');

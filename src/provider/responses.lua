@@ -230,9 +230,9 @@ return function(env)
 		local ceiling = tonumber(request.outputCeiling)
 		if ceiling and ceiling >= 1 and ceiling < wanted then wanted = math.floor(ceiling) end
 		if wanted > 0 then body.max_output_tokens = wanted end
-		if request.temperature ~= nil then body.temperature = request.temperature end
 		for key, value in pairs(record.params or {}) do body[key] = value end
 		for key, value in pairs(request.extra or {}) do body[key] = value end
+		env.require("provider/sampling").apply(record, request, body, { defaultOmit = true })
 		return body
 	end
 
@@ -448,6 +448,7 @@ return function(env)
 	end
 
 	function M.complete(record, request, handoff)
+		local owns = handoff and handoff.owns or env.require("provider/sampling").owner(record)
 		local problem = registry.protocolProblem(record)
 		if problem then return nil, problem end
 		request = util.copy(request or {})
@@ -472,7 +473,7 @@ return function(env)
 		local scope = registry.compatibilityKey(record)
 		local attemptsAllowed = request.attempts or config.get("agent.retries", 3)
 		local function fire()
-			if registry.compatibilityKey(record) ~= scope then return nil, "aborted" end
+			if not owns() or registry.compatibilityKey(record) ~= scope then return nil, "aborted" end
 			local imageRequest = env.require("runtime/images").hasReferences(request.messages)
 			return http.send({
 				relay = env.require("net/transport").shouldRelay(imageRequest), sessionId = request.sessionId,
@@ -494,6 +495,11 @@ return function(env)
 			res, err = fire()
 		end
 		if request.aborted and request.aborted() then return nil, "aborted" end
+		if not http.terminal(err) and env.require("provider/sampling").repair(record, body, res,
+			env.require("provider/openai").errorText(res, err), scope, owns) then
+			if request.onRetry then request.onRetry({ attempt = 1, attempts = 2, wait = 0, reason = "omitted unsupported temperature", status = res.status }) end
+			res, err = fire()
+		end
 		if not res or not res.ok then
 			local message = env.require("provider/openai").errorText(res, err)
 			registry.markFail(record, message)

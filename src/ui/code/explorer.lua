@@ -17,7 +17,7 @@ return function(env)
 	local M = {}
 	function M.new(parent, navigate)
 		local root, surface, surfaceScroll = common.surface(parent, { name = "NativeExplorer", size = UDim2.fromScale(1, 1), clip = true },
-			function() return common.barHeight() * 3 + theme.text.caption.height * 2 + theme.space.sm * 2 + common.controlHeight() * 3 end)
+			function() return common.barHeight() * 4 + theme.text.caption.height * 2 + theme.space.sm * 2 + common.controlHeight() * 3 end)
 		local view = explorer.view
 		view.pages, view.section = view.pages or {}, view.section or "properties"
 		view.root = view.root or refs.id(game)
@@ -26,11 +26,15 @@ return function(env)
 		local detailHost = P.frame(root, { name = "Inspector", clip = true })
 		local treeBar, detailBar = common.toolbar(treeHost), common.toolbar(detailHost)
 		local treeList, propertyList, refresh, layout, refreshProperties, observerOff, primary, menuButton
+		local parentButton, filterButton, clearSearchButton, multiButton, clearSelectionButton, subtreeButton
 		local detailSnapshot, selectedCopy, busy = nil, {}, false
 		local detailSelection, detailParents, sourceGeneration = nil, {}, 0
 		local searchGeneration, debounceGeneration = 0, 0
 		local dirtyBranches, selectingRow = {}, false
 		local search, changingSearch
+		local function searchRequested()
+			return util.trim(store.workspace.explorerQuery or "") ~= "" or (view.class and view.class ~= "") or (view.tag and view.tag ~= "")
+		end
 		local function setSearchText(text)
 			changingSearch = true
 			if search and search.get() ~= text then search.set(text) end
@@ -40,8 +44,9 @@ return function(env)
 		local function clearSearch()
 			searchGeneration, debounceGeneration = searchGeneration + 1, debounceGeneration + 1
 			if view.query then explorer.cancelQuery(view.query.queryId) end
-			view.query, view.class, view.tag, view.searchRoot, view.error, busy = nil, nil, nil, nil, nil, false
+			view.query, view.class, view.tag, view.searchRoot, view.error, view.pattern, busy = nil, nil, nil, nil, nil, false, false
 			setSearchText("")
+			store.preference("explorerQuery", "")
 		end
 		local function held(name)
 			local ok, down = pcall(function() return env.uis:IsKeyDown(Enum.KeyCode[name]) end)
@@ -84,6 +89,24 @@ return function(env)
 				if not handle.alive then return end
 				reveal(key); view.detail = true; refresh(); refreshProperties(); layout(); treeList.focusKey(key)
 			end))
+		end
+		local function navigateRoot(key)
+			view.root, view.detail = key, false
+			clearSearch(); page(key); refresh(); layout()
+		end
+		local function searchOptions(id)
+			forms.form("Search objects", {
+				{ key = "name", label = "Name", default = store.workspace.explorerQuery },
+				{ key = "class", label = "Class (optional)", default = view.class },
+				{ key = "tag", label = "Tag (optional)", default = view.tag },
+				{ key = "scope", label = "Scope", type = "choice", choices = { "Current root", "Selected subtree", "Game" }, default = "Current root" },
+				{ key = "pattern", label = "Use Lua pattern", type = "boolean", default = view.pattern },
+			}, function(data)
+				if data.scope == "Selected subtree" and (not id or not refs.resolve(id)) then return nil, "Select an object before searching its subtree." end
+				view.class, view.tag, view.pattern = data.class, data.tag, data.pattern
+				view.searchRoot = data.scope == "Selected subtree" and id or data.scope == "Game" and refs.id(game) or view.root
+				store.preference("explorerQuery", data.name); handle.search(data.name); return true
+			end, { key = "explorer-search" })
 		end
 		local function selectedInfo(snapshot, parents)
 			local valid, why = explorer.validateSelection(snapshot)
@@ -146,16 +169,13 @@ return function(env)
 				elseif action == "status" then overlay.toast(status.Text, "info", 5)
 				elseif util.startsWith(action, "section:") then view.section, view.detail = action:sub(9), true; refreshProperties(); layout()
 				elseif action == "multi" then explorer.setSelectionMode(explorer.selectionMode == "multiple" and "replace" or "multiple"); view.selectMode = explorer.selectionMode == "multiple"; refresh()
-				elseif action == "game" or action == "bookmarks" or action == "nil" then view.root = action == "game" and refs.id(game) or action; clearSearch(); page(view.root); view.detail = false; refresh(); layout()
-				elseif action == "search" then forms.form("Search objects", { { key = "name", label = "Name", default = store.workspace.explorerQuery }, { key = "class", label = "Class (optional)", default = view.class }, { key = "tag", label = "Tag (optional)", default = view.tag }, { key = "scope", label = "Scope", type = "choice", choices = { "Current root", "Selected subtree", "Game" } }, { key = "pattern", label = "Use Lua pattern", type = "boolean", default = view.pattern } }, function(data)
-					view.class, view.tag, view.pattern = data.class, data.tag, data.pattern; view.searchRoot = data.scope == "Selected subtree" and id or data.scope == "Game" and refs.id(game) or view.root
-					store.preference("explorerQuery", data.name); handle.search(data.name); return true
-				end, { key = "explorer-search" })
+				elseif action == "game" or action == "bookmarks" or action == "nil" then navigateRoot(action == "game" and refs.id(game) or action)
+				elseif action == "search" then searchOptions(id)
 				elseif action == "pick" then pick()
 				elseif action == "reference" then common.copy(id)
 				elseif action == "path" then common.copy(refs.describe(object).displayPath)
 				elseif action == "bookmark" or action == "unbookmark" then common.message(explorer.bookmark(id, action == "unbookmark"))
-				elseif action == "parent" then if object.Parent then view.root = refs.id(object.Parent); clearSearch(); view.detail = false; page(view.root); refresh(); layout() end
+				elseif action == "parent" then if object.Parent then navigateRoot(refs.id(object.Parent)) end
 				elseif action == "source" or action == "decompile" or action == "refreshSource" then chooseSource(id, action == "decompile", action == "refreshSource")
 				elseif action == "revealPath" then reveal(id); refresh(); treeList.focusKey(id)
 				elseif action == "remotes" then if object:IsA("RemoteEvent") or object:IsA("RemoteFunction") or object.ClassName == "UnreliableRemoteEvent" then
@@ -178,8 +198,16 @@ return function(env)
 			end)
 		end
 		primary = treeBar.add("Game roots", function(button)
-			common.menu(button, "Hierarchy root", { { label = "Game", value = refs.id(game) }, { label = "Bookmarks", value = "bookmarks" }, { label = "Nil objects", value = "nil" } }, function(key) view.root, view.detail = key, false; clearSearch(); page(key); refresh(); layout() end)
-		end, { flex = true })
+			local options = { { label = "Game", value = refs.id(game) }, { label = "Bookmarks", value = "bookmarks" }, { label = "Nil objects", value = "nil" } }
+			local chain, object = {}, refs.resolve(view.searchRoot or view.root)
+			while object and object ~= game and #chain < 64 do chain[#chain + 1] = { label = object.Name, value = refs.id(object) }; object = object.Parent end
+			for index = #chain, 1, -1 do options[#options + 1] = chain[index] end
+			common.menu(button, "Hierarchy root and ancestors", options, navigateRoot)
+		end, { flex = true, name = "ExplorerRoot" })
+		parentButton = treeBar.add("Up", function()
+			local object = refs.resolve(view.searchRoot or view.root)
+			if object and object.Parent then navigateRoot(refs.id(object.Parent)) end
+		end, { name = "ExplorerParent", tight = true })
 		treeBar.add("Pick", pick, { name = "PickWorldObject", tight = true })
 		treeBar.add("Refresh", function() view.pages = {}; if view.query then handle.search(store.workspace.explorerQuery) else page(view.root); refresh() end end, { tight = true })
 		menuButton = treeBar.add("", actionsMenu, { icon = "ellipsis", iconOnly = true, name = "ExplorerActions" })
@@ -190,6 +218,14 @@ return function(env)
 		end, onSubmit = function(text) debounceGeneration = debounceGeneration + 1; handle.search(text) end })
 		search.shell.Position, search.shell.Size = UDim2.fromOffset(theme.space.sm, common.barHeight() + theme.space.xs), UDim2.new(1, -theme.space.sm * 2, 0, common.barHeight())
 		local top = common.barHeight() * 2 + theme.space.sm
+		local searchBar = common.toolbar(treeHost, { name = "ExplorerSearchActions", divider = false })
+		searchBar.root.Position = UDim2.fromOffset(0, top)
+		filterButton = searchBar.add("Filters", function() searchOptions(explorer.primaryId) end, { name = "ExplorerFilters", tight = true })
+		clearSearchButton = searchBar.add("Clear search", function() clearSearch(); page(view.root); refresh() end, { name = "ExplorerClearSearch", tight = true })
+		multiButton = searchBar.add("Select multiple", function() explorer.setSelectionMode(explorer.selectionMode == "multiple" and "replace" or "multiple") end, { name = "ExplorerSelectMultiple", tight = true })
+		clearSelectionButton = searchBar.add("Clear selection", function() common.message(explorer.select({}, "clear")) end, { name = "ExplorerClearSelection", tight = true })
+		subtreeButton = searchBar.add("Focus subtree", function() if explorer.primaryId then navigateRoot(explorer.primaryId) end end, { name = "ExplorerFocusSubtree", tight = true })
+		top = top + common.barHeight()
 		local inspectWidth = common.buttonWidth("Inspect", { tight = true })
 		status.Position, status.Size = UDim2.fromOffset(common.inset(), top), UDim2.new(1, -common.inset() * 2 - inspectWidth - common.gap(), 0, common.barHeight())
 		local inspectButton = common.button(treeHost, { name = "InspectSelection", text = "Inspect", fill = true, tight = true, onClick = function() view.detail = true; refreshProperties(); layout() end })
@@ -201,7 +237,7 @@ return function(env)
 			icon = function(row) return row.instanceId and row.className or nil end,
 			indent = function(row) return row.depth or 0 end,
 			chevron = function(row)
-				if not row.instanceId or row.hasChildren == false then return nil end
+				if view.query or not row.instanceId or row.hasChildren == false then return nil end
 				return explorer.expanded[row.instanceId] and "open" or "closed"
 			end,
 			onToggle = function(row)
@@ -251,7 +287,7 @@ return function(env)
 				selectingRow = true; local result, why = explorer.select(ids, mode, detailSelection or explorer.state(), { clickedId = key, focusId = key, primaryId = mode ~= "remove" and key or nil, range = range }); selectingRow = false
 				if not common.message(result, why) then return end
 				view.anchorId = explorer.anchorId
-				if not modifier and not range and not view.selectMode then
+				if not view.query and not modifier and not range and not view.selectMode then
 					if row.hasChildren and not explorer.expanded[key] then explorer.expanded[key] = true; page(key)
 					elseif row.hasChildren == false then view.detail = true end
 				end
@@ -270,19 +306,24 @@ return function(env)
 		local identityInset = theme.size.iconLarge + theme.space.sm * 2
 		local identity = P.text(detailHost, { text = "Select an object", role = "caption", truncate = true, position = UDim2.fromOffset(identityInset, common.barHeight() * 2), size = UDim2.new(1, -identityInset - theme.space.sm, 0, theme.text.caption.height * 2 + theme.space.sm) })
 		local detailTop = common.barHeight() * 2 + theme.text.caption.height * 2 + theme.space.sm
-		local propertySearch = P.field(detailHost, { name = "PropertySearch", placeholder = "Filter properties", role = "small", text = view.propertyQuery or "", onChange = function(text) view.propertyQuery = text; refreshProperties() end })
+		local propertySearch = P.field(detailHost, { name = "PropertySearch", placeholder = "Filter field names or values", role = "small", text = view.propertyQuery or "", onChange = function(text) view.propertyQuery = text; refreshProperties() end })
 		propertySearch.shell.Position, propertySearch.shell.Size = UDim2.fromOffset(theme.space.sm, detailTop), UDim2.new(1, -theme.space.sm * 2, 0, common.barHeight())
 		detailTop = detailTop + common.barHeight() + theme.space.sm
 		propertyList = common.virtualList(detailHost, { name = "InstanceProperties", dense = true, position = UDim2.fromOffset(0, detailTop), size = UDim2.new(1, 0, 1, -detailTop), label = function(row) return row.key or row.label end, value = function(row) return row.valueText end, onSelect = function(row, _, button)
 			if not row.key then return end
 			local snapshot, ids = detailSnapshot, util.copy(selectedCopy)
 			local first = row.observations[1].value
-			local options = { { label = "Inspect value", value = "inspect" } }
+			local options = { { label = "Inspect value", value = "inspect" }, { label = "Copy value", value = "copy" }, { label = "Copy field name", value = "copyName" } }
 			if row.writable then options[#options + 1] = { label = "Edit field", value = "edit" } end
 			if row.kind == "attribute" or row.kind == "tag" then options[#options + 1] = { label = "Remove " .. row.kind, value = "remove" } end
 			if first.kind == "Instance" then options[#options + 1] = { label = "Reveal reference", value = "reveal" } end
 			if row.key == "Source" then options[#options + 1] = { label = "Open source", value = "source" } end
 			common.menu(button or sectionButton, row.key, options, function(action)
+				if action == "copyName" then common.copy(row.key); return end
+				if action == "copy" then
+					local lines = {}; for _, observation in ipairs(row.observations) do lines[#lines + 1] = (#ids > 1 and observation.instanceId .. ": " or "") .. values.format(observation.value) end
+					common.copy(table.concat(lines, "\n")); return
+				end
 				if action == "source" then chooseSource(ids[1]); return end
 				if action == "reveal" then common.message(explorer.select({ first.instanceId })); return end
 				if action == "inspect" then local lines = {}; for _, observation in ipairs(row.observations) do lines[#lines + 1] = observation.instanceId .. "\n" .. values.format(observation.value) end; overlay.code({ title = row.key, code = table.concat(lines, "\n\n") }); return end
@@ -323,9 +364,9 @@ return function(env)
 			detailSnapshot = result.snapshotId
 			local items, needle = {}, (view.propertyQuery or ""):lower()
 			for _, row in ipairs(result.items) do
-				if needle == "" or row.key:lower():find(needle, 1, true) then
+				row.valueText = (row.mixed and "Mixed values" or values.format(row.observations[1].value)) .. (row.writable and "" or "  · read only")
+				if needle == "" or row.key:lower():find(needle, 1, true) or row.valueText:lower():find(needle, 1, true) then
 					row.id = row.kind .. ":" .. row.key
-					row.valueText = (row.mixed and "Mixed values" or values.format(row.observations[1].value)) .. (row.writable and "" or "  · read only")
 					items[#items + 1] = row
 				end
 			end
@@ -344,7 +385,7 @@ return function(env)
 					local row = util.copy(item); row.selected = selected[item.instanceId]; row.depth = math.min(depth, 12)
 					row.label = (view.query and item.className and item.className ~= "" and item.name ~= item.className) and (item.name .. "  ·  " .. item.className) or item.name
 					rows[#rows + 1] = row
-					if explorer.expanded[item.instanceId] and not seen[item.instanceId] then
+					if not view.query and explorer.expanded[item.instanceId] and not seen[item.instanceId] then
 						seen[item.instanceId] = true; local branch = view.pages[item.instanceId] or page(item.instanceId)
 						if branch then
 							append(branch.items, depth + 1)
@@ -382,15 +423,27 @@ return function(env)
 			if view.tag and view.tag ~= "" then filters[#filters + 1] = "[tag: " .. view.tag .. "]" end
 			if view.query then filters[#filters + 1] = view.pattern and "[Lua pattern]" or "[Literal]" end
 			if #filters > 0 then status.Text = status.Text .. " " .. table.concat(filters, " ") end
-			primary.setText(view.query and "Search" or (view.root == "nil" and "Nil objects" or view.root == "bookmarks" and "Bookmarks" or "Game"))
+			local currentRoot = view.searchRoot or view.root
+			local object = refs.resolve(currentRoot)
+			local rootName = currentRoot == "nil" and "Nil objects" or currentRoot == "bookmarks" and "Bookmarks" or object == game and "Game" or object and object.Name or "Unavailable root"
+			primary.setText((view.query and "Search: " or "") .. rootName)
+			parentButton.setEnabled(object ~= nil and object.Parent ~= nil)
+			clearSearchButton.instance.Visible = busy or view.query ~= nil or (store.workspace.explorerQuery or "") ~= "" or #filters > 0
+			filterButton.setText(#filters > 0 and "Filters active" or "Filters")
+			multiButton.setText(view.selectMode and "Done selecting" or "Select multiple")
+			clearSelectionButton.instance.Visible = #explorer.selectedIds > 0
+			subtreeButton.instance.Visible = explorer.primaryId ~= nil
 			treeList.set(rows, true)
 		end
 		function handle.search(text, more)
 			if more and busy then return end
 			searchGeneration = searchGeneration + 1; local generation = searchGeneration; busy = true
 			if not more then if view.query then explorer.cancelQuery(view.query.queryId) end; view.error = nil; setSearchText(text or ""); store.preference("explorerQuery", text or ""); view.query = nil end
-			if not more and util.trim(text or "") == "" and (not view.class or view.class == "") and (not view.tag or view.tag == "") then busy = false; page(view.root); refresh(); return end
-			local query = { generation = generation, name = text or store.workspace.explorerQuery, class = view.class, tag = view.tag ~= "" and view.tag or nil, pattern = view.pattern, rootId = view.searchRoot or ((view.root ~= "nil" and view.root ~= "bookmarks") and view.root or refs.id(game)), limit = 100, cursor = more and view.query and view.query.nextCursor or nil }
+			if not more and not searchRequested() then busy, view.searchRoot = false, nil; page(view.root); refresh(); return end
+			local queryRoot = view.searchRoot or view.root
+			if queryRoot == "nil" or queryRoot == "bookmarks" then queryRoot = refs.id(game) end
+			view.searchRoot = queryRoot
+			local query = { generation = generation, name = text or store.workspace.explorerQuery, class = view.class, tag = view.tag ~= "" and view.tag or nil, pattern = view.pattern, rootId = queryRoot, limit = 100, cursor = more and view.query and view.query.nextCursor or nil }
 			clock.spawn(function()
 				local result, why = explorer.query(query, { aborted = function() return not handle.alive or not handle.visible or generation ~= searchGeneration end })
 				if not handle.alive or generation ~= searchGeneration then return end; busy = false
@@ -442,7 +495,7 @@ return function(env)
 		function handle.setVisible(visible)
 			if visible == handle.visible then return end
 			handle.visible = visible; treeList.visible, propertyList.visible = visible, visible; observe()
-			if visible then explorer.reconcileSelection(); page(view.root); if explorer.primaryId then reveal(explorer.primaryId) end; queue(); refresh(); refreshProperties(); layout()
+			if visible then explorer.reconcileSelection(); page(view.root); if searchRequested() then handle.search(store.workspace.explorerQuery) end; queue(); refresh(); refreshProperties(); layout()
 			else searchGeneration = searchGeneration + 1; sourceGeneration = sourceGeneration + 1; sources.cancel(handle); busy = false; env.require("ui/code/world_picker").stop() end
 			divider.root.Visible = visible and root.AbsoluteSize.X >= common.pixels(620)
 		end
@@ -455,9 +508,10 @@ return function(env)
 		function handle.destroy() if cleanup() then surface:Destroy() end end
 		surface.Destroying:Connect(cleanup)
 		handle.list, handle.more, handle.refresh = treeList, actionsMenu, function() refresh(); refreshProperties() end
-		if explorer.primaryId then reveal(explorer.primaryId) end
+		if explorer.primaryId and not view.pages[view.root] and not view.query and not searchRequested() then reveal(explorer.primaryId) end
 		if not view.pages[view.root] then page(view.root) end
 		refresh(); refreshProperties(); observe(); layout(); treeList.root.CanvasPosition = Vector2.new(0, view.y or 0)
+		if searchRequested() then handle.search(store.workspace.explorerQuery) end
 		return handle
 	end
 	return M
