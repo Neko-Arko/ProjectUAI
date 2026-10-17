@@ -215,10 +215,6 @@ return function(env)
 			end
 		end
 		local openai = env.require("provider/openai")
-		local toolCeiling = openai.toolCeiling(record)
-		if toolCeiling and #tools > toolCeiling then
-			tools = openai.capTools(tools, toolCeiling, registry.isOpencode(record))
-		end
 		if #tools > 0 then body.tools = tools end
 		if request.toolChoice ~= nil then body.tool_choice = request.toolChoice end
 		-- The lane has its own spelling and rejections: max_output_tokens rather
@@ -232,6 +228,10 @@ return function(env)
 		if wanted > 0 then body.max_output_tokens = wanted end
 		for key, value in pairs(record.params or {}) do body[key] = value end
 		for key, value in pairs(request.extra or {}) do body[key] = value end
+		local toolCeiling = openai.toolCeiling(record)
+		if type(body.tools) == "table" and #body.tools > toolCeiling then
+			body.tools = openai.capTools(body.tools, toolCeiling, registry.isOpencode(record))
+		end
 		env.require("provider/sampling").apply(record, request, body, { defaultOmit = true })
 		return body
 	end

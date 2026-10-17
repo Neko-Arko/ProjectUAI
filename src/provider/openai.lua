@@ -269,11 +269,6 @@ return function(env)
 			end
 		end
 
-		local toolCeiling = M.toolCeiling(record)
-		if toolCeiling and body.tools and #body.tools > toolCeiling then
-			body.tools = M.capTools(body.tools, toolCeiling, registry.isOpencode(record))
-		end
-
 		local maxTokens = M.cappedMaxTokens(record, request.maxTokens or config.get("agent.maxTokens", 4096))
 		if maxTokens and maxTokens > 0 then body.max_tokens = maxTokens end
 
@@ -290,6 +285,12 @@ return function(env)
 
 		for key, value in pairs(record.params or {}) do body[key] = value end
 		for key, value in pairs(request.extra or {}) do body[key] = value end
+		-- Apply the wire limit after overrides too: the full enabled catalogue
+		-- can exceed Chat Completions' 128 declarations even for unknown models.
+		local toolCeiling = M.toolCeiling(record)
+		if type(body.tools) == "table" and #body.tools > toolCeiling then
+			body.tools = M.capTools(body.tools, toolCeiling, registry.isOpencode(record))
+		end
 		env.require("provider/sampling").apply(record, request, body)
 		M.enforceOutputCeiling(record, body, request.outputCeiling)
 		if not body.stream then body.stream_options = nil end
@@ -540,8 +541,8 @@ return function(env)
 		if registry.get(record.id) == record then registry.save(record, { force = true }) end
 	end
 	function M.toolCeiling(record)
-		if not record then return nil end
-		local documented = traits.maxTools(record.model)
+		if not record then return 128 end
+		local documented = math.min(traits.maxTools(record.model) or 128, 128)
 		local cap = record.toolsCap
 		local scope = registry.compatibilityKey(record)
 		if type(cap) == "table" and cap.model == record.model and (cap.scope == nil or cap.scope == scope) then
@@ -569,6 +570,7 @@ return function(env)
 		local text = tostring(message or ""):lower():gsub("(%d),(%d%d%d)", "%1%2")
 		if not (text:find("tool", 1, true) or text:find("function", 1, true) or text:find("items", 1, true)) then return nil end
 		local patterns = {
+			"tools.-array too long.-maximum length%s*(%d+)",
 			"maximum number of items is%s*(%d+)",
 			"maximum of%s*(%d+)%s*tools",
 			"maximum of%s*(%d+)%s*functions",
