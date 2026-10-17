@@ -1344,7 +1344,7 @@ return function(env)
 				button.LayoutOrder = index
 				button.Selectable = true
 				P.corner(button, theme.radius.md)
-				local focusStroke = P.stroke(button, option.free and theme.color.success or theme.color.accentBorder, option.free and 2 or nil)
+				local focusStroke = P.stroke(button, option.free and P.freeModelOutline(theme.color.surfaceOverlay) or theme.color.accentBorder, option.free and 1 or nil)
 				focusStroke.Transparency = option.free and 0 or 1
 				button:SetAttribute("UAIFreeModel", option.free == true)
 

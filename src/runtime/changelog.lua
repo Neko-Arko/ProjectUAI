@@ -19,6 +19,24 @@ return function(env)
 	local CATEGORY_ORDER = { "added", "improved", "fixed" }
 	local ENTRIES = {
 		{
+			version = "3.3.1",
+			revision = "2026-10-17-native-preview-layout-fixes",
+			date = "October 17, 2026",
+			title = "Live bridge previews and interface fixes",
+			highlights = "Roomier model selection, visible queued messages, readable tool errors and live bridge progress in Roblox.",
+			sections = {
+				{ category = "fixed", label = "Model picker and queued messages", items = {
+					"Temperature settings now live under Models → Options → Temperature, leaving more room for the model list. Free-model outlines are softer in Roblox.",
+					"Queued messages show their count and review action above the composer instead of an empty bar.",
+				} },
+				{ category = "fixed", label = "Bridge progress and tool results", items = {
+					"Roblox receives real text and reasoning previews during bridge inference through short status polls. The browser keeps its live provider stream, and the full reply replaces the preview once.",
+					"Waiting bridge jobs no longer occupy native HTTP connection slots. Concurrent agents leave room for their polls; connected inference has no local overall deadline, while Stop and provider errors remain effective.",
+					"Bridge tool calls use compact status summaries and readable errors, with full inputs and results available when opened.",
+				} },
+			},
+		},
+		{
 			version = "3.3.0",
 			revision = "2026-10-17-mcp-gemini-followups",
 			date = "October 17, 2026",

@@ -1,6 +1,6 @@
 # Provider compatibility and WebSockets
 
-Applies to **3.3.0**, October 17, 2026.
+Applies to **3.3.1**, October 17, 2026.
 
 UAI implements **Chat Completions**, **Anthropic Messages** and **Google Gemini**,
 plus a dedicated **Responses** path for supported OpenCode models. Custom
@@ -39,6 +39,18 @@ UI changes cannot expose tokens before delivery. Native requests still have a
 inference has no overall client or bridge time limit; its individual status polls
 stay short and Stop remains available. Direct/companion timeout settings do not
 shorten Cowork requests, and the old bridge timeout setting is retired.
+
+The bridge reads provider SSE incrementally and pushes received deltas to the
+browser. Updated native clients also receive text/reasoning preview pages from
+the bridge's existing status endpoint, at roughly one-second intervals while the
+request runs. A cursor prevents repeated text after a lost poll. Missing retained
+frames or a preview limit leaves a labelled excerpt until the full final arrives.
+Tool arguments, Gemini signatures and usage are parsed from the authoritative
+completed response. Old bridges and the companion retain their completed-body
+protocol. Buffered responses never acquire artificial typing or preview replay.
+Relay waiters have their own bounded admission count; only actual native HTTP
+calls consume native connection slots. Local bridge calls can wait for an
+available slot within their existing short call budget.
 
 Stream failures preserve the provider's error code and message when supplied,
 including plain-text `event: error` responses. Details are redacted and bounded.

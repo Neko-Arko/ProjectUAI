@@ -1,6 +1,6 @@
-UAI BRIDGE 3.3.0 — WINDOWS 10/11 (64-BIT)
+UAI BRIDGE 3.3.1 — WINDOWS 10/11 (64-BIT)
 
-1. Download UAI-Bridge-3.3.0-win-x64.exe and open it directly.
+1. Download UAI-Bridge-3.3.1-win-x64.exe and open it directly.
 2. If Node.js is missing, choose Download Node.js or use
    the manual installation link. Then click Start Cowork.
 3. Load the updated Project UAI script in Roblox. It connects automatically.

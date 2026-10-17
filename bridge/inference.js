@@ -14,6 +14,8 @@ const RING_BYTES = 4 * 1024 * 1024;
 // The game's HTTP layer rejects any provider body over 8 MiB, so a job that can
 // only produce an undeliverable body is failed fast rather than stalled.
 const DELIVERABLE_MAX = 8 * 1024 * 1024;
+const PREVIEW_PAGE_BYTES = 64 * 1024;
+const PREVIEW_FRAME_BYTES = 8 * 1024;
 
 // Requests live independently of the short executor polls. IDs are never reused
 // during a server lifetime, even after response bodies expire.
@@ -55,9 +57,37 @@ function createInference({ publish = () => {}, maxBytes = 16 * 1024 * 1024,
       status: job.status, providerError, streamed: !!job.streaming, sawText: !!job.sawText, overflow: !!job.ringDropped });
     job.request = undefined;
   }
-  function view(job) {
-    return { id: job.id, state: job.state, error: job.error, status: job.status,
+  function previewPage(job, after) {
+    const preview = { schema: 1, after, cursor: after, frames: [],
+      model: typeof job.model === 'string' ? job.model.slice(0, 300) : undefined };
+    if (after > job.seq || (job.ring[0]?.seq || job.seq + 1) > after + 1) {
+      preview.gap = true; preview.cursor = job.seq; return preview;
+    }
+    let bytes = Buffer.byteLength(JSON.stringify(preview)) + 32;
+    for (const rec of job.ring) {
+      if (rec.seq <= after) continue;
+      if (rec.channel !== 'text' && rec.channel !== 'reasoning') { preview.cursor = rec.seq; continue; }
+      if (preview.frames.length >= 128) break;
+      const raw = Buffer.from(rec.text);
+      // A single oversized provider chunk cannot make a poll unbounded. Keep
+      // its real UTF-8 prefix and mark the preview incomplete until the final.
+      const text = raw.length > PREVIEW_FRAME_BYTES
+        ? new StringDecoder('utf8').write(raw.subarray(0, PREVIEW_FRAME_BYTES)) : rec.text;
+      const frame = { seq: rec.seq, channel: rec.channel, text };
+      const size = Buffer.byteLength(JSON.stringify(frame)) + 1;
+      if (bytes + size > PREVIEW_PAGE_BYTES) break;
+      preview.frames.push(frame); preview.cursor = rec.seq; bytes += size;
+      if (text !== rec.text) { preview.limited = true; break; }
+    }
+    return preview;
+  }
+  function view(job, after) {
+    const result = { id: job.id, state: job.state, error: job.error, status: job.status,
       headers: job.headers, body: job.state === 'completed' ? job.body : undefined };
+    // The final raw response stays byte-for-byte unchanged, without duplicate
+    // preview payload that could push a valid receipt over its delivery limit.
+    if (job.state === 'running' && Number.isSafeInteger(after) && after >= 0) result.preview = previewPage(job, after);
+    return result;
   }
 
   // Push one normalized delta into the bounded ring, assigning its gapless seq.
@@ -248,7 +278,7 @@ function createInference({ publish = () => {}, maxBytes = 16 * 1024 * 1024,
       activeRequestBytes += requestBytes;
       if (job.sessionId) publish({ kind: 'inference:start', id: job.id, sessionId: job.sessionId, model: job.model, startedAt: job.startedAt });
       opencode.request({ body: providerBody, url: url.href, signal: controller.signal,
-        onFrame: frame => { if (job.state === 'running') onFrame(job, frame); } }).then(result => {
+        onFrame: frame => { if (job.state === 'running') { job.streaming = true; onFrame(job, frame); } } }).then(result => {
         if (job.state !== 'running') return;
         job.status = result.status; job.headers = result.headers;
         const bytes = Buffer.byteLength(result.body);
@@ -410,7 +440,7 @@ function createInference({ publish = () => {}, maxBytes = 16 * 1024 * 1024,
     }
   }, Math.min(retentionMs, 10000));
   cleanup.unref();
-  return { instance, start, get: id => jobs.has(id) ? view(jobs.get(id)) : (horizon.has(id) ? { id, state: 'expired', error: 'Request expired and was evicted; do not resubmit' } : null), cancel,
+  return { instance, start, get: (id, after) => jobs.has(id) ? view(jobs.get(id), after) : (horizon.has(id) ? { id, state: 'expired', error: 'Request expired and was evicted; do not resubmit' } : null), cancel,
     pending: () => [...jobs.values()].some(job => job.state === 'running' ||
       (!job.committed && job.finishedAt && Date.now() - job.finishedAt < retentionMs)),
     limits: { maxBytes, deliverableMax: effectiveMax },

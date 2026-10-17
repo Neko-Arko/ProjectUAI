@@ -66,8 +66,9 @@ return function(env)
 		local count = P.text(root, { name = "ModelCount", text = "", role = "caption", color = theme.color.textTertiary,
 			position = UDim2.fromOffset(0, control * 2 + theme.space.sm * 2), size = UDim2.new(1, 0, 0, theme.text.caption.height) })
 		local listTop = control * 2 + theme.space.sm * 3 + theme.text.caption.height
+		local rowGap, listPad = theme.space.xxs, theme.space.xxs
 		local list = P.scroll(root, { name = "ModelScroll", position = UDim2.fromOffset(0, listTop),
-			size = UDim2.new(1, 0, 1, -listTop), gap = theme.space.hair,
+			size = UDim2.new(1, 0, 1, -listTop), gap = rowGap,
 			padding = { left = theme.space.xxs, right = theme.space.sm, top = theme.space.xxs, bottom = theme.space.xxs },
 			bg = theme.color.surface })
 		P.corner(list.instance, theme.radius.md)
@@ -76,8 +77,25 @@ return function(env)
 		local effort = P.column(root, { name = "Section_ReasoningEffort", anchor = Vector2.new(0, 1),
 			position = UDim2.fromScale(0, 1), size = UDim2.new(1, 0, 0, control + theme.text.caption.height + theme.space.sm),
 			gap = theme.space.xs })
-		local temperaturePanel = P.column(root, { name = "Section_Temperature", anchor = Vector2.new(0, 1),
-			position = UDim2.fromScale(0, 1), size = UDim2.new(1, 0, 0, 0), gap = theme.space.xs })
+		local function temperatureMenu(target, record)
+			local id, policy = record.model, sampling.state(record)
+			local automatic = policy.source == "learned" and "This provider rejected temperature; Automatic omits it."
+				or "Use known model and provider support"
+			overlay.menu({ target = target, options = {
+				{ label = "Automatic", value = "auto", selected = policy.override == "auto", detail = automatic },
+				{ label = "Send temperature", value = "send", selected = policy.override == "send" },
+				{ label = "Omit temperature", value = "omit", selected = policy.override == "omit" },
+				{ divider = true }, { label = "Edit shared temperature value", value = "value", detail = tostring(config.get("agent.temperature", 0.4)) },
+			}, onSelect = function(value)
+				if value == "value" then
+					overlay.prompt({ title = "Temperature", description = "Shared value from 0 to 2. Models set to omit do not send it.", value = tostring(config.get("agent.temperature", 0.4)), confirmText = "Save", onConfirm = function(text)
+						local number = tonumber(text)
+						if not number or number ~= number or number < 0 or number > 2 then overlay.toast("Enter a temperature from 0 to 2", "warn", 3); return end
+						config.set("agent.temperature", number); notify()
+					end })
+				else local ok, why = sampling.set(id, value); if not ok then overlay.toast(tostring(why), "warn", 3) else notify() end end
+			end })
+		end
 
 		filterRows = function()
 			local visible = 0
@@ -96,7 +114,6 @@ return function(env)
 
 		renderEffort = function()
 			for _, child in ipairs(effort:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
-			for _, child in ipairs(temperaturePanel:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
 			local record = providers.active()
 			local levels = record and traits.effortLevels(record.model)
 			-- A manual reasoning claim is honored by both request adapters. Offer
@@ -104,7 +121,8 @@ return function(env)
 			if not levels and record and traits.thinkingStyle(record.model) then levels = { "low", "medium", "high", "xhigh", "max" } end
 			local wanted = config.get("agent.effort", "low")
 			local sending = wanted == "off" and "off" or (record and traits.nearestEffort(record.model, wanted) or wanted)
-			P.text(effort, { text = levels and "Reasoning effort (global)" or "No documented effort control", name = levels and "EffortLabel" or "NoEffort",
+			local manual = record and (config.get("agent.forceReasoning", {}) or {})[tostring(record.model):lower()] == true
+			P.text(effort, { text = levels and (manual and "Reasoning effort (global, manual)" or "Reasoning effort (global)") or "No documented effort control", name = levels and "EffortLabel" or "NoEffort",
 				role = "caption", color = theme.color.textTertiary, size = UDim2.new(1, 0, 0, theme.text.caption.height), layoutOrder = 1 })
 			if levels then
 				local strip = P.scroll(effort, { name = "EffortPills", horizontal = true, gap = theme.space.xs,
@@ -120,50 +138,22 @@ return function(env)
 			local height = levels and (control + theme.text.caption.height + theme.space.sm) or 0
 			effort.Visible = levels ~= nil
 			effort.Size = UDim2.new(1, 0, 0, height)
-			temperaturePanel.Visible = record ~= nil
-			local temperatureHeight = record and control + theme.text.caption.height * 2 + theme.space.sm or 0
-			temperaturePanel.Size = UDim2.new(1, 0, 0, temperatureHeight)
-			effort.Position = UDim2.new(0, 0, 1, -temperatureHeight - (height > 0 and theme.space.sm or 0))
-			if record then
-				local id, policy = record.model, sampling.state(record)
-				local mode = ({ auto = "Automatic", send = "Send", omit = "Omit" })[policy.override] or "Automatic"
-				P.button(temperaturePanel, { name = "ModelTemperature", text = "Temperature: " .. mode .. (policy.allowed and (" · " .. tostring(config.get("agent.temperature", 0.4))) or " · omitted"),
-					fill = true, size = "sm", layoutOrder = 1, onClick = function(button)
-						overlay.menu({ target = button.instance, title = "Temperature for " .. id, options = {
-							{ label = "Automatic", value = "auto", selected = policy.override == "auto", detail = "Use known model and provider support" },
-							{ label = "Send temperature", value = "send", selected = policy.override == "send" },
-							{ label = "Omit temperature", value = "omit", selected = policy.override == "omit" },
-							{ divider = true }, { label = "Edit shared temperature value", value = "value" },
-						}, onSelect = function(value)
-							if value == "value" then
-								overlay.prompt({ title = "Temperature", description = "Shared value from 0 to 2. Models set to omit do not send it.", value = tostring(config.get("agent.temperature", 0.4)), confirmText = "Save", onConfirm = function(text)
-									local number = tonumber(text)
-									if not number or number ~= number or number < 0 or number > 2 then overlay.toast("Enter a temperature from 0 to 2", "warn", 3); return end
-									config.set("agent.temperature", number); notify()
-								end })
-							else local ok, why = sampling.set(id, value); if not ok then overlay.toast(tostring(why), "warn", 3) else notify() end end
-						end })
-					end })
-				local description = policy.source == "manual" and "Using your override for this model."
-					or policy.source == "learned" and "This provider rejected temperature; Automatic omits it."
-					or not policy.allowed and "This model does not use a custom temperature."
-					or "Lower values give more consistent responses."
-				P.text(temperaturePanel, { name = "TemperatureSupport", text = description, role = "caption", color = theme.color.textTertiary,
-					wrap = true, size = UDim2.new(1, 0, 0, theme.text.caption.height * 2), layoutOrder = 2 })
-			end
 			if fit then fit() end
 		end
 		fit = function()
 			if modal.closed or fitting then return end
 			fitting = true
-			local height = effort.Size.Y.Offset + temperaturePanel.Size.Y.Offset + (effort.Visible and temperaturePanel.Visible and theme.space.sm or 0)
+			local height = effort.Size.Y.Offset
 			local room = math.max(0, modal.scroll.viewportSize().Y)
 			local footerSpace = height > 0 and height + theme.space.md or 0
-			local natural = math.max(1, visibleCount) * (control + theme.space.hair) + theme.space.sm
-			local compact = room < listTop + footerSpace + control * 2
+			local function rowsHeight(count) return count * control + math.max(0, count - 1) * rowGap + listPad * 2 end
+			local natural = rowsHeight(math.max(1, visibleCount))
+			local compact = room < listTop + footerSpace + rowsHeight(math.min(5, math.max(1, visibleCount)))
 			-- One scrolling owner: short/keyboard layouts scroll the whole body;
 			-- ordinary layouts pin the search and scroll only the catalogue.
-			local listHeight = compact and natural or math.max(control, room - listTop - footerSpace)
+			local available = room - listTop - footerSpace
+			local fittingRows = math.max(1, math.floor((available - listPad * 2 + rowGap) / (control + rowGap)))
+			local listHeight = compact and natural or rowsHeight(fittingRows)
 			local contentHeight = compact and listTop + natural + footerSpace or room
 			modal.content.Size = UDim2.new(1, 0, 0, contentHeight)
 			modal.scroll.instance.ScrollingEnabled = compact
@@ -195,8 +185,8 @@ return function(env)
 					local free = models.isFree(record, id)
 					local button = P.rowButton(list.instance, { name = "Model_" .. id, height = control,
 						selected = selected, bgSelected = theme.color.surfaceActive, radius = theme.radius.sm,
-						stroke = free, strokeColor = free and theme.color.success or nil,
-						strokeFocusColor = free and theme.color.success or nil, strokeWidth = free and 2 or nil,
+						stroke = free, strokeColor = free and P.freeModelOutline(theme.color.surface) or nil,
+						strokeWidth = free and 1 or nil,
 						padding = { x = theme.space.sm }, gap = theme.space.sm, layoutOrder = index,
 						onClick = function() providers.setModel(record.id, id); notify() end })
 					local label = button.label(id, 1, selected and theme.color.text or theme.color.textSecondary, "small")
@@ -232,8 +222,8 @@ return function(env)
 			renderEffort()
 			local chrome = modal.card.Size.Y.Offset - modal.scroll.instance.Size.Y.Offset
 			modalProps.height = math.min(theme.size.modelPickerHeight, chrome + listTop
-				+ math.min(math.max(#rows, 2), 7) * (control + theme.space.hair) + theme.space.lg
-				+ effort.Size.Y.Offset + temperaturePanel.Size.Y.Offset + theme.space.md + (effort.Visible and temperaturePanel.Visible and theme.space.sm or 0))
+				+ math.min(math.max(#rows, 2), 7) * (control + rowGap) + theme.space.lg
+				+ effort.Size.Y.Offset + theme.space.md)
 			modal.relayout()
 			fit()
 		end
@@ -257,7 +247,10 @@ return function(env)
 				local record = providers.active()
 				local id = record and tostring(record.model):lower() or ""
 				local forced = (config.get("agent.forceReasoning", {}) or {})[id] == true
+				local policy = record and sampling.state(record)
+				local mode = policy and (({ auto = "Automatic", send = "Send", omit = "Omit" })[policy.override] or "Automatic")
 				local options = {
+					{ label = "Temperature", value = "temperature", detail = policy and (mode .. (policy.allowed and (" · " .. tostring(config.get("agent.temperature", 0.4))) or " · omitted")) or "Choose a provider first" },
 					{ label = "Add model ID", value = "add", icon = "plus" },
 					{ label = "Reasoning support", value = "reasoning", selected = forced, detail = "Override for the selected model" },
 					{ label = "Context window", value = "context", detail = "Override for the selected model" },
@@ -266,7 +259,8 @@ return function(env)
 				overlay.menu({ target = button.instance, options = options, onSelect = function(value)
 					if value == "manage" then modal.close(); env.require("ui/app").show("providers"); return end
 					if not record then overlay.toast("Add a provider first", "info", 2); return end
-					if value == "add" then
+					if value == "temperature" then temperatureMenu(button.instance, record)
+					elseif value == "add" then
 						overlay.prompt({ title = "Add a model ID", placeholder = "Exact model ID", confirmText = "Add", onConfirm = function(text)
 							local ok, note = models.add(record, text)
 							if ok then providers.setModel(record.id, util.trim(text)) end

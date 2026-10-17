@@ -5,7 +5,7 @@ updated Roblox script automatically. The desktop project is separate from the
 existing bridge and uses its server in `--desktop` mode on **127.0.0.1:28791**.
 Manual terminal startup keeps port 8790 and its existing token workflow.
 
-Download and open **UAI-Bridge-3.3.0-win-x64.exe**, then click
+Download and open **UAI-Bridge-3.3.1-win-x64.exe**, then click
 **Start Cowork**. The window shows connection, Node.js setup, OpenCode and
 update status. It detects Node.js 18+ on your computer. If none is available,
 choose **Download Node.js** or **Install Node manually**, then **Check again**.
@@ -67,7 +67,7 @@ Disable **Find desktop app automatically** to opt out. `bridge.stop()` suspends
 discovery until `bridge.sync()` or a connection-setting change. Unloading releases
 the discovery worker and ignores pending results.
 
-With client 3.3.0, authenticated bridge contact selects Web runtime automatically;
+With client 3.3.1, authenticated bridge contact selects Web runtime automatically;
 disconnecting restores Game for subsequent requests. Stopping or restarting the
 launcher does not resend an inference request. Update the packaged client and
 bridge together when building a desktop distribution.
@@ -91,7 +91,7 @@ cannot start. The original shortcut continues to work. Bridge cache identity
 stays stable across desktop updates. Failed network or integrity checks leave
 the current app usable and retry later.
 
-Desktop 1.0 has no updater, so its users need one manual download of 3.3.0 first.
+Desktop 1.0 has no updater, so its users need one manual download of 3.3.1 first.
 For each future release, publish `desktop-release.json`,
 `UAI-Bridge-<version>-win-x64.exe`, and its adjacent `.sha256` on the same official
 `v<version>` or `desktop-v<version>` GitHub release. The manifest includes the

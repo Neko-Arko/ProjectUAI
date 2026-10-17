@@ -298,39 +298,84 @@ function deadlineHelp(root,message,status){
   const link=el('a','deadline-help','Get help and updates on Discord');link.href='https://discord.gg/9xYyyYuKap';link.target='_blank';link.rel='noopener noreferrer';root.append(link);
 }
 function toolKey(e){return (e.kind?.startsWith('subagent:')?'child:'+e.id+':':'main:')+(e.callId||e.id||'')+':'+(e.name||'');}
-function codeListing(text,label){
+function codeListing(text,label,options={}){
   const listing=el('div','code-block tool-listing'),head=el('div','code-head');
   const copy=button('Copy',()=>copyText(text));
   copy.setAttribute('aria-label','Copy '+label);head.append(el('span',null,label),copy);
-  const pre=el('pre'),code=el('code',null,text);pre.tabIndex=0;pre.setAttribute('aria-label',label);pre.append(code);listing.append(head,pre);return listing;
+  if(options.wrap)listing.classList.add('tool-wrap');
+  const pre=el('pre'),code=el('code',null,options.display??text);pre.tabIndex=0;pre.setAttribute('aria-label',label);pre.append(code);listing.append(head,pre);return listing;
+}
+function toolDetail(label,content,open=false){
+  const detail=el('details','tool-detail');detail.open=open;detail.append(el('summary',null,label),content);return detail;
+}
+function toolExcerpt(value,limit=160){
+  const text=String(value??'').replace(/\s+/g,' ').trim();return text.length>limit?text.slice(0,limit-1)+'…':text;
+}
+function toolTarget(args){
+  if(!args||typeof args!=='object')return 'No input';
+  for(const key of ['path','query','url','target','name','task','command'])if(typeof args[key]==='string'&&args[key].trim())return toolExcerpt(args[key]);
+  for(const key of ['code','source','content','new_text'])if(typeof args[key]==='string'){const lines=args[key].split('\n').length;return lines+' '+(lines===1?'line':'lines')+(key==='code'?' of Luau':' of '+key.replaceAll('_',' '));}
+  const keys=Object.keys(args);return keys.length?keys.length+' input '+(keys.length===1?'field':'fields'):'No input';
+}
+function toolErrorText(event,text){
+  let parsed;try{parsed=JSON.parse(text);}catch{}
+  const candidates=[event.data?.error?.message,event.data?.message,parsed?.error?.message,typeof parsed?.error==='string'?parsed.error:null,parsed?.message];
+  let message=candidates.find(value=>typeof value==='string'&&value.trim());
+  if(!message&&parsed&&typeof parsed==='object')message='The tool reported an error. Open the call to inspect its result.';
+  if(!message){
+    const lines=String(text||event.error||'The tool did not complete.').trim().split(/\r?\n/),kept=[];
+    for(const line of lines){if(kept.length&&/^\s*(?:stack (?:trace|begin)|traceback|at\s|\[C\]:)/i.test(line))break;if(!line.trim()&&kept.length)break;kept.push(line);if(kept.length===3)break;}
+    message=kept.join(' ');
+  }
+  return toolExcerpt(message,420);
+}
+function toolResultSummary(event,text){
+  if(typeof event.summary==='string'&&event.summary.trim())return toolExcerpt(event.summary);
+  let parsed;try{parsed=JSON.parse(text);}catch{}
+  if(parsed&&typeof parsed==='object'){const message=[parsed.message,parsed.summary].find(value=>typeof value==='string'&&value.trim());return toolExcerpt(message||(Array.isArray(parsed)?parsed.length+' items returned':'Result available'));}
+  return /^(done|success|ok)[.!]?$/i.test(text.trim())?'':toolExcerpt(text);
+}
+function toolOutput(text,failed){
+  let parsed;try{parsed=JSON.parse(text);}catch{}
+  if(failed||parsed!==undefined)return codeListing(text,failed?'Full error':'Result',{wrap:true,display:parsed!==undefined?JSON.stringify(parsed,null,2):text});
+  const output=el('div','tool-output'),head=el('div','code-head'),copy=button('Copy',()=>copyText(text));
+  copy.setAttribute('aria-label','Copy Result');head.append(el('span',null,'Result'),copy);
+  const body=el('div','body tool-result-content');body.innerHTML=md(text);output.append(head,body);return output;
 }
 function openTool(e){
-  const wrapper=el('section','tool-call'),node=el('details','tool'),head=el('summary');
+  const wrapper=el('section','tool-call'),node=el('details','tool'),head=el('summary','tool-head');
   node.dataset.status='running';
   const raw=typeof e.arguments==='string'?e.arguments:JSON.stringify(e.arguments||{});
   let args;try{args=JSON.parse(raw);}catch{}
-  const preview=el('span','arguments',args?.path||args?.query||args?.url||raw);
+  const preview=el('span','arguments',args?toolTarget(args):'Input available');
   const verdict=el('small','tool-status','Running');verdict.setAttribute('role','status');
-  head.append(el('strong',null,e.name||'Tool'),preview,verdict);node.append(head);
-  const body=el('div','tool-body');body.append(codeListing(raw,'Arguments'));node.append(body);wrapper.append(node);
+  const duration=el('small','tool-duration'),outcome=el('span','tool-outcome');outcome.hidden=true;
+  head.append(el('strong',null,e.name||'Tool'),verdict,duration,preview,outcome);node.append(head);
+  const body=el('div','tool-body'),input=el('div','tool-input');
+  input.append(codeListing(raw,'Arguments',{wrap:true,display:args!==undefined?JSON.stringify(args,null,2):raw}));
   if(state.settings?.ui?.showToolCode!==false){
     for(const [key,label]of [['code','Luau'],['source','Source'],['content','File contents'],['old_text','Before'],['new_text','After']]){
-      if(typeof args?.[key]==='string')wrapper.append(codeListing(args[key],label));
+      if(typeof args?.[key]==='string'){const listing=codeListing(args[key],label);listing.classList.add('tool-code-input');input.append(listing);}
     }
   }
-  append(wrapper);tools.set(toolKey(e),{node,body,preview,verdict,restored:renderingSnapshot});
+  body.append(toolDetail('Input',input));node.append(body);wrapper.append(node);
+  append(wrapper);tools.set(toolKey(e),{node,body,preview,verdict,duration,outcome,restored:renderingSnapshot});
 }
 function finishTool(e){
   const key=toolKey(e),row=tools.get(key);
   if(!row)return;
   const stopped=e.error==='aborted'||e.data?.status==='aborted',timeout=e.error==='timeout'||e.data?.status==='timeout';
-  const failed=e.kind==='tool:error'||e.ok===false;
-  row.staleNote?.remove();
-  row.node.dataset.status=stopped?'stopped':failed?'failed':'done';
+  const failed=e.kind==='tool:error'||e.ok===false||stopped||timeout||e.denied===true;
+  row.node.dataset.status=stopped?'stopped':timeout?'timeout':e.denied?'declined':failed?'failed':'done';
   row.verdict.textContent=stopped?'Stopped':timeout?'Timed out':e.denied?'Declined':failed?'Failed':'Done';
-  if(Number.isFinite(e.ms))row.verdict.textContent+=' · '+(e.ms<1000?Math.round(e.ms)+' ms':(e.ms/1000).toFixed(1)+' s');
-  row.body.append(codeListing(e.text||e.summary||'(No output)',failed?'Execution details':'Result'));
-  if(failed){row.node.open=true;deadlineHelp(row.body,e.error||e.text,e.status);}
+  if(Number.isFinite(e.ms))row.duration.textContent=e.ms<1000?Math.round(e.ms)+' ms':(e.ms/1000).toFixed(1)+' s';
+  const text=typeof e.text==='string'?e.text:String(e.summary||e.error||(e.data?JSON.stringify(e.data,null,2):'(No output)'));
+  row.outcome.textContent=failed?toolErrorText(e,text):toolResultSummary(e,text);row.outcome.hidden=!row.outcome.textContent;
+  const output=el('div');output.append(toolOutput(text,failed));
+  if(e.data&&typeof e.data==='object')output.append(toolDetail('Result data',codeListing(JSON.stringify(e.data,null,2),'Result data',{wrap:true})));
+  if(e.truncated)output.append(el('p','tool-retention-note','This is the retained excerpt. Ask the agent for a narrower result if you need more.'));
+  if(timeout)deadlineHelp(output,e.error||e.text,e.status);
+  row.body.append(toolDetail(stopped||e.denied?'Details':failed?'Error details':'Result',output,true));
   tools.delete(key);
 }
 function renderEvent(e){
@@ -399,7 +444,7 @@ function apply(e){
     const next=e.state||{};changeSession(next.sessionId);state=next;renderState();
     if(!state.agent?.busy)for(const row of tools.values())if(row.restored){
       row.restored=false;row.node.dataset.status='unknown';row.verdict.textContent='No saved result';
-      row.staleNote=el('p','muted','No result was kept in this transcript.');row.body.append(row.staleNote);
+      row.outcome.textContent='No result was kept in this transcript.';row.outcome.hidden=false;
     }
     return;
   }

@@ -550,6 +550,7 @@ return function(env)
 				aborted = request.aborted,
 				onRetry = request.onRetry,
 				tag = "messages:" .. record.id,
+				onFrame = request.onFrame,
 				-- Same reasoning as the chat adapter: a thinking model emits nothing
 				-- until it answers, so the wall has to outlast the think.
 				timeout = requestTimeout(request),

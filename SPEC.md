@@ -1,8 +1,8 @@
 # Project UAI — contract
 
-Current client release: **3.3.0 — October 17, 2026**.
+Current client release: **3.3.1 — October 17, 2026**.
 
-Bridge and Windows desktop release 3.3.0 use verified automatic GitHub updates.
+Bridge and Windows desktop release 3.3.1 use verified automatic GitHub updates.
 Bridge worker replacement waits for idle work and retains its session token;
 desktop app updates stage for restart with a retained fallback. Desktop detects
 Node.js 18+ or downloads a verified LTS runtime per user instead of bundling Node.
@@ -311,8 +311,8 @@ Measurements expire after ten minutes and on connection/auth changes. Slow or
 failed user responses remove that candidate for subsequent requests; they never
 race or replay the current prompt. Synthetic latency is not a real-request SLA.
 Per-request selections retain the saved `auto`, preserve scoped adapter lessons,
-and cannot override later provider edits. Free model choices have a visible green
-rounded outline in the model picker and provider menus.
+and cannot override later provider edits. Free model choices have a subdued green
+rounded outline in the model picker and provider menus; selection stays distinct.
 Empty startup/import/reset configurations receive this ready provider;
 configured providers and credentials remain intact. Explicit removal stays removed
 for the current session. Public credentials remain masked in the UI. The welcome
@@ -367,8 +367,9 @@ and legend make that scale explicit. Category labels reserve the remaining row
 width, and live refreshes are coalesced and disconnected when the inspector closes.
 
 Native requests no longer apply an executor-specific output ceiling; saved
-`agent.executorReplyCeiling` values are ignored. Genuine socket frames produce
-transient `assistant:preview` events through `agent/stream`, with coalesced 64 KiB
+`agent.executorReplyCeiling` values are ignored. Genuine socket frames and live
+Cowork relay deltas produce transient `assistant:preview` events through
+`agent/stream`, with coalesced 64 KiB
 text/reasoning previews and cancellation. Final text/reasoning replace their
 previews and are retained once; buffered HTTP replies render immediately without
 simulated typing. The prompt requests brief assistant-content updates between
@@ -394,6 +395,8 @@ support is manually enabled for an otherwise unknown model. Provider default
 omits the effort field. Model-specific clamping never rewrites the saved global
 choice. Open controls follow external settings changes and release subscriptions
 when closed. A manual reasoning claim does not establish which levels a provider accepts.
+Temperature policy and its numeric value live under Models → Options → Temperature,
+so the settings do not reserve a permanent block above the model list.
 
 Main and subagent prompts place standing rules before changing environment facts,
 keeping a stable prefix eligible for provider caching without guaranteeing cache
@@ -1418,6 +1421,21 @@ setting is stripped from saved/imported configurations and cannot be edited.
 Individual executor polling calls remain bounded to five seconds; lost receipts
 reuse the original job ID. Stop, unload, changed credentials and actual provider
 failures remain terminal. Providers may impose their own upstream limits.
+
+Updated bridges advertise `capabilities.inferencePreview = {schema:1}`. Native
+Cowork requests with a preview callback poll `/api/inference/<id>?after=<cursor>`
+at the existing roughly one-second cadence. Running receipts return bounded,
+ordered text/reasoning pages from the real provider stream; cursor deduplication
+prevents repeated fragments. Gaps or clipped pages freeze a labelled preview
+until the final result. Completed receipts retain the exact raw provider body,
+without duplicate preview payload. Old bridges and the companion keep their
+existing completed-body exchange. No provider inference is replayed for previews.
+Up to 16 relay waiters are accounted separately from the eight native HTTP
+connection slots. Bridge control and result polls may wait for an available
+native slot within their individual call budget. A timed-out native call still
+owns its slot until it returns; a waiting relay job owns no native slot between
+polls. Local admission failures remain terminal and identify capacity, not a
+provider timeout.
 
 The bridge's protocol, installation, browser workflow and verification are
 documented in [bridge/README.md](bridge/README.md). Executor downloads start with

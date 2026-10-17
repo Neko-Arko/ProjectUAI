@@ -3,7 +3,7 @@
 Use UAI in your browser while Roblox runs your tools and keeps the conversation.
 Run both on the same computer. The [Windows desktop app](../desktop/README.md)
 detects installed Node.js and offers a verified download if needed. Open the
-single **UAI-Bridge-3.3.0-win-x64.exe** download, complete Node setup, click **Start
+single **UAI-Bridge-3.3.1-win-x64.exe** download, complete Node setup, click **Start
 Cowork**, and load the updated UAI script. The browser opens and Roblox connects
 automatically on dedicated port **28791**. No terminal or token copying is needed.
 
@@ -99,7 +99,7 @@ Failed downloads or startup keep a working version. Git checkouts and executor
 download packages are never overwritten; updates live in a per-install user cache.
 
 Publish `dist/bridge-release.json` and `dist/uai-bridge-package.json` on the same
-official `v3.3.0` or `bridge-v3.3.0` GitHub release. Generate them with
+official `v3.3.1` or `bridge-v3.3.1` GitHub release. Generate them with
 `node tools/build_bridge.js` after reviewing final bridge/web inputs, inspect
 the outputs, then run `node tools/build_bridge.js --check` and focused tests.
 Later releases must bump `bridge/release.js` and use the matching release tag.
@@ -112,6 +112,14 @@ and applies it on restart. An old 1.0 desktop ZIP needs one manual upgrade first
 
 ## Working in the browser
 
+- **Streaming is real when the provider supplies it.** Cowork reads incoming SSE
+  chunks and pushes text/reasoning deltas to the browser as they arrive. Roblox
+  also displays those deltas through short status polls, roughly once a second,
+  when both the bridge and script include the native-preview update. Restart the
+  bridge and reload the script to use it. Old bridges, direct executor HTTP and
+  providers that return only a final answer cannot show text before delivery.
+  The installed OpenCode route reads its evolving local response; it cannot
+  expose output that the installed CLI has not returned yet.
 - **Chat** follows the active Roblox conversation. Use the sidebar to find or
   start conversations; draft text and code files stay with their conversation.
   An empty conversation centers the prompt and composer, with quick ideas below.
@@ -125,6 +133,9 @@ and applies it on restart. An old 1.0 desktop ZIP needs one manual upgrade first
   Stop, or a real provider/connection failure. This is permanent, with no timeout
   setting. Individual status polls stay short and reuse the original request ID;
   a stalled poll does not submit the provider request again.
+  Waiting inference jobs do not occupy the native HTTP slots needed for those
+  polls. The bridge cannot remove a provider's own timeout or a tool's execution
+  deadline.
 - **Attach text or code** with the paperclip, drag a file onto the composer, or
   paste long text. Large inputs become verified files that the agent can read.
   Limits: 10 MiB per file/input, 16 text files and 16 MiB per draft.
@@ -237,7 +248,7 @@ short screens with full drafts, long task lists and model names, live question a
 selection updates, dialog errors, keyboard focus, contrast, and forced colors.
 Inspect the saved screenshots as well as checking geometry. These fixtures do not
 replace a live executor check. See the [UI audit](UI_AUDIT.md) for the findings.
-The [3.3.0 verification record](../docs/TESTING_3.3.0.md) records the current
+The [3.3.1 verification record](../docs/TESTING_3.3.1.md) records the current
 bridge release checks; the entire native suite is not part of this pass.
 
 Protocol remains version 2. `/api/hello` advertises optional picture and normalized

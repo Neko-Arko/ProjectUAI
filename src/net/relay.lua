@@ -31,7 +31,7 @@ return function(env)
 			if clock.ms() >= deadline then return nil, "deadline: relay request budget expired" end
 			return call({ url = base .. path, method = method, body = body,
 				headers = { Authorization = "Bearer " .. token }, identity = "none", silent = true,
-				timeout = math.min(5, (deadline - clock.ms()) / 1000), deadlineMs = deadline, aborted = ended })
+				waitForSlot = true, timeout = math.min(5, (deadline - clock.ms()) / 1000), deadlineMs = deadline, aborted = ended })
 		end
 		local cancelled = false
 		local function cancel()
@@ -39,7 +39,7 @@ return function(env)
 			cancelled = true
 			clock.spawn(function()
 				pcall(call, { url = base .. "/api/inference/" .. id, method = "DELETE",
-					headers = { Authorization = "Bearer " .. token }, identity = "none", silent = true, timeout = 2 })
+					headers = { Authorization = "Bearer " .. token }, identity = "none", silent = true, timeout = 2, waitForSlot = true })
 			end)
 		end
 		pending[id] = cancel
@@ -72,6 +72,46 @@ return function(env)
 			end
 			return failure("Web runtime cannot connect. Start the updated bridge/server.js and check its token.")
 		end
+		local capability = type(info.capabilities) == "table" and info.capabilities.inferencePreview
+		local previews = target == "cowork" and type(spec.onFrame) == "function"
+			and type(capability) == "table" and capability.schema == 1
+		local cursor, frozen = 0, false
+		local function integer(value)
+			return type(value) == "number" and value >= 0 and value < 9007199254740992 and value % 1 == 0
+		end
+		local function limitPreview()
+			if frozen then return end
+			frozen = true
+			if not ended() then pcall(spec.onFrame, { uaiPreviewLimited = true }) end
+		end
+		local function feedPreview(page)
+			if not previews or frozen or page == nil then return end
+			if type(page) ~= "table" or page.schema ~= 1 or not integer(page.after) or not integer(page.cursor)
+				or page.after > cursor or page.cursor < page.after or type(page.frames) ~= "table" or #page.frames > 128 then
+				limitPreview(); return
+			end
+			if page.cursor < cursor then return end
+			if page.gap then limitPreview(); return end
+			local previous = page.after
+			-- Validate the complete page before displaying any part. Preview errors
+			-- cannot cancel a paid request or make its authoritative body unusable.
+			for _, frame in ipairs(page.frames) do
+				if type(frame) ~= "table" or not integer(frame.seq) or frame.seq <= previous or frame.seq > page.cursor
+					or (frame.channel ~= "text" and frame.channel ~= "reasoning") or type(frame.text) ~= "string"
+					or #frame.text > 8192 or not util.validUtf8(frame.text) then limitPreview(); return end
+				previous = frame.seq
+			end
+			for _, frame in ipairs(page.frames) do
+				if ended() then return end
+				if frame.seq > cursor then
+					local delta = frame.channel == "text" and { content = frame.text } or { reasoning_content = frame.text }
+					local model = type(page.model) == "string" and #page.model <= 1200 and page.model or nil
+					if not pcall(spec.onFrame, { model = model, choices = { { delta = delta } } }) then limitPreview(); return end
+				end
+			end
+			cursor = page.cursor
+			if page.limited then limitPreview() end
+		end
 		if clock.ms() >= deadline then return failure("Relay request deadline reached before submission.") end
 		local input = { id = id, instance = info.instance, url = spec.url, headers = headers,
 			body = spec.body, sessionId = spec.sessionId }
@@ -84,12 +124,14 @@ return function(env)
 			if not submitted then
 				attempts = attempts + 1
 				response = short("POST", "/api/inference", payload)
-			else response = short("GET", "/api/inference/" .. id) end
+			else response = short("GET", "/api/inference/" .. id .. (previews and not frozen and ("?after=" .. cursor) or "")) end
 			if ended() then cancel(); pending[id] = nil; return nil, "aborted" end
 			if response and response.ok then
 				local job = util.decode(response.body)
 				if type(job) ~= "table" or job.id ~= id then cancel(); return failure("Invalid relay response; inference was not resubmitted.") end
 				submitted = true
+				if job.state == "running" then feedPreview(job.preview) end
+				if ended() then cancel(); pending[id] = nil; return nil, "aborted" end
 				if job.state == "completed" then
 					pending[id] = nil
 					return { status = job.status, headers = job.headers or {}, body = job.body or "", via = via, inferenceId = id }

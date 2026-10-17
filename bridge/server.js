@@ -784,6 +784,7 @@ const server = http.createServer(async (req, res) => {
       });
     } else if (route === '/api/hello' && req.method === 'GET') {
       const capabilities = { browserStream: { schema: 1, replay: true }, agentInbox: { waitHeader: 'X-UAI-Poll-Wait-Ms', maxWaitMs: HOLD_MS } };
+      capabilities.inferencePreview = { schema: 1 };
       capabilities.opencode = opencode.capability();
       capabilities.mcp = mcp.capability();
       if (!LEGACY) capabilities.pictures = { mode: 'provider-image-content', version: 2 };
@@ -805,7 +806,10 @@ const server = http.createServer(async (req, res) => {
       const id = route.slice('/api/inference/'.length);
       if (req.method === 'DELETE') sendJson(res, 200, { cancelled: inference.cancel(id) });
       else if (req.method === 'GET') {
-        const job = inference.get(id);
+        const afterText = url.searchParams.get('after');
+        const after = afterText === null ? undefined : Number(afterText);
+        if (afterText !== null && (!/^\d+$/.test(afterText) || !Number.isSafeInteger(after))) throw badRequest('Invalid inference preview cursor');
+        const job = inference.get(id, after);
         sendJson(res, job ? 200 : 404, job || { error: 'Unknown inference ID; do not resubmit' });
       } else sendJson(res, 405, { error: 'method not allowed' });
     } else if (route === '/api/agent/ack' && post) {

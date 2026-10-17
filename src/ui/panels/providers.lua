@@ -1490,8 +1490,8 @@ return function(env)
 					height = theme.size.rowSmall,
 					padding = { x = theme.space.sm },
 					radius = theme.radius.sm,
-					stroke = free, strokeColor = free and theme.color.success or nil,
-					strokeFocusColor = free and theme.color.success or nil, strokeWidth = free and 2 or nil,
+					stroke = free, strokeColor = free and P.freeModelOutline() or nil,
+					strokeWidth = free and 1 or nil,
 					selected = id == record.model,
 					layoutOrder = 100 + index,
 					onClick = function()

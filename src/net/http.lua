@@ -16,8 +16,8 @@ return function(env)
 	local headerMap = env.require("net/headers")
 
 	local HISTORY_LIMIT = 60
-	local MAX_BODY, MAX_WORKERS = 8 * 1024 * 1024, 8
-	local workers, alive = 0, true
+	local MAX_BODY, MAX_WORKERS, MAX_RELAY_WORKERS = 8 * 1024 * 1024, 8, 16
+	local workers, relayWorkers, alive = 0, 0, true
 	local function aborted(spec)
 		if not alive then return true end
 		if not spec.aborted then return false end
@@ -27,7 +27,7 @@ return function(env)
 		local value = tostring(err or ""):lower()
 		return value == "aborted" or value:find("deadline", 1, true) ~= nil or value:find("timed out", 1, true) ~= nil
 			or value:find("timeout", 1, true) ~= nil or value:find("response_limit:", 1, true) ~= nil or value:find("malformed:", 1, true) ~= nil
-			or value:find("malformed_stream:", 1, true) ~= nil
+			or value:find("malformed_stream:", 1, true) ~= nil or value:find("capacity:", 1, true) ~= nil
 	end
 
 	-- A browser agent for the public web: search engines and CDNs answer 403 to
@@ -265,7 +265,6 @@ return function(env)
 		local started = clock.ms()
 
 		if aborted(spec) then return nil, "aborted", 0 end
-		if workers >= MAX_WORKERS then return nil, "deadline: native HTTP worker limit reached", 0 end
 		local relayEndpoint = spec.relay and env.require("net/transport").endpoint()
 		local deadline = math.min(tonumber(spec.deadlineMs) or math.huge, started + math.max(1, math.min(300, tonumber(spec.timeout) or 120)) * 1000)
 		-- The PC bridge owns the long provider connection. Only its individual
@@ -275,8 +274,26 @@ return function(env)
 			for name in pairs(headers) do if name:lower() == "x-stainless-timeout" then headers[name] = nil end end
 		end
 		if deadline <= started then return nil, "deadline: request budget expired", 0 end
+		-- A relay waiter owns no native connection between status polls. Counting
+		-- it here as well as its short nested requests used to exhaust all eight
+		-- slots with only a few agents, taking the healthy bridge offline.
+		local relayed = spec.relay == true
+		if relayed then
+			if relayWorkers >= MAX_RELAY_WORKERS then return nil, "capacity: local relay request limit reached", 0 end
+		else
+			-- Bridge control and result polls may share a busy host. Wait for an
+			-- actual slot within this call's short budget; never release a slot
+			-- still owned by a native call whose outcome is unknown.
+			if spec.waitForSlot then
+				while workers >= MAX_WORKERS and clock.ms() < deadline and not aborted(spec) do clock.wait(0.05) end
+			end
+			if aborted(spec) then return nil, "aborted", clock.since(started) end
+			if workers >= MAX_WORKERS or clock.ms() >= deadline then
+				return nil, "capacity: native HTTP slots are busy; this call was not dispatched", clock.since(started)
+			end
+		end
 		local pending = { done = false, accepting = true }
-		workers = workers + 1
+		if relayed then relayWorkers = relayWorkers + 1 else workers = workers + 1 end
 		clock.spawn(function()
 			local ok, response, problem = pcall(function()
 				if spec.relay then
@@ -289,7 +306,7 @@ return function(env)
 				end
 				return send(url, method, headers, spec.body, math.max(0.001, (deadline - clock.ms()) / 1000))
 			end)
-			workers = math.max(0, workers - 1)
+			if relayed then relayWorkers = math.max(0, relayWorkers - 1) else workers = math.max(0, workers - 1) end
 			if pending.accepting then
 				-- A successful call normally returns nil for its error. An and/or
 				-- fallback would turn that nil into a failure beside every HTTP 200.
@@ -519,8 +536,9 @@ return function(env)
 	end
 
 	M.terminal = terminal
-	M.limits = { body = MAX_BODY, workers = MAX_WORKERS }
+	M.limits = { body = MAX_BODY, workers = MAX_WORKERS, relayWorkers = MAX_RELAY_WORKERS }
 	function M.workers() return workers end
+	function M.relayWorkers() return relayWorkers end
 	env.require("runtime/dispose").add(function() alive = false; M.changed:clear() end, "native HTTP workers")
 	M.BROWSER_UA = BROWSER_UA
 

@@ -32,6 +32,10 @@ return function(env)
 		function handle.feed(frame)
 			if closed or aborted() then return end
 			local chunk = type(frame) == "table" and frame or util.decode(frame)
+			if type(chunk) == "table" and chunk.uaiPreviewLimited == true then
+				full.content, full.reasoning = true, true
+				flush(); return
+			end
 			if type(chunk) ~= "table" or chunk.error or not assembly.feedChunk(chunk) then return end
 			if type(assembly.model) == "string" and util.trim(assembly.model) ~= "" then model = assembly.model end
 			local priorContent, priorReasoning = content, reasoning

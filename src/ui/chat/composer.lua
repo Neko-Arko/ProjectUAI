@@ -582,8 +582,9 @@ return function(env)
 			onClick = function() if props.onStop then props.onStop() end end,
 		})
 		stopButton.instance.Visible = false
+		-- P.button creates its label from the initial text; queue updates reuse it.
 		local pendingButton = P.button(surface, {
-			name = "PendingMessages", text = "", variant = "ghost", size = "sm", fill = true,
+			name = "PendingMessages", text = "Queued messages", variant = "ghost", size = "sm", fill = true,
 			onClick = function()
 				local session = sessions.threads[draftId]
 				if session then env.require("ui/chat/queue").open(session) end

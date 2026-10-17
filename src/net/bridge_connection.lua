@@ -48,13 +48,14 @@ return function(env)
 			while alive do
 				if automatic() and clock.ms() >= nextProbe then
 					local mine = epoch
-					local response = http.request({ url = "http://127.0.0.1:" .. M.PORT .. "/api/desktop/discover",
+					local response, err = http.request({ url = "http://127.0.0.1:" .. M.PORT .. "/api/desktop/discover",
 						method = "POST", body = "{}", headers = { ["X-UAI-Discovery"] = "1" },
-						identity = "none", silent = true, timeout = 2,
+						identity = "none", silent = true, timeout = 2, waitForSlot = true,
 						aborted = function() return not automatic() or epoch ~= mine end })
 					if alive and automatic() and mine == epoch then
+						local capacity = not response and tostring(err or ""):find("capacity:", 1, true)
 						local value = response and response.ok and #response.body <= 1024 and util.decode(response.body)
-						if not accept(value) then value = nil end
+						if capacity then value = desktop elseif not accept(value) then value = nil end
 						local changed = (desktop == nil) ~= (value == nil)
 							or (desktop and value and (desktop.token ~= value.token or desktop.instance ~= value.instance))
 						desktop = value

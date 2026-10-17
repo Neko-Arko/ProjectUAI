@@ -68,6 +68,10 @@ return function(env)
 		return stroke
 	end
 
+	function P.freeModelOutline(background)
+		return (background or theme.color.surface):Lerp(theme.color.success, 0.45)
+	end
+
 	function P.pad(instance, spec)
 		local padding = Instance.new("UIPadding", instance)
 		if type(spec) == "number" then

@@ -481,6 +481,7 @@ return function(env)
 				identity = registry.identityFor(record), identityRequired = registry.requiresClaude(record),
 				attempts = attemptsAllowed, skipStatus = #pool > 1 and { [429] = true } or nil,
 				aborted = request.aborted, onRetry = request.onRetry, tag = "responses:" .. record.id,
+				onFrame = request.onFrame,
 				timeout = requestTimeout(request), deadlineMs = deadline,
 			})
 		end

@@ -1136,6 +1136,7 @@ return function(env)
 				aborted = request.aborted,
 				onRetry = request.onRetry,
 				tag = "chat:" .. record.id,
+				onFrame = request.onFrame,
 				-- The one deadline that matters for a reasoning model: nothing arrives
 				-- until it finishes thinking, so this has to outlast the think.
 				timeout = requestTimeout(request),

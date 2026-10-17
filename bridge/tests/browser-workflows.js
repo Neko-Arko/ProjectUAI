@@ -99,6 +99,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     const resultClose = async () => {
       await page.waitForFunction(() => document.querySelector('#modalTitle').textContent.endsWith(' result'));
       await page.locator('#modalFooter').getByRole('button', { name: 'Done', exact: true }).click();
+      await page.locator('#modal').waitFor({ state: 'hidden' });
     };
     await page.goto(base + '/#t=' + token);
     await page.locator('#app').waitFor({ state: 'visible' });
@@ -252,11 +253,12 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     const rows = page.locator('.tool-call');
     assert.equal(await rows.count(), 2);
     assert.equal(await rows.first().locator('.tool-status').textContent(), 'Running');
-    assert.equal(await rows.first().locator(':scope > .tool-listing pre code').textContent(), code);
+    assert.equal(await rows.first().locator('.tool-code-input pre code').textContent(), code);
     assert.match(await rows.last().locator('.tool-status').textContent(), /Done/);
     await post({ events: [{ kind: 'tool:error', id: 'shared', name: 'run_luau', ok: false, data: { status: 'aborted' }, text: 'Stopped.', sessionId: 's1' }] });
     await page.waitForFunction(() => document.querySelector('.tool-status').textContent === 'Stopped');
-    assert.equal(await rows.first().locator('details').getAttribute('open'), '');
+    assert.equal(await rows.first().locator(':scope > .tool').getAttribute('open'), null);
+    assert.equal(await rows.first().locator('.tool-outcome').textContent(), 'Stopped.');
 
     await post({ snapshot: [{ kind: 'tool:call', id: 'old', name: 'file_read', arguments: '{}' }], sessionId: 's1', state });
     await page.waitForFunction(() => document.querySelector('.tool-status')?.textContent === 'No saved result');

@@ -1,6 +1,6 @@
 # Native client features and limits
 
-Current native feature contract for **3.3.0**, October 17, 2026.
+Current native feature contract for **3.3.1**, October 17, 2026.
 Internal APIs are described in
 [SPEC.md](../SPEC.md); verification and native-device scenarios are in
 [CODE_WORKSPACE_TESTING.md](CODE_WORKSPACE_TESTING.md).
@@ -9,11 +9,11 @@ In-game release notes are under **App menu → What's new**, also available from
 **About → What's new**. Reload the updated native bundle to see the latest notes.
 Revised notes restore the unread marker even when the client version stays the same.
 
-Version 3.3.0 adds MCP access through the bridge, queued follow-ups, native Gemini
+Version 3.3.1 adds MCP access through the bridge, queued follow-ups, native Gemini
 support and temperature controls. Code Library gains batch cleanup; Explorer,
 Remote Spy, code selection and subagent previews receive focused improvements.
 See the [release notes](../CHANGELOG.md) and
-[verification record](TESTING_3.3.0.md).
+[verification record](TESTING_3.3.1.md).
 
 The [script development manual](SCRIPT_DEVELOPMENT.md) is also bundled for
 models through the read-only `scripting_docs` tool. Its quickstart leads into
@@ -28,21 +28,31 @@ return usable entries with an explicit warning.
 New configurations use Low reasoning effort. Saved choices remain effective in
 **Settings → Agent → Effort**. The model modal edits this same global setting for
 documented reasoners and models with **Options → Reasoning support** enabled.
-Provider default is available there too. Temperature offers Automatic, Send and
-Omit for the selected model; its numeric value is shared across models. Automatic
+Provider default is available there too. **Models → Options → Temperature** offers
+Automatic, Send and Omit for the selected model without shrinking the model list;
+its numeric value is shared across models. Automatic
 uses documented support and provider rejections. Controls update when settings change.
 Thinking estimates describe visible text; clipped
 traces say **Excerpt**. Folded traces defer Markdown formatting and measurement
 until opened, reuse parsed text during resizing, and retain plain text if formatting
 fails. Provider stream errors retain useful bounded details without
 retrying an uncertain dispatch. See [provider behavior](PROVIDER_COMPATIBILITY.md)
-and the [release verification record](TESTING_3.3.0.md).
+and the [release verification record](TESTING_3.3.1.md).
 
 New access settings default to **Allow everything**, allowing reads, writes and
 execution unless an explicit tool rule says otherwise. Saved access modes and
 rules are preserved. The composer chip names the active mode.
 Live reasoning and answer previews disclose their limits independently, and
 game-folder discovery checks each unreadable candidate only once.
+
+With the updated Cowork bridge connected, Roblox receives genuine text and
+reasoning previews through its existing short status polls, roughly once per
+second. The browser receives provider deltas directly from the bridge. Both use
+the completed response as the final result. Direct executor HTTP and older
+bridges still return the whole response at completion; no typing is simulated.
+Waiting bridge jobs do not occupy native HTTP slots between polls and have no
+local overall inference deadline. Stop, changed credentials and actual provider
+failures still end the request.
 
 Send stays available while a conversation works. Follow-ups enter a visible queue
 and are consumed in order between complete model/tool exchanges. The pending bar

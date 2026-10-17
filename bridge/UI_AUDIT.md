@@ -157,3 +157,12 @@ retain their parent view and restore focus to the invoking control. The Connecti
 view gives current readiness a prominent summary and keeps token copy and setup
 steps close together. The focused redesign suite checks every workspace at wide,
 narrow, and short viewports, plus nested dismissal and draft retention.
+
+Tool calls now start with a compact name, status, duration, and input preview.
+Failures show a bounded, wrapped explanation in the summary. Opening a call
+reveals separate Input and Result or Error details disclosures; source, full
+errors, and structured result data keep their Copy actions. Successful text
+results render Markdown with fenced-code Copy. Completion preserves an open
+call, and restored calls with no saved outcome remain explicitly unknown.
+`tests/browser-tool-cards.js` exercises these states, exact copied content,
+replay, and narrow layouts; optional screenshots use `UAI_SCREENSHOTS`.

@@ -317,7 +317,8 @@ return function(env)
 				relay = transport.shouldRelay(env.require("runtime/images").hasReferences(request.messages)), sessionId = request.sessionId,
 				identity = registry.identityFor(record), identityRequired = registry.requiresClaude(record),
 				attempts = request.attempts or config.get("agent.retries", 3), skipStatus = #pool > 1 and { [429] = true } or nil,
-				timeout = timeout, deadlineMs = deadline, aborted = cancelled, onRetry = request.onRetry, tag = "gemini:" .. tostring(record.id) })
+				timeout = timeout, deadlineMs = deadline, aborted = cancelled, onRetry = request.onRetry,
+				onFrame = request.onFrame, tag = "gemini:" .. tostring(record.id) })
 		end
 		local response, err = fire()
 		while response and not response.ok and not response.terminal and not http.terminal(err) and left > 0 and (response.status == 429 or (response.status == 403 or response.status == 402)
@@ -336,7 +337,7 @@ return function(env)
 		end
 		local result, parseError
 		if sse.looksStreamed(response.body) then
-			local parsed, value, note = pcall(M.parseStream, response.body, request.onFrame)
+			local parsed, value, note = pcall(M.parseStream, response.body)
 			result, parseError = parsed and value or nil, parsed and note or "Invalid Gemini stream"
 		else
 			local decoded = util.decode(response.body)

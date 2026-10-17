@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.3.1 — October 17, 2026 — Live bridge previews and interface fixes
+
+- Move native temperature controls to Models → Options → Temperature so they
+  no longer squeeze the model list. Soften free-model outlines in Roblox.
+- Restore the queued-message count and review action above the native composer.
+- Give bridge tool calls compact summaries, clear status and readable errors,
+  with full inputs and results available on demand.
+- Deliver real bridge text and reasoning previews to Roblox while inference is
+  still running. Keep the completed response authoritative and avoid replaying
+  buffered Gemini responses as live output.
+- Stop counting waiting relay jobs as native HTTP connections. Concurrent bridge
+  agents retain capacity for their short polls without inheriting the executor's
+  inference deadline. Provider errors and Stop still settle the original job.
+
 ## 3.3.0 — October 17, 2026 — MCP, bridge redesign and queued follow-ups
 
 - Connect Claude Code, Codex, Cursor, OpenCode and other MCP clients to UAI's

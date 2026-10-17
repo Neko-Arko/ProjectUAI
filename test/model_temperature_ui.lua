@@ -6,6 +6,9 @@ local case, check = suite.case, suite.check
 local function click(f, name)
 	f.h.click(assert(f.h.byName(name), name)); f.h.settle(0.1)
 end
+local function temperature(f, mode)
+	click(f, "ModelOptions"); click(f, "Option_temperature"); click(f, "Option_" .. mode)
+end
 
 case("temperature controls preserve per-model overrides and short-window scrolling", function()
 	for _, width in ipairs({ 320, 900 }) do
@@ -19,17 +22,17 @@ case("temperature controls preserve per-model overrides and short-window scrolli
 		local picker = f.env.require("ui/panels/modelpicker").open(); f.h.settle(0.2)
 		local search = f.h.byName("ModelFilter"):FindFirstChildOfClass("TextBox")
 		search.Text = "vendor"; search:CaptureFocus()
-		click(f, "ModelTemperature"); click(f, "Option_omit")
+		temperature(f, "omit")
 		check("omit targets only the selected model", config.get("agent.forceSampling")["vendor/plain"] == false and config.get("agent.forceSampling")["vendor/second"] == true)
 		check("changing sampling preserves model search", f.h.byName("ModelFilter"):FindFirstChildOfClass("TextBox") == search and search.Text == "vendor")
-		click(f, "ModelTemperature"); click(f, "Option_auto")
+		temperature(f, "auto")
 		check("automatic removes the override while preserving other models", config.get("agent.forceSampling")["vendor/plain"] == nil and config.get("agent.forceSampling")["vendor/second"] == true)
-		click(f, "ModelTemperature"); click(f, "Option_send")
+		temperature(f, "send")
 		check("explicit send is represented by a boolean override", config.get("agent.forceSampling")["vendor/plain"] == true)
 		picker.scroll.instance.AbsoluteSize = f.h.dt.Vector2.new(width - 60, 150)
 		local list = f.h.byName("ModelScroll")
 		check("short dialogs scroll the full controls with one owner", picker.scroll.instance.ScrollingEnabled and not list.ScrollingEnabled and picker.content.Size.Y.Offset > 150)
-		check("temperature controls remain inside scrollable content", f.h.byName("Section_Temperature").Parent == f.h.byName("ModelPicker"))
+		check("temperature settings occupy no permanent model-list space", f.h.byName("Section_Temperature") == nil and f.h.byName("ModelTemperature") == nil)
 		picker.close(); f.h.settle(0.2); f.healthy(); f.close()
 	end
 end)

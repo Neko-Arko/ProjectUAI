@@ -30,26 +30,45 @@ record.id, record.baseUrl, record.apiKey, record.model = "queue-ui", "https://qu
 record.models, record.stream = { record.model }, false
 assert(app.providers.save(record, { force = true })); app.providers.setActive(record.id)
 local session, composer = app.sessions.current(), app.app.chatPanel.composer
+local pendingButton = assert(h.byName("PendingMessages", composer.shell))
+local inputHolder = assert(h.byName("InputHolder", composer.shell))
+local compactHeight, compactInputY = composer.shell.Size.Y.Offset, inputHolder.Position.Y.Offset
+local function pendingText()
+	local content = pendingButton:FindFirstChild("Content")
+	local label = content and content:FindFirstChildOfClass("TextLabel")
+	return label and label.Text or ""
+end
+check("empty queue does not show a placeholder row", not pendingButton.Visible)
 local function send(text)
 	composer.field.set(text); h.click(h.byName("Send", composer.shell)); h.settle(0.1)
 end
 send("First message")
 check("initial message starts work", session.busy and #requests == 1)
 check("Stop has its own visible control", h.byName("Stop", composer.shell).Visible)
+check("waiting without queued messages keeps the composer compact", not pendingButton.Visible
+	and composer.shell.Size.Y.Offset == compactHeight and inputHolder.Position.Y.Offset == compactInputY)
 send("Follow up without stopping")
 check("busy send queues and clears accepted draft", session.queueSnapshot().count == 1 and composer.field.get() == "")
 check("follow-up does not cancel the active request", session.busy and not session.aborted() and #requests == 1)
 check("pending queue is visible", h.byName("PendingMessages", composer.shell).Visible)
+check("queue review row displays its count and action", pendingText():find("1 queued", 1, true) and pendingText():find("Review", 1, true))
+check("queue review row has its own space above the prompt", composer.shell.Size.Y.Offset > compactHeight
+	and inputHolder.Position.Y.Offset >= pendingButton.Position.Y.Offset + pendingButton.Size.Y.Offset)
 h.settle(3.2)
 check("queued follow-up reaches the next inference", #requests == 2 and h.json.encode(requests[2].messages):find("Follow up without stopping", 1, true))
+check("consumed queue releases the row while the next request waits", not pendingButton.Visible
+	and composer.shell.Size.Y.Offset == compactHeight and inputHolder.Position.Y.Offset == compactInputY)
 send("Keep this pending")
 h.click(h.byName("Stop", composer.shell)); h.settle(3.5)
 check("Stop holds unconsumed messages", not session.busy and session.queueSnapshot().held and session.queueSnapshot().count == 1)
+check("held queue labels its review and resume action", pendingText():find("1 waiting", 1, true) and pendingText():find("Review or resume", 1, true))
 h.click(h.byName("PendingMessages", composer.shell)); h.settle(0.1)
 check("held queue offers explicit resume", h.byName("ResumeQueue").Visible)
 local pendingId = session.queueSnapshot().items[1].id
 h.click(h.byName("RemoveQueued_" .. pendingId)); h.settle(0.2)
 check("individual pending removal is reflected in the composer", session.queueSnapshot().count == 0 and not h.byName("PendingMessages", composer.shell).Visible)
+check("removing the final queued message removes its layout space", composer.shell.Size.Y.Offset == compactHeight
+	and inputHolder.Position.Y.Offset == compactInputY)
 h.click(h.byName("QueueDone")); h.settle(0.2)
 
 -- A bridge send retries its command receipt instead of adding another follow-up.

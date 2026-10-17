@@ -161,6 +161,7 @@ return function(env)
 		spec.aborted = function() return not alive or mine ~= generation or callerAborted and callerAborted() end
 		spec.identity = "none"
 		spec.silent = true
+		spec.waitForSlot = true
 		spec.tag = "bridge"
 		return http.request(spec)
 	end
@@ -276,6 +277,8 @@ return function(env)
 	-- Reported once per streak rather than per attempt: with the bridge not running,
 	-- a per-attempt warning would be the only thing in the log.
 	local function offline(reason, direction)
+		-- Local slot admission sent no request and says nothing about reachability.
+		if tostring(reason or ""):find("capacity:", 1, true) then return end
 		if direction == "upload" then uploadFailed = true else pollFailed = true end
 		local moved = M.online or M.lastError == nil
 		local changed = M.online or M.lastError ~= reason
