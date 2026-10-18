@@ -14,6 +14,7 @@ return function(env)
 	local caps = env.require("runtime/caps")
 	local http = env.require("net/http")
 	local signal = env.require("runtime/signal")
+	local dataModel = env.require("net/relay_datamodel")
 
 	local M = { changed = signal.new("relay") }
 	local alive, started, nextProbe, epoch = true, false, 0, 0
@@ -116,7 +117,7 @@ return function(env)
 		if has(text, { "capacity:", "slots are busy", "request limit" }) then
 			return "Native HTTP capacity is busy; wait for other requests, then scan again."
 		end
-		if has(text, { "connection refused", "econnrefused", "failed to connect", "connect failed", "connection failed", "could not connect", "unable to connect" }) then
+		if has(text, { "connectfail", "connection refused", "econnrefused", "failed to connect", "connect failed", "connection failed", "could not connect", "unable to connect" }) then
 			return "Connection refused or failed; check that UAI Relay is running on this port."
 		end
 		if has(text, { "cleartext", "https-only", "https only", "only https", "unsupported protocol", "protocol is not supported", "https required" }) then
@@ -165,6 +166,9 @@ return function(env)
 			if index == 1 then add({ request = alias.fn, name = alias.name, useTimeout = true, omitEmptyHeaders = false }) end
 			add({ request = alias.fn, name = alias.name, useTimeout = false, omitEmptyHeaders = true })
 		end
+		if dataModel.available() then
+			add({ request = dataModel.request, name = "HttpGet/HttpPost", useTimeout = false, omitEmptyHeaders = true })
+		end
 		return out
 	end
 
@@ -187,6 +191,9 @@ return function(env)
 				if info.server ~= "uai-relay" then problem = "Port " .. tostring(probePort) .. " is used by another program"
 				elseif info.protocol ~= 2 then problem = "The companion hello uses an incompatible protocol; protocol 2 is required."
 				elseif not validInstance(info.instance) then problem = "The companion hello did not include a valid instance ID."
+				elseif profile.request == dataModel.request and (type(info.capabilities) ~= "table"
+					or type(info.capabilities.executorPost) ~= "table" or info.capabilities.executorPost.schema ~= 1) then
+					problem = "The companion is reachable through HttpGet. Install UAI Relay 3.5.7 or newer for authenticated HttpPost support."
 				else return info, profile end
 			end
 			local errorText = tostring(helloError or ""):lower()

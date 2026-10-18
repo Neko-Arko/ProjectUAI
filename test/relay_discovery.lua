@@ -433,4 +433,71 @@ case("an accepted job pins its copied profile through rediscovery, polls and can
 	f.finish()
 end)
 
+local function dataModelFixture(old)
+	local f = fixture()
+	f.nativeOverride = function() error("HttpError: ConnectFail", 0) end
+	f.posts, f.gets = {}, {}
+	f.h.sandbox.game.HttpGet = function(_, url)
+		f.gets[#f.gets + 1] = url
+		local info = f.hello()
+		if not old then info.capabilities.executorPost = { schema = 1 } end
+		return f.h.json.encode(info)
+	end
+	f.h.sandbox.game.HttpPost = function(_, url, body, contentType)
+		check("HttpPost keeps JSON and credentials out of URLs", contentType == "application/json" and not url:find(f.token, 1, true)
+			and not url:find("?", 1, true))
+		f.posts[#f.posts + 1] = { url = url, body = body }
+		if f.postOverride then local answer = f.postOverride(url, body); if answer then return answer end end
+		if url:find("/api/pair", 1, true) then
+			return f.reply({ ok = true, protocol = 2, instance = f.instance, token = f.token }).Body
+		end
+		local input = f.h.json.decode(body)
+		check("authenticated POST envelope retains token and schema", input.token == f.token and input.schema == 1)
+		local response = f.h.http.relay({ url = "http://127.0.0.1:8790" .. input.path, method = input.method, body = input.body })
+		return f.h.json.encode({ schema = 1, status = response.StatusCode, body = response.Body })
+	end
+	return f
+end
+
+case("Delta ConnectFail can pair and infer through the advertised DataModel transport", function()
+	local f = dataModelFixture()
+	check("fallback authenticates before becoming usable", f.probe() and f.link.status().transport == "HttpGet/HttpPost minimal")
+	local response = f.infer()
+	check("one provider job returns through POST polling", response and response.body == "companion result" and #f.submissions == 1)
+	check("GET was only used for public discovery", #f.gets == 1 and f.gets[1] == "http://127.0.0.1:8790/api/hello")
+	f.finish()
+end)
+
+case("an old companion reached via HttpGet requires an update without pairing", function()
+	local f = dataModelFixture(true)
+	local ok, reason = f.probe()
+	check("old app reports the exact required update", not ok and reason:find("Install UAI Relay 3.5.7", 1, true) and #f.posts == 0)
+	f.finish()
+end)
+
+case("DataModel timeout retains native ownership and cannot select the profile", function()
+	local f = dataModelFixture()
+	f.postOverride = function() f.h.sched.wait(7); return "{}" end
+	local ok = f.probe(5.5)
+	check("pair wait is bounded with one POST", not ok and not f.link.usable() and #f.posts == 1 and f.env.require("net/http").workers() == 1)
+	f.h.sched.advance(2)
+	check("late pair cannot connect", not f.link.usable() and f.env.require("net/http").workers() == 0)
+	f.finish()
+end)
+
+case("DataModel cancellation preserves the original accepted job", function()
+	local f = dataModelFixture()
+	check("DataModel connects", f.probe())
+	local stopped, deleted = false, 0
+	f.override = function(step, request)
+		local id = step:match("^inference/(.+)$")
+		if id and request.method == "DELETE" then deleted = deleted + 1
+		elseif id then return f.reply({ id = id, state = "running" }) end
+	end
+	f.h.sched.delay(2, function() stopped = true end)
+	local response, reason = f.infer({ aborted = function() return stopped end }, 3)
+	check("Stop sends one cancellation without new inference", not response and reason == "aborted" and deleted == 1 and #f.submissions == 1)
+	f.finish()
+end)
+
 suite.finish()

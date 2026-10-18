@@ -5,6 +5,8 @@ import dev.projectuai.relay.data.RelaySettings
 import dev.projectuai.relay.engine.JobEngine
 import dev.projectuai.relay.protocol.CancelledResponse
 import dev.projectuai.relay.protocol.ErrorBody
+import dev.projectuai.relay.protocol.ExecutorRequest
+import dev.projectuai.relay.protocol.ExecutorResponse
 import dev.projectuai.relay.protocol.Hello
 import dev.projectuai.relay.protocol.JobView
 import dev.projectuai.relay.protocol.PairRequest
@@ -79,6 +81,7 @@ class RelayServer(
                 call.respondJson(Hello(instance = instance))
             }
             post("/api/pair") { handlePair(call) }
+            post("/api/executor") { handleExecutor(call) }
             post("/api/inference") {
                 if (!call.authorised()) { call.respondJson(ErrorBody("bad token"), HttpStatusCode.Unauthorized); return@post }
                 handleSubmit(call)
@@ -95,6 +98,49 @@ class RelayServer(
                 if (!call.authorised()) { call.respondJson(ErrorBody("bad token"), HttpStatusCode.Unauthorized); return@get }
                 handleStatus(call)
             }
+        }
+    }
+
+    // HttpPost returns only a body. Preserve operation status in an envelope.
+    private suspend fun handleExecutor(call: ApplicationCall) {
+        if (!loopbackHost(call.request.headers["Host"].orEmpty()) || call.request.headers["Origin"] != null ||
+            call.request.headers["Sec-Fetch-Site"] != null ||
+            call.request.headers["Content-Type"]?.substringBefore(';')?.trim()?.lowercase() != "application/json") {
+            call.respondJson(ErrorBody("invalid executor transport origin"), HttpStatusCode.Forbidden); return
+        }
+        val declared = call.request.headers["Content-Length"]?.toLongOrNull()
+        if (declared != null && declared > MAX_REQUEST_BYTES) {
+            call.respondJson(ErrorBody("request too large"), HttpStatusCode.PayloadTooLarge); return
+        }
+        val text = call.receiveText()
+        if (text.toByteArray(Charsets.UTF_8).size.toLong() > MAX_REQUEST_BYTES) {
+            call.respondJson(ErrorBody("request too large"), HttpStatusCode.PayloadTooLarge); return
+        }
+        val input = decodeJson<ExecutorRequest>(text)
+        if (input == null || input.schema != 1) { call.respondExecutor(ErrorBody("invalid executor request"), 400); return }
+        if (!authorisedToken(input.token)) { call.respondExecutor(ErrorBody("bad token"), 401); return }
+        val id = Regex("^/api/inference/([A-Za-z0-9_-]{1,128})$").matchEntire(input.path)?.groupValues?.get(1)
+        when {
+            input.method == "GET" && input.path == "/api/hello" -> call.respondExecutor(Hello(instance = instance))
+            input.method == "GET" && input.path == "/api/status" -> call.respondExecutor(status())
+            input.method == "POST" && input.path == "/api/inference" -> {
+                val request = decodeJson<SubmitRequest>(input.body)
+                if (request == null) { call.respondExecutor(ErrorBody("invalid request"), 400); return }
+                when (val result = engine.submit(request)) {
+                    is JobEngine.Submission.Accepted -> call.respondExecutor(result.view, 202)
+                    is JobEngine.Submission.Rejected -> call.respondExecutor(ErrorBody(result.message), result.status)
+                }
+            }
+            input.method == "GET" && id != null -> {
+                val view = engine.poll(id)
+                if (view == null) call.respondExecutor(ErrorBody("Unknown inference ID; do not resubmit"), 404)
+                else call.respondExecutor(view)
+            }
+            input.method == "DELETE" && id != null -> {
+                if (engine.cancel(id)) call.respondExecutor(CancelledResponse(true))
+                else call.respondExecutor(ErrorBody("Unknown inference ID"), 404)
+            }
+            else -> call.respondExecutor(ErrorBody("unsupported executor operation"), 400)
         }
     }
 
@@ -156,20 +202,20 @@ class RelayServer(
     }
 
     private suspend fun handleStatus(call: ApplicationCall) {
-        call.respondJson(
-            StatusResponse(
-                instance = instance,
-                port = port,
-                uptimeMs = System.currentTimeMillis() - startedAt,
-                activeJobs = engine.activeCount,
-                retainedBytes = engine.retained,
-                paired = settings.token.isNotEmpty(),
-                userStopped = settings.userStopped,
-                lastClientAt = lastClientAt,
-                activity = engine.activity(),
-            ),
-        )
+        call.respondJson(status())
     }
+
+    private fun status() = StatusResponse(
+        instance = instance,
+        port = port,
+        uptimeMs = System.currentTimeMillis() - startedAt,
+        activeJobs = engine.activeCount,
+        retainedBytes = engine.retained,
+        paired = settings.token.isNotEmpty(),
+        userStopped = settings.userStopped,
+        lastClientAt = lastClientAt,
+        activity = engine.activity(),
+    )
 
     private fun pairAllowed(): Boolean {
         val now = System.currentTimeMillis()
@@ -184,6 +230,10 @@ class RelayServer(
     private fun ApplicationCall.authorised(): Boolean {
         val header = request.headers["Authorization"] ?: return false
         val supplied = if (header.startsWith("Bearer ")) header.substring(7).trim() else header.trim()
+        return authorisedToken(supplied)
+    }
+
+    private fun authorisedToken(supplied: String): Boolean {
         val expected = settings.token
         if (expected.isEmpty() || supplied.length != expected.length) return false
         val matches = MessageDigest.isEqual(supplied.toByteArray(Charsets.UTF_8), expected.toByteArray(Charsets.UTF_8))
@@ -220,6 +270,11 @@ class RelayServer(
 
 private suspend inline fun <reified T> ApplicationCall.respondJson(value: T, status: HttpStatusCode = HttpStatusCode.OK) {
     respondText(RelayJson.encodeToString(value), ContentType.Application.Json, status)
+}
+
+private suspend inline fun <reified T> ApplicationCall.respondExecutor(value: T, status: Int = 200) {
+    response.headers.append("Cache-Control", "no-store")
+    respondJson(ExecutorResponse(status = status, body = RelayJson.encodeToString(value)))
 }
 
 private inline fun <reified T> decodeJson(text: String): T? =

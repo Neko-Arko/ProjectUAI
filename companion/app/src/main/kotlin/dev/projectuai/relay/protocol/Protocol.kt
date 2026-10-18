@@ -25,7 +25,17 @@ data class Capabilities(
     val serverSidePairing: Boolean = true,
     val deltas: Boolean = false,
     val inference: InferenceCapability = InferenceCapability(),
+    val executorPost: ExecutorPostCapability = ExecutorPostCapability(),
 )
+
+@Serializable
+data class ExecutorPostCapability(val schema: Int = 1)
+
+@Serializable
+data class ExecutorRequest(val schema: Int = 0, val method: String, val path: String, val token: String, val body: String = "")
+
+@Serializable
+data class ExecutorResponse(val schema: Int = 1, val status: Int, val body: String)
 
 @Serializable
 data class InferenceCapability(val schema: Int = 1, val unlimited: Boolean = true)

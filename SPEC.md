@@ -1521,7 +1521,8 @@ game input, not native Roblox/executor behavior. See [desktop/README.md](desktop
 The Android companion in `companion/` is a narrower relay, not a second Cowork: it
 holds the provider connection so every executor-visible call stays short, which is
 what a phone executor's HTTP wall-clock limit otherwise cuts off. It implements only
-`/api/hello`, `/api/pair`, `/api/inference` and `/api/status` — no agent routes, no
+`/api/hello`, `/api/pair`, `/api/inference`, `/api/status` and the `/api/executor`
+POST adapter — no agent routes, no
 web UI, no static files. `relay.mode` defaults to `auto`; `net/relay_link` probes
 `127.0.0.1:8790`, requires protocol 2 and the `uai-relay` marker (so a PC bridge on
 the same port is never mistaken for it), and pairs once for a token that survives
@@ -1552,6 +1553,16 @@ a new profile does not switch or replay that job.
 Minimal native options omit the optional empty Headers table and undocumented
 Timeout field. The Lua caller still stops waiting at its own deadline; a native
 function that continues afterward keeps its connection slot until it ends.
+
+Companion 3.5.7 advertises `capabilities.executorPost = {schema:1}`. After completed
+native discovery failures, DataModel HttpGet/HttpPost can discover and pair.
+Authenticated operations use POST `/api/executor` with a schema-1 method/path/
+token/body envelope; credentials and provider data never enter GET URLs. This
+endpoint accepts only existing relay operations, checks loopback Host, rejects
+browser Origin/Fetch Metadata, and requires JSON and the constant-time token check.
+It returns the operation status and JSON body in a schema-1 envelope. Job identity,
+leases, cancellation and native deadline/slot ownership retain their existing rules.
+Older companions cannot select this profile.
 
 Updated companions advertise `capabilities.inference = {schema:1, unlimited:true}`.
 With the normal `agent.requestUnlimited` setting, default inference uses an

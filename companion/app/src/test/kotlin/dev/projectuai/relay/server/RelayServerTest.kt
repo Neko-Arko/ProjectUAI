@@ -4,6 +4,9 @@ import dev.projectuai.relay.RelayLog
 import dev.projectuai.relay.data.MemorySettings
 import dev.projectuai.relay.engine.JobEngine
 import dev.projectuai.relay.protocol.Hello
+import dev.projectuai.relay.protocol.ExecutorRequest
+import dev.projectuai.relay.protocol.ExecutorResponse
+import kotlinx.serialization.encodeToString
 import dev.projectuai.relay.protocol.RelayJson
 import dev.projectuai.relay.protocol.StatusResponse
 import kotlinx.serialization.decodeFromString
@@ -206,6 +209,51 @@ class RelayServerTest {
             {"id":"inference_abcdef12","instance":"old","url":"https://provider.test/v1","headers":{},"body":"{}","timeout":180}
         """.trimIndent()
         call("/api/inference", "POST", body, token = token).use { assertEquals(409, it.code) }
+    }
+
+    private fun executor(token: String, method: String, path: String, body: String = ""): ExecutorResponse {
+        val input = RelayJson.encodeToString(ExecutorRequest(1, method, path, token, body))
+        return call("/api/executor", "POST", input).use {
+            assertEquals(200, it.code)
+            assertEquals("no-store", it.header("Cache-Control"))
+            RelayJson.decodeFromString<ExecutorResponse>(it.body!!.string())
+        }
+    }
+
+    @Test
+    fun `executor POST preserves authentication and rejects browser and unknown operations`() {
+        val token = pair()
+        assertEquals(401, executor("bad", "GET", "/api/status").status)
+        assertEquals(200, executor(token, "GET", "/api/status").status)
+        assertEquals(400, executor(token, "POST", "/api/pair").status)
+        assertEquals(400, executor(token, "GET", "https://other.test").status)
+        assertEquals(404, executor(token, "GET", "/api/inference/missing").status)
+        val body = RelayJson.encodeToString(ExecutorRequest(1, "GET", "/api/status", token))
+        for (headers in listOf(mapOf("Host" to "evil.test"), mapOf("Origin" to "http://127.0.0.1"),
+            mapOf("Sec-Fetch-Site" to "cross-site"))) {
+            call("/api/executor", "POST", body, headers = headers).use { assertEquals(403, it.code) }
+        }
+        val plain = Request.Builder().url("http://127.0.0.1:${server.port}/api/executor")
+            .post(body.toRequestBody("text/plain".toMediaType())).build()
+        client.newCall(plain).execute().use { assertEquals(403, it.code) }
+        assertEquals(0, upstream.requestCount)
+    }
+
+    @Test
+    fun `executor POST uses the same engine for submission polling replay and cancellation`() {
+        val token = pair()
+        upstream.enqueue(MockResponse().setBody("executor answer").setBodyDelay(300, java.util.concurrent.TimeUnit.MILLISECONDS))
+        val body = """{"id":"inference_executor","instance":"inst-test","url":"${upstream.url("/v1")}","body":"{}","timeout":0}"""
+        assertEquals(202, executor(token, "POST", "/api/inference", body).status)
+        assertEquals(202, executor(token, "POST", "/api/inference", body).status)
+        assertTrue(poll(token, "inference_executor").contains("executor answer"))
+        assertTrue(executor(token, "GET", "/api/inference/inference_executor").body.contains("executor answer"))
+        assertEquals(1, upstream.requestCount)
+        assertEquals(409, executor(token, "POST", "/api/inference", body.replace("inst-test", "stale")).status)
+        upstream.enqueue(MockResponse().setBody("later").setBodyDelay(2, java.util.concurrent.TimeUnit.SECONDS))
+        assertEquals(202, executor(token, "POST", "/api/inference", body.replace("inference_executor", "inference_cancel")).status)
+        assertEquals(200, executor(token, "DELETE", "/api/inference/inference_cancel").status)
+        assertTrue(executor(token, "GET", "/api/inference/inference_cancel").body.contains("cancelled"))
     }
 
     private fun poll(token: String, id: String): String {

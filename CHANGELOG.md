@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add companion 3.5.7's authenticated POST transport for Delta builds where
+  `request` fails on loopback but `HttpGet` works. The client discovers through
+  `HttpGet` and uses `HttpPost` for pairing and authenticated operations,
+  preserving job IDs, deadlines and cancellation. A companion update is required.
 - Probe companion request compatibility with unauthenticated hello requests.
   A completed executor exception can try the minimal documented request format
   and distinct native request aliases. A validated, authenticated selection is

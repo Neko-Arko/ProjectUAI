@@ -1,6 +1,6 @@
 # UAI Relay (Android companion)
 
-Version **3.5.6** (Android version code 3).
+Version **3.5.7** (Android version code 4).
 
 A foreground service that holds the upstream provider connection while the
 Project UAI client submits and polls through short loopback calls. The client
@@ -72,6 +72,12 @@ browser also cannot connect, check the companion's port and diagnostics and use
 Stop/Start to restart its listener.
 
 The client also checks executor request compatibility during discovery. If a
+Delta build fails local `request` but permits `HttpGet`, companion 3.5.7 supports
+an authenticated `HttpPost` transport. Update the APK and client together. It
+uses POST bodies for credentials, submission, polling and cancellation; no
+provider content or token is added to a URL. Phone HttpPost support must also work.
+
+During native request discovery, if a
 completed native call throws, public hello probes can try minimal request options
 and distinct request aliases. Only an authenticated companion selects a working
 profile for later local calls. Pairing and provider work are not replayed to test
