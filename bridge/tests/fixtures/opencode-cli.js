@@ -1,5 +1,6 @@
 'use strict';
 // Offline native-process fixture. It never contacts an upstream provider.
+if (process.argv.includes('--version')) { process.stdout.write('opencode v2.0.32\n'); process.exit(0); }
 const http = require('node:http');
 const fs = require('node:fs');
 const sessions = new Map(), servers = new Map();
@@ -13,7 +14,10 @@ const server = http.createServer(async (req, res) => {
   let raw = ''; for await (const chunk of req) raw += chunk;
   const body = raw ? JSON.parse(raw) : {}, url = new URL(req.url, 'http://localhost');
   const parts = url.pathname.split('/'), id = parts[3], session = sessions.get(id);
-  if (url.pathname === '/openapi.json') return reply(res, { paths: { '/api/session/{sessionID}/prompt': {}, '/api/model': {} } });
+  if (url.pathname === '/openapi.json') return reply(res, { paths: Object.fromEntries((process.env.UAI_OPENCODE_FIXTURE_OLD_API === '1'
+    ? ['/api/model', '/api/session/{sessionID}/prompt']
+    : ['/api/model', '/api/session', '/api/session/{sessionID}', '/api/session/{sessionID}/prompt', '/api/session/{sessionID}/message',
+      '/api/session/{sessionID}/interrupt', '/api/session/{sessionID}/permission', '/api/experimental/mcp/{server}']).map(route => [route, {}])) });
   if (url.pathname === '/api/model') return reply(res, { data: [
     { id: 'fixture-free', modelID: 'fixture-free', providerID: 'opencode', name: 'Fixture', limit: { context: 100000, output: 4096 }, cost: [{ input: 0, output: 0, cache: { read: 0, write: 0 } }] },
     { id: 'fixture-paid', providerID: 'opencode', cost: [{ input: 1, output: 0, cache: { read: 0, write: 0 } }] },

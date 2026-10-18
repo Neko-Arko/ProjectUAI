@@ -6,8 +6,9 @@ function icon(name){const n=document.createElementNS('http://www.w3.org/2000/svg
 const uuid=()=>crypto.randomUUID();
 function stored(storage,key){try{return window[storage].getItem(key);}catch{return null;}}
 const fromHash=location.hash.match(/(?:#|&)t=([a-f0-9]{64})(?:$|&)/i);
+let requestedSettings=new URLSearchParams(location.search).get('settings')==='mcp'?'mcp':null;
 let token=fromHash?.[1]?.toLowerCase()||stored('sessionStorage','uai.token')||stored('localStorage','uai.token')||'';
-if(fromHash)history.replaceState(null,'',location.pathname);
+if(fromHash||requestedSettings)history.replaceState(null,'',location.pathname);
 let state={},bridgeUpdate={},page='chat',stream,busy=false,connected=false,sending=false,stopping=false,sessionId=null,events=[],uploads=[],instance=stored('sessionStorage','uai.instance');
 let drafts={};try{const value=JSON.parse(stored('sessionStorage','uai.drafts')||'{}');if(value&&typeof value==='object'&&!Array.isArray(value))drafts=value;}catch{}
 const tools=new Map(),dirtyDrafts=new Set();
@@ -317,6 +318,20 @@ function toolTarget(args){
   for(const key of ['code','source','content','new_text'])if(typeof args[key]==='string'){const lines=args[key].split('\n').length;return lines+' '+(lines===1?'line':'lines')+(key==='code'?' of Luau':' of '+key.replaceAll('_',' '));}
   const keys=Object.keys(args);return keys.length?keys.length+' input '+(keys.length===1?'field':'fields'):'No input';
 }
+function toolLabel(name){return String(name||'Tool').replaceAll('_',' ').replace(/\b(?:luau|lua|json|http|api|ui|mcp)\b/gi,value=>({luau:'Luau',lua:'Lua'}[value.toLowerCase()]||value.toUpperCase())).replace(/^./,value=>value.toUpperCase());}
+function toolInput(args,raw){
+  const input=el('div','tool-input'),fields=el('dl','tool-fields');
+  if(args&&typeof args==='object'&&!Array.isArray(args))for(const [key,value]of Object.entries(args)){
+    if(['code','source','content','old_text','new_text'].includes(key)||value!==null&&typeof value==='object')continue;
+    const row=el('div');row.append(el('dt',null,toolLabel(key)),el('dd',null,toolExcerpt(value===null?'null':value,500)));fields.append(row);
+  }
+  if(fields.children.length)input.append(fields);
+  if(state.settings?.ui?.showToolCode!==false)for(const [key,label]of [['code','Luau'],['source','Source'],['content','File contents'],['old_text','Before'],['new_text','After']]){
+    if(typeof args?.[key]==='string'){const listing=codeListing(args[key],label);listing.classList.add('tool-code-input');input.append(listing);}
+  }
+  input.append(toolDetail('Raw arguments',codeListing(raw,'Arguments',{wrap:true,display:args!==undefined?JSON.stringify(args,null,2):raw})));
+  return input;
+}
 function toolErrorText(event,text){
   let parsed;try{parsed=JSON.parse(text);}catch{}
   const candidates=[event.data?.error?.message,event.data?.message,parsed?.error?.message,typeof parsed?.error==='string'?parsed.error:null,parsed?.message];
@@ -333,7 +348,11 @@ function toolResultSummary(event,text){
   if(typeof event.summary==='string'&&event.summary.trim())return toolExcerpt(event.summary);
   let parsed;try{parsed=JSON.parse(text);}catch{}
   if(parsed&&typeof parsed==='object'){const message=[parsed.message,parsed.summary].find(value=>typeof value==='string'&&value.trim());return toolExcerpt(message||(Array.isArray(parsed)?parsed.length+' items returned':'Result available'));}
-  return /^(done|success|ok)[.!]?$/i.test(text.trim())?'':toolExcerpt(text);
+  if(/^(done|success|ok)[.!]?$/i.test(text.trim()))return '';
+  const first=text.split(/\r?\n/).find(line=>line.trim())||'';
+  if(/^\s*(?:`{3,}|~{3,})/.test(first))return 'Code result available';
+  return toolExcerpt(first.replace(/^\s*(?:#{1,6}|>|[-*+])\s+/,'').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1')
+    .replace(/(`+)(.*?)\1/g,'$2').replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'$1'));
 }
 function toolOutput(text,failed){
   let parsed;try{parsed=JSON.parse(text);}catch{}
@@ -349,17 +368,15 @@ function openTool(e){
   let args;try{args=JSON.parse(raw);}catch{}
   const preview=el('span','arguments',args?toolTarget(args):'Input available');
   const verdict=el('small','tool-status','Running');verdict.setAttribute('role','status');
+  preview.title=args?toolTarget(args):'';
   const duration=el('small','tool-duration'),outcome=el('span','tool-outcome');outcome.hidden=true;
-  head.append(el('strong',null,e.name||'Tool'),verdict,duration,preview,outcome);node.append(head);
-  const body=el('div','tool-body'),input=el('div','tool-input');
-  input.append(codeListing(raw,'Arguments',{wrap:true,display:args!==undefined?JSON.stringify(args,null,2):raw}));
-  if(state.settings?.ui?.showToolCode!==false){
-    for(const [key,label]of [['code','Luau'],['source','Source'],['content','File contents'],['old_text','Before'],['new_text','After']]){
-      if(typeof args?.[key]==='string'){const listing=codeListing(args[key],label);listing.classList.add('tool-code-input');input.append(listing);}
-    }
-  }
-  body.append(toolDetail('Input',input));node.append(body);wrapper.append(node);
-  append(wrapper);tools.set(toolKey(e),{node,body,preview,verdict,duration,outcome,restored:renderingSnapshot});
+  const progress=el('span','tool-progress');progress.hidden=true;progress.setAttribute('role','status');
+  const name=el('strong',null,toolLabel(e.name));name.title=e.name||'Tool';
+  head.append(name,verdict,duration,preview,progress,outcome);node.append(head);
+  const body=el('div','tool-body'),identity=el('div','tool-identity');
+  identity.append(el('code',null,e.name||'Tool'),el('span',null,e.kind==='subagent:tool'?'Subagent tool call':'Tool call'));
+  body.append(identity,toolDetail('Input',toolInput(args,raw)));node.append(body);wrapper.append(node);
+  append(wrapper);tools.set(toolKey(e),{node,body,preview,progress,verdict,duration,outcome,restored:renderingSnapshot});
 }
 function finishTool(e){
   const key=toolKey(e),row=tools.get(key);
@@ -368,6 +385,7 @@ function finishTool(e){
   const failed=e.kind==='tool:error'||e.ok===false||stopped||timeout||e.denied===true;
   row.node.dataset.status=stopped?'stopped':timeout?'timeout':e.denied?'declined':failed?'failed':'done';
   row.verdict.textContent=stopped?'Stopped':timeout?'Timed out':e.denied?'Declined':failed?'Failed':'Done';
+  row.progress.hidden=true;
   if(Number.isFinite(e.ms))row.duration.textContent=e.ms<1000?Math.round(e.ms)+' ms':(e.ms/1000).toFixed(1)+' s';
   const text=typeof e.text==='string'?e.text:String(e.summary||e.error||(e.data?JSON.stringify(e.data,null,2):'(No output)'));
   row.outcome.textContent=failed?toolErrorText(e,text):toolResultSummary(e,text);row.outcome.hidden=!row.outcome.textContent;
@@ -387,7 +405,7 @@ function renderEvent(e){
     case 'assistant:reasoning':renderer.commitReasoning(e);break;
     case 'tool:call':case 'subagent:tool':openTool(e);break;
     case 'tool:result':case 'tool:error':case 'subagent:tool:done':finishTool(e);break;
-    case 'tool:progress':{const row=tools.get(toolKey(e))||(!e.id&&tools.size===1?[...tools.values()][0]:null);if(row)row.preview.textContent=e.text||'';break;}
+    case 'tool:progress':{const row=tools.get(toolKey(e))||(!e.id&&tools.size===1?[...tools.values()][0]:null);if(row){row.progress.textContent=e.text||'';row.progress.hidden=!e.text;}break;}
     case 'error':{const error=el('div','error');error.append(el('p','error-message',e.message||'Unknown error'));deadlineHelp(error,e.message,e.status);append(error);break;}
     case 'status':announce(e.text||'Ready');break;
     case 'turn:start':if(sendOperation&&sendOperation.sessionId===sessionId)sendOperation.sawTurn=true;clearTimeout(awaitTurnTimer);if(sendPhase!=='uncertain')sendPhase='idle';setBusy(true);break;
@@ -442,6 +460,7 @@ function apply(e){
   }
   if(e.kind==='bridge:state'){
     const next=e.state||{};changeSession(next.sessionId);state=next;renderState();
+    if(requestedSettings){const section=requestedSettings;requestedSettings=null;openSettings(section);}
     if(!state.agent?.busy)for(const row of tools.values())if(row.restored){
       row.restored=false;row.node.dataset.status='unknown';row.verdict.textContent='No saved result';
       row.outcome.textContent='No result was kept in this transcript.';row.outcome.hidden=false;
@@ -499,21 +518,84 @@ function renderState(){
   setBusy(state.agent?.busy);
   renderThreads();renderQuestions();renderStrips();renderQueue();welcome();if($('modal').open)modalRefresh?.();if(page!=='chat')requestPanelRefresh();
 }
+function editQueued(item,owner){
+  modal('Edit follow-up',root=>{
+    const form=el('form','dialog-form');root.append(form);
+    const input=field(form,'Message',item.text,'textarea');input.rows=6;input.required=true;
+    const count=el('small','queue-edit-count');form.append(count);
+    const save=button('Save changes',()=>form.requestSubmit(),'primary');
+    const update=()=>{const bytes=new TextEncoder().encode(input.value).length;count.textContent=bytes.toLocaleString()+' / 8,000 bytes';save.disabled=!input.value.trim()||bytes>8000;};
+    input.addEventListener('input',update);update();
+    form.onsubmit=event=>{event.preventDefault();if(!save.disabled)modalCommand('queue:edit',{sessionId:owner,messageId:item.id,text:input.value,expectedText:item.text});};
+    modalActions(modalCancel(),save);
+  },{description:'Your composer draft and this message’s attached images stay in place.'});
+}
+function clearQueued(items,owner){
+  const ids=items.map(item=>item.id);
+  modal('Clear queued follow-ups?',root=>{
+    root.append(el('p','muted','Remove these '+ids.length+' queued messages. The current response keeps running.'));
+    const list=el('ol','queue-clear-list');for(const item of items)list.append(el('li',null,toolExcerpt(item.text||'Attached input',180)));root.append(list);
+    modalActions(modalCancel(),button('Clear queued',()=>modalCommand('queue:clear',{sessionId:owner,messageIds:ids}),'danger outline'));
+  });
+}
+async function queueAction(row,type,fields){
+  const owner=sessionId,focused=document.activeElement;let succeeded=false;
+  row.dataset.pending='true';row.querySelectorAll('button').forEach(node=>node.disabled=true);
+  try{await command(type,{sessionId:owner,...fields});succeeded=true;}
+  catch(error){toast(error.message);}
+  finally{
+    delete row.dataset.pending;delete $('queuedMessages').dataset.signature;renderQueue();
+    if(owner===sessionId&&[document.body,focused].includes(document.activeElement)){
+      const target=succeeded&&type==='queue:remove'?$('input'):focused?.isConnected&&!focused.disabled&&focused.getClientRects().length?focused:row.querySelector('summary')||$('input');
+      if(target.isConnected)target.focus({preventScroll:true});
+    }
+  }
+}
 function renderQueue(){
-  const root=$('queuedMessages'),queue=state.queue||{},items=Array.isArray(queue.items)?queue.items:[];
+  const root=$('queuedMessages'),queue=state.queue||{},items=Array.isArray(queue.items)?queue.items:[],operations=queue.operations||{};
   const hadFocus=root.contains(document.activeElement);root.hidden=!items.length;if(!items.length){root.replaceChildren();delete root.dataset.signature;if(hadFocus)$('input').focus({preventScroll:true});return;}
   const signature=JSON.stringify([sessionId,queue,connected]);if(root.dataset.signature===signature)return;root.dataset.signature=signature;
-  const focused=root.contains(document.activeElement)?document.activeElement?.dataset.focusKey:null,oldRows=new Map([...root.querySelectorAll('.queued-item')].map(row=>[row.dataset.messageId,row]));
+  if(root.dataset.session!==sessionId){root.replaceChildren();root.dataset.session=sessionId;}
+  root.dataset.state=queue.held?'paused':'queued';
+  const focused=hadFocus?document.activeElement?.dataset.focusKey:null,oldRows=new Map([...root.querySelectorAll('.queued-item')].map(row=>[row.dataset.messageId,row]));
   let heading=root.querySelector('.queued-heading'),list=root.querySelector('.queued-list');
-  if(!heading){heading=el('div','queued-heading');heading.append(el('strong'),el('span','spacer'));list=el('div','queued-list');root.append(heading,list);}
+  if(!heading){
+    heading=el('div','queued-heading');const title=el('div','queued-title');title.append(el('strong'),el('small'));
+    const clear=button('Clear',()=>clearQueued(state.queue.items,sessionId),'queue-clear','queue:clear');
+    const resume=button('Resume queue',()=>queueAction(heading,'queue:resume',{}),'outline queue-resume','queue:resume');
+    heading.append(title,clear,resume);list=el('div','queued-list');list.setAttribute('role','list');root.append(heading,list);
+  }
   heading.querySelector('strong').textContent=queue.held?'Follow-ups paused':items.length+' follow-up'+(items.length===1?'':'s')+' queued';
-  let resume=heading.querySelector('button');if(queue.held&&!resume){resume=button('Resume queue',async()=>{resume.dataset.pending='true';resume.disabled=true;try{await command('queue:resume');}catch(error){toast(error.message);}finally{delete resume.dataset.pending;if(resume.isConnected)resume.disabled=!connected;}},'outline','queue:resume');heading.append(resume);}if(resume){resume.hidden=!queue.held;resume.disabled=!connected||resume.dataset.pending==='true';}
+  heading.querySelector('small').textContent=queue.held?items.length+' waiting for you':'Added after the current response or tool batch';
+  const resume=heading.querySelector('.queue-resume');resume.hidden=!queue.held;resume.disabled=!connected||heading.dataset.pending==='true';
+  const clear=heading.querySelector('.queue-clear');clear.hidden=!operations.clear;clear.disabled=!connected||heading.dataset.pending==='true';
   let reason=root.querySelector('.queue-reason');if(queue.held&&queue.reason){if(!reason){reason=el('p','queue-reason');root.insertBefore(reason,list);}reason.textContent=queue.reason;}else reason?.remove();
   const wanted=new Set(items.map(item=>String(item.id)));for(const [id,row]of oldRows)if(!wanted.has(id))row.remove();
-  items.forEach((item,index)=>{const id=String(item.id);let row=oldRows.get(id);if(!row){row=el('div','queued-item');row.dataset.messageId=id;const copy=el('div','queued-copy'),text=el('p'),status=el('small');copy.append(text,status);const remove=button('Remove',async()=>{const origin=sessionId;row.dataset.removing='true';remove.disabled=true;try{await command('queue:remove',{messageId:id});if(sessionId===origin&&[document.body,remove].includes(document.activeElement))$('input').focus({preventScroll:true});}catch(error){toast(error.message);}finally{delete row.dataset.removing;if(remove.isConnected)remove.disabled=!connected;}},'queue-remove','queue:remove:'+id);row.append(copy,remove);}
-    row.querySelector('p').textContent=item.text||'Attached input';const images=Array.isArray(item.images)?item.images.length:0;row.querySelector('small').textContent=(item.state==='preparing'?'Preparing attachments':queue.held?'Waiting for resume':'Waiting for the current turn')+(images?' · '+images+' image'+(images===1?'':'s'):'');row.querySelector('button').disabled=!connected||row.dataset.removing==='true';if(list.children[index]!==row)list.insertBefore(row,list.children[index]||null);
+  items.forEach((item,index)=>{
+    const id=String(item.id);let row=oldRows.get(id);
+    if(!row){
+      row=el('div','queued-item');row.dataset.messageId=id;row.setAttribute('role','listitem');
+      const order=el('span','queue-order'),detail=el('details','queued-copy'),summary=el('summary');summary.dataset.focusKey='queue:review:'+id;
+      summary.append(el('p'),el('small'));const body=el('div','queued-detail'),full=el('p','queued-full'),actions=el('div','queue-actions');
+      const edit=button('Edit',()=>editQueued(row._item,sessionId),'queue-edit','queue:edit:'+id);
+      const move=direction=>{const liveItems=state.queue?.items||[],at=liveItems.findIndex(value=>String(value.id)===id),neighbor=liveItems[at+direction];if(neighbor)queueAction(row,'queue:move',{messageId:id,direction,neighborId:neighbor.id});};
+      const up=button('Move up',()=>move(-1),'queue-up','queue:up:'+id),down=button('Move down',()=>move(1),'queue-down','queue:down:'+id);
+      const copy=button('Copy',()=>copyText(row._item.text||''),'queue-copy','queue:copy:'+id);
+      actions.append(edit,up,down,copy);body.append(full,actions);detail.append(summary,body);
+      const remove=button('Remove',()=>queueAction(row,'queue:remove',{messageId:id}),'queue-remove','queue:remove:'+id);
+      row.append(order,detail,remove);
+    }
+    row._item=item;row.querySelector('.queue-order').textContent=String(index+1);
+    row.querySelector('summary p').textContent=item.text||'Attached input';row.querySelector('.queued-full').textContent=item.text||'Attached input';
+    const images=Array.isArray(item.images)?item.images.length:0,files=Array.isArray(item.files)?item.files.length:0;
+    row.querySelector('summary small').textContent=(item.state==='preparing'?'Preparing attachments':queue.held?'Paused':index===0?'Up next':'Waiting')+(files?' · '+files+' file'+(files===1?'':'s'):'')+(images?' · '+images+' image'+(images===1?'':'s'):'');
+    row.querySelectorAll('button').forEach(node=>node.disabled=!connected||row.dataset.pending==='true');
+    row.querySelector('.queue-edit').hidden=!operations.edit||item.state!=='queued'||files>0;
+    for(const [selector,neighbor]of [['.queue-up',items[index-1]],['.queue-down',items[index+1]]]){const control=row.querySelector(selector);control.hidden=!operations.move||!neighbor;control.disabled=control.disabled||item.state!=='queued'||neighbor?.state!=='queued';}
+    row.querySelector('.queue-remove').setAttribute('aria-label','Remove queued message '+(index+1));
+    if(list.children[index]!==row)list.insertBefore(row,list.children[index]||null);
   });
-  if(focused&&![...root.querySelectorAll('button')].some(node=>node===document.activeElement)){const replacement=[...root.querySelectorAll('button')].find(node=>node.dataset.focusKey===focused)||root.querySelector('button:not([hidden])')||$('input');replacement.focus({preventScroll:true});}
+  if(focused&&!root.contains(document.activeElement)){const replacement=[...root.querySelectorAll('[data-focus-key]')].find(node=>node.dataset.focusKey===focused&&!node.disabled&&node.getClientRects().length)||root.querySelector('.queued-copy summary')||$('input');replacement.focus({preventScroll:true});}
 }
 function renderThreads(){
   const search=$('threadSearch').value.toLowerCase(),root=$('threads'),signature=JSON.stringify([search,state.threads]);
@@ -1260,6 +1342,7 @@ async function enter(){
   stream.onopen=()=>{clearTimeout(connectionRetry);link='online';refresh();};
   stream.onmessage=e=>{try{apply(JSON.parse(e.data));}catch(err){console.error(err);toast('Could not render bridge update: '+err.message);}};
   stream.onerror=()=>{link='offline';connected=false;refresh();clearTimeout(connectionRetry);connectionRetry=setTimeout(checkConnection,2000);};
+  if(requestedSettings&&!connected){const section=requestedSettings;requestedSettings=null;openSettings(section);}
 }
 $('gate-form').onsubmit=async e=>{e.preventDefault();token=$('gate-token').value.trim().toLowerCase();$('gate-connect').disabled=true;$('gate-error').textContent='';try{await enter();}catch(err){showGate(err.message);}finally{$('gate-connect').disabled=false;}};
 window.addEventListener('hashchange',async()=>{

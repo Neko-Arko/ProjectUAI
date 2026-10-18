@@ -9,12 +9,14 @@ const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
 const crypto = require('node:crypto');
-const { spawn } = require('node:child_process');
+const { spawn, execFile } = require('node:child_process');
 const { once } = require('node:events');
 const { help } = require('./support');
 
 const MAX_REPLY = 8 << 20;
 const WAIT_MS = 150;
+const REQUIRED_ROUTES = ['/api/model', '/api/session', '/api/session/{sessionID}', '/api/session/{sessionID}/prompt',
+  '/api/session/{sessionID}/message', '/api/session/{sessionID}/interrupt', '/api/session/{sessionID}/permission', '/api/experimental/mcp/{server}'];
 const missing = 'Install OpenCode Desktop from https://opencode.ai, then restart Cowork. OpenCode free models require the desktop workaround; mobile is unsupported.';
 const pause = (ms, signal) => new Promise((resolve, reject) => {
   if (signal?.aborted) { reject(Error('Stopped')); return; }
@@ -158,16 +160,22 @@ function responseBody(model, message, calls, responses) {
 
 function createOpenCode({ env = process.env, binary = findBinary(env), binaryArgs = [], startupMs = 30000, pollMs = WAIT_MS } = {}) {
   let child, directory, base, password, rpcServer, rpcSecret, starting, closed = false;
-  let state = binary ? 'starting' : 'missing', modelsCache = [];
+  const enabled = env.UAI_OPENCODE_DISABLED !== '1';
+  if (!enabled) binary = null;
+  let state = !enabled ? 'disabled' : binary ? 'starting' : 'missing', modelsCache = [], version;
+  let failure = 'OpenCode could not start. Update OpenCode Desktop and restart Cowork.';
   const jobs = new Map();
   const killOwnedChild = () => { if (child && child.exitCode === null && child.signalCode === null) child.kill(); };
   process.once('exit', killOwnedChild);
   const api = (route, method, body, signal, timeout) => jsonRequest(base, password, route, method, body, signal, timeout);
-  const capability = () => ({ schema: 1, available: !!binary && !closed, state, models: '/api/opencode/models',
-    ...(state === 'missing' ? { message: help(missing) } : state === 'failed' ? { message: help('OpenCode could not start. Update OpenCode Desktop and restart Cowork.') } : {}) });
+  const capability = () => ({ schema: 1, enabled, available: !!binary && !closed && state !== 'failed', state, models: '/api/opencode/models',
+    ...(binary ? { binary: path.basename(binary) } : {}), ...(version ? { version } : {}),
+    ...(state === 'disabled' ? { message: 'OpenCode tunnel is turned off. Enable it in the desktop app, then start Cowork again.' }
+      : state === 'missing' ? { message: help(missing) } : state === 'failed' ? { message: help(failure) } : {}) });
 
   async function start() {
     if (closed) throw Error('OpenCode bridge stopped');
+    if (!enabled) throw Error('OpenCode tunnel is turned off');
     if (!binary) throw Error(missing);
     if (starting) return starting;
     starting = (async () => {
@@ -224,6 +232,14 @@ function createOpenCode({ env = process.env, binary = findBinary(env), binaryArg
       for (const name of Object.keys(isolated)) {
         if (/(?:^|_)(?:API_KEY|API_TOKEN|ACCESS_TOKEN|AUTH_TOKEN|SECRET_KEY)$/.test(name) || name === 'OPENCODE_AUTH_JSON') delete isolated[name];
       }
+      // Check the selected executable itself, not the desktop app's adjacent
+      // version file. Old compatible v2 builds may omit this diagnostic.
+      version = await new Promise(resolve => execFile(binary, [...binaryArgs, '--version'],
+        { cwd: directory, env: isolated, windowsHide: true, timeout: 4000, maxBuffer: 4096 }, (error, stdout) => {
+          const match = !error && /^opencode\s+v?(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)\s*$/i.exec(stdout.trim());
+          resolve(match ? match[1] : undefined);
+        }));
+      if (closed) throw Error('OpenCode bridge stopped');
       child = spawn(binary, [...binaryArgs, 'serve', '--port', String(port), '--hostname', '127.0.0.1'],
         { cwd: directory, env: isolated, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
       child.stdout.resume(); child.stderr.resume(); // Never expose credentials or provider output in launcher logs.
@@ -234,16 +250,20 @@ function createOpenCode({ env = process.env, binary = findBinary(env), binaryArg
         if (state === 'failed') break;
         try {
           const spec = await api('/openapi.json');
-          if (!spec.paths?.['/api/session/{sessionID}/prompt'] || !spec.paths?.['/api/model']) throw Error('Unsupported OpenCode API');
+          if (!REQUIRED_ROUTES.every(route => spec.paths?.[route])) {
+            failure = 'The installed OpenCode CLI has an incompatible server API. Install an updated OpenCode Desktop v2 and restart Cowork.';
+            break;
+          }
           const list = await api('/api/model');
           modelsCache = modelRows(list);
           if (modelsCache.length) { state = 'ready'; return; }
         } catch { /* The native server and its built-in provider plugin start independently. */ }
         await pause(pollMs);
       }
+      if (closed) throw Error('OpenCode bridge stopped');
       state = 'failed'; child?.kill();
-      throw Error('OpenCode could not start its model service. Update OpenCode Desktop and restart Cowork.');
-    })();
+      throw Error(failure);
+    })().catch(error => { if (!closed) state = 'failed'; throw error; });
     return starting;
   }
 
@@ -340,6 +360,7 @@ function createOpenCode({ env = process.env, binary = findBinary(env), binaryArg
 
   async function close() {
     if (closed) return; closed = true;
+    if (state !== 'disabled' && state !== 'missing') state = 'stopped';
     process.removeListener('exit', killOwnedChild);
     for (const job of jobs.values()) for (const res of job.pending) res.destroy();
     rpcServer?.closeAllConnections(); rpcServer?.close();

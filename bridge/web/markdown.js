@@ -4,8 +4,13 @@
   function inline(text) {
     const slots = []; let sentinel = '\u0001';
     while (text.includes(sentinel)) sentinel += '\u0001';
-    text = text.replace(/(`+)([\s\S]*?)\1|\\([\\`*_|<>])/g, (_, ticks, code, literal) => {
-      slots.push(literal ? escape(literal) : `<code>${escape(code)}</code>`); return sentinel + (slots.length - 1) + sentinel;
+    text = text.replace(/(`+)([\s\S]*?)\1|\\([\\`*_|<>])|\[([^\]\n]+)\]\(([^\s)]+)\)/g, (match, ticks, code, literal, label, destination) => {
+      if (destination) {
+        let url; try { url = new URL(destination); } catch { return match; }
+        if (!['http:', 'https:'].includes(url.protocol)) return match;
+        slots.push(`<a href="${escape(url.href)}" target="_blank" rel="noopener noreferrer">${escape(label)}</a>`);
+      } else slots.push(literal ? escape(literal) : `<code>${escape(code)}</code>`);
+      return sentinel + (slots.length - 1) + sentinel;
     });
     text = escape(text).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*([^*]+)\*/g,'<em>$1</em>');
     return text.replace(new RegExp(sentinel + '(\\d+)' + sentinel, 'g'), (_, id) => slots[Number(id)]);

@@ -7,7 +7,7 @@ namespace ProjectUai.Bridge;
 
 internal sealed class DesktopUpdater
 {
-    public const string CurrentVersion = "3.3.1";
+    public const string CurrentVersion = "3.3.5";
     private const string Repo = "Project-Ptolemy/ProjectUAI";
     private const string ManifestName = "desktop-release.json";
     private const string Executable = "UAI Bridge.exe";
@@ -194,10 +194,18 @@ internal sealed class DesktopUpdater
 
     private static Process Start(string executable, params string[] args)
     {
+        return Process.Start(LaunchInfo(executable, args)) ?? throw new IOException("The updated app could not start.");
+    }
+
+    internal static ProcessStartInfo LaunchInfo(string executable, params string[] args)
+    {
+        // The updater helper has no window. The replacement and fallback are
+        // interactive apps and must return to the taskbar visibly after restart.
         var info = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true,
-            WindowStyle = ProcessWindowStyle.Hidden, WorkingDirectory = Path.GetDirectoryName(executable)! };
+            WindowStyle = args.Contains("--apply-update") ? ProcessWindowStyle.Hidden : ProcessWindowStyle.Normal,
+            WorkingDirectory = Path.GetDirectoryName(executable)! };
         foreach (string argument in args) info.ArgumentList.Add(argument);
-        return Process.Start(info) ?? throw new IOException("The updated app could not start.");
+        return info;
     }
 
     public static void Configure(string[] args)

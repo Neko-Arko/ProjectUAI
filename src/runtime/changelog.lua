@@ -19,6 +19,27 @@ return function(env)
 	local CATEGORY_ORDER = { "added", "improved", "fixed" }
 	local ENTRIES = {
 		{
+			version = "3.3.5",
+			revision = "2026-10-18-prompt-bridge-queue",
+			date = "October 18, 2026",
+			title = "Stronger agents and desktop bridge",
+			highlights = "More reliable tool use, a refreshed desktop dashboard, richer bridge responses and editable queued follow-ups.",
+			sections = {
+				{ category = "improved", label = "Agent reliability", items = {
+					"Main and worker prompts require precise function calls, observed targets, complete arguments and real results before reporting success. Detailed guides remain available when needed.",
+					"Tools beyond a provider's 128-declaration ceiling remain accessible through a bounded catalog adapter, with normal scope and permissions.",
+				} },
+				{ category = "improved", label = "Desktop and OpenCode", items = {
+					"The refreshed desktop dashboard offers persistent OpenCode tunnel, MCP server, browser-open and automatic app-update switches. Minimize stays on the taskbar; closing stops Cowork and exits.",
+					"OpenCode reports the installed CLI version and distinguishes disabled, missing and failed setups. Required native API routes are checked before use.",
+				} },
+				{ category = "improved", label = "Conversation and follow-ups", items = {
+					"Review, edit, reorder and clear pending follow-ups in Roblox and the browser. Stale edits are rejected and attachments stay with their message.",
+					"Bridge assistant replies and tool cards give outcomes, progress, exact inputs and results a clearer presentation.",
+				} },
+			},
+		},
+		{
 			version = "3.3.1",
 			revision = "2026-10-17-native-preview-layout-fixes",
 			date = "October 17, 2026",

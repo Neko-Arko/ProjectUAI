@@ -17,6 +17,7 @@ return function(env)
 	local providers = env.require("provider/registry")
 	local chat = env.require("provider/chat")
 	local stream = env.require("agent/stream")
+	local toolCatalog = env.require("provider/tool_catalog")
 
 	local M = {}
 
@@ -472,13 +473,14 @@ return function(env)
 					break
 				end
 			else
+				local executionCalls, immediate = toolCatalog.resolve(result, definitions)
 				-- Identical batches mean the model is stuck. Rather than let it burn the
 				-- turn budget, the results are replaced with a refusal that names the
 				-- problem, which is enough for most models to change tack.
-				local signature = callSignature(result.toolCalls)
+				local signature = callSignature(executionCalls)
 				-- A token-limited batch is never dispatched. It cannot count as an
 				-- executed repeat and prevent a later complete version from running.
-				if result.finish == "length" or waitingForSubagents(result.toolCalls) then
+				if result.finish == "length" or waitingForSubagents(executionCalls) then
 					lastSignature, streak = "", 0
 				elseif signature == lastSignature then
 					streak = streak + 1
@@ -496,20 +498,20 @@ return function(env)
 					session.emit("status", { text = "Breaking a repeat loop" })
 					log.warn("loop", "repeat limit hit on " .. util.ellipsis(signature, 120))
 				else
-					for _, call in ipairs(result.toolCalls) do
+					for index, call in ipairs(executionCalls) do
 						local fn = call["function"] or {}
 						local tool = registry.get(fn.name)
 						session.emit("tool:call", {
 							id = call.id,
 							name = fn.name,
 							group = tool and tool.group or nil,
-							risk = tool and tool.risk or "write",
+							risk = tool and tool.risk or (immediate[index] and "read" or "write"),
 							arguments = fn.arguments,
 						})
 					end
 
 					session.emit("status", { text = result.finish == "length" and "Requesting smaller tool calls" or #result.toolCalls == 1
-						and ("Running " .. ((result.toolCalls[1]["function"] or {}).name or "tool"))
+						and ("Running " .. ((executionCalls[1]["function"] or {}).name or "tool"))
 						or ("Running " .. util.pluralise(#result.toolCalls, "tool")) })
 
 					-- The transcript sees a result as soon as that call finishes. Keep the
@@ -529,7 +531,7 @@ return function(env)
 							session.emit("tool:error", results[index])
 						end
 					else
-						results = registry.runAll(result.toolCalls, session.toolContext(), function(outcome)
+						results = toolCatalog.runAll(executionCalls, immediate, session.toolContext(), registry, function(outcome)
 							session.emit(outcome.ok and "tool:result" or "tool:error", outcome)
 						end)
 					end

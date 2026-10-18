@@ -1,5 +1,26 @@
 # Changelog
 
+## 3.3.5 — October 18, 2026 — Stronger agents and desktop bridge
+
+- Strengthen main and worker prompts with exact native tool-call rules,
+  schema-aware arguments, observed targets, complete pagination, safe recovery
+  and evidence-based completion. Keep detailed guides on demand.
+- Fix the incomplete 128-tool workaround from `fbd093a`: retain access to tools
+  beyond the provider's declaration ceiling through a bounded catalog adapter.
+  Tool execution still uses the original dispatcher, scope and permissions.
+- Refresh the desktop dashboard with persistent OpenCode tunnel, MCP server,
+  browser-open and automatic desktop-update switches. Minimize stays on the
+  taskbar; closing the app stops its bridge and exits instead of hiding in the tray.
+- Check the installed OpenCode CLI version and required API routes, distinguish
+  disabled/missing/failed states, and report actionable setup details. Verify
+  real native tool handoff and tool-result replay with CLI 2.0.32.
+- Improve queued-message review, editing, ordering and clearing in Roblox and
+  the browser, preserving attachment ownership and rejecting stale edits.
+- Refine bridge assistant responses and tool-call cards with readable outcomes,
+  clear progress, and deliberate access to exact inputs and results.
+- Ship matching client, bridge and Windows desktop 3.3.5 artifacts. UI LIB stays
+  1.3.0 and SDK 1.0.0; the mobile companion is unchanged.
+
 ## 3.3.1 — October 17, 2026 — Live bridge previews and interface fixes
 
 - Move native temperature controls to Models → Options → Temperature so they

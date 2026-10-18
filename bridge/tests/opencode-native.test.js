@@ -8,11 +8,11 @@ const { createOpenCode, official, findBinary, responseBody, promptInput, toolDef
 const { createInference } = require('../inference');
 const { sleep } = require('./helpers/bridge');
 
-function native(t) {
+function native(t, environment = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'uai-native-fixture-'));
   const log = path.join(directory, 'events.jsonl');
   const backend = createOpenCode({ binary: process.execPath, binaryArgs: [path.join(__dirname, 'fixtures', 'opencode-cli.js')],
-    env: { ...process.env, UAI_OPENCODE_FIXTURE_LOG: log }, startupMs: 5000, pollMs: 10 });
+    env: { ...process.env, UAI_OPENCODE_DISABLED: '0', UAI_OPENCODE_FIXTURE_LOG: log, ...environment }, startupMs: 5000, pollMs: 10 });
   t.after(async () => { await backend.close(); fs.rmSync(directory, { recursive: true, force: true }); });
   return { backend, events: () => fs.readFileSync(log, 'utf8').trim().split('\n').map(JSON.parse) };
 }
@@ -32,6 +32,8 @@ test('native server discovery confines process, Basic auth and temporary files',
     }
   }
   assert.equal(backend.capability().state, 'ready');
+  assert.equal(backend.capability().version, '2.0.32');
+  assert.equal(backend.capability().binary, path.basename(process.execPath));
   assert.doesNotMatch(JSON.stringify(backend.capability()), /password|pid|directory|127\.0\.0\.1/);
   const ready = events().find(e => e.type === 'ready');
   assert.equal(ready.passwordLength, 64); assert.equal(ready.isolated, true);
@@ -39,6 +41,26 @@ test('native server discovery confines process, Basic auth and temporary files',
   await backend.close(); assert.equal(backend.capability().available, false);
   assert.equal(fs.existsSync(ready.directory), false);
   await assert.rejects(fetch('http://127.0.0.1:' + ready.port + '/api/model'));
+});
+
+test('disabled native tunnel never starts even with a configured binary', async t => {
+  const backend = createOpenCode({ binary: process.execPath, env: { UAI_OPENCODE_DISABLED: '1' } });
+  t.after(() => backend.close());
+  assert.equal(backend.capability().enabled, false);
+  assert.equal(backend.capability().state, 'disabled');
+  assert.equal(backend.capability().available, false);
+  assert.match(backend.capability().message, /turned off/);
+  await assert.rejects(backend.models(), /turned off/);
+  assert.equal(backend.accepts(url, JSON.stringify(input('ignored'))), false);
+});
+
+test('incompatible installed API fails before creating a session', async t => {
+  const { backend, events } = native(t, { UAI_OPENCODE_FIXTURE_OLD_API: '1' });
+  await assert.rejects(backend.start(), /incompatible server API/);
+  assert.equal(backend.capability().state, 'failed');
+  assert.equal(backend.capability().available, false);
+  assert.match(backend.capability().message, /incompatible server API/);
+  assert.ok(!events().some(event => event.type === 'session'));
 });
 
 test('native inference retains one job, translates tool handoff and cleans sessions', async t => {

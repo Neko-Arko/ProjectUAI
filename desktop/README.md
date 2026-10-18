@@ -5,10 +5,10 @@ updated Roblox script automatically. The desktop project is separate from the
 existing bridge and uses its server in `--desktop` mode on **127.0.0.1:28791**.
 Manual terminal startup keeps port 8790 and its existing token workflow.
 
-Download and open **UAI-Bridge-3.3.1-win-x64.exe**, then click
+Download and open **UAI-Bridge-3.3.5-win-x64.exe**, then click
 **Start Cowork**. The window shows connection, Node.js setup, OpenCode and
 update status. It detects Node.js 18+ on your computer. If none is available,
-choose **Download Node.js** or **Install Node manually**, then **Check again**.
+choose **Get Node.js** or **Manual setup**, then **Check again**.
 The app downloads the current Windows x64 LTS executable from nodejs.org, checks
 its official SHA-256, and installs it for your account without administrator
 access.
@@ -27,7 +27,7 @@ installed native CLI, starts its authenticated loopback server privately, and
 routes models in its public catalog through the native connection. OpenCode is
 **not bundled, downloaded or copied into the desktop distribution**. The app uses
 its existing Windows Job Object to own the bridge and its CLI descendant; Stop
-and Exit shut them down. The bridge also supports an absolute
+and closing the window shut them down. The bridge also supports an absolute
 `UAI_OPENCODE_BINARY` override; see the [bridge guide](../bridge/README.md).
 
 The existing direct desktop workaround still works without this app. This native
@@ -44,14 +44,40 @@ Project UAI Free is available by default when no provider is configured. Thank y
 for your continued use and support. Join [our Discord](https://discord.gg/9xYyyYuKap)
 for help, availability updates and news about more free providers.
 
-The window reports bridge startup separately from Roblox connection. Closing a
-running window hides it in the tray; **Exit** stops the owned bridge and exits.
+The window reports bridge startup separately from Roblox connection. Minimize
+keeps Cowork in the taskbar. Closing the window stops the owned bridge and its
+OpenCode process, then exits; the app never hides in the notification area.
 Repeated launches restore the existing window. Occupied ports produce an error;
 the app never chooses an undiscoverable random port or kills another application.
 
+## Desktop preferences
+
+The dashboard saves five controls for this installation and retains them across
+verified app updates:
+
+| Control | Default | Behavior |
+| --- | --- | --- |
+| OpenCode tunnel | On | Uses the installed CLI for native free models. Turn off to avoid starting OpenCode. |
+| MCP access | On | Allows external coding agents to connect to UAI's MCP endpoint. Turning it off rejects MCP sessions. |
+| Open browser when bridge starts | On | Opens Cowork after successful bridge startup. **Open Cowork** always opens it manually. |
+| Start bridge when app opens | Off | Starts the bridge after Node.js detection; does not register Windows startup. |
+| Download app updates | On | Checks and downloads desktop updates automatically. **Check for updates** remains available when off. |
+
+Stop the bridge before changing OpenCode or MCP. The next start receives the
+saved settings; existing tool calls are never silently interrupted by a switch.
+The OpenCode card shows readiness, the detected CLI version, or a setup problem.
+MCP access controls external agents; OpenCode's private tool relay remains
+independent. App preferences contain no credentials, and malformed preference
+files recover to defaults. Disabling automatic app downloads lets a download
+already in progress finish. Closing always exits, including when an update is
+staged; the new version starts the next time you open Cowork. **Restart to update
+app** applies a staged update immediately after the bridge has stopped.
+Bridge worker updates continue automatically when work is idle.
+
 ## Automatic connection
 
-External AI harnesses can use the same desktop bridge as an MCP server. Open
+External AI harnesses can use the same desktop bridge as an MCP server. Click
+**MCP setup** in the running desktop app to open its browser setup panel, or open
 **Settings → MCP** in Cowork to copy the configuration for your harness. The
 single executable accepts `--mcp-stdio`, runs its verified embedded adapter with
 the detected Node runtime, and discovers the already-running desktop bridge.
@@ -67,7 +93,7 @@ Disable **Find desktop app automatically** to opt out. `bridge.stop()` suspends
 discovery until `bridge.sync()` or a connection-setting change. Unloading releases
 the discovery worker and ignores pending results.
 
-With client 3.3.1, authenticated bridge contact selects Web runtime automatically;
+With client 3.3.5, authenticated bridge contact selects Web runtime automatically;
 disconnecting restores Game for subsequent requests. Stopping or restarting the
 launcher does not resend an inference request. Update the packaged client and
 bridge together when building a desktop distribution.
@@ -91,7 +117,7 @@ cannot start. The original shortcut continues to work. Bridge cache identity
 stays stable across desktop updates. Failed network or integrity checks leave
 the current app usable and retry later.
 
-Desktop 1.0 has no updater, so its users need one manual download of 3.3.1 first.
+Desktop 1.0 has no updater, so its users need one manual download of 3.3.5 first.
 For each future release, publish `desktop-release.json`,
 `UAI-Bridge-<version>-win-x64.exe`, and its adjacent `.sha256` on the same official
 `v<version>` or `desktop-v<version>` GitHub release. The manifest includes the
@@ -139,8 +165,10 @@ powershell -ExecutionPolicy Bypass -File desktop/verify.ps1
 The desktop verification checks the release executable and embedded file hashes,
 single-file startup, and the absence of bundled Node/OpenCode runtimes. It exercises
 detected Node, repeated startup, discovery, simulated game status, graceful stop
-and restart with a new token. It also renders a native WinForms window preview in
-`.build/verification/launcher.png`; inspect it. These checks do not claim a live
+and restart with a new token. It checks persisted preferences, launch switches,
+native minimize/restore, and window-close shutdown against the packaged bridge.
+It also renders native WinForms window previews in
+`.build/verification/launcher.png` and `launcher-compact.png`; inspect them. These checks do not claim a live
 executor/Roblox connection. The source compiles with the official Luau compiler.
 
 Build outputs, dependency caches and intermediate files are ignored by Git.

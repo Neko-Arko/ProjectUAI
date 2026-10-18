@@ -77,7 +77,7 @@ case("OpenCode declarations recover through the actual scoped file tool", functi
 	local prompt = f.env.require("agent/prompt")
 	check("unrelated providers do not get OpenCode instructions", not has(prompt.build({ tools = {} }), "OpenCode compatibility:"))
 	local registered = prompt.build({ opencodeCompatibility = true,
-		tools = { { name = "bash" }, { name = "read" }, { name = "edit" }, { name = "glob" }, { name = "grep" }, { name = "list" } } })
+		tools = { { name = "bash" }, { name = "read" }, { name = "edit" }, { name = "glob" }, { name = "grep" }, { name = "list" }, { name = "shell" } } })
 	check("real host-provided handlers retain their names", not has(registered, "OpenCode compatibility:"))
 	f.healthy(); f.close()
 end)

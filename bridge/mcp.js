@@ -21,11 +21,11 @@ function canonical(value) {
   return result;
 }
 
-function createMcp({ version, getState, connected, enqueue, receipt, cancelCommand, readBody, headers = {} }) {
+function createMcp({ version, getState, connected, enqueue, receipt, cancelCommand, readBody, headers = {}, enabled = true }) {
   const sessions = new Map(), cached = [];
   let closed = false, activeCalls = 0, cacheBytes = 0, catalogAt = 0;
 
-  function ready() { return connected() && getState()?.mcp?.schema === 1; }
+  function ready() { return enabled && !closed && connected() && getState()?.mcp?.schema === 1; }
   function catalog() {
     if (!ready()) return [];
     const names = new Set();
@@ -42,8 +42,9 @@ function createMcp({ version, getState, connected, enqueue, receipt, cancelComma
     }));
   }
   function capability() {
-    return { schema: 1, endpoint: '/mcp', transports: ['streamable-http', 'stdio'],
-      available: ready(), connected: connected(), tools: catalog().length, sessions: sessions.size };
+    return { schema: 1, endpoint: '/mcp', transports: ['streamable-http', 'stdio'], enabled,
+      available: ready(), connected: connected(), tools: catalog().length, sessions: sessions.size,
+      ...(!enabled ? { message: 'MCP is turned off. Enable MCP in the desktop app, then start Cowork again.' } : {}) };
   }
   function catalogFingerprint(tools) {
     return crypto.createHash('sha256').update(JSON.stringify(tools)).digest('hex');
@@ -200,6 +201,7 @@ function createMcp({ version, getState, connected, enqueue, receipt, cancelComma
   }
 
   async function handle(req, res) {
+    if (!enabled) return json(res, 503, rpcError(null, -32000, 'MCP is turned off. Enable MCP and restart Cowork.'), { connection: 'close' });
     if (closed) return json(res, 503, rpcError(null, -32000, 'MCP bridge stopped'));
     const versionHeader = req.headers['mcp-protocol-version'];
     if (versionHeader && !PROTOCOLS.includes(versionHeader)) return json(res, 400, rpcError(null, -32600, 'Unsupported MCP protocol version'));

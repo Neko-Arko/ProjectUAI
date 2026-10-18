@@ -18,6 +18,7 @@ return function(env)
 	local urls = env.require("net/url")
 	local headerMap = env.require("net/headers")
 	local registry = env.require("provider/registry")
+	local toolCatalog = env.require("provider/tool_catalog")
 
 	local M = {}
 
@@ -208,7 +209,7 @@ return function(env)
 		local tools = M.toolsFor(request.tools) or {}
 		local names = {}
 		for _, tool in ipairs(tools) do names[tool.name] = true end
-		for _, tool in ipairs(M.toolsFor(env.require("provider/openai").opencodeTools) or {}) do
+		for _, tool in ipairs(registry.isOpencode(record) and M.toolsFor(env.require("provider/openai").opencodeTools) or {}) do
 			if not names[tool.name] then
 				tools[#tools + 1] = tool
 				names[tool.name] = true
@@ -230,7 +231,7 @@ return function(env)
 		for key, value in pairs(request.extra or {}) do body[key] = value end
 		local toolCeiling = openai.toolCeiling(record)
 		if type(body.tools) == "table" and #body.tools > toolCeiling then
-			body.tools = openai.capTools(body.tools, toolCeiling, registry.isOpencode(record))
+			openai.limitTools(body, toolCeiling, registry.isOpencode(record))
 		end
 		env.require("provider/sampling").apply(record, request, body, { defaultOmit = true })
 		return body
@@ -496,6 +497,18 @@ return function(env)
 			res, err = fire()
 		end
 		if request.aborted and request.aborted() then return nil, "aborted" end
+		-- An explicit declaration-limit refusal is safe to repair once. Keep the
+		-- full catalogue behind the same router and teach only this live scope.
+		local toolLimit = res and not res.ok and (res.status == 400 or res.status == 422)
+			and not res.terminal and not http.terminal(err)
+			and env.require("provider/openai").toolCeilingFromMessage(env.require("provider/openai").errorText(res, err))
+		if toolLimit and body.tools and #body.tools > toolLimit and owns() and registry.compatibilityKey(record) == scope then
+			local openai = env.require("provider/openai")
+			openai.limitTools(body, toolLimit, registry.isOpencode(record))
+			openai.rememberToolCeiling(record, toolLimit)
+			if request.onRetry then request.onRetry({ attempt = 1, attempts = 2, wait = 0, reason = "limited tool declarations with catalogue preserved", status = res.status }) end
+			res, err = fire()
+		end
 		if not http.terminal(err) and env.require("provider/sampling").repair(record, body, res,
 			env.require("provider/openai").errorText(res, err), scope, owns) then
 			if request.onRetry then request.onRetry({ attempt = 1, attempts = 2, wait = 0, reason = "omitted unsupported temperature", status = res.status }) end
@@ -541,7 +554,7 @@ return function(env)
 		parsed.requestId = res.inferenceId
 		parsed.streamed = parsed.frames and parsed.frames > 0 or false
 		registry.markOk(record, parsed.ms)
-		return parsed, nil, res
+		return toolCatalog.bind(parsed, body), nil, res
 	end
 
 	return M

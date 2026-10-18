@@ -18,6 +18,7 @@ return function(env)
 	local responses = env.require("provider/responses")
 	local urls = env.require("net/url")
 	local headerMap = env.require("net/headers")
+	local toolCatalog = env.require("provider/tool_catalog")
 
 	local M = {}
 
@@ -218,6 +219,11 @@ return function(env)
 	-- The declarations are shared with the Responses adapter, which must carry
 	-- them too so the same compatibility check passes on that lane.
 	M.opencodeTools = OPENCODE_TOOLS
+	local OPENCODE_NAMES = {}
+	for _, tool in ipairs(OPENCODE_TOOLS) do OPENCODE_NAMES[tool["function"].name] = true end
+	function M.limitTools(body, limit, isOpencode)
+		toolCatalog.limit(body, limit, isOpencode and OPENCODE_NAMES or nil)
+	end
 
 	function M.buildBody(record, request)
 		local body = {
@@ -289,7 +295,7 @@ return function(env)
 		-- can exceed Chat Completions' 128 declarations even for unknown models.
 		local toolCeiling = M.toolCeiling(record)
 		if type(body.tools) == "table" and #body.tools > toolCeiling then
-			body.tools = M.capTools(body.tools, toolCeiling, registry.isOpencode(record))
+			M.limitTools(body, toolCeiling, registry.isOpencode(record))
 		end
 		env.require("provider/sampling").apply(record, request, body)
 		M.enforceOutputCeiling(record, body, request.outputCeiling)
@@ -590,43 +596,9 @@ return function(env)
 	function M.capTools(tools, limit, isOpencode)
 		limit = tonumber(limit) or 128
 		if limit ~= limit or limit == math.huge then limit = 128 end
-		limit = math.max(1, math.floor(limit))
-		if not tools or #tools <= limit then return tools end
-		if not isOpencode then
-			local capped = {}
-			for i = 1, limit do capped[i] = tools[i] end
-			return capped
-		end
-
-		local stdNames, reserved, reservedCount = {}, {}, 0
-		for _, stdTool in ipairs(OPENCODE_TOOLS) do
-			stdNames[stdTool["function"].name] = true
-		end
-		-- OpenCode body construction adds its declarations before capping. A
-		-- generic tool-limit repair must never invent new callable functions or
-		-- insert Chat-shaped definitions into a flat Responses tools array.
-		for _, tool in ipairs(tools) do
-			local name = tool["function"] and tool["function"].name or tool.name
-			if stdNames[name] and not reserved[name] and reservedCount < limit then
-				reserved[name] = true
-				reservedCount = reservedCount + 1
-			end
-		end
-		local capped, included, regularCount = {}, {}, 0
-		local maxRegular = limit - reservedCount
-		for _, t in ipairs(tools) do
-			local name = t["function"] and t["function"].name or t.name
-			if reserved[name] then
-				if not included[name] then
-					capped[#capped + 1] = t
-					included[name] = true
-				end
-			elseif not stdNames[name] and regularCount < maxRegular then
-				capped[#capped + 1] = t
-				regularCount = regularCount + 1
-			end
-		end
-		return capped
+		local body = { tools = tools }
+		M.limitTools(body, math.max(1, math.floor(limit)), isOpencode)
+		return body.tools
 	end
 
 	-- Read the window named by a context refusal, never the request size or the
@@ -936,7 +908,7 @@ return function(env)
 				local limit = (message and M.toolCeilingFromMessage(message)) or 128
 				local before = body.tools and #body.tools or 0
 				if before <= limit then return nil end
-				body.tools = M.capTools(body.tools, limit, true)
+				M.limitTools(body, limit, false)
 				return string.format("capped tools from %d to %d", before, #body.tools), "cap_tools"
 			end,
 		},
@@ -968,7 +940,7 @@ return function(env)
 		local toolCeil = M.toolCeilingFromMessage(message)
 		if toolCeil and body.tools and #body.tools > toolCeil then
 			local before = #body.tools
-			body.tools = M.capTools(body.tools, toolCeil, true)
+			M.limitTools(body, toolCeil, false)
 			return string.format("capped tools from %d to %d", before, #body.tools), "cap_tools"
 		end
 		if body.max_completion_tokens and not body.max_tokens and lowered:find("max_completion_tokens", 1, true) then
@@ -1303,7 +1275,7 @@ return function(env)
 		parsed.requestId = res.inferenceId
 		parsed.streamed = parsed.frames and parsed.frames > 0 or false
 		registry.markOk(record, parsed.ms)
-		return parsed, nil, res
+		return toolCatalog.bind(parsed, body), nil, res
 	end
 
 	return M

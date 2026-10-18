@@ -1,8 +1,8 @@
 # Project UAI — contract
 
-Current client release: **3.3.1 — October 17, 2026**.
+Current client release: **3.3.5 — October 18, 2026**.
 
-Bridge and Windows desktop release 3.3.1 use verified automatic GitHub updates.
+Bridge and Windows desktop release 3.3.5 use verified automatic GitHub updates.
 Bridge worker replacement waits for idle work and retains its session token;
 desktop app updates stage for restart with a retained fallback. Desktop detects
 Node.js 18+ or downloads a verified LTS runtime per user instead of bundling Node.
@@ -283,8 +283,9 @@ changes OpenCode privacy or subscription settings.
 
 A connected desktop bridge can additionally serve supported free OpenCode models
 through a separately installed official CLI binary. The binary is never packaged.
-The bridge advertises authenticated `capabilities.opencode` (schema 1, availability,
-state), lists verified CLI models at `/api/opencode/models`, and routes supported
+The bridge advertises authenticated `capabilities.opencode` (schema 1, enabled,
+availability, state, binary filename and detected version), validates its required
+v2 API routes, lists verified CLI models at `/api/opencode/models`, and routes supported
 models through its existing inference job protocol. Missing CLI and models outside
 its verified public catalog retain direct HTTP behavior. The native server binds
 loopback, uses private authentication and isolated owned sessions, and leaves UAI
@@ -408,6 +409,22 @@ prompt preview includes all sections. Subagents receive their own plan, permissi
 mode, selected model, host instructions and reply language, and follow-ups take
 precedence over the original task. Custom instructions override workflow/style
 defaults but cannot override tool permissions.
+
+The shared prompt explicitly requires native function calls with complete JSON
+objects, exact offered tool names and schema keys, and observed targets before
+dependent actions. Returned receipts, not plans or emitted calls, establish
+success. It distinguishes safe argument repair from uncertain side effects,
+preserves pagination cursors and calls for a requirement check before finishing.
+
+Chat and Responses declarations respect the provider's ceiling (128 by default)
+without silently losing later tools. A request-local `uai_tool_catalog` function
+(collision-safe name) lists the omitted names and bounded descriptions.
+`action=describe` returns paginated exact schemas; `action=call` supplies the real
+name and argument object. Only tools from both the original offered catalog and
+the authoritative loop scope qualify. Native dispatch rechecks permissions and
+capabilities. Provider history keeps the wrapper and call ID for valid replay;
+execution, progress and UI receipts use the original name. Explicit tool choice
+is preserved, and a smaller limit refusal retains the full original catalog.
 
 `scripting_docs` is a read-only tool in the script group with no host capability
 requirements. It supplies the detailed `docs/SCRIPT_DEVELOPMENT.md` guide offline.
@@ -834,7 +851,12 @@ unconsumed messages for explicit Resume or a later idle send. Preparing inputs
 are cancelled with their composer draft retained. Prepared follow-ups in saved
 conversations restore held; reload never starts inference. Attachment references
 are revalidated before resuming. Queue review supports individual removal in
-Roblox and the bridge; Stop is separate from Send.
+Roblox and the bridge; Stop is separate from Send. Pending inline text can be
+edited with an expected-text guard, retaining its ID and attached images.
+File-backed inputs preserve their verified references. Adjacent moves require the
+observed neighbor ID and cannot overtake a preparing entry. Clear removes only
+the reviewed IDs, preserving later arrivals. Queue snapshots advertise supported
+operations; edits, moves and removals never interrupt active inference.
 
 `agent/loop` never touches the interface. It emits into `agent/session`, which
 fans out to subscribers. Every payload also carries `kind` and `at` (epoch ms),
@@ -1447,6 +1469,12 @@ payload in one executable and verifies it into a private user cache. It detects
 Node.js 18+ or offers an official, checksum-verified LTS installation per user.
 Desktop release updates verify executable bytes and stage them for the next
 app restart, preserving the original executable and a working fallback.
+Its native dashboard persists OpenCode, MCP, browser-open, start-on-launch and
+automatic desktop-update preferences under the stable installation identity.
+Integration switches apply at Start and remain disabled while running. Minimize
+retains the taskbar window; closing stops owned processes and exits. No tray icon
+or close-to-tray behavior remains. Disabling automatic desktop downloads keeps
+manual update checks and previously verified staged updates available.
 The launcher owns a bridge supervisor and its attached worker in
 `--desktop` mode on `127.0.0.1:28791`. Start opens Cowork after a structured ready
 message; Stop/Exit use owned stdin control, and a Windows Job Object prevents
@@ -1461,6 +1489,11 @@ executable's `--mcp-stdio` entry owns an adapter process without opening another
 window; it discovers an already-running desktop bridge. Checkout users can run
 `node bridge/server.js --mcp-stdio`. Connection examples live in the browser's
 Settings modal and [bridge/MCP.md](bridge/MCP.md).
+
+`UAI_MCP_DISABLED=1` disables public MCP admission, returning HTTP 503 at both
+aliases and `enabled=false` in its authenticated capability/configuration.
+`UAI_OPENCODE_DISABLED=1` independently disables the native inference backend,
+including its private MCP server. Neither flag changes Roblox tool permissions.
 
 MCP advertises schemas from the connected client's registry, excluding unavailable
 capabilities, disabled groups and effective denials. `net/mcp` executes through

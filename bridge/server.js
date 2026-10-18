@@ -121,7 +121,7 @@ const state = {
   connected: false,
 };
 
-const mcp = createMcp({ version: RELEASE.version, getState: () => state.agentState,
+const mcp = createMcp({ version: RELEASE.version, enabled: process.env.UAI_MCP_DISABLED !== '1', getState: () => state.agentState,
   connected: () => state.connected,
   enqueue: command => enqueue(command, undefined, command.type === 'mcp:close'), receipt: id => commands.get(id),
   cancelCommand, readBody,

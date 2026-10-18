@@ -21,13 +21,17 @@ internal sealed class BridgeProcess : IAsyncDisposable
     public string UpdateState { get; private set; } = "current";
     public string BridgeVersion { get; private set; } = DesktopUpdater.CurrentVersion;
     public string OpenCodeState { get; private set; } = "stopped";
+    public string? OpenCodeMessage { get; private set; }
+    public string? OpenCodeVersion { get; private set; }
+    public bool McpEnabled { get; private set; } = true;
     public string OpenCodeDetail => OpenCodeState switch
     {
-        "ready" => "OpenCode free models are ready through your installed CLI.",
+        "ready" => "Your installed OpenCode CLI is connected" + (OpenCodeVersion is { Length: > 0 } ? " (" + OpenCodeVersion + ")." : "."),
         "starting" => "Starting your installed OpenCode CLI...",
         "missing" => "For the native route, install OpenCode Desktop and restart Cowork.",
-        "failed" => "OpenCode could not start. Update OpenCode Desktop, then restart Cowork.",
-        _ => "OpenCode Desktop is optional. Cowork detects its installed CLI when started."
+        "failed" => OpenCodeMessage ?? "OpenCode could not start. Update OpenCode Desktop, then restart Cowork.",
+        "disabled" => "Native OpenCode is off for this bridge session.",
+        _ => "Use free models through your installed OpenCode CLI."
     };
     public const string Discord = "https://discord.gg/9xYyyYuKap";
     private static string Help(string text) => text.Contains(Discord, StringComparison.Ordinal) ? text : text + " Help: " + Discord;
@@ -43,7 +47,7 @@ internal sealed class BridgeProcess : IAsyncDisposable
         Changed?.Invoke();
     }
 
-    public async Task StartAsync()
+    public async Task StartAsync(BridgeLaunchOptions? options = null)
     {
         await gate.WaitAsync();
         try
@@ -72,11 +76,16 @@ internal sealed class BridgeProcess : IAsyncDisposable
             process.StartInfo.ArgumentList.Add("--desktop");
             process.StartInfo.Environment["UAI_BRIDGE_INSTALLATION_ID"] = Path.Combine(DesktopUpdater.InstallationRoot, "bridge", "server.js");
             process.StartInfo.Environment["UAI_DESKTOP_EXECUTABLE"] = Environment.ProcessPath;
+            options?.Apply(process.StartInfo);
+            McpEnabled = options?.McpEnabled ?? Environment.GetEnvironmentVariable("UAI_MCP_DISABLED") != "1";
+            OpenCodeState = (options?.OpenCodeEnabled ?? Environment.GetEnvironmentVariable("UAI_OPENCODE_DISABLED") != "1") ? "starting" : "disabled";
+            OpenCodeMessage = null; OpenCodeVersion = null;
             process.Exited += (_, _) =>
             {
                 if (ReferenceEquals(child, process) && !stopping)
                 {
                     token = null;
+                    OpenCodeState = "stopped"; OpenCodeMessage = null; OpenCodeVersion = null;
                     SetState("Could not connect", "The bridge stopped unexpectedly. Click Start Cowork to restart it.");
                 }
             };
@@ -158,7 +167,13 @@ internal sealed class BridgeProcess : IAsyncDisposable
             bool connected = doc.RootElement.GetProperty("connected").GetBoolean();
             if (secret != token || stopping) return;
             if (doc.RootElement.TryGetProperty("capabilities", out var capabilities) && capabilities.TryGetProperty("opencode", out var openCode))
+            {
                 OpenCodeState = openCode.TryGetProperty("state", out var backendState) ? backendState.GetString() ?? "missing" : "missing";
+                OpenCodeMessage = openCode.TryGetProperty("message", out var backendDetail) ? backendDetail.GetString() : null;
+                OpenCodeVersion = openCode.TryGetProperty("version", out var backendVersion) ? backendVersion.GetString() : null;
+            }
+            if (capabilities.ValueKind == JsonValueKind.Object && capabilities.TryGetProperty("mcp", out var mcp))
+                McpEnabled = !mcp.TryGetProperty("enabled", out var enabled) || enabled.GetBoolean();
             if (doc.RootElement.TryGetProperty("update", out var update))
             {
                 UpdateState = update.TryGetProperty("state", out var s) ? s.GetString() ?? "current" : "current";

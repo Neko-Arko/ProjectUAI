@@ -14,6 +14,13 @@ The desktop endpoint is `http://127.0.0.1:28791/mcp`; a terminal bridge normally
 `http://127.0.0.1:8790/mcp`. Both accept `/api/mcp` as an alias. All HTTP requests
 require `Authorization: Bearer <bridge token>`.
 
+The desktop app's **MCP access** switch controls admission when Cowork starts.
+Stop Cowork to change it, then start again. Terminal users can set
+`UAI_MCP_DISABLED=1` before launching the bridge. When disabled, `/mcp` and
+`/api/mcp` reject connections with HTTP 503, and the authenticated capability and
+configuration routes report `enabled: false`. This switch is independent of the
+private MCP connection used by the optional OpenCode inference tunnel.
+
 ## Connect a harness
 
 The desktop executable provides a stdio entry point. Replace the example path
@@ -23,7 +30,7 @@ with the location of your downloaded executable:
 {
   "mcpServers": {
     "projectuai": {
-      "command": "C:\\Tools\\UAI-Bridge-3.3.0-win-x64.exe",
+      "command": "C:\\Tools\\UAI-Bridge-3.3.5-win-x64.exe",
       "args": ["--mcp-stdio"]
     }
   }

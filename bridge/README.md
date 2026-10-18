@@ -3,7 +3,7 @@
 Use UAI in your browser while Roblox runs your tools and keeps the conversation.
 Run both on the same computer. The [Windows desktop app](../desktop/README.md)
 detects installed Node.js and offers a verified download if needed. Open the
-single **UAI-Bridge-3.3.1-win-x64.exe** download, complete Node setup, click **Start
+single **UAI-Bridge-3.3.5-win-x64.exe** download, complete Node setup, click **Start
 Cowork**, and load the updated UAI script. The browser opens and Roblox connects
 automatically on dedicated port **28791**. No terminal or token copying is needed.
 
@@ -39,7 +39,11 @@ The bridge detects OpenCode Desktop's Windows `resources/opencode-cli.exe`, nati
 `opencode-cli`/`opencode` binaries on PATH, and `~/.opencode/bin`. A custom native
 binary may be selected with the absolute `UAI_OPENCODE_BINARY` environment variable.
 Shell shims are not executed. `UAI_OPENCODE_DISABLED=1` disables this optional route.
-OpenCode's v2 server API is required (verified with CLI 2.0.27).
+OpenCode's v2 server API is required (verified with CLI 2.0.32). The bridge checks
+all required routes before accepting requests and reports the selected binary's
+actual version. Incompatible installations produce an update instruction.
+The desktop app's **OpenCode tunnel** switch persists between launches and applies
+when Cowork starts. It controls this private local connection, not a public tunnel.
 
 The bridge starts `serve` privately on a random loopback port with a random Basic
 Auth password and isolated configuration/data directories. It never reads the
@@ -47,7 +51,9 @@ user's OpenCode account credentials or forwards a provider key to that process.
 Only models reported by the native public catalog route through it; paid/custom
 models and installations without a ready native backend retain the direct path.
 Model discovery uses authenticated `GET /api/opencode/models`; `/api/hello` exposes
-`capabilities.opencode = {schema:1, available, state, models}` without CLI credentials.
+`capabilities.opencode = {schema:1, enabled, available, state, models, binary?, version?, message?}`
+without CLI credentials. Disabled, missing, starting, ready and failed states are
+distinct; `binary` is only the executable's filename.
 
 Each request gets a temporary native session and location. UAI tools are exposed
 through a private MCP server, collected after the provider stream completes, and
@@ -99,7 +105,7 @@ Failed downloads or startup keep a working version. Git checkouts and executor
 download packages are never overwritten; updates live in a per-install user cache.
 
 Publish `dist/bridge-release.json` and `dist/uai-bridge-package.json` on the same
-official `v3.3.1` or `bridge-v3.3.1` GitHub release. Generate them with
+official `v3.3.5` or `bridge-v3.3.5` GitHub release. Generate them with
 `node tools/build_bridge.js` after reviewing final bridge/web inputs, inspect
 the outputs, then run `node tools/build_bridge.js --check` and focused tests.
 Later releases must bump `bridge/release.js` and use the matching release tag.
@@ -148,8 +154,12 @@ and applies it on restart. An old 1.0 desktop ZIP needs one manual upgrade first
   If delivery is unclear, use **Check delivery** before sending again.
 - **Follow-ups** can be sent while an answer is running. They wait visibly above
   the composer and enter the conversation in order at a safe turn boundary.
-  Remove a pending message or use Resume queue after Stop, a failure, or a budget
-  limit pauses the queue. Stop stays separate from the follow-up send action.
+  Expand a numbered message to read or copy it, edit inline text, or move it up
+  or down. Images stay attached; file-backed inputs keep their verified text.
+  Clear removes only the messages reviewed in its confirmation. Stale changes
+  are rejected and your current composer draft remains intact. Remove a pending
+  message or use Resume queue after Stop, a failure, or a budget limit pauses
+  the queue. Stop stays separate from the follow-up send action.
 - **Connection, Providers, Tools, Subagents, Chat loops, Memory & skills, and
   Activity** open in a modal workspace above your conversation. Switch views in
   its top navigation; nested provider and tool dialogs return to the same view.
@@ -248,7 +258,7 @@ short screens with full drafts, long task lists and model names, live question a
 selection updates, dialog errors, keyboard focus, contrast, and forced colors.
 Inspect the saved screenshots as well as checking geometry. These fixtures do not
 replace a live executor check. See the [UI audit](UI_AUDIT.md) for the findings.
-The [3.3.1 verification record](../docs/TESTING_3.3.1.md) records the current
+The [3.3.5 verification record](../docs/TESTING_3.3.5.md) records the current
 bridge release checks; the entire native suite is not part of this pass.
 
 Protocol remains version 2. `/api/hello` advertises optional picture and normalized

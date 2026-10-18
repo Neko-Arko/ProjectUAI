@@ -22,6 +22,26 @@ internal static class DesktopSelfTest
         }
         try
         {
+            string preferencesPath = Path.Combine(root, "preferences.json");
+            Check("Missing preferences preserve enabled integrations and manual startup", DesktopPreferences.Load(preferencesPath) == new DesktopPreferences());
+            var savedPreferences = new DesktopPreferences(false, false, false, false, true); savedPreferences.Save(preferencesPath);
+            Check("All desktop switches survive a new preferences load", DesktopPreferences.Load(preferencesPath) == savedPreferences);
+            File.WriteAllText(preferencesPath, "{\"OpenCodeEnabled\":false}");
+            Check("Partial older preferences keep defaults for newly added controls", DesktopPreferences.Load(preferencesPath) == new DesktopPreferences(OpenCodeEnabled: false));
+            File.WriteAllText(preferencesPath, "{\"OpenCodeEnabled\":\"yes\"}");
+            Check("Invalid preferences recover to usable defaults", DesktopPreferences.Load(preferencesPath) == new DesktopPreferences());
+            var launch = new System.Diagnostics.ProcessStartInfo();
+            launch.Environment["UAI_OPENCODE_BINARY"] = "C:\\Installed App\\opencode-cli.exe";
+            savedPreferences.BridgeOptions.Apply(launch);
+            Check("Disabled integration switches are passed to the child process", launch.Environment["UAI_OPENCODE_DISABLED"] == "1" && launch.Environment["UAI_MCP_DISABLED"] == "1");
+            new DesktopPreferences().BridgeOptions.Apply(launch);
+            Check("Re-enabled integrations override stale disables and retain binary override", launch.Environment["UAI_OPENCODE_DISABLED"] == "0" && launch.Environment["UAI_MCP_DISABLED"] == "0" && launch.Environment["UAI_OPENCODE_BINARY"] == "C:\\Installed App\\opencode-cli.exe");
+            string launchFixture = Path.Combine(root, "App with spaces", "Cowork.exe");
+            var replacement = DesktopUpdater.LaunchInfo(launchFixture, "--skip-update", "--update-receipt", "receipt with spaces.json");
+            var fallbackLaunch = DesktopUpdater.LaunchInfo(launchFixture, "--skip-update");
+            var helperLaunch = DesktopUpdater.LaunchInfo(launchFixture, "--apply-update", "request with spaces.json");
+            Check("Updated and fallback windows launch normally while the helper stays hidden", replacement.WindowStyle == System.Diagnostics.ProcessWindowStyle.Normal && fallbackLaunch.WindowStyle == System.Diagnostics.ProcessWindowStyle.Normal && helperLaunch.WindowStyle == System.Diagnostics.ProcessWindowStyle.Hidden);
+            Check("Update launch preserves paths and arguments with spaces without a shell", !replacement.UseShellExecute && replacement.FileName == launchFixture && replacement.ArgumentList[2] == "receipt with spaces.json");
             Check("Stable versions reject previews, leading zeroes, and overflow", UpdateFiles.StableVersion("24.1.0", out _) &&
                 !UpdateFiles.StableVersion("24.1.0-rc.1", out _) && !UpdateFiles.StableVersion("024.1.0", out _) && !UpdateFiles.StableVersion("99999999999999.1.0", out _));
             Check("Missing Node returns a setup state without running another candidate", await NodeRuntime.FindAsync(default, [], Path.Combine(root, "empty-node")) is null);

@@ -5,12 +5,13 @@ namespace ProjectUai.Bridge;
 
 internal static class Palette
 {
-    public static readonly Color Canvas = Color.FromArgb(245, 246, 243);
-    public static readonly Color Ink = Color.FromArgb(30, 43, 42);
-    public static readonly Color Muted = Color.FromArgb(103, 116, 112);
-    public static readonly Color Line = Color.FromArgb(225, 230, 225);
-    public static readonly Color Accent = Color.FromArgb(182, 237, 199);
-    public static readonly Color Dark = Color.FromArgb(24, 48, 43);
+    public static readonly Color Canvas = Color.FromArgb(245, 245, 240);
+    public static readonly Color Ink = Color.FromArgb(31, 46, 42);
+    public static readonly Color Muted = Color.FromArgb(105, 119, 112);
+    public static readonly Color Line = Color.FromArgb(224, 230, 221);
+    public static readonly Color Accent = Color.FromArgb(205, 239, 160);
+    public static readonly Color Dark = Color.FromArgb(29, 53, 45);
+    public static readonly Color Green = Color.FromArgb(50, 107, 72);
     public static GraphicsPath Round(RectangleF r, float radius)
     {
         var path = new GraphicsPath();
@@ -37,6 +38,50 @@ internal sealed class SurfacePanel : Panel
         using var shape = Palette.Round(new RectangleF(0.5f, 0.5f, Width - 1, Height - 1), 16 * DeviceDpi / 96f);
         using var fill = new SolidBrush(Fill); using var edge = new Pen(Border);
         e.Graphics.FillPath(fill, shape); e.Graphics.DrawPath(edge, shape);
+    }
+}
+
+// Keep CheckBox semantics for keyboard navigation and screen readers while
+// drawing a generous native switch target. Space toggles it, just like a checkbox.
+internal sealed class ToggleSwitch : CheckBox
+{
+    public ToggleSwitch()
+    {
+        AutoSize = false; Size = new Size(52, 32); Cursor = Cursors.Hand;
+        AccessibleRole = AccessibleRole.CheckButton; BackColor = Color.White;
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+    }
+    protected override void OnCheckedChanged(EventArgs e) { base.OnCheckedChanged(e); Invalidate(); }
+    protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Invalidate(); }
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.Clear(BackColor); e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        float scale = DeviceDpi / 96f;
+        float width = 42 * scale, height = 24 * scale, x = (Width - width) / 2, y = (Height - height) / 2;
+        Color fill = Checked ? Palette.Green : Color.FromArgb(217, 224, 215);
+        if (!Enabled) fill = Checked ? Color.FromArgb(151, 175, 151) : Palette.Line;
+        using var track = Palette.Round(new RectangleF(x, y, width, height), height / 2);
+        using var brush = new SolidBrush(fill); e.Graphics.FillPath(brush, track);
+        float knob = 18 * scale, inset = 3 * scale;
+        using var white = new SolidBrush(Color.White);
+        e.Graphics.FillEllipse(white, Checked ? x + width - knob - inset : x + inset, y + inset, knob, knob);
+        if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(ClientRectangle, -1, -1));
+    }
+}
+
+internal sealed class StatusPill : Control
+{
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public bool Active { get; set; }
+    public StatusPill() { DoubleBuffered = true; BackColor = Color.White; Font = new Font("Segoe UI", 8, FontStyle.Bold); AccessibleRole = AccessibleRole.StaticText; }
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.Clear(BackColor); e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using var shape = Palette.Round(new RectangleF(0, 1, Width - 1, Height - 3), 8 * DeviceDpi / 96f);
+        using var brush = new SolidBrush(Active ? Color.FromArgb(231, 242, 220) : Color.FromArgb(241, 243, 237));
+        e.Graphics.FillPath(brush, shape);
+        TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, Active ? Palette.Green : Palette.Muted,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
     }
 }
 

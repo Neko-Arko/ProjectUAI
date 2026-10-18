@@ -611,14 +611,17 @@ case("tool capping preserves supplied declarations and fills the exact ceiling",
 		end
 		local capped = adapter.capTools(tools, 128, true)
 		check("standard declarations at the front still fill the ceiling", #capped == 128)
-		check("input order and schema survive", capped[1] == tools[1] and capped[128] == tools[128])
+		check("input order and schema survive beside the overflow catalogue", capped[1] == tools[1] and capped[127] == tools[127]
+			and (capped[128]["function"] or capped[128]).name == "uai_tool_catalog")
 		check("a small ceiling is never exceeded", #adapter.capTools(tools, 2, true) == 2)
 	end
 	local generic = { tools = {} }
 	for index = 1, 140 do generic.tools[index] = { type = "function", ["function"] = { name = "custom_" .. index } } end
 	adapter.repairForTest(generic, "Invalid tools: maximum number of items is 128")
 	check("generic repair caps the declared tools", #generic.tools == 128)
-	for index, tool in ipairs(generic.tools) do check("generic repair never invents an OpenCode tool", tool["function"].name == "custom_" .. index) end
+	for index = 1, 127 do check("generic repair preserves native declarations", generic.tools[index]["function"].name == "custom_" .. index) end
+	check("generic repair exposes omitted names through the catalogue", generic.tools[128]["function"].name == "uai_tool_catalog"
+		and generic.tools[128]["function"].parameters.properties.name.enum[1] == "custom_128")
 	local record = recordFor(f, "zen"); record.model = "cat-jam-free"
 	record.toolsCap = { model = record.model, limit = 256 }
 	check("a saved cap cannot exceed the model ceiling", adapter.toolCeiling(record) == 128)

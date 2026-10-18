@@ -125,7 +125,7 @@ case("status ownership, admission cancellation and bounded polling stay independ
 	f.h.sched.delay(0.4, function() stopWait = true end)
 	local waitingCtx = { session = parent, aborted = function() return stopWait end }
 	local interrupted = f.dispatch("agent_status", { id = record.id, wait_seconds = 30 }, waitingCtx, 0.75)
-	check("cancelling a status wait promptly returns without cancelling its child", not interrupted.ok and interrupted.text:find("aborted", 1, true)
+	check("cancelling a status wait promptly returns without cancelling its child", not interrupted.ok and interrupted.error == "aborted"
 		and record.status == "running" and not record.session.abortFlag)
 	agents.stop(record.id); f.h.sched.advance(0.3)
 	f.healthy(); f.close()

@@ -591,6 +591,8 @@ return function(env)
 			end,
 		})
 		pendingButton.instance.Visible = false
+		local pendingPreview = P.text(surface, { name = "PendingPreview", text = "", role = "caption",
+			color = theme.color.textSecondary, truncate = true, visible = false, size = UDim2.new(1, 0, 0, theme.size.chip) })
 
 		local details = P.frame(shell, { name = "ComposerState", size = UDim2.fromOffset(0, 0), visible = false })
 		local permissionLabel = P.text(scopeRow, { name = "PermissionLabel", text = "", role = "caption", auto = "X", layoutOrder = 6 })
@@ -748,6 +750,13 @@ return function(env)
 				pendingButton.instance.Position = UDim2.fromOffset(inset, top)
 				pendingButton.instance.Size = UDim2.new(1, -inset * 2, 0, chipHeight)
 				top = top + chipHeight + theme.space.xxs
+			end
+			pendingPreview.Visible = pendingButton.instance.Visible and room >= controlHeight * 5
+			if pendingPreview.Visible then
+				local height = theme.textRole("caption").size + theme.space.xxs
+				pendingPreview.Position = UDim2.fromOffset(inset + theme.space.xs, top)
+				pendingPreview.Size = UDim2.new(1, -inset * 2 - theme.space.xs * 2, 0, height)
+				top = top + height + theme.space.xs
 			end
 			-- Extra context yields to the typing row when any window is short.
 			-- Attachments also remain removable from Message options.
@@ -909,6 +918,10 @@ return function(env)
 			local count = pending and pending.count or 0
 			pendingButton.instance.Visible = count > 0
 			pendingButton.setText(tostring(count) .. (pending and pending.held and " waiting · Review or resume" or " queued · Review"))
+			local first = pending and pending.items and pending.items[1]
+			pendingPreview.Text = first and ((first.state == "preparing" and "Preparing: " or "Up next: ")
+				.. util.ellipsis((first.text or "Attached input"):gsub("%s+", " "), 220)) or ""
+			pendingPreview.TextColor3 = pending and pending.held and theme.color.warn or theme.color.textSecondary
 			resizeComposer()
 		end
 

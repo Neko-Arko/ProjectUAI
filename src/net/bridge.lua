@@ -222,6 +222,13 @@ return function(env)
 			local ok, why = session.resumeQueue()
 			if not ok then error(tostring(why), 0) end
 			return session.queueSnapshot()
+		elseif kind == "queue:edit" or kind == "queue:move" or kind == "queue:clear" then
+			local ok, why
+			if kind == "queue:edit" then ok, why = session.editQueued(command.messageId, command.text, command.expectedText)
+			elseif kind == "queue:move" then ok, why = session.moveQueued(command.messageId, command.direction, command.neighborId)
+			else ok, why = session.clearQueued(command.messageIds) end
+			if not ok then error(tostring(why), 0) end
+			return session.queueSnapshot()
 		elseif kind == "abort" then
 			session.abort()
 		elseif kind == "clear" then

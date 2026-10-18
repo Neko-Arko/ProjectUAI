@@ -1,11 +1,12 @@
-UAI BRIDGE 3.3.1 — WINDOWS 10/11 (64-BIT)
+UAI BRIDGE 3.3.5 — WINDOWS 10/11 (64-BIT)
 
-1. Download UAI-Bridge-3.3.1-win-x64.exe and open it directly.
-2. If Node.js is missing, choose Download Node.js or use
-   the manual installation link. Then click Start Cowork.
+1. Download UAI-Bridge-3.3.5-win-x64.exe and open it directly.
+2. If Node.js is missing, choose Get Node.js or Manual setup.
+   Then click Start Cowork.
 3. Load the updated Project UAI script in Roblox. It connects automatically.
 
-The browser opens automatically. Installed Node.js 18+ is detected, or the app
+The browser opens automatically unless you turn off Open browser when bridge
+starts. Installed Node.js 18+ is detected, or the app
 downloads a verified Node.js LTS runtime for your account. Node is no longer
 bundled. .NET, the bridge, browser assets and client are included in the single
 executable. Supporting files are prepared automatically in your private user
@@ -13,7 +14,7 @@ cache. No ZIP extraction, terminal or administrator access is needed.
 
 OpenCode is optional and is never bundled or downloaded by this app. Install
 OpenCode Desktop from https://opencode.ai, then restart Cowork to use its native
-free-model workaround. The OpenCode card shows readiness. The original direct
+free-model workaround. The OpenCode card shows the actual CLI version and readiness. Use the OpenCode tunnel switch before starting Cowork. The original direct
 desktop workaround also remains supported; OpenCode free models are unsupported on mobile.
 UAI tools run in Roblox. The native CLI is not allowed to run desktop tools.
 OpenCode Go subscriptions use https://opencode.ai/inference/go/v1 and your Go API
@@ -32,7 +33,8 @@ The executable includes the matching client as part of its embedded files.
 Use the updated Project UAI loader in your executor.
 Roblox must remain running. The app does not launch Roblox or an executor.
 
-To connect a local coding agent, open Settings > MCP in Cowork and choose
+To connect a local coding agent, click MCP setup in the running desktop app
+or open Settings > MCP in Cowork and choose
 Copy setup prompt. The desktop executable also supports --mcp-stdio for
 harnesses that launch local MCP commands. Roblox retains tool permissions.
 
@@ -40,8 +42,9 @@ If Roblox is not connecting, open UAI > Cowork. Turn on "Find desktop app
 automatically" and turn off "Manual bridge enabled". Discovery checks port
 28791 on this computer every four seconds. Tokens refresh automatically.
 
-Closing a running app hides it in the system tray. Double-click its tray icon
-to return. Use Stop bridge to disconnect, or Exit to stop and close the app.
+Minimize keeps the app on the Windows taskbar. Closing the window stops the
+owned bridge and exits. The app never hides itself in the system tray.
+Use Stop bridge to disconnect while keeping the settings window open.
 Stopping interrupts active bridge requests and clears temporary picture uploads.
 
 Port 28791 is reserved by this app while it is running. If another program

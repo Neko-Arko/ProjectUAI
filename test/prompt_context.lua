@@ -11,6 +11,9 @@ case("prompt size stays bounded and workflows follow the offered tools", functio
 	local main, child = prompt.build(), prompt.subagent("Repair the boat")
 	check("full main and child prompts fit the fixed instruction budget", #main < 12000 and #child < 12500)
 	for _, text in ipairs({ main, child }) do
+		check("native calls, complete arguments and evidence have an explicit contract", has(text, "actual tool-call channel")
+			and has(text, "one JSON object") and has(text, "per-item errors") and has(text, "successive responses")
+			and has(text, "nextOffset as offset") and has(text, "readTool names") and has(text, "every requested deliverable"))
 		check("routine Roblox operations do not invite a blanket refusal", has(text, "ordinary client tasks")
 			and has(text, "risk label selects its permission handling") and has(text, "not a reason to refuse"))
 		check("game rules and replication limits are not blanket prohibitions", has(text, "In-game rules or anticheat are not by themselves a reason to refuse")
@@ -22,7 +25,10 @@ case("prompt size stays bounded and workflows follow the offered tools", functio
 		and not has(readOnly, "Delegation:") and not has(readOnly, "Background chat:"))
 	local noTools = prompt.subagent("Explain the result", { tools = {} })
 	check("empty tool catalogue is distinct from an unscoped preview", #noTools < #child / 2
-		and not has(noTools, "Skills:") and not has(noTools, "Files and source"))
+		and not has(noTools, "Skills:") and not has(noTools, "Files and source") and not has(noTools, "Tool calls:"))
+	local compatibility = prompt.build({ tools = { { name = "file_read" } }, opencodeCompatibility = true })
+	check("every unimplemented OpenCode placeholder is excluded explicitly", has(compatibility, "bash, read, edit, glob, grep, list, shell")
+		and has(compatibility, "Do not call them"))
 	local author = prompt.build({ tools = { { name = "file_write" }, { name = "project_build" } } })
 	check("source authors retain UI and project requirements", has(author, "Project UAI UI LIB")
 		and has(author, "project_patch_read") and has(author, "window:OnDestroy"))

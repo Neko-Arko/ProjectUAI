@@ -4,14 +4,11 @@
 // the quiet, initially closed desktop shell as well as the mobile drawer.
 function navigation(page) {
   const openSidebar = async () => {
-    if (await page.locator('#modal').evaluate(node => node.open)) {
-      await page.locator('#modalClose').click();
-      await page.locator('#modal').waitFor({ state: 'hidden' });
-    }
-    if (await page.locator('#workspaceModal').evaluate(node => node.open)) {
-      await page.locator('#workspaceClose').click();
-      await page.locator('#workspaceModal').waitFor({ state: 'hidden' });
-    }
+    // A previous click can already be finishing the close animation.
+    if (await page.locator('#modal').evaluate(node => node.open && !node.classList.contains('closing'))) await page.locator('#modalClose').click();
+    await page.locator('#modal').waitFor({ state: 'hidden' });
+    if (await page.locator('#workspaceModal').evaluate(node => node.open && !node.classList.contains('closing'))) await page.locator('#workspaceClose').click();
+    await page.locator('#workspaceModal').waitFor({ state: 'hidden' });
     // A resize can resolve before syncSidebar updates aria-expanded.
     await page.waitForFunction(() => {
       const open = innerWidth <= 768 ? document.body.classList.contains('sidebar-open') : !document.body.classList.contains('sidebar-hidden');

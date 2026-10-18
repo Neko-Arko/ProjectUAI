@@ -305,6 +305,15 @@ return function(env)
 			return ok, why
 		end
 		function session.hasQueued() return queue.pending() > 0 end
+		local function changeQueue(operation, ...)
+			if not alive or session.removed or session.clearingMessages then return false, "Conversation is unavailable" end
+			local ok, why = operation(...)
+			if ok then session.persist(); startReady() end
+			return ok, why
+		end
+		function session.editQueued(id, text, expected) return changeQueue(queue.edit, id, text, expected) end
+		function session.moveQueued(id, direction, neighborId) return changeQueue(queue.move, id, direction, neighborId) end
+		function session.clearQueued(ids) return changeQueue(queue.clearSelected, ids) end
 		-- Called only after a complete assistant/tool exchange, never while its
 		-- inference or native tools are running. A preparing head retains order.
 		function session.consumeQueued(waitForPreparation, deadline)

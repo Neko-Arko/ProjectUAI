@@ -22,8 +22,8 @@ function request(path, options = {}) {
     req.on('error', reject); req.end(body);
   });
 }
-async function desktop(t) {
-  const proc = spawn(process.execPath, ['bridge/server.js', '--desktop'], { cwd: root, env: { ...process.env, UAI_BRIDGE_TEST_NO_UPDATES: '1', UAI_OPENCODE_DISABLED: '1' }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+async function desktop(t, environment = {}) {
+  const proc = spawn(process.execPath, ['bridge/server.js', '--desktop'], { cwd: root, env: { ...process.env, UAI_BRIDGE_TEST_NO_UPDATES: '1', UAI_OPENCODE_DISABLED: '1', ...environment }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   const exit = once(proc, 'exit');
   const stop = async (eof = false) => {
     if (proc.exitCode !== null || proc.signalCode !== null) return;
@@ -99,4 +99,28 @@ test('terminal bridge does not expose desktop discovery', async t => {
   const result = await fetch(bridge.base + '/api/desktop/discover', { method: 'POST',
     headers: { Authorization: 'Bearer ' + bridge.token, 'X-UAI-Discovery': '1' }, body: '{}' });
   assert.equal(result.status, 404);
+});
+
+test('desktop integration switches disable MCP admission and native model discovery', async t => {
+  const app = await desktop(t, { UAI_MCP_DISABLED: '1' });
+  assert.equal(app.message.type, 'ready');
+  const headers = { Authorization: 'Bearer ' + app.message.token };
+  const hello = JSON.parse((await request('/api/hello', { method: 'GET', headers })).text);
+  assert.equal(hello.capabilities.opencode.enabled, false);
+  assert.equal(hello.capabilities.opencode.state, 'disabled');
+  assert.equal(hello.capabilities.mcp.enabled, false);
+  assert.equal(hello.capabilities.mcp.available, false);
+  for (const route of ['/mcp', '/api/mcp']) {
+    const response = await request(route, { headers, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize',
+      params: { protocolVersion: '2025-11-25', clientInfo: { name: 'disabled probe' }, capabilities: {} } }) });
+    assert.equal(response.status, 503);
+    assert.match(JSON.parse(response.text).error.message, /turned off/);
+  }
+  const config = JSON.parse((await request('/api/mcp/config', { method: 'GET', headers })).text);
+  assert.equal(config.enabled, false); assert.deepEqual(config.sessions, []);
+  await app.stop();
+  const enabled = await desktop(t, { UAI_MCP_DISABLED: '0' });
+  const active = JSON.parse((await request('/api/hello', { method: 'GET', headers: { Authorization: 'Bearer ' + enabled.message.token } })).text);
+  assert.equal(active.capabilities.mcp.enabled, true);
+  await enabled.stop();
 });

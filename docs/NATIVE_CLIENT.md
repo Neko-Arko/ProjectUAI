@@ -1,6 +1,6 @@
 # Native client features and limits
 
-Current native feature contract for **3.3.1**, October 17, 2026.
+Current native feature contract for **3.3.5**, October 18, 2026.
 Internal APIs are described in
 [SPEC.md](../SPEC.md); verification and native-device scenarios are in
 [CODE_WORKSPACE_TESTING.md](CODE_WORKSPACE_TESTING.md).
@@ -9,11 +9,13 @@ In-game release notes are under **App menu → What's new**, also available from
 **About → What's new**. Reload the updated native bundle to see the latest notes.
 Revised notes restore the unread marker even when the client version stays the same.
 
-Version 3.3.1 adds MCP access through the bridge, queued follow-ups, native Gemini
-support and temperature controls. Code Library gains batch cleanup; Explorer,
-Remote Spy, code selection and subagent previews receive focused improvements.
+Version 3.3.5 strengthens main and worker tool-use instructions and preserves
+access to tools beyond provider declaration limits. Pending follow-ups can be
+reviewed, edited, reordered and cleared without interrupting the active response.
+The desktop bridge gains persistent integration switches and closes normally
+instead of hiding in the tray; browser replies and tool receipts are refined.
 See the [release notes](../CHANGELOG.md) and
-[verification record](TESTING_3.3.1.md).
+[verification record](TESTING_3.3.5.md).
 
 The [script development manual](SCRIPT_DEVELOPMENT.md) is also bundled for
 models through the read-only `scripting_docs` tool. Its quickstart leads into

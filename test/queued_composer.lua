@@ -71,6 +71,28 @@ check("removing the final queued message removes its layout space", composer.she
 	and inputHolder.Position.Y.Offset == compactInputY)
 h.click(h.byName("QueueDone")); h.settle(0.2)
 
+responseDelay = 20
+send("Active while managing follow-ups")
+send("First queued thought")
+send("Second queued thought")
+composer.field.set("Keep this separate draft")
+h.click(pendingButton); h.settle(0.1)
+local queued = session.queueSnapshot().items
+local firstId, secondId = queued[1].id, queued[2].id
+local stableRow = h.byName("Queued_" .. firstId)
+check("composer previews the next follow-up", h.byName("PendingPreview", composer.shell).Text:find("First queued thought", 1, true))
+h.click(h.byName("MoveQueuedUp_" .. secondId)); h.settle(0.1)
+check("review reorders messages without rebuilding existing rows", session.queueSnapshot().items[1].id == secondId and h.byName("Queued_" .. firstId) == stableRow)
+h.click(h.byName("EditQueued_" .. secondId)); h.settle(0.1)
+local editField = h.byName("QueuedEditField"):FindFirstChildOfClass("TextBox")
+editField.Text = "Second thought refined"
+h.click(h.byName("SaveQueuedEdit")); h.settle(0.2)
+check("review edits the pending message in place", session.queueSnapshot().items[1].id == secondId and session.queueSnapshot().items[1].text == "Second thought refined")
+check("queue management preserves the current composer draft", composer.field.get() == "Keep this separate draft")
+h.click(h.byName("QueueDone")); h.settle(0.1)
+assert(session.clearQueued({ firstId, secondId }))
+h.click(h.byName("Stop", composer.shell)); h.settle(20.5)
+
 -- A bridge send retries its command receipt instead of adding another follow-up.
 responseDelay = 20
 send("Parent request for bridge steering")
@@ -83,6 +105,10 @@ commands = { { type = "send", commandId = "queued-browser", sessionId = session.
 h.settle(1.2)
 check("repeated bridge receipt cannot duplicate a queued message", session.queueSnapshot().count == 1)
 check("bridge snapshots expose queue and real context metadata", state and state.queue.count == 1 and state.context.sessionId == session.id and state.providers[1].modelInfo)
+commands = { { type = "queue:edit", commandId = "edit-browser", sessionId = session.id, messageId = "queued-browser", text = "Refined browser follow-up", expectedText = "Browser follow-up" } }
+h.settle(1.3)
+check("bridge queue editing preserves the owned identity", receipts["edit-browser"] and receipts["edit-browser"].ok
+	and session.queueSnapshot().items[1].text == "Refined browser follow-up" and session.queueSnapshot().items[1].id == "queued-browser")
 commands = { { type = "queue:remove", commandId = "remove-browser", sessionId = session.id, messageId = "queued-browser" },
 	{ type = "setting", commandId = "effort-off", sessionId = session.id, path = "agent.effort", value = "off" } }
 h.settle(1.4)

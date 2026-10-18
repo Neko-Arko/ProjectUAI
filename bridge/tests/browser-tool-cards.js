@@ -51,6 +51,7 @@ const { startBridge } = require('./helpers/bridge');
     await cards.nth(1).waitFor();
     assert.equal(await cards.first().getAttribute('open'), null, 'running call starts compact');
     assert.equal(await cards.first().locator('.arguments').textContent(), '2 lines of Luau');
+    assert.equal(await cards.first().locator('.tool-head > strong').textContent(), 'Run Luau', 'human-readable title retains the exact tool identity in details');
     assert.equal(await cards.first().locator('.tool-code-input').isVisible(), false, 'source waits behind Input');
     assert.equal(await cards.first().locator('.tool-status').evaluate(node => getComputedStyle(node, '::before').animationName), 'none', 'reduced motion disables running animation');
     await push({ events: [
@@ -58,7 +59,8 @@ const { startBridge } = require('./helpers/bridge');
       event({ kind: 'subagent:tool:done', id: 'child', callId: 'shared', name: 'run_luau', summary: 'Child inspected four lights.', ok: true, ms: 320 }),
     ] });
     await page.waitForFunction(() => document.querySelectorAll('.tool-status')[1].textContent === 'Done');
-    assert.equal(await cards.first().locator('.arguments').textContent(), 'Reading the Garden model');
+    assert.equal(await cards.first().locator('.tool-progress').textContent(), 'Reading the Garden model');
+    assert.equal(await cards.first().locator('.arguments').textContent(), '2 lines of Luau', 'progress preserves the original input summary');
     assert.equal(await cards.first().locator('.tool-status').textContent(), 'Running', 'child result cannot complete the main call');
     assert.equal(await cards.nth(1).locator('.tool-outcome').textContent(), 'Child inspected four lights.');
 
@@ -66,6 +68,7 @@ const { startBridge } = require('./helpers/bridge');
     await cards.first().locator(':scope > .tool-body > .tool-detail').first().locator(':scope > summary').click();
     await cards.first().getByRole('button', { name: 'Copy Luau', exact: true }).click();
     assert.equal(await clipboard(), code, 'source Copy preserves exact text');
+    await cards.first().locator('.tool-detail > summary').filter({ hasText: /^Raw arguments$/ }).click();
     await cards.first().getByRole('button', { name: 'Copy Arguments', exact: true }).click();
     assert.equal(await clipboard(), rawArguments, 'pretty input retains original JSON for Copy');
     const result = 'Found **Garden**.\n\n```lua\nprint("Garden is ready")\n```\n\n[Roblox documentation](https://create.roblox.com/docs)';
@@ -73,8 +76,10 @@ const { startBridge } = require('./helpers/bridge');
     await page.waitForFunction(() => document.querySelector('.tool-status').textContent === 'Done');
     assert.equal(await cards.first().getAttribute('open'), '', 'completion preserves user expansion');
     assert.equal(await cards.first().locator('.tool-duration').textContent(), '1.5 s');
+    assert.equal(await cards.first().locator('.tool-progress').isVisible(), false, 'finished calls clear transient progress');
+    assert.equal(await cards.first().locator('.tool-outcome').textContent(), 'Found Garden.', 'collapsed outcome shows prose without Markdown payload noise');
     assert.equal(await cards.first().locator('.tool-result-content strong').textContent(), 'Garden', 'successful text renders Markdown');
-    assert.match(await cards.first().locator('.tool-result-content').textContent(), /https:\/\/create\.roblox\.com\/docs/, 'the shared Markdown renderer retains link text');
+    assert.equal(await cards.first().getByRole('link', { name: 'Roblox documentation' }).getAttribute('href'), 'https://create.roblox.com/docs', 'result links use the safe shared Markdown renderer');
     await cards.first().getByRole('button', { name: 'Copy Result', exact: true }).click();
     assert.equal(await clipboard(), result, 'rendered result Copy retains original Markdown');
     await cards.first().locator('.tool-result-content .copy-code').click();

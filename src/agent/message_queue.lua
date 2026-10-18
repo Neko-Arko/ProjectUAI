@@ -87,6 +87,50 @@ return function(env)
 			end
 			return false, "queued message no longer exists"
 		end
+		function Q.edit(id, text, expected)
+			if type(text) ~= "string" or type(expected) ~= "string" then return false, "invalid queued message edit" end
+			if #text > 8000 or #expected > 16000 then return false, "An edited follow-up supports up to 8,000 bytes; attach longer input in a new message" end
+			text = util.trim(text)
+			if not util.validUtf8(text) then return false, "Queued message text must be valid UTF-8" end
+			if text == "" or #text > 8000 then return false, "Use 1 to 8,000 bytes for an edited follow-up; attach longer input in a new message" end
+			for _, entry in ipairs(items) do
+				if entry.id == id then
+					if entry.state ~= "queued" then return false, "Wait for this message to finish preparing" end
+					if #(entry.files or {}) > 0 then return false, "File-backed messages keep their verified attachment text; remove and compose a new message to replace it" end
+					if entry.text ~= expected then return false, "This follow-up changed. Review its latest text before editing again" end
+					local bytes = #text
+					for _, item in ipairs(items) do if item ~= entry then bytes = bytes + #item.text end end
+					if bytes > M.BYTES then return false, "The follow-up queue text limit was reached" end
+					entry.text = text
+					session.emit("message:edited", { messageId = id, text = text })
+					notify(); return true
+				end
+			end
+			return false, "queued message no longer exists"
+		end
+		function Q.move(id, direction, neighborId)
+			if direction ~= -1 and direction ~= 1 then return false, "invalid queue direction" end
+			for index, entry in ipairs(items) do
+				if entry.id == id then
+					local neighbor = items[index + direction]
+					if not neighbor or neighbor.id ~= neighborId then return false, "The queue order changed. Review the latest order before moving this message" end
+					if entry.state ~= "queued" or neighbor.state ~= "queued" then return false, "Messages still preparing retain their place in the queue" end
+					items[index], items[index + direction] = neighbor, entry
+					session.emit("message:moved", { messageId = id, position = index + direction })
+					notify(); return true
+				end
+			end
+			return false, "queued message no longer exists"
+		end
+		function Q.clearSelected(ids)
+			if type(ids) ~= "table" or not util.isArray(ids) or #ids > M.LIMIT then return false, "invalid queued message selection" end
+			for _, id in ipairs(ids) do if type(id) ~= "string" then return false, "invalid queued message id" end end
+			-- Only remove the reviewed identities. Newly queued messages survive, even
+			-- if a completion callback or another client adds one during this action.
+			local selected = util.copy(ids)
+			for _, id in ipairs(selected) do Q.remove(id, "queue cleared") end
+			return true
+		end
 		function Q.cancelPreparations(why)
 			local pending = util.copy(items)
 			for _, entry in ipairs(pending) do if entry.state == "preparing" then Q.reject(entry, why) end end
@@ -106,7 +150,8 @@ return function(env)
 				out[#out + 1] = { id = entry.id, text = entry.text, files = util.deepCopy(entry.files),
 					images = util.deepCopy(entry.images), at = entry.at, state = entry.state }
 			end
-			return { items = out, count = #out, limit = M.LIMIT, held = held, reason = reason }
+			return { items = out, count = #out, limit = M.LIMIT, held = held, reason = reason,
+				operations = { edit = true, move = true, clear = true } }
 		end
 		function Q.serialise()
 			local out = {}

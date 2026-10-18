@@ -1,6 +1,6 @@
 # Provider compatibility and WebSockets
 
-Applies to **3.3.1**, October 17, 2026.
+Applies to **3.3.5**, October 18, 2026.
 
 UAI implements **Chat Completions**, **Anthropic Messages** and **Google Gemini**,
 plus a dedicated **Responses** path for supported OpenCode models. Custom
@@ -11,6 +11,13 @@ The compatibility checks use synthetic HTTP responses and socket events. They
 need no running models, API keys or paid inference. Live server availability,
 model quality, tool-call accuracy, executor networking and TLS are outside that
 coverage.
+
+Chat and Responses requests keep at most 128 tool declarations by default.
+When more tools are available, `uai_tool_catalog` exposes the remaining names,
+their exact schema pages and a call action. The native dispatcher retains the
+original tool permissions, scope and execution receipts. This replaces the
+earlier cutoff that made later tools inaccessible. OpenCode compatibility
+declarations are reserved only for OpenCode routes.
 
 ## Response speed and reasoning display
 

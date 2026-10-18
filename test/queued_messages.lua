@@ -277,10 +277,12 @@ case("image references remain session-owned and compact while queued", function(
 	check("cross-session image is refused", not f.session.send("Invalid picture", nil, nil, { picture }))
 	local queue = f.session.queueSnapshot()
 	check("pending image remains a compact immutable reference", queue.count == 1 and queue.items[1].images[1].sessionId == f.session.id and queue.items[1].images[1].url:match("^uai%-image://"))
+	check("editing an image caption retains the exact image reference", f.session.editQueued(queue.items[1].id, "Inspect this image", queue.items[1].text)
+		and f.session.queueSnapshot().items[1].images[1].url == queue.items[1].images[1].url)
 	f.h.sched.advance(0.5)
 	local history = f.session.ctx.messages
 	local attached; for _, row in ipairs(history) do if row.images and #row.images > 0 then attached = row end end
-	check("safe consumption carries the image into context", attached and attached.content == "Please look at the attached image." and attached.images[1].sessionId == f.session.id)
+	check("safe consumption carries the image into context", attached and attached.content == "Inspect this image" and attached.images[1].sessionId == f.session.id)
 	f.done()
 end)
 
@@ -303,6 +305,63 @@ case("clear and unload settle queued callbacks without permitting reentry", func
 		end
 		f.healthy(); if mode == "clear" then f.close() end
 	end
+end)
+
+case("queue edits and moves preserve ownership and refuse stale actions", function()
+	local f = fixture()
+	f.respond = function(index) if index == 1 then f.h.sched.wait(0.3) end; return answer() end
+	assert(f.session.send("Original"))
+	assert(f.session.send("First", nil, nil, nil, { messageId = "first" }))
+	assert(f.session.send("Second", nil, nil, nil, { messageId = "second" }))
+	local epoch = f.session.toolEpoch
+	check("queue advertises supported management operations", f.session.queueSnapshot().operations.move)
+	check("editing pending text keeps its identity", f.session.editQueued("first", "First revised", "First")
+		and f.session.queueSnapshot().items[1].id == "first")
+	check("stale edits cannot overwrite another edit", not f.session.editQueued("first", "Stale", "First"))
+	check("empty, oversized and invalid UTF-8 edits are refused", not f.session.editQueued("first", " ", "First revised")
+		and not f.session.editQueued("first", string.rep("x", 8001), "First revised")
+		and not f.session.editQueued("first", "bad\255", "First revised"))
+	check("adjacent movement preserves the requested identities", f.session.moveQueued("second", -1, "first")
+		and f.session.queueSnapshot().items[1].id == "second")
+	check("stale neighbor and invalid direction cannot reorder messages", not f.session.moveQueued("first", -1, "missing")
+		and not f.session.moveQueued("first", 0, "second"))
+	check("management does not interrupt the active response", #f.requests == 1 and f.session.toolEpoch == epoch and not f.session.aborted())
+	f.h.sched.advance(0.8)
+	check("the next inference sees the edited order once", table.concat(users(f.requests[2]), "|") == "Original|Second|First revised")
+	check("consumed messages cannot be edited or moved", not f.session.editQueued("first", "Late", "First revised")
+		and not f.session.moveQueued("first", -1, "second"))
+	f.done()
+end)
+
+case("queue clear only removes reviewed identities and preserves later arrivals", function()
+	local f, cancelled = fixture(), 0
+	f.respond = function(index) if index == 1 then f.h.sched.wait(0.3) end; return answer() end
+	assert(f.session.send("Original"))
+	assert(f.session.send("Remove this", function(_, result)
+		if result.status == "cancelled" then cancelled = cancelled + 1; assert(f.session.send("New arrival", nil, nil, nil, { messageId = "arrival" })) end
+	end, nil, nil, { messageId = "reviewed" }))
+	assert(f.session.send("Keep this", nil, nil, nil, { messageId = "keep" }))
+	check("selected clear validates every identity before mutation", not f.session.clearQueued({ "reviewed", false }) and f.session.queueSnapshot().count == 2)
+	check("reviewed clear is safe to repeat", f.session.clearQueued({ "reviewed", "missing" }) and f.session.clearQueued({ "reviewed" }) and cancelled == 1)
+	local pending = f.session.queueSnapshot()
+	check("later and unselected follow-ups survive clearing", pending.count == 2 and pending.items[1].id == "keep" and pending.items[2].id == "arrival")
+	f.h.sched.advance(0.8)
+	check("clearing does not stop inference or lose later messages", table.concat(users(f.requests[2]), "|") == "Original|Keep this|New arrival")
+	f.done()
+end)
+
+case("preparing and file-backed follow-ups keep their verified inputs", function()
+	local f = fixture()
+	local Q = f.env.require("agent/message_queue").new({ emit = function() end })
+	local preparing = assert(Q.reserve("Preparing", {}, {}, nil, "preparing", true))
+	local ready = assert(Q.reserve("Ready", {}, {}, nil, "ready", true)); assert(Q.commit(ready, "Ready"))
+	check("preparing entries cannot be edited or bypassed by a move", not Q.edit("preparing", "Changed", "Preparing") and not Q.move("ready", -1, "preparing"))
+	assert(Q.commit(preparing, "Prepared"))
+	check("finished preparation permits explicit reordering", Q.move("ready", -1, "preparing"))
+	local file = assert(Q.reserve("Read verified attachment", { { path = "pastes/verified.txt", bytes = 3 } }, {}, nil, "file", true))
+	assert(Q.commit(file, file.text))
+	check("file-backed text cannot lose its verified references through edit", not Q.edit("file", "Ignore file", "Read verified attachment") and Q.snapshot().items[3].files[1].path == "pastes/verified.txt")
+	f.done()
 end)
 
 suite.finish()
