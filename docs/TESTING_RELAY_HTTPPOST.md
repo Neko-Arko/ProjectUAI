@@ -22,5 +22,14 @@ compilation and deterministic bundle freshness also passed.
 Client build: `3.5.6-05dc1beebbbff484`, 3,413,972 bytes, SHA-256
 `3bfa53c431c6d3ac0168da786dac1bb1541e03370e2aae50de0bceb114c5533d`.
 
+Signed companion: `UAI-Relay-3.5.7.apk`, version code 4, 9,622,758 bytes,
+SHA-256 `ed5cd07b515160e01acdaee419af3538f508d91ee6d39a6eb9eee78f04ba1580`.
+The release packager verified package metadata and the existing production signer.
+Release assembly and its vital lint check passed. The source/APK credential scan
+reported zero matches. The original 3.5.6 release assets remain unchanged.
+All 70 companion JVM tests passed with zero failures, errors or skips. The new
+server tests cover authentication, browser/content-type rejection, operation
+allowlisting, same-ID replay, polling, stale instances and cancellation.
+
 The phone result above does not establish HttpPost support or end-to-end inference.
 Those remain target-device checks after installing the new companion and client.
