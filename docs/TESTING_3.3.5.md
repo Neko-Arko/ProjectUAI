@@ -78,8 +78,11 @@ path works through the installed CLI, beyond the deterministic fixtures.
   `desktop/.build/verification/launcher.png` and `launcher-compact.png`. The compact
   window keeps the title and connection controls visible and scrolls vertically.
 - A live-update probe using the exact `v3.3.1` desktop updater and download code
-  is compiled and audited. Its published-release download check runs after
-  publication, without launching or installing the downloaded executable.
+  passes against the published release. Starting with an empty isolated cache,
+  it discovers, downloads, verifies and stages 3.3.5, then verifies the staged
+  file again. The result is `verified=true`, `state=Ready`; the staged executable
+  matches the final byte count and SHA-256 above. No downloaded app is launched
+  or installed by this probe.
 
 - Browser verification passes `browser.js`, `browser-tool-cards.js`,
   `browser-queue.js`, `browser-desktop-redesign.js` and `browser-workflows.js`.
@@ -99,9 +102,16 @@ path works through the installed CLI, beyond the deterministic fixtures.
 
 ## Publication
 
-The release uses the `v3.3.5` tag and a stable GitHub release containing seven
-assets: both updater manifests, the bridge package, the desktop executable and
-checksum, and the native bundle and manifest. Publication verification downloads
-all seven assets anonymously and compares their bytes and SHA-256 hashes with
-the reviewed local outputs. The exact 3.3.1 desktop updater then checks and stages
-the public release in an isolated cache. These checks run after publication.
+The annotated `v3.3.5` tag points to release commit
+`49cc1b3877b88b4069260b89d4cffad6d4012780`, pushed to `main` with the tag.
+The [GitHub release](https://github.com/Project-Ptolemy/ProjectUAI/releases/tag/v3.3.5)
+is published as stable and latest, with all seven assets: both updater manifests,
+the bridge package, the desktop executable and checksum, and the native bundle
+and manifest.
+
+Post-publication verification passes on October 18, 2026. All seven assets were
+downloaded anonymously from their public release URLs and matched the reviewed
+local byte counts and SHA-256 hashes. The exact 3.3.1 desktop updater independently
+downloaded and staged this release from an empty cache, reaching `Ready` with
+verified executable bytes. Desktop 1.0 predates the updater and still needs one
+manual download.
