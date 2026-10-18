@@ -10,6 +10,29 @@ executor version alongside any report.
 authenticated status. It never prints the pairing token or raw bodies. A PASS
 here does **not** demonstrate inference forwarding.
 
+## Delta transport diagnosis
+
+If discovery exhausts the request aliases with `executor threw`, run
+`transport_probe.lua` separately in Delta's editor and read Delta's console.
+It prints a bounded, scrubbed native exception instead of UAI's generic category.
+Only public GETs are used: companion hello through `request` and `HttpGet` at
+`127.0.0.1` and `localhost`, then this public README over HTTPS using `request`.
+No pairing, inference, saved settings, response bodies or response headers enter
+the report. The script stops after a five-second wait expires; a native call may
+still be running, and no further calls are dispatched by that run.
+
+The [Delta scripts guide](https://docs.deltaexploits.gg/scripts) points to SUNC
+for function behavior and to Delta's console for troubleshooting. The linked
+[SUNC request reference](https://docs.sunc.su/Miscellaneous/request/) documents
+the `{ Url, Method }` format used here. Neither page establishes that Android
+loopback HTTP works on a particular Delta build.
+
+Open `http://127.0.0.1:8790/api/hello` in the same phone's browser as a separate
+listener check. Browser success with native failure isolates the executor path.
+Public HTTPS success alone does not demonstrate local HTTP support. A successful
+`HttpGet` hello is diagnostic evidence only: the relay still needs authenticated
+POST, GET and DELETE support, which `HttpGet` alone cannot supply.
+
 ## Long-response measurement
 
 Start the controlled delayed provider with Node.js 18+ on a computer on the same
