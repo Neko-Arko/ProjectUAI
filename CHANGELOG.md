@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Probe companion request compatibility with unauthenticated hello requests.
+  A completed executor exception can try the minimal documented request format
+  and distinct native request aliases. A validated, authenticated selection is
+  retained for local polling and cancellation; provider requests are not replayed
+  to discover a working transport. Diagnostics identify the attempted formats.
 - Keep native HTTP timeouts positive after worker scheduling; fractional remaining
   budgets no longer become `Timeout = 0`. The original caller deadline still
   applies and a timed-out native request keeps its slot until it actually ends.

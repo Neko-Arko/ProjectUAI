@@ -216,11 +216,11 @@ return function(env)
 		local headers = res.Headers or res.ResponseHeaders or {}
 		if type(headers) ~= "table" then headers = {} end
 		local body = res.Body or res.ResponseData or ""
-		if type(body) ~= "string" then return nil, "malformed: transport body is not text" end
-		if #body > MAX_BODY then return nil, "response_limit: response exceeds 8 MiB" end
+		if type(body) ~= "string" then return nil, "malformed: transport body is not text", "response" end
+		if #body > MAX_BODY then return nil, "response_limit: response exceeds 8 MiB", "response" end
 		if body == "" and next(headers) == nil then
 			local said = util.trim(tostring(res.StatusMessage or ""))
-			return nil, said ~= "" and said or "the transport returned no response"
+			return nil, said ~= "" and said or "the transport returned no response", "response"
 		end
 		return {
 			status = tonumber(res.StatusCode or res.Status) or 0,
@@ -231,42 +231,58 @@ return function(env)
 		}
 	end
 
-	local function send(url, method, headers, body, timeout)
+	local function send(url, method, headers, body, timeout, profile)
 		local options = { Url = url, Method = method, Headers = headers }
 		if body and body ~= "" and method ~= "GET" and method ~= "HEAD" then
 			options.Body = body
 		end
 
-		if caps.fn.request then
+		local request = profile and profile.request or caps.fn.request
+		if request then
 			-- Set only on this path: RequestAsync accepts a fixed set of keys. Not every
 			-- executor honours it either, which is why an attempt that runs long is also
 			-- recognised after the fact rather than only prevented here. Round up so
 			-- elapsed setup time cannot turn a one-second probe into Timeout = 0;
 			-- the outer deadline still bounds waiting and retains native ownership.
-			if timeout and timeout > 0 then options.Timeout = math.max(1, math.ceil(timeout)) end
-			local ok, res = pcall(caps.fn.request, options)
-			if not ok then return nil, tostring(res) end
-			if type(res) ~= "table" then return nil, "empty executor response" end
-			return normalise(res, "executor")
+			if not profile or profile.useTimeout then
+				if timeout and timeout > 0 then options.Timeout = math.max(1, math.ceil(timeout)) end
+			end
+			if profile and profile.omitEmptyHeaders and next(headers) == nil then options.Headers = nil end
+			local ok, res = pcall(request, options)
+			if not ok then return nil, tostring(res), "transport" end
+			if type(res) ~= "table" then return nil, "empty executor response", "response" end
+			return normalise(res, profile and profile.name or "executor")
 		end
 
-		if caps.http == "none" then return nil, caps.reason("http") end
+		if caps.http == "none" then return nil, caps.reason("http"), "terminal" end
 		local ok, res = pcall(function() return env.hs:RequestAsync(options) end)
-		if not ok then return nil, tostring(res) end
-		if type(res) ~= "table" then return nil, "empty HttpService response" end
+		if not ok then return nil, tostring(res), "transport" end
+		if type(res) ~= "table" then return nil, "empty HttpService response", "response" end
 		return normalise(res, "roblox")
 	end
 
-	-- One attempt. Returns res (with .ok) or nil plus a transport error string.
+	-- One attempt. Returns res (with .ok), or nil, error, elapsed milliseconds and
+	-- a fixed failure kind. Only a completed native throw is a transport failure;
+	-- received/invalid responses and terminal waits cannot authorize alias fallback.
 	function M.request(spec)
 		local url = tostring(spec.url or "")
-		if url == "" then return nil, "no url" end
+		if url == "" then return nil, "no url", nil, "terminal" end
+		-- Local discovery can select an executor function and option shape explicitly.
+		-- Keep it local to this call; a delayed worker must use the same selection.
+		local profile = spec.executorProfile
+		if profile ~= nil then
+			if type(profile) ~= "table" or type(profile.request) ~= "function" then
+				return nil, "invalid executor transport profile", 0, "terminal"
+			end
+			profile = { request = profile.request, name = type(profile.name) == "string" and profile.name or "executor",
+				useTimeout = profile.useTimeout ~= false, omitEmptyHeaders = profile.omitEmptyHeaders == true }
+		end
 		local method = (spec.method or "GET"):upper()
 		local attempt = spec.attempt or 1
 		local headers = buildHeaders(spec, attempt)
 		local started = clock.ms()
 
-		if aborted(spec) then return nil, "aborted", 0 end
+		if aborted(spec) then return nil, "aborted", 0, "terminal" end
 		local transport = spec.relay and env.require("net/transport")
 		local relayEndpoint = transport and (spec.relayEndpoint or transport.endpoint())
 		local relayUnlimited = relayEndpoint and transport.unlimited(spec, relayEndpoint)
@@ -277,13 +293,13 @@ return function(env)
 			deadline = math.huge
 			for name in pairs(headers) do if name:lower() == "x-stainless-timeout" then headers[name] = nil end end
 		end
-		if deadline <= started then return nil, "deadline: request budget expired", 0 end
+		if deadline <= started then return nil, "deadline: request budget expired", 0, "terminal" end
 		-- A relay waiter owns no native connection between status polls. Counting
 		-- it here as well as its short nested requests used to exhaust all eight
 		-- slots with only a few agents, taking the healthy bridge offline.
 		local relayed = spec.relay == true
 		if relayed then
-			if relayWorkers >= MAX_RELAY_WORKERS then return nil, "capacity: local relay request limit reached", 0 end
+			if relayWorkers >= MAX_RELAY_WORKERS then return nil, "capacity: local relay request limit reached", 0, "terminal" end
 		else
 			-- Bridge control and result polls may share a busy host. Wait for an
 			-- actual slot within this call's short budget; never release a slot
@@ -291,20 +307,20 @@ return function(env)
 			if spec.waitForSlot then
 				while workers >= MAX_WORKERS and clock.ms() < deadline and not aborted(spec) do clock.wait(0.05) end
 			end
-			if aborted(spec) then return nil, "aborted", clock.since(started) end
+			if aborted(spec) then return nil, "aborted", clock.since(started), "terminal" end
 			if workers >= MAX_WORKERS or clock.ms() >= deadline then
-				return nil, "capacity: native HTTP slots are busy; this call was not dispatched", clock.since(started)
+				return nil, "capacity: native HTTP slots are busy; this call was not dispatched", clock.since(started), "terminal"
 			end
 		end
 		local pending = { done = false, accepting = true }
 		if relayed then relayWorkers = relayWorkers + 1 else workers = workers + 1 end
 		clock.spawn(function()
-			local ok, response, problem = pcall(function()
+			local ok, response, problem, failureKind = pcall(function()
 				-- Scheduling can outlive the caller. Recheck before dispatch while
 				-- leaving the reserved slot owned until this worker actually settles.
-				if not pending.accepting or aborted(spec) then return nil, "aborted" end
+				if not pending.accepting or aborted(spec) then return nil, "aborted", "terminal" end
 				local remaining = deadline - clock.ms()
-				if remaining <= 0 then return nil, "deadline: request budget expired before dispatch" end
+				if remaining <= 0 then return nil, "deadline: request budget expired before dispatch", "terminal" end
 				if spec.relay then
 					local relaySpec = {}
 					for key, value in pairs(spec) do relaySpec[key] = value end
@@ -314,23 +330,27 @@ return function(env)
 					relaySpec.aborted = function() return not pending.accepting or aborted(spec) end
 					return env.require("net/relay").request(relaySpec, headers, M.request)
 				end
-				return send(url, method, headers, spec.body, remaining / 1000)
+				return send(url, method, headers, spec.body, remaining / 1000, profile)
 			end)
 			if relayed then relayWorkers = math.max(0, relayWorkers - 1) else workers = math.max(0, workers - 1) end
 			if pending.accepting then
 				-- A successful call normally returns nil for its error. An and/or
 				-- fallback would turn that nil into a failure beside every HTTP 200.
-				if ok then pending.res, pending.err = response, problem
-				else pending.err = "Native HTTP transport failed" end
+				if ok then pending.res, pending.err, pending.failureKind = response, problem, failureKind
+				else pending.err, pending.failureKind = "Native HTTP transport failed", "response" end
 				pending.done = true
 			end
 		end)
 		while not pending.done and not aborted(spec) and clock.ms() < deadline do clock.wait(0.05) end
 		pending.accepting = false
-		local res, err = pending.res, pending.err
-		if aborted(spec) then res, err = nil, "aborted"
-		elseif not pending.done or clock.ms() > deadline then res, err = nil, "deadline: transport outcome is unknown; automatic retry is disabled" end
-		if res and (type(res.body) ~= "string" or #res.body > MAX_BODY) then res, err = nil, "response_limit: response exceeds its text budget" end
+		local res, err, failureKind = pending.res, pending.err, pending.failureKind
+		if aborted(spec) then res, err, failureKind = nil, "aborted", "terminal"
+		elseif not pending.done or clock.ms() > deadline then
+			res, err, failureKind = nil, "deadline: transport outcome is unknown; automatic retry is disabled", "terminal"
+		end
+		if res and (type(res.body) ~= "string" or #res.body > MAX_BODY) then
+			res, err, failureKind = nil, "response_limit: response exceeds its text budget", "response"
+		end
 		if err then err = log.redact(util.ellipsis(tostring(err), 1000)) end
 		local elapsed = clock.since(started)
 
@@ -347,7 +367,7 @@ return function(env)
 			ms = elapsed,
 			status = res and res.status or 0,
 			bytes = res and #tostring(res.body or "") or 0,
-			via = res and res.via or (caps.fn.request and "executor" or "roblox"),
+			via = res and res.via or (profile and profile.name) or (caps.fn.request and "executor" or "roblox"),
 			identity = (urls.host(url) == "openrouter.ai" and "openrouter") or spec.identity or "claude",
 			uaSent = ((spec.identity ~= "none") or urls.host(url) == "openrouter.ai") and caps.uaSupported or false,
 			error = err,
@@ -373,7 +393,7 @@ return function(env)
 				log.warn("http", string.format("%s %s failed after %s", method, entry.url,
 					util.formatDuration(elapsed)), err)
 			end
-			return nil, err or "request failed", elapsed
+			return nil, err or "request failed", elapsed, failureKind or "response"
 		end
 
 		res.ms = elapsed

@@ -20,6 +20,11 @@ return function(env)
 		local endpoint = spec.relayEndpoint or transport.endpoint()
 		if not endpoint then return noRelay() end
 		local base, token, target = endpoint.base, endpoint.token, endpoint.target
+		-- Keep one native path for the entire job, including receipt recovery and
+		-- cancellation. A later discovery scan cannot redirect an accepted request.
+		local selected = endpoint.executorProfile
+		local executorProfile = selected and { request = selected.request, name = selected.name,
+			useTimeout = selected.useTimeout, omitEmptyHeaders = selected.omitEmptyHeaders }
 		local via = target == "companion" and "relay" or "web"
 		local timeout = math.max(1, math.min(300, tonumber(spec.timeout) or 180))
 		local id = "inference_" .. env.services.HttpService:GenerateGUID(false)
@@ -32,7 +37,8 @@ return function(env)
 			if clock.ms() >= deadline then return nil, "deadline: relay request budget expired" end
 			return call({ url = base .. path, method = method, body = body,
 				headers = { Authorization = "Bearer " .. token }, identity = "none", silent = true,
-				waitForSlot = true, timeout = math.min(5, (deadline - clock.ms()) / 1000), deadlineMs = deadline, aborted = ended })
+				waitForSlot = true, timeout = math.min(5, (deadline - clock.ms()) / 1000), deadlineMs = deadline,
+				aborted = ended, executorProfile = executorProfile })
 		end
 		local cancelled = false
 		local function cancel()
@@ -40,7 +46,8 @@ return function(env)
 			cancelled = true
 			clock.spawn(function()
 				pcall(call, { url = base .. "/api/inference/" .. id, method = "DELETE",
-					headers = { Authorization = "Bearer " .. token }, identity = "none", silent = true, timeout = 2, waitForSlot = true })
+					headers = { Authorization = "Bearer " .. token }, identity = "none", silent = true, timeout = 2,
+					waitForSlot = true, executorProfile = executorProfile })
 			end)
 		end
 		pending[id] = cancel

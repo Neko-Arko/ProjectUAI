@@ -71,6 +71,16 @@ Resetting pairing does not repair an unreachable `/api/hello` endpoint. If the
 browser also cannot connect, check the companion's port and diagnostics and use
 Stop/Start to restart its listener.
 
+The client also checks executor request compatibility during discovery. If a
+completed native call throws, public hello probes can try minimal request options
+and distinct request aliases. Only an authenticated companion selects a working
+profile for later local calls. Pairing and provider work are not replayed to test
+these alternatives. The diagnostic lists the attempted aliases and option forms.
+This helps distinguish option rejection from an unreachable listener; it does not
+by itself establish Delta or OpenCode support on a phone. The
+[standard request API](https://docs.sunc.io/Miscellaneous/request/) documents
+optional Headers and does not document Timeout.
+
 The Roblox status reports actual pairing or authenticated client contact in the
 current service run. A saved token alone is shown as saved pairing, not a live
 connection. Requests shows accepted jobs, active work, received responses,

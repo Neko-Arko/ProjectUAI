@@ -19,6 +19,7 @@ return function(env)
 	local alive, started, nextProbe, epoch = true, false, 0, 0
 	local activeProbe, failures = nil, 0
 	local verifiedToken, verifiedInstance, unlimited = nil, nil, false
+	local verifiedProfile
 	local state, lastError, lastProbeAt = "off", nil, 0
 	local PROBE_MS = 30000
 	local EXCHANGE_SECONDS = 5
@@ -62,45 +63,80 @@ return function(env)
 		if config.get(path, "") ~= value then config.set(path, value, { quiet = true }) end
 	end
 
+	local function copyProfile(profile)
+		if not profile then return nil end
+		return { request = profile.request, name = profile.name,
+			useTimeout = profile.useTimeout, omitEmptyHeaders = profile.omitEmptyHeaders }
+	end
+
+	local function profileLabel(profile)
+		return profile.name .. (profile.useTimeout == false and " minimal" or " standard")
+	end
+
+	local function sameProfile(left, right)
+		return left and right and left.request == right.request and left.useTimeout == right.useTimeout
+			and left.omitEmptyHeaders == right.omitEmptyHeaders
+	end
+
 	function M.status()
 		return { mode = mode(), state = state, port = port(), server = tostring(config.get("relay.server", "")),
 			instance = tostring(config.get("relay.instance", "")), placeId = tonumber(config.get("relay.placeId", 0)) or 0,
-			error = lastError, lastProbeAt = lastProbeAt, unlimited = unlimited }
+			error = lastError, lastProbeAt = lastProbeAt, unlimited = unlimited,
+			transport = verifiedProfile and profileLabel(verifiedProfile) or nil }
+	end
+
+	local function has(text, terms)
+		for _, term in ipairs(terms) do if text:find(term, 1, true) then return true end end
+		return false
+	end
+
+	local function optionFailure(text)
+		return has(text, { "invalid option", "unknown option", "unsupported option", "unexpected option", "unrecognized option",
+			"bad argument", "invalid argument", "argument #", "invalid parameter", "unknown field", "invalid field",
+			"unexpected field", "unsupported field", "unrecognized field" })
+	end
+
+	local function timedOut(text)
+		return has(text, { "deadline", "timeout", "timed out", "etimedout", "timedout" })
 	end
 
 	-- Native exceptions can include whole request or response objects, including
 	-- a newly issued pairing token. Display only fixed categories, never excerpts.
 	local function transportProblem(problem)
 		local text = tostring(problem or ""):lower()
-		local function has(terms)
-			for _, term in ipairs(terms) do if text:find(term, 1, true) then return true end end
-			return false
+		if optionFailure(text) then
+			return "The executor rejected a native request option or argument."
 		end
-		if has({ "deadline", "timeout", "timed out" }) then
+		if timedOut(text) then
 			return "The discovery exchange reached its deadline or timed out."
 		end
-		if has({ "capacity:", "slots are busy", "request limit" }) then
+		if has(text, { "aborted", "cancelled", "canceled" }) then
+			return "The discovery exchange was cancelled."
+		end
+		if has(text, { "capacity:", "slots are busy", "request limit" }) then
 			return "Native HTTP capacity is busy; wait for other requests, then scan again."
 		end
-		if has({ "connection refused", "econnrefused", "failed to connect", "connect failed", "connection failed", "could not connect", "unable to connect" }) then
+		if has(text, { "connection refused", "econnrefused", "failed to connect", "connect failed", "connection failed", "could not connect", "unable to connect" }) then
 			return "Connection refused or failed; check that UAI Relay is running on this port."
 		end
-		if has({ "cleartext", "https-only", "https only", "only https", "unsupported protocol", "protocol is not supported", "https required" }) then
+		if has(text, { "cleartext", "https-only", "https only", "only https", "unsupported protocol", "protocol is not supported", "https required" }) then
 			return "The executor rejected local HTTP; cleartext or this protocol is not supported."
 		end
-		if has({ "permission", "denied", "not permitted", "disallowed", "blocked" }) then
+		if has(text, { "permission", "denied", "not permitted", "disallowed", "blocked" }) then
 			return "The executor denied permission for this loopback request."
 		end
-		if has({ "malformed", "empty executor", "no response", "non-text", "body is not text", "response_limit:" }) then
+		if has(text, { "malformed", "empty executor", "no response", "non-text", "body is not text", "response_limit:" }) then
 			return "The executor returned an empty, malformed or oversized response."
 		end
 		return "The executor reported an unknown transport failure."
 	end
 
-	local function readReply(step, response, problem, probePort, limit)
+	local function readReply(step, response, problem, probePort, limit, profile, failureKind)
 		local label = "Companion " .. step .. " on port " .. tostring(probePort)
 		if not response then
-			return nil, label .. " failed via " .. tostring(caps.requestName or "executor HTTP") .. ": " .. transportProblem(problem)
+			local origin = failureKind == "transport" and "executor threw"
+				or failureKind == "response" and "executor returned an unusable response" or "wait stopped"
+			return nil, label .. " failed via " .. profileLabel(profile) .. " (" .. origin .. "): " .. transportProblem(problem)
 		end
 		if not response.ok then
 			return nil, label .. " returned HTTP " .. tostring(response.status or 0) .. "."
@@ -118,31 +154,68 @@ return function(env)
 		return type(value) == "string" and #value > 0 and #value <= 128
 	end
 
+	local function profiles()
+		local out = {}
+		local function add(profile)
+			for _, prior in ipairs(out) do if sameProfile(prior, profile) then return end end
+			out[#out + 1] = copyProfile(profile)
+		end
+		if verifiedProfile then add(verifiedProfile) end
+		for index, alias in ipairs(caps.requestAliases()) do
+			if index == 1 then add({ request = alias.fn, name = alias.name, useTimeout = true, omitEmptyHeaders = false }) end
+			add({ request = alias.fn, name = alias.name, useTimeout = false, omitEmptyHeaders = true })
+		end
+		return out
+	end
+
+	-- Only a completed native throw can justify another unauthenticated hello.
+	-- A returned response, timeout, cancellation or busy worker is conclusive for
+	-- this scan. In particular, no unknown native work can accumulate across aliases.
+	local function chooseHello(probeBase, probePort, stale)
+		local candidates, attempts = profiles(), {}
+		for index, profile in ipairs(candidates) do
+			if stale() then return nil, nil, "cancelled" end
+			local authenticated = sameProfile(profile, verifiedProfile) and token() == verifiedToken and token() ~= ""
+			local hello, helloError, _, failureKind = http.request({ url = probeBase .. "/api/hello", method = "GET",
+				headers = authenticated and { Authorization = "Bearer " .. token() } or nil,
+				identity = "none", silent = true, timeout = EXCHANGE_SECONDS, aborted = stale, executorProfile = profile })
+			if stale() then return nil, nil, "cancelled" end
+			attempts[#attempts + 1] = profileLabel(profile)
+			local info, problem = readReply("hello", hello, helloError, probePort, 4096, profile, failureKind)
+			if info then
+				-- Metadata is validated before this profile can carry any credential.
+				if info.server ~= "uai-relay" then problem = "Port " .. tostring(probePort) .. " is used by another program"
+				elseif info.protocol ~= 2 then problem = "The companion hello uses an incompatible protocol; protocol 2 is required."
+				elseif not validInstance(info.instance) then problem = "The companion hello did not include a valid instance ID."
+				else return info, profile end
+			end
+			local errorText = tostring(helloError or ""):lower()
+			local stop = hello ~= nil or failureKind ~= "transport"
+				or has(errorText, { "aborted", "cancelled", "canceled", "capacity:", "slots are busy", "request limit" })
+				or (not optionFailure(errorText) and timedOut(errorText))
+			if stop or index == #candidates then
+				return nil, nil, problem .. " Attempts: " .. table.concat(attempts, ", ") .. "."
+			end
+		end
+		return nil, nil, "No captured executor HTTP request function is available."
+	end
+
 	-- A periodic health check must not make a ready relay temporarily unusable or
 	-- fill the log with an absent optional app. Settings and unload invalidate each
 	-- request; a late hello/pair cannot restore credentials for an old endpoint.
 	local function probe(mine, probeBase, probePort)
 		local function stale() return not alive or epoch ~= mine or mode() == "off" end
-		local hello, helloError = http.request({ url = probeBase .. "/api/hello", method = "GET",
-			headers = token() ~= "" and { Authorization = "Bearer " .. token() } or nil,
-			identity = "none", silent = true, timeout = EXCHANGE_SECONDS, aborted = stale })
-		if stale() then return false, "cancelled" end
-		local info, helloProblem = readReply("hello", hello, helloError, probePort, 4096)
+		local info, profile, helloProblem = chooseHello(probeBase, probePort, stale)
 		if not info then return false, helloProblem end
-		-- Check the marker even when a token was saved from an earlier companion.
-		if info.server ~= "uai-relay" then return false, "Port " .. tostring(probePort) .. " is used by another program" end
-		if info.protocol ~= 2 then return false, "The companion hello uses an incompatible protocol; protocol 2 is required." end
-		if not validInstance(info.instance) then
-			return false, "The companion hello did not include a valid instance ID."
-		end
 		local pairedToken = token()
-		if pairedToken ~= "" and (pairedToken ~= verifiedToken or info.instance ~= verifiedInstance) then
-			local status, statusError = http.request({ url = probeBase .. "/api/status", method = "GET",
-				headers = { Authorization = "Bearer " .. pairedToken }, identity = "none", silent = true, timeout = EXCHANGE_SECONDS, aborted = stale })
+		if pairedToken ~= "" and (pairedToken ~= verifiedToken or info.instance ~= verifiedInstance or not sameProfile(profile, verifiedProfile)) then
+			local status, statusError, _, failureKind = http.request({ url = probeBase .. "/api/status", method = "GET",
+				headers = { Authorization = "Bearer " .. pairedToken }, identity = "none", silent = true,
+				timeout = EXCHANGE_SECONDS, aborted = stale, executorProfile = profile })
 			if stale() then return false, "cancelled" end
 			if status and status.status == 401 then pairedToken = ""
 			else
-				local checked, statusProblem = readReply("saved-pairing check", status, statusError, probePort, 8192)
+				local checked, statusProblem = readReply("saved-pairing check", status, statusError, probePort, 8192, profile, failureKind)
 				if not checked then return false, statusProblem end
 				if checked.server ~= "uai-relay" then return false, "The saved-pairing check answered from another program." end
 				if checked.protocol ~= 2 then return false, "The saved-pairing check uses an incompatible protocol; protocol 2 is required." end
@@ -156,10 +229,11 @@ return function(env)
 			local body = util.encode({ client = "ProjectUAI-Mobile",
 				version = (env.info and env.info.version) or "0.0.0", protocol = 2,
 				placeId = place.id, gameId = place.gameId })
-			local pair, pairError = http.request({ url = probeBase .. "/api/pair", method = "POST", body = body,
-				headers = { ["Content-Type"] = "application/json" }, identity = "none", silent = true, timeout = EXCHANGE_SECONDS, aborted = stale })
+			local pair, pairError, _, failureKind = http.request({ url = probeBase .. "/api/pair", method = "POST", body = body,
+				headers = { ["Content-Type"] = "application/json" }, identity = "none", silent = true,
+				timeout = EXCHANGE_SECONDS, aborted = stale, executorProfile = profile })
 			if stale() then return false, "cancelled" end
-			local issued, pairProblem = readReply("pairing", pair, pairError, probePort, 4096)
+			local issued, pairProblem = readReply("pairing", pair, pairError, probePort, 4096, profile, failureKind)
 			if not issued then return false, pairProblem end
 			if issued.protocol ~= 2 then return false, "The pairing reply uses an incompatible protocol; protocol 2 is required." end
 			if not validInstance(issued.instance) then return false, "The pairing reply did not include a valid instance ID." end
@@ -173,6 +247,7 @@ return function(env)
 			remember("relay.placeId", place.id)
 		end
 		verifiedToken, verifiedInstance = pairedToken, info.instance
+		verifiedProfile = copyProfile(profile)
 		local inference = type(info.capabilities) == "table" and info.capabilities.inference
 		unlimited = type(inference) == "table" and inference.schema == 1 and inference.unlimited == true
 		remember("relay.instance", tostring(info.instance))
@@ -211,7 +286,7 @@ return function(env)
 	end
 
 	function M.usable()
-		return alive and mode() ~= "off" and state == "ready" and token() ~= "" and type(caps.fn.request) == "function"
+		return alive and mode() ~= "off" and state == "ready" and token() ~= "" and verifiedProfile ~= nil
 	end
 
 	function M.endpoint(retain)
@@ -219,7 +294,8 @@ return function(env)
 			if not alive or mode() == "off" or token() == "" then return nil end
 		elseif not M.usable() then return nil end
 		return { target = "companion", base = base(), token = token(),
-			instance = tostring(config.get("relay.instance", "")), enabled = true, unlimited = unlimited }
+			instance = tostring(config.get("relay.instance", "")), enabled = true, unlimited = unlimited,
+			executorProfile = copyProfile(verifiedProfile) }
 	end
 
 	local function start()
@@ -260,6 +336,7 @@ return function(env)
 	function M.forget()
 		epoch, failures = epoch + 1, 0
 		verifiedToken, verifiedInstance, unlimited = nil, nil, false
+		verifiedProfile = nil
 		remember("relay.token", "")
 		remember("relay.server", "")
 		remember("relay.instance", "")
@@ -271,8 +348,8 @@ return function(env)
 		if path ~= nil and path ~= "relay" and not util.startsWith(tostring(path), "relay.") then return end
 		epoch, failures = epoch + 1, 0
 		nextProbe = 0
+		verifiedToken, verifiedInstance, verifiedProfile, unlimited = nil, nil, nil, false
 		if path == "relay.port" then
-			verifiedToken, verifiedInstance, unlimited = nil, nil, false
 			remember("relay.token", "")
 			remember("relay.server", "")
 			remember("relay.instance", "")

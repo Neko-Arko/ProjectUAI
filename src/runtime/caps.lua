@@ -15,7 +15,7 @@ return function(env)
 
 	-- Executors disagree on where the HTTP function lives. Order matters only in
 	-- that the bare global is the modern spelling.
-	local function findRequest()
+	local function findRequests()
 		local candidates = {
 			{ name = "request", fn = callable(request) },
 			{ name = "http_request", fn = callable(http_request) },
@@ -23,10 +23,14 @@ return function(env)
 			{ name = "http.request", fn = type(http) == "table" and callable(http.request) or nil },
 			{ name = "fluxus.request", fn = type(fluxus) == "table" and callable(fluxus.request) or nil },
 		}
+		local found, seen = {}, {}
 		for _, candidate in ipairs(candidates) do
-			if candidate.fn then return candidate.fn, candidate.name end
+			if candidate.fn and not seen[candidate.fn] then
+				seen[candidate.fn] = true
+				found[#found + 1] = candidate
+			end
 		end
-		return nil, nil
+		return found
 	end
 
 	local function findClipboard()
@@ -36,7 +40,9 @@ return function(env)
 			or nil
 	end
 
-	local requestFn, requestName = findRequest()
+	local requestAliases = findRequests()
+	local primaryRequest = requestAliases[1]
+	local requestFn, requestName = primaryRequest and primaryRequest.fn, primaryRequest and primaryRequest.name
 	local compiler = callable(loadstring)
 	if not compiler and callable(getgenv) then
 		local ok, globals = pcall(getgenv)
@@ -89,6 +95,16 @@ return function(env)
 	}
 
 	M.requestName = requestName
+
+	-- Discovery may compare distinct native aliases without re-reading globals or
+	-- changing the provider transport. Copies keep its captured inventory private.
+	function M.requestAliases()
+		local out = {}
+		for _, candidate in ipairs(requestAliases) do
+			out[#out + 1] = { name = candidate.name, fn = candidate.fn }
+		end
+		return out
+	end
 
 	-- HTTP -------------------------------------------------------------------
 	-- The executor path is preferred for one specific reason: RequestAsync

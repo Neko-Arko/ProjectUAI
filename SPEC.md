@@ -1538,6 +1538,21 @@ retains its slot until completion. A failed probe distinguishes unavailable
 executor transport, connection/deadline failures, HTTP refusals and incompatible
 replies without exposing response bodies or pairing credentials.
 
+Companion discovery can compare captured native request implementations using
+unauthenticated `GET /api/hello` only. The primary implementation is tried with its
+normal options, then with the minimal documented options after a completed native
+exception; distinct aliases can also try minimal options. Repeated aliases of the
+same function are deduplicated. No-response deadlines, cancellation, capacity
+limits, returned HTTP/response errors or incompatible companion metadata end the
+search. A working profile is retained only after the companion marker, protocol,
+instance and authenticated pairing are verified. It stays local to the relay and
+is captured for an active job's submissions, polls and cancellation. Discovering
+a new profile does not switch or replay that job.
+
+Minimal native options omit the optional empty Headers table and undocumented
+Timeout field. The Lua caller still stops waiting at its own deadline; a native
+function that continues afterward keeps its connection slot until it ends.
+
 Updated companions advertise `capabilities.inference = {schema:1, unlimited:true}`.
 With the normal `agent.requestUnlimited` setting, default inference uses an
 unlimited job (`timeout:0`), while every executor-visible exchange remains bounded
