@@ -21,6 +21,7 @@ return function(env)
 	local verifiedToken, verifiedInstance, unlimited = nil, nil, false
 	local state, lastError, lastProbeAt = "off", nil, 0
 	local PROBE_MS = 30000
+	local EXCHANGE_SECONDS = 5
 
 	local function mode()
 		local value = config.get("relay.mode", "auto")
@@ -67,34 +68,87 @@ return function(env)
 			error = lastError, lastProbeAt = lastProbeAt, unlimited = unlimited }
 	end
 
+	-- Native exceptions can include whole request or response objects, including
+	-- a newly issued pairing token. Display only fixed categories, never excerpts.
+	local function transportProblem(problem)
+		local text = tostring(problem or ""):lower()
+		local function has(terms)
+			for _, term in ipairs(terms) do if text:find(term, 1, true) then return true end end
+			return false
+		end
+		if has({ "deadline", "timeout", "timed out" }) then
+			return "The discovery exchange reached its deadline or timed out."
+		end
+		if has({ "capacity:", "slots are busy", "request limit" }) then
+			return "Native HTTP capacity is busy; wait for other requests, then scan again."
+		end
+		if has({ "connection refused", "econnrefused", "failed to connect", "connect failed", "connection failed", "could not connect", "unable to connect" }) then
+			return "Connection refused or failed; check that UAI Relay is running on this port."
+		end
+		if has({ "cleartext", "https-only", "https only", "only https", "unsupported protocol", "protocol is not supported", "https required" }) then
+			return "The executor rejected local HTTP; cleartext or this protocol is not supported."
+		end
+		if has({ "permission", "denied", "not permitted", "disallowed", "blocked" }) then
+			return "The executor denied permission for this loopback request."
+		end
+		if has({ "malformed", "empty executor", "no response", "non-text", "body is not text", "response_limit:" }) then
+			return "The executor returned an empty, malformed or oversized response."
+		end
+		return "The executor reported an unknown transport failure."
+	end
+
+	local function readReply(step, response, problem, probePort, limit)
+		local label = "Companion " .. step .. " on port " .. tostring(probePort)
+		if not response then
+			return nil, label .. " failed via " .. tostring(caps.requestName or "executor HTTP") .. ": " .. transportProblem(problem)
+		end
+		if not response.ok then
+			return nil, label .. " returned HTTP " .. tostring(response.status or 0) .. "."
+		end
+		if type(response.body) ~= "string" or #response.body > limit then
+			return nil, label .. " returned an oversized or non-text reply."
+		end
+		local value, decodeError = util.decode(response.body)
+		if decodeError then return nil, label .. " returned invalid JSON." end
+		if type(value) ~= "table" then return nil, label .. " did not return a JSON object." end
+		return value
+	end
+
+	local function validInstance(value)
+		return type(value) == "string" and #value > 0 and #value <= 128
+	end
+
 	-- A periodic health check must not make a ready relay temporarily unusable or
 	-- fill the log with an absent optional app. Settings and unload invalidate each
 	-- request; a late hello/pair cannot restore credentials for an old endpoint.
 	local function probe(mine, probeBase, probePort)
 		local function stale() return not alive or epoch ~= mine or mode() == "off" end
-		local hello = http.request({ url = probeBase .. "/api/hello", method = "GET",
+		local hello, helloError = http.request({ url = probeBase .. "/api/hello", method = "GET",
 			headers = token() ~= "" and { Authorization = "Bearer " .. token() } or nil,
-			identity = "none", silent = true, timeout = 1, aborted = stale })
+			identity = "none", silent = true, timeout = EXCHANGE_SECONDS, aborted = stale })
 		if stale() then return false, "cancelled" end
-		local info = hello and hello.ok and #hello.body <= 4096 and util.decode(hello.body)
-		if type(info) ~= "table" or info.protocol ~= 2 or type(info.instance) ~= "string"
-			or #info.instance == 0 or #info.instance > 128 then
-			return false, "No companion answered on port " .. tostring(probePort)
-		end
+		local info, helloProblem = readReply("hello", hello, helloError, probePort, 4096)
+		if not info then return false, helloProblem end
 		-- Check the marker even when a token was saved from an earlier companion.
 		if info.server ~= "uai-relay" then return false, "Port " .. tostring(probePort) .. " is used by another program" end
+		if info.protocol ~= 2 then return false, "The companion hello uses an incompatible protocol; protocol 2 is required." end
+		if not validInstance(info.instance) then
+			return false, "The companion hello did not include a valid instance ID."
+		end
 		local pairedToken = token()
 		if pairedToken ~= "" and (pairedToken ~= verifiedToken or info.instance ~= verifiedInstance) then
-			local status = http.request({ url = probeBase .. "/api/status", method = "GET",
-				headers = { Authorization = "Bearer " .. pairedToken }, identity = "none", silent = true, timeout = 1, aborted = stale })
+			local status, statusError = http.request({ url = probeBase .. "/api/status", method = "GET",
+				headers = { Authorization = "Bearer " .. pairedToken }, identity = "none", silent = true, timeout = EXCHANGE_SECONDS, aborted = stale })
 			if stale() then return false, "cancelled" end
 			if status and status.status == 401 then pairedToken = ""
 			else
-				local checked = status and status.ok and #status.body <= 8192 and util.decode(status.body)
-				if type(checked) ~= "table" or checked.ok ~= true or checked.server ~= "uai-relay"
-					or checked.protocol ~= 2 or checked.instance ~= info.instance then
-					return false, "The companion could not verify its saved pairing"
-				end
+				local checked, statusProblem = readReply("saved-pairing check", status, statusError, probePort, 8192)
+				if not checked then return false, statusProblem end
+				if checked.server ~= "uai-relay" then return false, "The saved-pairing check answered from another program." end
+				if checked.protocol ~= 2 then return false, "The saved-pairing check uses an incompatible protocol; protocol 2 is required." end
+				if not validInstance(checked.instance) then return false, "The saved-pairing check did not include a valid instance ID." end
+				if checked.instance ~= info.instance then return false, "The companion instance changed during its saved-pairing check; scan again." end
+				if checked.ok ~= true then return false, "The companion could not confirm its saved pairing." end
 			end
 		end
 		if pairedToken == "" then
@@ -102,14 +156,16 @@ return function(env)
 			local body = util.encode({ client = "ProjectUAI-Mobile",
 				version = (env.info and env.info.version) or "0.0.0", protocol = 2,
 				placeId = place.id, gameId = place.gameId })
-			local pair = http.request({ url = probeBase .. "/api/pair", method = "POST", body = body,
-				headers = { ["Content-Type"] = "application/json" }, identity = "none", silent = true, timeout = 2, aborted = stale })
+			local pair, pairError = http.request({ url = probeBase .. "/api/pair", method = "POST", body = body,
+				headers = { ["Content-Type"] = "application/json" }, identity = "none", silent = true, timeout = EXCHANGE_SECONDS, aborted = stale })
 			if stale() then return false, "cancelled" end
-			local issued = pair and pair.ok and #pair.body <= 4096 and util.decode(pair.body)
-			if type(issued) ~= "table" or issued.ok ~= true or type(issued.token) ~= "string"
-				or #issued.token ~= 64 or not issued.token:match("^[a-f0-9]+$")
-				or issued.protocol ~= 2 or issued.instance ~= info.instance then
-				return false, "The companion refused pairing"
+			local issued, pairProblem = readReply("pairing", pair, pairError, probePort, 4096)
+			if not issued then return false, pairProblem end
+			if issued.protocol ~= 2 then return false, "The pairing reply uses an incompatible protocol; protocol 2 is required." end
+			if not validInstance(issued.instance) then return false, "The pairing reply did not include a valid instance ID." end
+			if issued.instance ~= info.instance then return false, "The companion instance changed during pairing; scan again." end
+			if issued.ok ~= true or type(issued.token) ~= "string" or #issued.token ~= 64 or not issued.token:match("^[a-f0-9]+$") then
+				return false, "The companion did not issue a valid pairing token."
 			end
 			pairedToken = issued.token
 			remember("relay.token", issued.token)
@@ -126,9 +182,10 @@ return function(env)
 	function M.probe()
 		if not alive then return false, "unloaded" end
 		if mode() == "off" then setState("off"); return false, "off" end
-		if not caps.has("http") then
+		if type(caps.fn.request) ~= "function" then
 			nextProbe = clock.ms() + PROBE_MS
-			setState("error", "no HTTP transport"); return false, "no HTTP transport"
+			local reason = "The companion needs an executor HTTP request function; Roblox HttpService cannot reach this phone's loopback relay."
+			setState("error", reason); return false, reason
 		end
 		if activeProbe then
 			local pending = activeProbe
@@ -154,7 +211,7 @@ return function(env)
 	end
 
 	function M.usable()
-		return alive and mode() ~= "off" and state == "ready" and token() ~= "" and caps.has("http")
+		return alive and mode() ~= "off" and state == "ready" and token() ~= "" and type(caps.fn.request) == "function"
 	end
 
 	function M.endpoint(retain)

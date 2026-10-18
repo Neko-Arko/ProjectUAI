@@ -94,7 +94,7 @@ return function(env)
 			else
 				relayDot.BackgroundColor3 = theme.color.warn
 				relayText.Text = status.state == "searching" and "Looking for the companion app…"
-					or "Companion not found. Start UAI Relay, then press Scan now."
+					or "Companion connection failed. Check the details below, then press Scan now."
 			end
 			local parts = { "port " .. tostring(status.port) }
 			if status.server ~= "" then parts[#parts + 1] = "server " .. status.server end

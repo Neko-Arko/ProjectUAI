@@ -1531,6 +1531,13 @@ inference. Mobile sends can run a shared bounded discovery probe after five seco
 without a successful connection, so starting the companion does not require waiting
 through the idle discovery backoff.
 
+Discovery hello, saved-pairing verification and pairing each have a five-second
+budget. Native integer timeouts round positive remaining fractions up; the
+client's original deadline still bounds its wait, and timed-out native work
+retains its slot until completion. A failed probe distinguishes unavailable
+executor transport, connection/deadline failures, HTTP refusals and incompatible
+replies without exposing response bodies or pairing credentials.
+
 Updated companions advertise `capabilities.inference = {schema:1, unlimited:true}`.
 With the normal `agent.requestUnlimited` setting, default inference uses an
 unlimited job (`timeout:0`), while every executor-visible exchange remains bounded

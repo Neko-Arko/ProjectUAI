@@ -240,8 +240,10 @@ return function(env)
 		if caps.fn.request then
 			-- Set only on this path: RequestAsync accepts a fixed set of keys. Not every
 			-- executor honours it either, which is why an attempt that runs long is also
-			-- recognised after the fact rather than only prevented here.
-			if timeout and timeout > 0 then options.Timeout = math.floor(timeout) end
+			-- recognised after the fact rather than only prevented here. Round up so
+			-- elapsed setup time cannot turn a one-second probe into Timeout = 0;
+			-- the outer deadline still bounds waiting and retains native ownership.
+			if timeout and timeout > 0 then options.Timeout = math.max(1, math.ceil(timeout)) end
 			local ok, res = pcall(caps.fn.request, options)
 			if not ok then return nil, tostring(res) end
 			if type(res) ~= "table" then return nil, "empty executor response" end
@@ -298,6 +300,11 @@ return function(env)
 		if relayed then relayWorkers = relayWorkers + 1 else workers = workers + 1 end
 		clock.spawn(function()
 			local ok, response, problem = pcall(function()
+				-- Scheduling can outlive the caller. Recheck before dispatch while
+				-- leaving the reserved slot owned until this worker actually settles.
+				if not pending.accepting or aborted(spec) then return nil, "aborted" end
+				local remaining = deadline - clock.ms()
+				if remaining <= 0 then return nil, "deadline: request budget expired before dispatch" end
 				if spec.relay then
 					local relaySpec = {}
 					for key, value in pairs(spec) do relaySpec[key] = value end
@@ -307,7 +314,7 @@ return function(env)
 					relaySpec.aborted = function() return not pending.accepting or aborted(spec) end
 					return env.require("net/relay").request(relaySpec, headers, M.request)
 				end
-				return send(url, method, headers, spec.body, math.max(0.001, (deadline - clock.ms()) / 1000))
+				return send(url, method, headers, spec.body, remaining / 1000)
 			end)
 			if relayed then relayWorkers = math.max(0, relayWorkers - 1) else workers = math.max(0, workers - 1) end
 			if pending.accepting then

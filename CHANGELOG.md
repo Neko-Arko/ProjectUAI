@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Keep native HTTP timeouts positive after worker scheduling; fractional remaining
+  budgets no longer become `Timeout = 0`. The original caller deadline still
+  applies and a timed-out native request keeps its slot until it actually ends.
+- Allow five seconds per companion discovery and pairing exchange. Report the
+  actual connection, HTTP or protocol failure instead of treating every failed
+  hello as an absent companion. Discovery remains quiet during background scans.
+  See [discovery verification](docs/TESTING_RELAY_DISCOVERY.md).
+
 ## 3.5.6 — October 18, 2026 — Mobile relay reliability and automatic updates
 
 - Fix companion request admission by sending finite timeouts as integer seconds,

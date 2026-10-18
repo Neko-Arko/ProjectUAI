@@ -16,8 +16,7 @@ serving, no agent state, no commands. Just the relay contract in
 - Android 8.0+ (`minSdk 26`). Sideload only; no Play dependency.
 - A mobile executor that exposes `request` / `http_request` / `syn.request` /
   `http.request` / `fluxus.request`. Plain `HttpService` cannot reach loopback
-  plain-HTTP or set the discovery header, so without an executor function nothing
-  can connect.
+  plain-HTTP; the executor must perform requests locally on the phone.
 - The client's `relay.mode` is `auto` by default: the script probes
   `127.0.0.1:8790`, pairs once for a stable token, and relays from then on.
 
@@ -55,6 +54,22 @@ the same production signer.
    companion once paired — no token copying.
 3. Keep Roblox and the relay running. **Stop** in the app is authoritative: the
    watchdogs stay down until you start again.
+
+If Roblox cannot find the companion, first confirm that the app's status reads
+**Running** and both show the same port. Opening the app alone does not start its
+server. On that same phone, open `http://127.0.0.1:8790/api/hello` in a browser
+(replace the port if it was changed). A JSON reply containing `"server":"uai-relay"`
+and `"protocol":2` confirms that the local listener answered. This public endpoint
+contains no pairing token or provider credential and does not count as a paired
+Roblox connection.
+
+If the browser succeeds but Roblox discovery fails, reload the current Project
+UAI client and use **Scan now**. The relay detail reports the executor connection,
+HTTP or protocol failure. A browser success does not prove that an executor can
+reach loopback: some executors route requests remotely or block local plain HTTP.
+Resetting pairing does not repair an unreachable `/api/hello` endpoint. If the
+browser also cannot connect, check the companion's port and diagnostics and use
+Stop/Start to restart its listener.
 
 The Roblox status reports actual pairing or authenticated client contact in the
 current service run. A saved token alone is shown as saved pairing, not a live
