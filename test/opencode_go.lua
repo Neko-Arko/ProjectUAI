@@ -98,11 +98,11 @@ suite.case("Go subscription and region refusals give specific guidance without r
 		end
 		local result, why = f.run(function() return chat.complete(record, { messages = { { role = "user", content = "hi" } } }) end)
 		check("one request only", not result and calls == 1)
-		check("actionable Go guidance", why:find(item[3], 1, true) and not why:find("Mobile is unsupported", 1, true) and not why:find("buy", 1, true))
+		check("actionable Go guidance", why:find(item[3], 1, true) and not why:find("UAI Relay app", 1, true) and not why:find("buy", 1, true))
 		check("support remains idempotent", f.env.require("runtime/support").error(why) == why)
 	end
 	local why = f.env.require("provider/openai").errorText({ status = 410, body = '{"error":{"type":"FreeTierError","message":"OpenCode proxy endpoint has been deprecated due to upstream edge restrictions."}}' })
-	check("retired proxy is not a subscription verdict", why:find("A 410 does not validate", 1, true) and not why:find("Mobile is unsupported", 1, true))
+	check("retired proxy is not a subscription verdict", why:find("A 410 does not validate", 1, true) and not why:find("UAI Relay app", 1, true))
 	f.healthy(); f.close()
 end)
 suite.finish()

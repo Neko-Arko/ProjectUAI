@@ -15,10 +15,10 @@ cache. No ZIP extraction, terminal or administrator access is needed.
 OpenCode is optional and is never bundled or downloaded by this app. Install
 OpenCode Desktop from https://opencode.ai, then restart Cowork to use its native
 free-model workaround. The OpenCode card shows the actual CLI version and readiness. Use the OpenCode tunnel switch before starting Cowork. The original direct
-desktop workaround also remains supported; OpenCode free models are unsupported on mobile.
+desktop workaround also remains supported; on mobile, OpenCode requires the UAI Relay app from Discord.
 UAI tools run in Roblox. The native CLI is not allowed to run desktop tools.
 OpenCode Go subscriptions use https://opencode.ai/inference/go/v1 and your Go API
-key directly. Go does not use the native free-model route or its mobile restriction.
+key directly. Go does not use the native free-model route or its mobile relay requirement.
 
 Project UAI Free is the default when you have not configured a provider. Thank
 you for your continued support. More free providers may become available.

@@ -1,12 +1,16 @@
 # Mobile Relay and Android Companion — Detailed Plan
 
-## OpenCode and free access in 3.2.0
+## OpenCode and free access on mobile (updated October 18, 2026)
 
-OpenCode free models are unsupported on mobile, including this Android companion.
-Its retired proxy cannot recover FreeTierError. Use **Project UAI Free**, now the
-ready default for users without a provider, or another compatible provider. Shared
+OpenCode now works on mobile through the UAI Relay app from Discord: install and
+start the app, then connect it in UAI. A user confirmed OpenCode inference on a
+Delta Android phone through the relay after one manual retry; the initial request
+returned `Relay rejected the request (400)` and succeeded on retry. Its retired
+proxy still cannot recover FreeTierError. **Project UAI Free** remains the ready
+default for users without a provider, or use another compatible provider; shared
 free capacity and speed vary. Desktop retains the direct OpenCode workaround and
-adds an optional installed CLI bridge path; neither makes OpenCode work on a phone.
+adds an optional installed CLI bridge path. Phone tool execution, tool-result
+replay and background survival remain unverified.
 For error help and provider updates, join https://discord.gg/9xYyyYuKap.
 
 

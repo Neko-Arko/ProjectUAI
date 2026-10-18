@@ -34,7 +34,7 @@ ready = false; h.settle(5)
 check("CLI shutdown invalidates availability", not app.bridge.opencodeStatus().available)
 local before = requests
 result, why = app.bridge.opencodeModels()
-check("missing CLI explains optional desktop path and mobile limitation", not result and requests == before and why:find("Mobile is unsupported", 1, true) and why:find("discord.gg/9xYyyYuKap", 1, true))
+check("missing CLI explains optional desktop path and mobile relay", not result and requests == before and why:find("UAI Relay app", 1, true) and why:find("discord.gg/9xYyyYuKap", 1, true))
 app.bridge.stop()
 check("disconnect clears cached capability", app.bridge.opencodeStatus().state == "disconnected")
 app.destroy(); h.settle(1)

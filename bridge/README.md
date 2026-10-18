@@ -26,7 +26,8 @@ The existing direct desktop workaround remains supported. Version 3.2 also adds
 an optional native route through an **already installed OpenCode CLI**. Install
 [OpenCode Desktop](https://opencode.ai), restart Cowork, and wait for its OpenCode
 status to become ready. UAI does not download or package the OpenCode binary.
-OpenCode free models are unsupported on mobile; use Project UAI Free or another provider.
+OpenCode free models require the UAI Relay app from Discord on mobile; install and
+start the app, then connect it in UAI. Project UAI Free also remains available.
 The retired OpenCode HTTPS proxy is never used; the proxy supports AgentRouter only.
 
 **OpenCode Go subscriptions use a separate endpoint:**
@@ -214,7 +215,7 @@ guarantee; executor scheduling and the provider's response time also matter.
 | A picture is expired or unavailable | Attach it again. Pictures expire after 15 minutes of inactivity and disappear when the bridge stops. |
 | The bridge is reconnecting | Keep your draft in the tab and restart/reconnect the bridge. Review the conversation if a delivery receipt was lost. |
 | A deadline error appears | Use the highlighted Discord tutorial link. Cowork imposes no overall deadline, but an upstream provider or transport can still fail. |
-| OpenCode reports `FreeTierError` | Keep the direct desktop workaround enabled, or install/update OpenCode Desktop and restart Cowork for the native route. Mobile is unsupported. [Discord help](https://discord.gg/9xYyyYuKap). |
+| OpenCode reports `FreeTierError` | Keep the direct desktop workaround enabled, or install/update OpenCode Desktop and restart Cowork for the native route. On mobile, use the UAI Relay app from Discord. [Discord help](https://discord.gg/9xYyyYuKap). |
 
 ## Development and tests
 

@@ -266,9 +266,9 @@ timestamp-based session identity and wildcard Accept header, while retaining req
 compatibility tool declarations and the Chat/Responses protocol fallback. Explicit
 custom header overrides remain effective. Generated project/request headers are
 omitted because the live Chat probe rejected the previous CLI fingerprint. Mobile
-OpenCode free models are unsupported, including the Android companion; mobile
-free-tier refusals do not retry the alternate lane. Errors explain the optional
-installed CLI desktop path and point mobile users to Project UAI Free.
+OpenCode requires the UAI Relay app from Discord; mobile free-tier refusals do not
+retry the alternate lane or a retired proxy. Errors explain the optional installed
+CLI desktop path and the mobile relay requirement.
 
 OpenCode Go is a separate keyed preset at `https://opencode.ai/inference/go/v1`.
 Its legacy `/zen/go/v1` alias remains a Go route. Go model discovery and every

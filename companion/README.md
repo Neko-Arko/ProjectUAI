@@ -83,7 +83,9 @@ and distinct request aliases. Only an authenticated companion selects a working
 profile for later local calls. Pairing and provider work are not replayed to test
 these alternatives. The diagnostic lists the attempted aliases and option forms.
 This helps distinguish option rejection from an unreachable listener; it does not
-by itself establish Delta or OpenCode support on a phone. The
+by itself establish Delta or OpenCode support on a phone. A later Delta report
+(October 18, 2026) confirmed OpenCode inference through the UAI Relay app; mobile
+OpenCode requires the UAI Relay app from Discord. The
 [standard request API](https://docs.sunc.io/Miscellaneous/request/) documents
 optional Headers and does not document Timeout.
 

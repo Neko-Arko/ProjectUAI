@@ -6253,7 +6253,7 @@ scenario("a first-run client is pointed at the featured provider", function()
 	check("OpenCode Zen is featured too", zen and zen.featured, true)
 	check("pointing at the Zen relay", zen.baseUrl, "https://opencode.ai/zen/v1")
 	contains("OpenCode explains direct desktop support", zen.note, "without a bridge")
-	contains("OpenCode highlights its mobile limitation", zen.noteHighlight, "Mobile is unsupported")
+	contains("OpenCode highlights its mobile relay requirement", zen.noteHighlight, "UAI Relay app")
 	handle.providers.remove(active.id)
 	harness.settle(1)
 	local freeCard

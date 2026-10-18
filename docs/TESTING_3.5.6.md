@@ -102,6 +102,6 @@ boot and had no mobile executor; they supplied no mobile acceptance evidence.
 No native Android package installation, upgrade, permission/cancellation flow,
 process-death recovery or data-retention run is claimed. See the remaining
 [device checks](../companion/UPDATES.md#device-acceptance) and
-[mobile research](OPENCODE_MOBILE_RESEARCH.md). OpenCode free models remain
-unsupported on mobile pending that evidence; use Project UAI Free or another
-supported provider.
+[mobile research](OPENCODE_MOBILE_RESEARCH.md). This historical scope predates the
+later Delta phone report; mobile OpenCode now requires the UAI Relay app from
+Discord, and Project UAI Free remains an alternative.

@@ -17,7 +17,7 @@ const MAX_REPLY = 8 << 20;
 const WAIT_MS = 150;
 const REQUIRED_ROUTES = ['/api/model', '/api/session', '/api/session/{sessionID}', '/api/session/{sessionID}/prompt',
   '/api/session/{sessionID}/message', '/api/session/{sessionID}/interrupt', '/api/session/{sessionID}/permission', '/api/experimental/mcp/{server}'];
-const missing = 'Install OpenCode Desktop from https://opencode.ai, then restart Cowork. OpenCode free models require the desktop workaround; mobile is unsupported.';
+const missing = 'Install OpenCode Desktop from https://opencode.ai, then restart Cowork. OpenCode free models require the desktop workaround. On mobile, OpenCode requires the UAI Relay app from Discord.';
 const pause = (ms, signal) => new Promise((resolve, reject) => {
   if (signal?.aborted) { reject(Error('Stopped')); return; }
   const abort = () => { clearTimeout(timer); reject(Error('Stopped')); };

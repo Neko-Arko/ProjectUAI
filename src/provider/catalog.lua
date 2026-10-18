@@ -88,8 +88,8 @@ return function(env)
 			-- additional route through the desktop bridge, never a bundled binary.
 			featured = true,
 			featuredOrder = 2,
-			note = "Desktop supports the direct OpenCode workaround without a bridge. Project UAI Bridge also supports a separately installed OpenCode CLI for free models; models fetched from the connected CLI need no personal key. Mobile is unsupported for OpenCode free models, including the Android companion. The retired OpenCode proxy cannot restore mobile access. Direct and paid Zen API access use your own key. Help and updates: https://discord.gg/9xYyyYuKap",
-			noteHighlight = "Mobile is unsupported for OpenCode free models",
+			note = "Desktop supports the direct OpenCode workaround without a bridge. Project UAI Bridge also supports a separately installed OpenCode CLI for free models; models fetched from the connected CLI need no personal key. Mobile OpenCode requires the UAI Relay app from Discord; install and start the app, then connect it in UAI. The retired OpenCode proxy cannot restore mobile access. Direct and paid Zen API access use your own key. Help and updates: https://discord.gg/9xYyyYuKap",
+			noteHighlight = "Mobile OpenCode requires the UAI Relay app from Discord",
 		},
 		{
 			id = "opencode-go",

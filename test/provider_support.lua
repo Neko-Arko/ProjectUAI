@@ -19,9 +19,9 @@ suite.case("provider statuses, transport and streamed failures include one invit
 		local text = adapter.errorText({ status = 403, body = f.h.json.encode({ error = {
 			type = "invalid_request_error", [field] = "FreeTierError", message = "Access denied",
 		} }) })
-		suite.check("mixed error fields retain workaround guidance", text:find("Access denied", 1, true) and text:find("Mobile is unsupported", 1, true))
+		suite.check("mixed error fields retain workaround guidance", text:find("Access denied", 1, true) and text:find("UAI Relay app", 1, true))
 	end
-	suite.check("stream failures also show mobile guidance", support.error("stream error: FreeTierError"):find("Mobile is unsupported", 1, true))
+	suite.check("stream failures also show mobile guidance", support.error("stream error: FreeTierError"):find("UAI Relay app", 1, true))
 	local log = f.env.require("runtime/log")
 	log.error("fixture", "E_FIXTURE: failed")
 	suite.check("diagnostic error codes include invite", log.entries[#log.entries].message:find(support.invite, 1, true))

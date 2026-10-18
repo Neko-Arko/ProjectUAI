@@ -25,7 +25,7 @@ return function(env)
 		elseif problem == "retired" and not lower:find("a 410 does not validate", 1, true) then
 			text = text .. " -- Select OpenCode Go for a Go subscription or OpenCode Zen for Zen access. "
 				.. "A 410 does not validate your key or subscription."
-		elseif not problem and not lower:find("mobile is unsupported", 1, true) and (lower:find("freetiererror", 1, true)
+		elseif not problem and not lower:find("requires the uai relay app", 1, true) and (lower:find("freetiererror", 1, true)
 			or lower:find("can only be used from within opencode", 1, true)) then
 			text = text .. " -- " .. M.opencode()
 		end
@@ -35,8 +35,8 @@ return function(env)
 
 	function M.opencode()
 		return "If the direct desktop workaround is refused, use the installed OpenCode CLI with Project UAI Desktop Bridge. "
-			.. "Mobile is unsupported for OpenCode free models, including the Android companion. The OpenCode proxy is retired. "
-			.. "Use Project UAI Free on mobile."
+			.. "Mobile OpenCode requires the UAI Relay app from Discord; install and start the app, then connect it in UAI. "
+			.. "The OpenCode proxy is retired. Project UAI Free remains an alternative."
 	end
 
 	return M

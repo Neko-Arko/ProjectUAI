@@ -137,7 +137,7 @@ case("OpenCode discovery uses the connected CLI and expires when connection chan
 	available = false
 	f.h.http.handler = function() return { StatusCode = 403, Body = '{"error":{"type":"FreeTierError","message":"OpenCode free tier can only be used from within OpenCode"}}' } end
 	local rejected, why = f.run(function() return models.discover(record) end)
-	check("unavailable mobile route reports the workaround limitation", #rejected == 0 and has(why, "Mobile is unsupported") and has(why, "https://discord.gg/9xYyyYuKap"))
+	check("unavailable mobile route reports the relay requirement", #rejected == 0 and has(why, "UAI Relay app") and has(why, "https://discord.gg/9xYyyYuKap"))
 	check("failure never targets the retired proxy", f.h.http.requestCount == 1)
 	f.healthy(); f.close()
 end)

@@ -151,7 +151,7 @@ case("OpenCode desktop keeps its direct workaround without the retired proxy", f
 	end
 	local result, why = f.complete()
 	check("direct Chat and Responses retained", not result and f.h.http.requestCount == 2)
-	check("desktop and mobile guidance", has(why, "direct desktop workaround") and has(why, "Mobile is unsupported") and has(why, "https://discord.gg/9xYyyYuKap"))
+	check("desktop and mobile guidance", has(why, "direct desktop workaround") and has(why, "UAI Relay app") and has(why, "https://discord.gg/9xYyyYuKap"))
 	check("saved URL stays official", f.registry.get(record.id).baseUrl == "https://opencode.ai/zen/v1")
 	f.healthy(); f.close()
 end)
@@ -161,8 +161,14 @@ case("OpenCode mobile refuses once with the supported alternative", function()
 	f.env.uis.TouchEnabled, f.env.uis.MouseEnabled = true, false
 	f.h.http.handler = function() return { StatusCode = 403, Body = '{"error":{"type":"FreeTierError"}}' } end
 	local result, why = f.complete()
-	check("no mobile retry or proxy", not result and f.h.http.requestCount == 1)
-	check("alternative and help are visible", has(why, "Mobile is unsupported") and has(why, "Project UAI Free") and has(why, "https://discord.gg/9xYyyYuKap"))
+	-- The mobile loopback companion probe is background plumbing, not a provider
+	-- attempt, so count only requests that reached the provider endpoint.
+	local provider = 0
+	for _, entry in ipairs(f.h.http.log) do
+		if entry.url:find("opencode.ai", 1, true) then provider = provider + 1 end
+	end
+	check("no mobile retry or proxy", not result and provider == 1)
+	check("alternative and help are visible", has(why, "UAI Relay app") and has(why, "Project UAI Free") and has(why, "https://discord.gg/9xYyyYuKap"))
 	f.healthy(); f.close()
 end)
 

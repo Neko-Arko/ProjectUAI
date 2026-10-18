@@ -262,7 +262,7 @@ function contrast(foreground, background) {
     for (const value of ['https://opencode.ai/zen/v1', 'https://opencode.ai/inference/v1/responses',
       'https://puai-proxy.davidzk.tech/opencode/v1', 'https://puai-free-gateway.renern.workers.dev/opencode/v1']) {
       await endpoint.fill(value);
-      assert.match(await disclosure.textContent(), /direct desktop workaround.*installed OpenCode CLI.*Mobile free models are unsupported/s);
+      assert.match(await disclosure.textContent(), /direct desktop workaround.*installed OpenCode CLI.*UAI Relay app/s);
       assert.doesNotMatch(await disclosure.textContent(), /can retry|90,000|API keys pass/);
       assert.equal(await disclosure.locator('a').getAttribute('href'), 'https://discord.gg/9xYyyYuKap');
     }
@@ -272,7 +272,7 @@ function contrast(foreground, background) {
       'https://opencode.ai/inference/go/v1/responses']) {
       await endpoint.fill(value);
       assert.match(await disclosure.textContent(), /Go subscription endpoint.*Go API key.*directly/s);
-      assert.doesNotMatch(await disclosure.textContent(), /proxy|Mobile.*unsupported|installed OpenCode CLI/i);
+      assert.doesNotMatch(await disclosure.textContent(), /proxy|UAI Relay app|installed OpenCode CLI/i);
       assert.equal(await disclosure.locator('a').getAttribute('href'), 'https://discord.gg/9xYyyYuKap');
     }
     await disclosure.scrollIntoViewIfNeeded(); await screenshot('bridge-320-opencode-go-disclosure');

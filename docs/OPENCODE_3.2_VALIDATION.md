@@ -29,7 +29,8 @@ Additional Go discovery and keyed checks on the same date are recorded below.
 These checks ran from Windows Node.js and Windows `curl.exe` 8.9.1 using
 Schannel, plus the official native server. They do not establish native Roblox
 executor rendering/input behavior or mobile support. Mobile OpenCode free-model
-access remains unsupported; paid Go is a separate keyed service.
+access was unsupported at this time; a later correction establishes that mobile
+OpenCode requires the UAI Relay app from Discord. Paid Go is a separate keyed service.
 
 ## Go subscription investigation
 

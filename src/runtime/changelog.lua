@@ -20,7 +20,7 @@ return function(env)
 	local ENTRIES = {
 		{
 			version = "3.5.6",
-			revision = "2026-10-18-mobile-relay-updates",
+			revision = "2026-10-18-mobile-relay-supported",
 			date = "October 18, 2026",
 			title = "Mobile relay reliability and automatic updates",
 			highlights = "Fix companion request admission and deadline handling, show real connection activity, and add verified automatic Android update downloads.",
@@ -36,7 +36,7 @@ return function(env)
 				} },
 				{ category = "improved", label = "Connection and activity", items = {
 					"Authenticate saved pairing, repair a rejected token, and check again when sending after the companion starts. The app separates saved pairing from live contact and shows requests, received bytes and safe error categories.",
-					"OpenCode text, tool calls and tool-result replay passed with the companion's HTTP library on Windows. Android networking, mobile executor behavior and OpenCode acceptance on a phone remain unverified; OpenCode free models remain unsupported on mobile.",
+					"OpenCode text, tool calls and tool-result replay passed with the companion's HTTP library on Windows. A user then confirmed OpenCode inference on a Delta Android phone through the UAI Relay app after one manual retry; mobile OpenCode now requires the UAI Relay app from Discord. Phone tool execution, tool-result replay and background survival remain unverified.",
 				} },
 			},
 		},
@@ -126,7 +126,7 @@ return function(env)
 			revision = "2026-10-16-intro-tour",
 			date = "October 15, 2026",
 			title = "Project UAI Free and OpenCode desktop",
-			highlights = "Start with included free access, keep the OpenCode desktop workaround, and add an optional installed CLI bridge path. OpenCode free models are unsupported on mobile.",
+			highlights = "Start with included free access, keep the OpenCode desktop workaround, and add an optional installed CLI bridge path. OpenCode free models are unsupported on mobile. (Corrected October 18, 2026: mobile OpenCode requires the UAI Relay app from Discord.)",
 			sections = {
 				{ category = "added", label = "Project UAI Free", items = {
 					"Project UAI Free is ready by default when no provider is configured. Included public HCNSEC access uses its verified auto router; existing providers and credentials stay intact.",
@@ -146,7 +146,7 @@ return function(env)
 				{ category = "fixed", label = "Provider routes and help", items = {
 					"Add a separate OpenCode Go preset with its own catalog and Chat, Responses or Messages routing. Keep Go outside the free CLI backend and explain subscription and Privacy region refusals. Gemini's native Go protocol is not implemented.",
 					"Remove the retired OpenCode proxy and migrate saved URLs back to Zen. Only AgentRouter uses the proper proxy domain; no Workers.dev fallback remains.",
-					"OpenCode free models are unsupported on mobile, including the Android companion. Use Project UAI Free there. Error messages include Discord support.",
+					"OpenCode free models are unsupported on mobile, including the Android companion. Use Project UAI Free there. Error messages include Discord support. (Corrected October 18, 2026: mobile OpenCode works with the UAI Relay app from Discord.)",
 				} },
 			},
 		},

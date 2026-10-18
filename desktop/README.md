@@ -31,14 +31,15 @@ and closing the window shut them down. The bridge also supports an absolute
 `UAI_OPENCODE_BINARY` override; see the [bridge guide](../bridge/README.md).
 
 The existing direct desktop workaround still works without this app. This native
-route provides an additional desktop option; OpenCode free models remain unsupported on mobile.
+route provides an additional desktop option; on mobile, OpenCode requires the UAI
+Relay app from Discord.
 UAI tools are returned to Roblox for execution. The CLI never receives permission
 to run local desktop tools. Provider keys and existing OpenCode credentials are not
 copied into its isolated session. OpenCode's retired HTTPS proxy is not used.
 
 OpenCode Go subscriptions use `https://opencode.ai/inference/go/v1` and your Go API
-key directly. They do not use this native free-model route. The mobile restriction
-above applies to OpenCode free models, not Go subscriptions.
+key directly. They do not use this native free-model route. That mobile relay
+requirement applies to OpenCode free models, not Go subscriptions.
 
 Project UAI Free is available by default when no provider is configured. Thank you
 for your continued use and support. Join [our Discord](https://discord.gg/9xYyyYuKap)

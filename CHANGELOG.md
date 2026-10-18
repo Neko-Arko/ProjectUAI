@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Correct the mobile OpenCode guidance. OpenCode now works on Android through the
+  UAI Relay app from Discord: install and start the app, then connect it in UAI.
+  A user confirmed OpenCode inference on a Delta Android phone after manually
+  retrying an initial `Relay rejected the request (400)`. Phone tool execution,
+  tool-result replay and background survival remain unverified.
 - Add companion 3.5.7's authenticated POST transport for Delta builds where
   `request` fails on loopback but `HttpGet` works. The client discovers through
   `HttpGet` and uses `HttpPost` for pairing and authenticated operations,
@@ -50,7 +55,8 @@
   companion's Java HTTP library and settings. **Native Android, mobile executor
   behavior and OpenCode acceptance on a phone remain unverified.** OpenCode free
   models remain unsupported on mobile; use Project UAI Free or another supported
-  provider. See [mobile research](docs/OPENCODE_MOBILE_RESEARCH.md).
+  provider. See [mobile research](docs/OPENCODE_MOBILE_RESEARCH.md). (Corrected
+  October 18, 2026: mobile OpenCode requires the UAI Relay app from Discord.)
 - Ship client, bridge, Windows desktop and Android companion 3.5.6. UI LIB remains
   1.3.0 and SDK 1.0.0. See [companion updates](companion/UPDATES.md) for signing and
   installation details.
@@ -155,6 +161,7 @@
   and retired-proxy refusals. Gemini's native Go protocol is not implemented.
 - Clearly mark OpenCode free models unsupported on mobile, including the Android
   companion. Add Discord help to provider, conversation, tool and bridge errors.
+  (Corrected October 18, 2026: mobile OpenCode requires the UAI Relay app from Discord.)
 - Refresh provider-specific model prices and context/reply limits. Account for
   documented cache rates and long-context tiers, keep unknown prices unknown,
   and show included Project UAI Free usage at zero cost.

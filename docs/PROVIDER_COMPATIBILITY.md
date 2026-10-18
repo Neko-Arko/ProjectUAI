@@ -267,8 +267,9 @@ uses its authenticated bridge capability; without that capability normal direct
 model discovery remains available. Missing CLI and models outside its public catalog
 retain the existing direct HTTP route.
 
-**OpenCode free models are unsupported on mobile**, including the Android companion.
-Select Project UAI Free or another mobile-compatible provider. A mobile free-tier
+**Mobile OpenCode requires the UAI Relay app from Discord**: install and start the
+app, then connect it in UAI. Project UAI Free remains an alternative for a
+mobile-compatible provider. A mobile free-tier
 refusal does not retry Responses or a proxy. Share errors and get updates in
 [Discord](https://discord.gg/9xYyyYuKap).
 

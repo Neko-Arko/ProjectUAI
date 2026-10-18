@@ -33,3 +33,9 @@ allowlisting, same-ID replay, polling, stale instances and cancellation.
 
 The phone result above does not establish HttpPost support or end-to-end inference.
 Those remain target-device checks after installing the new companion and client.
+
+Subsequently, the user confirmed OpenCode inference on a Delta Android phone
+through the UAI Relay app after manually retrying an initial
+`Relay rejected the request (400)`. The initial 400 remains an unresolved observed
+error; the retry confirms inference, not phone tool execution, tool-result replay
+or background survival. Mobile OpenCode requires the UAI Relay app from Discord.

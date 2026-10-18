@@ -37,7 +37,9 @@ This correction changes the client; it does not require a companion APK update.
 The tests reproduce delayed setup, replies taking more than two seconds,
 five-second timeouts, queued and active cancellation, retained native ownership,
 single dispatch and diagnostic privacy. They do not confirm the cause on the
-reporting user's phone or establish mobile OpenCode support. The
+reporting user's phone or establish mobile OpenCode support at that time; a later
+Delta report (October 18, 2026) confirmed OpenCode inference through the UAI Relay
+app. The
 [same-phone browser check](../companion/README.md#use) distinguishes a listening
 companion from an executor that cannot reach it.
 

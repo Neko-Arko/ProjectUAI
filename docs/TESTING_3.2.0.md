@@ -151,5 +151,7 @@ Source checkouts and desktop payloads retain separate modules. The real pinned
 The full native suite was not run. Mock/Chromium checks do not establish native
 Roblox rendering or executor HTTP behavior. Live free-model results are dated
 observations; the direct Step 5 request received an upstream availability refusal.
-Native cancellation was checked before output, not mid-token. Mobile OpenCode
-free access remains unsupported. No release was published or deployed by this work.
+Native cancellation was checked before output, not mid-token. Mobile OpenCode free
+access was unsupported at this time; a later correction establishes that mobile
+OpenCode requires the UAI Relay app from Discord. No release was published or
+deployed by this work.

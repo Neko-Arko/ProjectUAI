@@ -3,9 +3,22 @@
 Research date: October 18, 2026. This records evidence for a phone workaround;
 it does not certify the Android companion or a native phone executor.
 
+## Subsequent user report — October 18, 2026
+
+After this investigation, the user confirmed that OpenCode worked on a Delta
+Android phone through UAI Relay after manually retrying an initial error:
+
+> Relay rejected the request (400): invalid executor request Inference was not
+> resubmitted. (599).
+
+The retry produced inference. Mobile OpenCode now requires the UAI Relay app from
+Discord (https://discord.gg/9xYyyYuKap). The initial 400 is an unresolved observed
+error; a successful retry confirms inference, not phone tool execution, tool-result
+replay or background survival. The evidence below was gathered before that report.
+
 The current evidence does **not** establish that OpenCode free models categorically
 exclude Android. There are viable transport and runtime candidates, but neither a
-model listing nor a CLI that starts proves that inference works. The next decisive
+model listing nor a CLI that starts proves that inference works. The decisive
 check is text, tool invocation and tool-result replay through the actual Android
 HTTP stack, followed by the companion and a phone executor.
 
@@ -52,8 +65,9 @@ companion and a mobile Roblox executor: first collect a passing transport report
 then verify OpenCode text, harmless tool invocation and tool-result replay through
 that same phone's companion. Confirm Stop and background behavior on the target
 device. A successful controlled fixture does not by itself test OpenCode; a JVM
-OpenCode response does not by itself test the phone. Until these checks are
-observed, the mobile workaround remains a candidate and the original goal is open.
+OpenCode response does not by itself test the phone. The dated Delta report at the
+top of this document confirms OpenCode inference through the relay; phone tool
+invocation, tool-result replay and background survival remain unobserved.
 
 ## Companion defects identified during this investigation
 

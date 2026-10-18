@@ -23,9 +23,10 @@ speed vary; more free providers may become available soon. Join
 OpenCode's direct desktop workaround uses the verified desktop identity and keeps
 its required compatibility tool declarations, without requiring the bridge. The Windows
 bridge adds an optional path through an installed OpenCode CLI server; the CLI
-binary is not packaged. **OpenCode free models are unsupported on mobile**, including
-the Android companion. The retired OpenCode proxy is removed; only AgentRouter
-uses the proxy's proper domain. Saved OpenCode proxy URLs migrate back to Zen.
+binary is not packaged. **Mobile OpenCode requires the UAI Relay app from Discord**;
+install and start the app, then connect it in UAI. The retired OpenCode proxy is
+removed; only AgentRouter uses the proxy's proper domain. Saved OpenCode proxy URLs
+migrate back to Zen.
 
 Go subscribers choose the separate **OpenCode Go** preset at
 `https://opencode.ai/inference/go/v1` and a key from their subscribed OpenCode
@@ -33,8 +34,8 @@ workspace. Go keeps its own catalog and routes; the optional free CLI backend
 does not intercept it. Subscription and workspace region refusals identify the
 setting to check. See [provider setup](docs/PROVIDER_COMPATIBILITY.md).
 
-Client, bridge, desktop and Android companion are 3.5.6; UI LIB remains 1.3.0
-and SDK 1.0.0.
+Client, bridge and desktop are 3.5.6 and the Android companion is 3.5.7; UI LIB
+remains 1.3.0 and SDK 1.0.0.
 Model pricing and context/reply limits use a refreshed provider-specific catalog;
 included Project UAI Free access is counted at zero cost.
 See the [release notes](CHANGELOG.md), [script development manual](docs/SCRIPT_DEVELOPMENT.md)
@@ -52,8 +53,10 @@ visible text only. A long retained trace is labelled
 See [3.5.6 verification](docs/TESTING_3.5.6.md),
 [mobile research](docs/OPENCODE_MOBILE_RESEARCH.md) and
 [companion update checks](companion/UPDATES.md). Native Android, mobile executor
-behavior and OpenCode acceptance on a phone remain unverified; the successful
-OpenCode text/tool/replay probes used the companion's Java HTTP library on Windows.
+behavior, phone tool execution/replay and background survival remain unverified;
+the successful OpenCode text/tool/replay probes used the companion's Java HTTP
+library on Windows. A user later confirmed OpenCode inference on a Delta Android
+phone through the UAI Relay app, so mobile OpenCode now requires that app from Discord.
 The [3.3.5 verification record](docs/TESTING_3.3.5.md) retains earlier bridge checks,
 and the [3.0.0 audit ledger](docs/AUDIT_3.0.0.md) retains its module and tool coverage.
 
@@ -772,7 +775,8 @@ one-time transition from an old debug-signed APK.
 
 The relay does not provide a mobile executor. Its Android networking, background
 survival, installer and actual executor compatibility still require phone testing.
-OpenCode free models remain unsupported on mobile. Use **Project UAI Free** or
+OpenCode on mobile requires the **UAI Relay app from Discord**; install and start
+it, then connect it in UAI. **Project UAI Free** remains an alternative, or use
 another supported provider; [executor probes](companion/tools/README.md) can
 measure loopback and delayed-request behavior without provider credentials.
 See the [companion guide](companion/README.md) for setup and diagnostics.
