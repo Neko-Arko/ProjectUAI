@@ -24,6 +24,24 @@ return function(env)
 		return nil
 	end
 
+	-- The companion must advertise this before the client sends timeout=0. Older
+	-- companions interpret zero as ten seconds. Explicit request budgets remain
+	-- finite; the normal unlimited setting applies only to default inference.
+	function M.unlimited(request, endpoint)
+		endpoint = endpoint or M.endpoint()
+		if not endpoint then return false end
+		request = request or {}
+		if request.relayUnlimited == false then return false end
+		if endpoint.target == "cowork" then return true end
+		if endpoint.unlimited ~= true then return false end
+		if request.relayUnlimited == true then return true end
+		return request.timeout == nil and request.deadlineMs == nil and config.get("agent.requestUnlimited", true) == true
+	end
+
+	function M.prepare()
+		if not M.coworkWeb() then relayLink.prepare() end
+	end
+
 	-- Images always need a resolver, so they relay whenever any relay exists.
 	function M.shouldRelay(imageRequest)
 		return imageRequest == true or M.coworkWeb() or M.companionReady()

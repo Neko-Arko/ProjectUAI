@@ -5,6 +5,14 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Signing material belongs to the release machine, never Gradle arguments or source.
+val releaseSigningNames = listOf("UAI_ANDROID_KEYSTORE", "UAI_ANDROID_STORE_PASSWORD", "UAI_ANDROID_KEY_ALIAS", "UAI_ANDROID_KEY_PASSWORD")
+val releaseSigningValues = releaseSigningNames.associateWith { System.getenv(it).orEmpty() }
+val hasReleaseSigning = releaseSigningValues.values.any { it.isNotEmpty() }
+if (hasReleaseSigning && releaseSigningValues.values.any { it.isEmpty() }) {
+    error("Provide all four UAI_ANDROID signing environment variables, or none for an unsigned local build")
+}
+
 android {
     namespace = "dev.projectuai.relay"
     compileSdk = 36
@@ -13,13 +21,25 @@ android {
         applicationId = "dev.projectuai.relay"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 3
+        versionName = "3.5.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseSigningValues.getValue("UAI_ANDROID_KEYSTORE"))
+                storePassword = releaseSigningValues.getValue("UAI_ANDROID_STORE_PASSWORD")
+                keyAlias = releaseSigningValues.getValue("UAI_ANDROID_KEY_ALIAS")
+                keyPassword = releaseSigningValues.getValue("UAI_ANDROID_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

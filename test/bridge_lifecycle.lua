@@ -12,7 +12,7 @@ local function hello(instance)
 	return { StatusCode = 200, Body = json.encode({ protocol = 2, server = "uai-relay", instance = instance or "phone-one" }) }
 end
 local function pair()
-	return { StatusCode = 200, Body = json.encode({ ok = true, token = ("a"):rep(64) }) }
+	return { StatusCode = 200, Body = json.encode({ ok = true, token = ("a"):rep(64), protocol = 2, instance = "phone-one" }) }
 end
 local function manual(app)
 	app.config.set("bridge.port", 8795)

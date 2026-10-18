@@ -38,6 +38,8 @@ return function(env)
 		local support = env.require("runtime/support")
 		local problem = env.require("provider/registry").protocolProblem(record)
 		if problem then return nil, support.error(problem) end
+		env.require("net/transport").prepare()
+		if request and request.aborted and request.aborted() then return nil, "aborted" end
 		local result, err, response = M.adapterFor(record).complete(record, request)
 		return result, err and support.error(err) or nil, response
 	end

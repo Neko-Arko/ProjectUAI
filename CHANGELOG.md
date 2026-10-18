@@ -1,5 +1,41 @@
 # Changelog
 
+## 3.5.6 — October 18, 2026 — Mobile relay reliability and automatic updates
+
+- Fix companion request admission by sending finite timeouts as integer seconds,
+  matching the Android protocol instead of submitting rejected fractional values.
+- Negotiate unlimited default inference with updated companions, removing the
+  unintended five-minute client limit while keeping each executor exchange within
+  five seconds. Explicit deadlines and older companions retain finite budgets.
+  Lost polls reuse the original job; Stop, lost receipts and upstream failures
+  stay terminal without replaying inference.
+- Authenticate saved pairing, repair explicitly rejected tokens, and rediscover
+  a newly started companion when sending instead of waiting through idle backoff.
+- Show live client contact separately from saved pairing, plus accepted/active
+  requests, received bytes and safe failure categories. Accepted jobs immediately
+  own foreground activity and a wake lock. A two-minute ownership lease cancels
+  orphaned jobs after Roblox stops polling and releases idle resources.
+- Add automatic Android update checks at startup and every 15 minutes while the
+  app or relay process runs. Download compatible official releases by default,
+  verify size, SHA-256, package/version/SDK and signing certificate, and preserve
+  verified downloads across restart. Manual download remains available.
+- Require Android installation approval and idle work before replacing the app.
+  Persist the owned installer session and admission pause across interruptions;
+  resume the relay only after successful replacement or cancellation of that
+  session. Explicit Stop remains authoritative.
+- Publish the signed Android companion with release metadata and a checksum.
+  Earlier debug-signed installs need a one-time uninstall/reinstall and new
+  pairing; production updates use the same signing key and preserve app data.
+- Add executor loopback/polling/cancellation probes and a controlled delay fixture.
+  OpenCode text, tool calls and tool-result replay passed on Windows using the
+  companion's Java HTTP library and settings. **Native Android, mobile executor
+  behavior and OpenCode acceptance on a phone remain unverified.** OpenCode free
+  models remain unsupported on mobile; use Project UAI Free or another supported
+  provider. See [mobile research](docs/OPENCODE_MOBILE_RESEARCH.md).
+- Ship client, bridge, Windows desktop and Android companion 3.5.6. UI LIB remains
+  1.3.0 and SDK 1.0.0. See [companion updates](companion/UPDATES.md) for signing and
+  installation details.
+
 ## 3.3.5 — October 18, 2026 — Stronger agents and desktop bridge
 
 - Strengthen main and worker prompts with exact native tool-call rules,

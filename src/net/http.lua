@@ -265,11 +265,13 @@ return function(env)
 		local started = clock.ms()
 
 		if aborted(spec) then return nil, "aborted", 0 end
-		local relayEndpoint = spec.relay and env.require("net/transport").endpoint()
+		local transport = spec.relay and env.require("net/transport")
+		local relayEndpoint = transport and (spec.relayEndpoint or transport.endpoint())
+		local relayUnlimited = relayEndpoint and transport.unlimited(spec, relayEndpoint)
 		local deadline = math.min(tonumber(spec.deadlineMs) or math.huge, started + math.max(1, math.min(300, tonumber(spec.timeout) or 120)) * 1000)
-		-- The PC bridge owns the long provider connection. Only its individual
-		-- executor exchanges have a time limit; waiting for that job does not.
-		if relayEndpoint and relayEndpoint.target == "cowork" then
+		-- Capable local relays own the long provider connection. Their default
+		-- inference waits have no overall deadline; native exchanges stay short.
+		if relayUnlimited then
 			deadline = math.huge
 			for name in pairs(headers) do if name:lower() == "x-stainless-timeout" then headers[name] = nil end end
 		end
@@ -301,6 +303,7 @@ return function(env)
 					for key, value in pairs(spec) do relaySpec[key] = value end
 					relaySpec.deadlineMs = deadline
 					relaySpec.relayEndpoint = relayEndpoint
+					relaySpec.relayUnlimited = relayUnlimited
 					relaySpec.aborted = function() return not pending.accepting or aborted(spec) end
 					return env.require("net/relay").request(relaySpec, headers, M.request)
 				end
@@ -468,12 +471,14 @@ return function(env)
 	function M.send(spec)
 		local attempts = math.max(1, math.min(8, tonumber(spec.attempts) or 1))
 		local deadline = tonumber(spec.deadlineMs) or (clock.ms() + math.max(1, math.min(300, tonumber(spec.timeout) or 120)) * 1000)
-		if spec.relay and env.require("net/transport").coworkWeb() then deadline = math.huge end
+		local relayUnlimited = spec.relay and env.require("net/transport").unlimited(spec)
+		if relayUnlimited then deadline = math.huge end
 		local lastRes, lastErr
 		for attempt = 1, attempts do
 			if aborted(spec) then return nil, "aborted" end
 			local copy = util.copy(spec)
 			copy.attempt, copy.deadlineMs = attempt, deadline
+			copy.relayUnlimited = relayUnlimited
 			if clock.ms() >= deadline then return nil, "deadline: request budget expired" end
 			local res, err, failedMs = M.request(copy)
 			lastRes, lastErr = res, err

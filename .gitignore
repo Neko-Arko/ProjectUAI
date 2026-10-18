@@ -11,6 +11,7 @@ companion/build/
 companion/app/build/
 companion/local.properties
 companion/.cache/
+companion/release/
 HANDOVER.md
 handover.md
 *.local.md

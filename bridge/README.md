@@ -3,7 +3,7 @@
 Use UAI in your browser while Roblox runs your tools and keeps the conversation.
 Run both on the same computer. The [Windows desktop app](../desktop/README.md)
 detects installed Node.js and offers a verified download if needed. Open the
-single **UAI-Bridge-3.3.5-win-x64.exe** download, complete Node setup, click **Start
+single **UAI-Bridge-3.5.6-win-x64.exe** download, complete Node setup, click **Start
 Cowork**, and load the updated UAI script. The browser opens and Roblox connects
 automatically on dedicated port **28791**. No terminal or token copying is needed.
 
@@ -105,7 +105,7 @@ Failed downloads or startup keep a working version. Git checkouts and executor
 download packages are never overwritten; updates live in a per-install user cache.
 
 Publish `dist/bridge-release.json` and `dist/uai-bridge-package.json` on the same
-official `v3.3.5` or `bridge-v3.3.5` GitHub release. Generate them with
+official `v3.5.6` or `bridge-v3.5.6` GitHub release. Generate them with
 `node tools/build_bridge.js` after reviewing final bridge/web inputs, inspect
 the outputs, then run `node tools/build_bridge.js --check` and focused tests.
 Later releases must bump `bridge/release.js` and use the matching release tag.
@@ -258,8 +258,9 @@ short screens with full drafts, long task lists and model names, live question a
 selection updates, dialog errors, keyboard focus, contrast, and forced colors.
 Inspect the saved screenshots as well as checking geometry. These fixtures do not
 replace a live executor check. See the [UI audit](UI_AUDIT.md) for the findings.
-The [3.3.5 verification record](../docs/TESTING_3.3.5.md) records the current
-bridge release checks; the entire native suite is not part of this pass.
+The [3.5.6 verification record](../docs/TESTING_3.5.6.md) records the current
+release checks. The [3.3.5 record](../docs/TESTING_3.3.5.md) remains available for
+the earlier release.
 
 Protocol remains version 2. `/api/hello` advertises optional picture and normalized
 stream capabilities. `--legacy` disables pictures and uses compatibility delta

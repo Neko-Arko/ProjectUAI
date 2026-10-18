@@ -15,6 +15,39 @@ Scope decision for the original companion project: Android only, with PC bridge
 behavior unchanged. The 3.1.0 bridge release extends the client behavior below;
 the original app design and historical implementation plan follow afterward.
 
+## Current companion transport and diagnostics
+
+Companion version 3.5.6 (version code 3) adds these changes.
+
+The companion now advertises `capabilities.inference = {schema:1, unlimited:true}`
+in hello and authenticated status. Updated clients can send `timeout:0` to wait
+without an overall inference deadline. An explicit positive timeout remains
+bounded to 10–86400 seconds; an omitted value retains the legacy 180-second
+default. A finite caller deadline remains authoritative. OkHttp has no hidden
+read/write timeout and no automatic connection retry or redirect replay;
+connection establishment retains its 15-second limit. Cancellation and response
+size limits remain terminal.
+
+A running job has a 120-second monotonic ownership lease, renewed only by its
+authenticated job poll or identical submission retry. The Android service sweeps
+every five seconds even without incoming traffic. Expiry settles
+`client_disconnected`, cancels the native provider call and releases idle wake-lock
+ownership. Hello/status traffic and other jobs do not renew it; an expired receipt
+cannot start another inference. This limits abandoned work after Roblox exits or
+loses its transport, without imposing a total deadline on a regularly polled job.
+
+Acceptance immediately updates foreground notification and wake-lock ownership.
+The wake lock lasts until jobs settle or the service stops, so long reasoning does
+not lose protection at ten minutes. The UI shows authenticated client contact
+separately from a saved pairing token and shows live accepted, active, response,
+failure and cancellation counts. Recent activity contains only hostnames, elapsed
+time, received bytes and safe error categories. `/api/status` exposes the same
+metadata after token authentication. Diagnostics never expose raw exception
+messages, provider URL paths, credentials or request/response contents.
+
+The historical finite-only timeout references below describe the original app;
+the negotiated zero value above extends that contract without changing protocol 2.
+
 ## Client updates in 3.1.0
 
 Routine companion health checks keep the current state while waiting and do not
@@ -258,7 +291,9 @@ Companion responsibilities (mirroring `bridge/inference.js:143-183`):
 - `headers` are filtered: drop `host`, `connection`, `content-length`,
   `transfer-encoding`, `accept-encoding`; force `accept-encoding: identity`; set
   `content-length` to the body length.
-- `timeout` is clamped to `[10, 86400]`, default 180.
+- `timeout:0` disables the overall deadline when the client has negotiated the
+  unlimited inference capability. Positive values clamp to `[10, 86400]`; omitted
+  values default to 180 for legacy clients.
 - **Idempotency**: a fingerprint over `url + sorted filtered headers + body + sessionId`
   is stored per id. A re-submit of the same id with the same fingerprint returns the
   existing job view; a different fingerprint is an error.

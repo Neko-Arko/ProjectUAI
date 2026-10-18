@@ -5,6 +5,7 @@ import dev.projectuai.relay.data.MemorySettings
 import dev.projectuai.relay.engine.JobEngine
 import dev.projectuai.relay.protocol.Hello
 import dev.projectuai.relay.protocol.RelayJson
+import dev.projectuai.relay.protocol.StatusResponse
 import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -97,6 +98,8 @@ class RelayServerTest {
             assertEquals(2, hello.protocol)
             assertEquals("uai-relay", hello.server)
             assertEquals("inst-test", hello.instance)
+            assertTrue(hello.capabilities.inference.unlimited)
+            assertEquals(1, hello.capabilities.inference.schema)
         }
     }
 
@@ -112,6 +115,8 @@ class RelayServerTest {
     fun `pairing rejects a foreign origin and host`() {
         call("/api/pair", "POST", "{}", headers = mapOf("Origin" to "http://evil.test")).use { assertEquals(403, it.code) }
         call("/api/pair", "POST", "{}", headers = mapOf("Host" to "evil.test")).use { assertEquals(403, it.code) }
+        call("/api/pair", "POST", "{}", headers = mapOf("Host" to "localhost.evil.test")).use { assertEquals(403, it.code) }
+        call("/api/pair", "POST", "{}", headers = mapOf("Origin" to "http://127.0.0.1.evil.test")).use { assertEquals(403, it.code) }
     }
 
     @Test
@@ -145,6 +150,53 @@ class RelayServerTest {
         assertTrue(completed.contains("\"state\":\"completed\""))
         assertTrue(completed.contains("answer"))
         assertEquals("Bearer key", upstream.takeRequest().getHeader("authorization"))
+        call("/api/status", token = token).use { response ->
+            val status = RelayJson.decodeFromString<StatusResponse>(response.body!!.string())
+            assertEquals(1, status.activity.acceptedJobs)
+            assertEquals(1, status.activity.completedJobs)
+            assertEquals(0, status.activeJobs)
+            assertTrue(status.lastClientAt > 0)
+            assertTrue(status.capabilities.inference.unlimited)
+        }
+    }
+
+    @Test
+    fun `saved credentials are not evidence of a live client`() {
+        settings.token = "a".repeat(64)
+        call("/api/hello").close()
+        call("/api/status").use { assertEquals(401, it.code) }
+        call("/api/hello", token = "invalid").close()
+        assertEquals(0L, server.lastClientAt)
+        call("/api/hello", token = settings.token).use { assertEquals(200, it.code) }
+        assertTrue(server.lastClientAt > 0)
+    }
+
+    @Test
+    fun `negotiated zero timeout is accepted and cancellable`() {
+        val token = pair()
+        upstream.enqueue(MockResponse().setBody("{}").setBodyDelay(2, java.util.concurrent.TimeUnit.SECONDS))
+        val body = """{"id":"inference_unlimited","instance":"inst-test","url":"${upstream.url("/v1")}","body":"{}","timeout":0}"""
+        call("/api/inference", "POST", body, token = token).use { assertEquals(202, it.code) }
+        call("/api/inference/inference_unlimited", "DELETE", token = token).use { assertEquals(200, it.code) }
+        assertTrue(poll(token, "inference_unlimited").contains("cancelled"))
+    }
+
+    @Test
+    fun `fractional timeout fails before dispatch and integer timeout reaches the provider`() {
+        val token = pair()
+        val body = """{"id":"inference_integer","instance":"inst-test","url":"${upstream.url("/v1")}","body":"{}","timeout":299.948}"""
+        call("/api/inference", "POST", body, token = token).use { response ->
+            assertEquals(400, response.code)
+            assertTrue(response.body!!.string().contains("invalid request"))
+        }
+        assertEquals(0, upstream.requestCount)
+        assertEquals(0, engine.activity().acceptedJobs)
+        upstream.enqueue(MockResponse().setBody("integer accepted"))
+        call("/api/inference", "POST", body.replace("299.948", "300"), token = token).use { response ->
+            assertEquals(202, response.code)
+        }
+        assertTrue(poll(token, "inference_integer").contains("integer accepted"))
+        assertEquals(1, upstream.requestCount)
     }
 
     @Test

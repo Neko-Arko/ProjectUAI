@@ -3,18 +3,34 @@ package dev.projectuai.relay.engine
 import dev.projectuai.relay.protocol.JobState
 import dev.projectuai.relay.protocol.JobView
 import dev.projectuai.relay.protocol.SubmitRequest
+import dev.projectuai.relay.protocol.ActivitySnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
+import java.net.UnknownHostException
+import java.io.IOException
+import okhttp3.Call
+import okhttp3.EventListener
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 
 class JobEngineTest {
     private lateinit var upstream: MockWebServer
@@ -52,8 +68,8 @@ class JobEngineTest {
         timeout = timeout,
     )
 
-    private fun waitFor(engine: JobEngine, id: String): JobView? {
-        val deadline = System.currentTimeMillis() + 5000
+    private fun waitFor(engine: JobEngine, id: String, waitMs: Long = 5000): JobView? {
+        val deadline = System.currentTimeMillis() + waitMs
         while (System.currentTimeMillis() < deadline) {
             val view = engine.poll(id)
             if (view != null && view.state != JobState.RUNNING) return view
@@ -159,5 +175,267 @@ class JobEngineTest {
         assertEquals(JobState.COMPLETED, view.state)
         assertEquals(500, view.status)
         assertEquals(1, upstream.requestCount)
+    }
+
+    @Test
+    fun `unlimited reasoning survives ten seconds of silence while explicit deadlines still apply`() {
+        upstream.enqueue(MockResponse().setBody("long answer").setBodyDelay(12, TimeUnit.SECONDS))
+        upstream.enqueue(MockResponse().setBody("too late").setBodyDelay(12, TimeUnit.SECONDS))
+        val engine = engine()
+        engine.submit(submitRequest(id = "inference_unlimited", timeout = 0))
+        assertTrue(upstream.takeRequest(2, TimeUnit.SECONDS) != null)
+        engine.submit(submitRequest(id = "inference_finite00", timeout = 10))
+        assertTrue(upstream.takeRequest(2, TimeUnit.SECONDS) != null)
+        val bounded = waitFor(engine, "inference_finite00", 15_000)!!
+        assertEquals(JobState.FAILED, bounded.state)
+        assertEquals("timeout", bounded.errorCode)
+        val unlimited = waitFor(engine, "inference_unlimited", 5000)!!
+        assertEquals(JobState.COMPLETED, unlimited.state)
+        assertEquals("long answer", unlimited.body)
+        assertEquals(2, upstream.requestCount)
+    }
+
+    @Test
+    fun `notifies on acceptance and counts terminal states without duplicate submission`() {
+        upstream.enqueue(MockResponse().setBody("answer").setBodyDelay(150, TimeUnit.MILLISECONDS))
+        val observations = CopyOnWriteArrayList<ActivitySnapshot>()
+        lateinit var engine: JobEngine
+        engine = JobEngine(instance, scope, onChanged = { observations.add(engine.activity()) })
+        engine.submit(submitRequest())
+        assertTrue(observations.any { it.activeJobs == 1 && it.acceptedJobs == 1 && it.completedJobs == 0 })
+        waitFor(engine, "inference_abcdef12")
+        engine.submit(submitRequest())
+        val activity = engine.activity()
+        assertEquals(1, activity.acceptedJobs)
+        assertEquals(1, activity.completedJobs)
+        assertEquals(0, activity.activeJobs)
+        assertEquals(6L, activity.recent.single().receivedBytes)
+        assertEquals(upstream.url("/").host, activity.recent.single().provider)
+    }
+
+    @Test
+    fun `transport disconnect is terminal and never repeated`() {
+        upstream.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST))
+        upstream.enqueue(MockResponse().setBody("must not retry"))
+        val engine = engine()
+        engine.submit(submitRequest())
+        val failed = waitFor(engine, "inference_abcdef12")!!
+        assertEquals(JobState.FAILED, failed.state)
+        assertEquals("transport", failed.errorCode)
+        assertEquals(1, upstream.requestCount)
+        assertEquals(1, engine.activity().failedJobs)
+    }
+
+    @Test
+    fun `redirect does not replay the provider post`() {
+        upstream.enqueue(MockResponse().setResponseCode(307).setHeader("Location", upstream.url("/replay")))
+        upstream.enqueue(MockResponse().setBody("must not replay"))
+        val engine = engine()
+        engine.submit(submitRequest())
+        assertEquals(307, waitFor(engine, "inference_abcdef12")!!.status)
+        assertEquals(1, upstream.requestCount)
+    }
+
+    @Test
+    fun `diagnostic failures categorize without leaking raw errors`() {
+        val client = JobEngine.providerClient().newBuilder().addInterceptor {
+            throw UnknownHostException("private-provider-key-and-query")
+        }.build()
+        val engine = JobEngine(instance, scope, client)
+        engine.submit(submitRequest())
+        val failed = waitFor(engine, "inference_abcdef12")!!
+        assertEquals("dns", failed.errorCode)
+        assertFalse(failed.error.orEmpty().contains("private-provider"))
+        assertEquals("dns", engine.activity().recent.single().errorCode)
+    }
+
+    @Test
+    fun `cancelled unlimited request settles once and releases active state`() {
+        upstream.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        val engine = engine()
+        engine.submit(submitRequest(timeout = 0))
+        assertTrue(upstream.takeRequest(2, TimeUnit.SECONDS) != null)
+        engine.cancel("inference_abcdef12")
+        engine.cancel("inference_abcdef12")
+        assertEquals(JobState.CANCELLED, engine.poll("inference_abcdef12")!!.state)
+        assertEquals(0, engine.activity().activeJobs)
+        assertEquals(1, engine.activity().cancelledJobs)
+        assertEquals(1, upstream.requestCount)
+    }
+
+    @Test
+    fun `closing cancels active work and prevents later admission`() {
+        upstream.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        val engine = engine()
+        engine.submit(submitRequest(timeout = 0))
+        assertTrue(upstream.takeRequest(2, TimeUnit.SECONDS) != null)
+        engine.close()
+        val rejected = engine.submit(submitRequest(id = "inference_afterstop", timeout = 0))
+        assertTrue(rejected is JobEngine.Submission.Rejected)
+        assertEquals(JobState.CANCELLED, engine.poll("inference_abcdef12")!!.state)
+        assertEquals(0, engine.activity().activeJobs)
+        assertEquals(1, upstream.requestCount)
+    }
+
+    @Test
+    fun `owner loss cancels a silent unlimited call without incoming traffic or wall clock dependence`() {
+        upstream.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        val ownerTime = AtomicLong(0)
+        val wallTime = AtomicLong(1_000_000)
+        val nativeCancelled = CountDownLatch(1)
+        val client = JobEngine.providerClient().newBuilder().eventListener(object : EventListener() {
+            override fun callFailed(call: Call, ioe: IOException) {
+                if (call.isCanceled()) nativeCancelled.countDown()
+            }
+        }).build()
+        val engine = JobEngine(instance, scope, client, clock = { wallTime.get() }, ownerClock = { ownerTime.get() })
+        engine.submit(submitRequest(timeout = 0))
+        assertTrue(upstream.takeRequest(2, TimeUnit.SECONDS) != null)
+        ownerTime.set(JobEngine.OWNER_LEASE_MS - 1)
+        wallTime.set(Long.MAX_VALUE / 2)
+        engine.sweep()
+        assertEquals(1, engine.activeCount)
+        assertEquals(1, engine.activity().activeJobs)
+        ownerTime.set(JobEngine.OWNER_LEASE_MS)
+        engine.sweep()
+        assertTrue(nativeCancelled.await(2, TimeUnit.SECONDS))
+        val settled = engine.poll("inference_abcdef12")!!
+        assertEquals(JobState.CANCELLED, settled.state)
+        assertEquals("client_disconnected", settled.errorCode)
+        assertEquals(0, engine.activeCount)
+        assertEquals(1, engine.activity().cancelledJobs)
+        val duplicate = engine.submit(submitRequest(timeout = 0)) as JobEngine.Submission.Accepted
+        assertEquals(JobState.CANCELLED, duplicate.view.state)
+        assertEquals(1, upstream.requestCount)
+    }
+
+    @Test
+    fun `only the exact job poll or matching submission renews ownership beyond total deadlines`() {
+        repeat(2) { upstream.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)) }
+        val ownerTime = AtomicLong(0)
+        val engine = JobEngine(instance, scope, ownerClock = { ownerTime.get() })
+        val first = submitRequest(id = "inference_owner_one", timeout = 0)
+        val second = submitRequest(id = "inference_owner_two", timeout = 0)
+        engine.submit(first)
+        engine.submit(second)
+        repeat(2) { assertTrue(upstream.takeRequest(2, TimeUnit.SECONDS) != null) }
+        ownerTime.set(119_000)
+        assertEquals(JobState.RUNNING, engine.poll(first.id)!!.state)
+        assertTrue(engine.submit(second) is JobEngine.Submission.Accepted)
+        ownerTime.set(238_000)
+        assertEquals(JobState.RUNNING, engine.poll(first.id)!!.state)
+        assertTrue(engine.submit(second.copy(body = "different")) is JobEngine.Submission.Rejected)
+        assertNull(engine.poll("inference_unknown"))
+        engine.activity()
+        ownerTime.set(239_000)
+        engine.sweep()
+        assertEquals(JobState.CANCELLED, engine.poll(second.id)!!.state)
+        assertEquals("client_disconnected", engine.poll(second.id)!!.errorCode)
+        for (time in listOf(357_000L, 476_000L)) {
+            ownerTime.set(time)
+            assertEquals(JobState.RUNNING, engine.poll(first.id)!!.state)
+        }
+        assertEquals(1, engine.activeCount)
+        assertEquals(2, upstream.requestCount)
+        engine.close()
+    }
+
+    @Test
+    fun `update reservation rejects new provider work until released`() {
+        val engine = engine()
+        assertTrue(engine.pauseForUpdate())
+        assertTrue(engine.pauseForUpdate())
+        assertNull(engine.poll("inference_unknown"))
+        assertFalse(engine.cancel("inference_unknown"))
+        val rejected = engine.submit(submitRequest()) as JobEngine.Submission.Rejected
+        assertEquals(503, rejected.status)
+        assertEquals(0, engine.total)
+        assertEquals(0, upstream.requestCount)
+
+        engine.resumeAfterUpdate()
+        engine.resumeAfterUpdate()
+        upstream.enqueue(MockResponse().setBody("ready again"))
+        assertTrue(engine.submit(submitRequest()) is JobEngine.Submission.Accepted)
+        assertEquals("ready again", waitFor(engine, "inference_abcdef12")!!.body)
+        assertEquals(1, upstream.requestCount)
+    }
+
+    @Test
+    fun `update waits for active jobs and cancellation receipts without cancelling work`() {
+        upstream.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        val wallTime = AtomicLong(1_000)
+        val engine = JobEngine(instance, scope, clock = { wallTime.get() })
+        engine.submit(submitRequest(timeout = 0))
+        assertTrue(upstream.takeRequest(2, TimeUnit.SECONDS) != null)
+        assertFalse(engine.pauseForUpdate())
+        assertEquals(JobState.RUNNING, engine.poll("inference_abcdef12")!!.state)
+        assertTrue(engine.cancel("inference_abcdef12"))
+        assertEquals(JobState.CANCELLED, engine.poll("inference_abcdef12")!!.state)
+        assertFalse(engine.pauseForUpdate())
+        wallTime.addAndGet(engine.limits.retentionMs)
+        assertFalse(engine.pauseForUpdate())
+        wallTime.incrementAndGet()
+        assertTrue(engine.pauseForUpdate())
+        assertEquals(JobState.EXPIRED, engine.poll("inference_abcdef12")!!.state)
+        assertFalse(engine.cancel("inference_abcdef12"))
+        assertEquals(1, upstream.requestCount)
+    }
+
+    @Test
+    fun `empty completion receipts delay an update and closing never resumes admission`() {
+        upstream.enqueue(MockResponse().setResponseCode(204))
+        val wallTime = AtomicLong(1_000)
+        val engine = JobEngine(instance, scope, clock = { wallTime.get() })
+        engine.submit(submitRequest())
+        assertEquals(JobState.COMPLETED, waitFor(engine, "inference_abcdef12")!!.state)
+        assertEquals(0L, engine.retained)
+        assertFalse(engine.pauseForUpdate())
+        wallTime.addAndGet(engine.limits.retentionMs + 1)
+        assertTrue(engine.pauseForUpdate())
+        engine.close()
+        engine.resumeAfterUpdate()
+        assertFalse(engine.pauseForUpdate())
+        assertEquals(503, (engine.submit(submitRequest(id = "inference_after_update")) as JobEngine.Submission.Rejected).status)
+        assertEquals(1, upstream.requestCount)
+    }
+
+    @Test
+    fun `update reservation and concurrent admission have one winner`() {
+        val workers = Executors.newFixedThreadPool(2)
+        try {
+            repeat(32) {
+                val dispatches = AtomicInteger(0)
+                val client = JobEngine.providerClient().newBuilder().addInterceptor { chain ->
+                    dispatches.incrementAndGet()
+                    Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
+                        .code(200).message("OK").body("answer".toResponseBody()).build()
+                }.build()
+                val engine = JobEngine(instance, scope, client)
+                val start = CountDownLatch(1)
+                val ready = CountDownLatch(2)
+                val pause = workers.submit(Callable {
+                    ready.countDown()
+                    start.await()
+                    engine.pauseForUpdate()
+                })
+                val submission = workers.submit(Callable {
+                    ready.countDown()
+                    start.await()
+                    engine.submit(submitRequest())
+                })
+                assertTrue(ready.await(2, TimeUnit.SECONDS))
+                start.countDown()
+                if (pause.get(2, TimeUnit.SECONDS)) {
+                    assertEquals(503, (submission.get(2, TimeUnit.SECONDS) as JobEngine.Submission.Rejected).status)
+                    assertEquals(0, engine.total)
+                    assertEquals(0, dispatches.get())
+                } else {
+                    assertTrue(submission.get(2, TimeUnit.SECONDS) is JobEngine.Submission.Accepted)
+                    assertEquals(JobState.COMPLETED, waitFor(engine, "inference_abcdef12")!!.state)
+                    assertEquals(1, dispatches.get())
+                }
+                engine.close()
+            }
+        } finally { workers.shutdownNow() }
     }
 }

@@ -26,7 +26,9 @@ object RequestRules {
     fun filterResponseHeaders(input: Map<String, String>): Map<String, String> =
         input.filterKeys { it.lowercase() !in HOP_BY_HOP }
 
-    fun clampTimeout(seconds: Int): Int = seconds.coerceIn(10, 86400)
+    // Zero is negotiated by capabilities.inference.unlimited. Positive legacy
+    // budgets retain their original range; a missing field still defaults to 180.
+    fun clampTimeout(seconds: Int): Int = if (seconds == 0) 0 else seconds.coerceIn(10, 86400)
 
     /** null when the URL may be forwarded; otherwise the reason to reject it. */
     fun validateUrl(raw: String): String? {

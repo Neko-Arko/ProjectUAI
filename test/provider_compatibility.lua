@@ -705,6 +705,7 @@ case("Responses connection tests retain OpenCode identity on Game and Web routes
 		record.query = { mode = "a b" }
 		local captured, relayed
 		f.loaded["net/transport"] = { streamForced = function() return route == "web" end,
+			prepare = function() end, unlimited = function() return route ~= "game" end,
 			coworkWeb = function() return route ~= "game" end,
 			endpoint = function() return route ~= "game" and { target = "cowork", base = "http://127.0.0.1:8790", token = "fixture" } or nil end,
 			shouldRelay = function(images) return route == "web" or images end }
@@ -767,6 +768,7 @@ case("Cowork provider calls and explicit-refusal recovery outlive native request
 		record.apiKey = "first-key\nsecond-key"
 		local calls, deadlines = 0, {}
 		f.loaded["net/transport"] = {
+			prepare = function() end, unlimited = function() return true end,
 			streamForced = function() return true end, coworkWeb = function() return true end,
 			shouldRelay = function() return true end,
 			endpoint = function() return { target = "cowork", base = "http://127.0.0.1:8790", token = "fixture" } end,

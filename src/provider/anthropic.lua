@@ -523,8 +523,10 @@ return function(env)
 		local headers = rebuildHeaders()
 
 		local started = clock.ms()
-		local deadline = env.require("net/transport").coworkWeb() and math.huge
-			or (started + math.max(1, math.min(300, tonumber(requestTimeout(request)) or 120)) * 1000)
+		local relayUnlimited = env.require("net/transport").unlimited(request)
+		local deadline = relayUnlimited and math.huge
+			or math.min(tonumber(request.deadlineMs) or math.huge,
+				started + math.max(1, math.min(300, tonumber(requestTimeout(request)) or 120)) * 1000)
 		local recovery = proxy.new(record, { aborted = request.aborted, onRetry = request.onRetry, deadlineMs = deadline })
 		local lastRequestMs = 0
 		local rotationsLeft = math.max(#pool - 1, 0)
@@ -538,6 +540,7 @@ return function(env)
 			local requestStarted = clock.ms()
 			local res, err = http.send({
 				relay = env.require("net/transport").shouldRelay(env.require("runtime/images").hasReferences(request.messages)),
+				relayUnlimited = relayUnlimited,
 				sessionId = request.sessionId,
 				url = url,
 				method = "POST",

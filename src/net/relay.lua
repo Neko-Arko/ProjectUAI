@@ -25,7 +25,8 @@ return function(env)
 		local id = "inference_" .. env.services.HttpService:GenerateGUID(false)
 		local deadline = math.min(tonumber(spec.deadlineMs) or math.huge,
 			clock.ms() + math.max(1, math.min(300, tonumber(spec.timeout) or 120)) * 1000)
-		if target == "cowork" then deadline = math.huge end
+		local unlimited = transport.unlimited(spec, endpoint)
+		if unlimited then deadline = math.huge end
 		local ended
 		local function short(method, path, body)
 			if clock.ms() >= deadline then return nil, "deadline: relay request budget expired" end
@@ -115,7 +116,13 @@ return function(env)
 		if clock.ms() >= deadline then return failure("Relay request deadline reached before submission.") end
 		local input = { id = id, instance = info.instance, url = spec.url, headers = headers,
 			body = spec.body, sessionId = spec.sessionId }
-		if target == "companion" then input.timeout = math.min(timeout, (deadline - clock.ms()) / 1000) end
+		if target == "companion" then
+			local inference = type(info.capabilities) == "table" and info.capabilities.inference
+			local acceptsUnlimited = type(inference) == "table" and inference.schema == 1 and inference.unlimited == true
+			-- Kotlin's protocol uses integer seconds. Fractional remaining budgets
+			-- previously produced invalid JSON requests before inference could start.
+			input.timeout = unlimited and acceptsUnlimited and 0 or math.max(1, math.ceil(math.min(timeout, (deadline - clock.ms()) / 1000)))
+		end
 		local payload = util.encode(input)
 		local submitted, attempts = false, 0
 		while clock.ms() < deadline do

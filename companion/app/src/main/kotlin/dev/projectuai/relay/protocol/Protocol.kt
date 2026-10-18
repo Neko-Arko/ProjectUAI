@@ -24,7 +24,11 @@ object JobState {
 data class Capabilities(
     val serverSidePairing: Boolean = true,
     val deltas: Boolean = false,
+    val inference: InferenceCapability = InferenceCapability(),
 )
+
+@Serializable
+data class InferenceCapability(val schema: Int = 1, val unlimited: Boolean = true)
 
 @Serializable
 data class Hello(
@@ -71,6 +75,31 @@ data class JobView(
     val status: Int = 0,
     val headers: Map<String, String> = emptyMap(),
     val body: String? = null,
+    val errorCode: String? = null,
+)
+
+/** Diagnostic metadata only: no request/response contents, URL paths or credentials. */
+@Serializable
+data class JobActivity(
+    val id: String,
+    val provider: String,
+    val state: String,
+    val stage: String,
+    val startedAt: Long,
+    val finishedAt: Long = 0,
+    val receivedBytes: Long = 0,
+    val status: Int = 0,
+    val errorCode: String? = null,
+)
+
+@Serializable
+data class ActivitySnapshot(
+    val activeJobs: Int = 0,
+    val acceptedJobs: Int = 0,
+    val completedJobs: Int = 0,
+    val failedJobs: Int = 0,
+    val cancelledJobs: Int = 0,
+    val recent: List<JobActivity> = emptyList(),
 )
 
 @Serializable
@@ -88,4 +117,7 @@ data class StatusResponse(
     val retainedBytes: Long,
     val paired: Boolean,
     val userStopped: Boolean,
+    val lastClientAt: Long = 0,
+    val activity: ActivitySnapshot = ActivitySnapshot(),
+    val capabilities: Capabilities = Capabilities(),
 )

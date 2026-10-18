@@ -30,6 +30,7 @@ local function setup(handlers)
 	record.label, record.baseUrl, record.apiKey = "Relay", "https://relay.test/v1", "sk-relay-key"
 	record.model, record.models = "harness-model", { "harness-model" }
 	assert(app.providers.save(record), "provider rejected")
+	assert(app.providers.setActive(record.id), "fixture provider was not selected")
 	h.settle(1)
 	return h, app
 end

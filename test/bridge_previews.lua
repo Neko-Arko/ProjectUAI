@@ -9,6 +9,7 @@ local function fixture(options)
 	local f = F.new(); f.tools({})
 	local endpoint = { target = options.target or "cowork", base = "http://127.0.0.1:28791", token = "fixture-token", instance = "fixture-bridge" }
 	f.loaded["net/transport"] = {
+		prepare = function() end, unlimited = function() return endpoint.target == "cowork" end,
 		endpoint = function() return endpoint end, shouldRelay = function() return true end,
 		coworkWeb = function() return endpoint.target == "cowork" end,
 		streamForced = function() return endpoint.target == "cowork" end,

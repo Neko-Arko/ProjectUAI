@@ -300,7 +300,9 @@ return function(env)
 		if not ok then return nil, "Unable to prepare Gemini request: " .. tostring(body) end
 		local scope, started = registry.compatibilityKey(record), clock.ms()
 		local timeout = request.timeout or config.get("agent.requestTimeout", 86400)
-		local deadline = transport.coworkWeb() and math.huge or started + math.max(1, math.min(300, tonumber(timeout) or 120)) * 1000
+		local relayUnlimited = transport.unlimited(request)
+		local deadline = relayUnlimited and math.huge or math.min(tonumber(request.deadlineMs) or math.huge,
+			started + math.max(1, math.min(300, tonumber(timeout) or 120)) * 1000)
 		local pool, key = registry.keysOf(record), registry.nextKey(record)
 		local left = math.max(0, #pool - 1)
 		local function cancelled()
@@ -315,6 +317,7 @@ return function(env)
 				headers = headers.merge(M.headers(record, key), registry.opencodeHeaders(record, request), record.headers,
 					{ Accept = wantStream and "text/event-stream" or "application/json" }),
 				relay = transport.shouldRelay(env.require("runtime/images").hasReferences(request.messages)), sessionId = request.sessionId,
+				relayUnlimited = relayUnlimited,
 				identity = registry.identityFor(record), identityRequired = registry.requiresClaude(record),
 				attempts = request.attempts or config.get("agent.retries", 3), skipStatus = #pool > 1 and { [429] = true } or nil,
 				timeout = timeout, deadlineMs = deadline, aborted = cancelled, onRetry = request.onRetry,

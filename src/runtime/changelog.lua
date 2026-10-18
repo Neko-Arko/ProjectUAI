@@ -19,6 +19,28 @@ return function(env)
 	local CATEGORY_ORDER = { "added", "improved", "fixed" }
 	local ENTRIES = {
 		{
+			version = "3.5.6",
+			revision = "2026-10-18-mobile-relay-updates",
+			date = "October 18, 2026",
+			title = "Mobile relay reliability and automatic updates",
+			highlights = "Fix companion request admission and deadline handling, show real connection activity, and add verified automatic Android update downloads.",
+			sections = {
+				{ category = "added", label = "Android companion updates", items = {
+					"UAI Relay checks official releases at startup and every 15 minutes while running, downloads compatible updates automatically, and verifies the APK's hash, package, version and signing certificate.",
+					"Install updates after active requests and retained replies finish. Android asks for installation approval; an interrupted installation retains its admission pause until resolved.",
+				} },
+				{ category = "fixed", label = "Companion requests and deadlines", items = {
+					"Finite request timeouts use integer seconds so the Android relay accepts them. Updated clients and companions can keep normal inference running beyond five minutes while each executor poll stays within five seconds.",
+					"Explicit deadlines, Stop and provider failures still end the original request. Lost polls keep the same request ID and never start a second inference.",
+					"Abandoned requests cancel after two minutes without their owner's polls, releasing the provider connection and idle wake lock.",
+				} },
+				{ category = "improved", label = "Connection and activity", items = {
+					"Authenticate saved pairing, repair a rejected token, and check again when sending after the companion starts. The app separates saved pairing from live contact and shows requests, received bytes and safe error categories.",
+					"OpenCode text, tool calls and tool-result replay passed with the companion's HTTP library on Windows. Android networking, mobile executor behavior and OpenCode acceptance on a phone remain unverified; OpenCode free models remain unsupported on mobile.",
+				} },
+			},
+		},
+		{
 			version = "3.3.5",
 			revision = "2026-10-18-prompt-bridge-queue",
 			date = "October 18, 2026",

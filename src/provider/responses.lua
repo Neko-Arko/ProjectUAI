@@ -469,8 +469,12 @@ return function(env)
 			return headerMap.merge(registry.authHeaders(record, currentKey or ""), registry.opencodeHeaders(record, request), record.headers)
 		end
 		local started = clock.ms()
-		local deadline = env.require("net/transport").coworkWeb() and math.huge
-			or handoff.deadlineMs or (started + math.max(1, math.min(300, tonumber(requestTimeout(request)) or 120)) * 1000)
+		local relayUnlimited = handoff.relayUnlimited
+		if relayUnlimited == nil then relayUnlimited = env.require("net/transport").unlimited(request) end
+		if handoff.deadlineMs and handoff.deadlineMs < math.huge then relayUnlimited = false end
+		local deadline = handoff.deadlineMs or (relayUnlimited and math.huge
+			or math.min(tonumber(request.deadlineMs) or math.huge,
+				started + math.max(1, math.min(300, tonumber(requestTimeout(request)) or 120)) * 1000))
 		local scope = registry.compatibilityKey(record)
 		local attemptsAllowed = request.attempts or config.get("agent.retries", 3)
 		local function fire()
@@ -478,6 +482,7 @@ return function(env)
 			local imageRequest = env.require("runtime/images").hasReferences(request.messages)
 			return http.send({
 				relay = env.require("net/transport").shouldRelay(imageRequest), sessionId = request.sessionId,
+				relayUnlimited = relayUnlimited,
 				url = url, method = "POST", headers = headersFor(), body = util.encode(body),
 				identity = registry.identityFor(record), identityRequired = registry.requiresClaude(record),
 				attempts = attemptsAllowed, skipStatus = #pool > 1 and { [429] = true } or nil,

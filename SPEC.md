@@ -1,8 +1,8 @@
 # Project UAI — contract
 
-Current client release: **3.3.5 — October 18, 2026**.
+Current client release: **3.5.6 — October 18, 2026**.
 
-Bridge and Windows desktop release 3.3.5 use verified automatic GitHub updates.
+Bridge and Windows desktop release 3.5.6 use verified automatic GitHub updates.
 Bridge worker replacement waits for idle work and retains its session token;
 desktop app updates stage for restart with a retained fallback. Desktop detects
 Node.js 18+ or downloads a verified LTS runtime per user instead of bundling Node.
@@ -1525,7 +1525,38 @@ what a phone executor's HTTP wall-clock limit otherwise cuts off. It implements 
 web UI, no static files. `relay.mode` defaults to `auto`; `net/relay_link` probes
 `127.0.0.1:8790`, requires protocol 2 and the `uai-relay` marker (so a PC bridge on
 the same port is never mistaken for it), and pairs once for a token that survives
-companion restarts. `net/transport` is the single transport decision point: an
+companion restarts. Saved pairing is authenticated on first contact and after a
+changed companion instance; an explicit bad-token response repairs pairing before
+inference. Mobile sends can run a shared bounded discovery probe after five seconds
+without a successful connection, so starting the companion does not require waiting
+through the idle discovery backoff.
+
+Updated companions advertise `capabilities.inference = {schema:1, unlimited:true}`.
+With the normal `agent.requestUnlimited` setting, default inference uses an
+unlimited job (`timeout:0`), while every executor-visible exchange remains bounded
+to five seconds. Explicit request timeouts/deadlines and disabled unlimited settings
+remain finite. Legacy companions retain finite jobs. Finite submission timeouts are
+integer seconds, as required by the Kotlin protocol. Lost polls retain the accepted
+job identity; Stop, unload, changed credentials, lost receipts and upstream failures
+remain terminal. Provider limits still apply. No timeout causes a direct retry.
+Companion jobs retain a separate 120-second monotonic ownership lease, renewed only
+by their authenticated result poll or matching submission retry. A five-second
+service sweep cancels abandoned provider calls and releases idle wake locks after
+Roblox disappears. Lease expiry is terminal `client_disconnected` and cannot
+authorize replay; normal polling can keep an unlimited job alive indefinitely.
+
+The Android app checks official stable `Project-Ptolemy/ProjectUAI` releases on
+startup and every 15 minutes while its process is alive. Automatic downloads are
+enabled by default. An update must have the expected package ID, compatible SDK,
+newer version name/code, matching size/hash and the same installed signing
+certificate. Checking and downloading never stop inference. Installation requires
+an explicit user action and Android confirmation, and reserves admission only
+after active jobs and retained receipts are gone. The app owns and persists its
+Android installation session; after interruption, that session must be abandoned
+before relay admission resumes. See [companion/UPDATES.md](companion/UPDATES.md)
+for the signed release assets, initial debug-build transition and device checks.
+
+`net/transport` is the single transport decision point: a
 connected Cowork connection wins, then the companion, then the executor directly.
 Images always relay because they need a resolver. `relay.*` is independent of
 `bridge.*` and is preserved across settings import. The companion never persists or

@@ -18,6 +18,7 @@ return function(env)
 	local M = { changed = signal.new("relay") }
 	local alive, started, nextProbe, epoch = true, false, 0, 0
 	local activeProbe, failures = nil, 0
+	local verifiedToken, verifiedInstance, unlimited = nil, nil, false
 	local state, lastError, lastProbeAt = "off", nil, 0
 	local PROBE_MS = 30000
 
@@ -63,7 +64,7 @@ return function(env)
 	function M.status()
 		return { mode = mode(), state = state, port = port(), server = tostring(config.get("relay.server", "")),
 			instance = tostring(config.get("relay.instance", "")), placeId = tonumber(config.get("relay.placeId", 0)) or 0,
-			error = lastError, lastProbeAt = lastProbeAt }
+			error = lastError, lastProbeAt = lastProbeAt, unlimited = unlimited }
 	end
 
 	-- A periodic health check must not make a ready relay temporarily unusable or
@@ -72,6 +73,7 @@ return function(env)
 	local function probe(mine, probeBase, probePort)
 		local function stale() return not alive or epoch ~= mine or mode() == "off" end
 		local hello = http.request({ url = probeBase .. "/api/hello", method = "GET",
+			headers = token() ~= "" and { Authorization = "Bearer " .. token() } or nil,
 			identity = "none", silent = true, timeout = 1, aborted = stale })
 		if stale() then return false, "cancelled" end
 		local info = hello and hello.ok and #hello.body <= 4096 and util.decode(hello.body)
@@ -81,7 +83,21 @@ return function(env)
 		end
 		-- Check the marker even when a token was saved from an earlier companion.
 		if info.server ~= "uai-relay" then return false, "Port " .. tostring(probePort) .. " is used by another program" end
-		if token() == "" then
+		local pairedToken = token()
+		if pairedToken ~= "" and (pairedToken ~= verifiedToken or info.instance ~= verifiedInstance) then
+			local status = http.request({ url = probeBase .. "/api/status", method = "GET",
+				headers = { Authorization = "Bearer " .. pairedToken }, identity = "none", silent = true, timeout = 1, aborted = stale })
+			if stale() then return false, "cancelled" end
+			if status and status.status == 401 then pairedToken = ""
+			else
+				local checked = status and status.ok and #status.body <= 8192 and util.decode(status.body)
+				if type(checked) ~= "table" or checked.ok ~= true or checked.server ~= "uai-relay"
+					or checked.protocol ~= 2 or checked.instance ~= info.instance then
+					return false, "The companion could not verify its saved pairing"
+				end
+			end
+		end
+		if pairedToken == "" then
 			local place = env.require("runtime/place")
 			local body = util.encode({ client = "ProjectUAI-Mobile",
 				version = (env.info and env.info.version) or "0.0.0", protocol = 2,
@@ -91,13 +107,18 @@ return function(env)
 			if stale() then return false, "cancelled" end
 			local issued = pair and pair.ok and #pair.body <= 4096 and util.decode(pair.body)
 			if type(issued) ~= "table" or issued.ok ~= true or type(issued.token) ~= "string"
-				or #issued.token ~= 64 or not issued.token:match("^[a-f0-9]+$") then
+				or #issued.token ~= 64 or not issued.token:match("^[a-f0-9]+$")
+				or issued.protocol ~= 2 or issued.instance ~= info.instance then
 				return false, "The companion refused pairing"
 			end
+			pairedToken = issued.token
 			remember("relay.token", issued.token)
 			remember("relay.server", "uai-relay")
 			remember("relay.placeId", place.id)
 		end
+		verifiedToken, verifiedInstance = pairedToken, info.instance
+		local inference = type(info.capabilities) == "table" and info.capabilities.inference
+		unlimited = type(inference) == "table" and inference.schema == 1 and inference.unlimited == true
 		remember("relay.instance", tostring(info.instance))
 		return true
 	end
@@ -141,7 +162,7 @@ return function(env)
 			if not alive or mode() == "off" or token() == "" then return nil end
 		elseif not M.usable() then return nil end
 		return { target = "companion", base = base(), token = token(),
-			instance = tostring(config.get("relay.instance", "")), enabled = true }
+			instance = tostring(config.get("relay.instance", "")), enabled = true, unlimited = unlimited }
 	end
 
 	local function start()
@@ -170,8 +191,18 @@ return function(env)
 		return M.probe()
 	end
 
+	-- Starting the app after Roblox should affect the next request, without
+	-- waiting through discovery's two-minute idle backoff. One shared short scan
+	-- is allowed per five seconds; absent apps cannot delay every provider retry.
+	function M.prepare()
+		if not mobile() or not alive or mode() == "off" or M.usable() then return end
+		M.ensure()
+		if activeProbe or lastProbeAt == 0 or clock.since(lastProbeAt) >= 5000 then M.probe() end
+	end
+
 	function M.forget()
 		epoch, failures = epoch + 1, 0
+		verifiedToken, verifiedInstance, unlimited = nil, nil, false
 		remember("relay.token", "")
 		remember("relay.server", "")
 		remember("relay.instance", "")
@@ -184,6 +215,7 @@ return function(env)
 		epoch, failures = epoch + 1, 0
 		nextProbe = 0
 		if path == "relay.port" then
+			verifiedToken, verifiedInstance, unlimited = nil, nil, false
 			remember("relay.token", "")
 			remember("relay.server", "")
 			remember("relay.instance", "")

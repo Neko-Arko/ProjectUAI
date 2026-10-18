@@ -1051,6 +1051,7 @@ return function(env)
 
 		local started = clock.ms()
 		local deadline, recovery
+		local relayUnlimited = env.require("net/transport").unlimited(request)
 		local lastRequestMs = 0
 		local attemptsAllowed = request.attempts or config.get("agent.retries", 3)
 		local rotationsLeft = math.max(#pool - 1, 0)
@@ -1089,15 +1090,17 @@ return function(env)
 			end
 			local requestStarted = clock.ms()
 			-- A socket setup failure before Send retains its existing HTTP fallback.
-			-- Native/companion retries share one deadline. Cowork jobs have no
-			-- elapsed-time limit, including their explicit-refusal recovery path.
+			-- Native and explicitly bounded companion retries share one deadline.
+			-- Unlimited relay jobs retain that policy through refusal recovery.
 			if not deadline then
-				deadline = env.require("net/transport").coworkWeb() and math.huge
-					or (requestStarted + math.max(1, math.min(300, tonumber(requestTimeout(request)) or 120)) * 1000)
+				deadline = relayUnlimited and math.huge
+					or math.min(tonumber(request.deadlineMs) or math.huge,
+						requestStarted + math.max(1, math.min(300, tonumber(requestTimeout(request)) or 120)) * 1000)
 				recovery = proxy.new(record, { aborted = request.aborted, onRetry = request.onRetry, deadlineMs = deadline })
 			end
 			local res, err = http.send({
 				relay = web,
+				relayUnlimited = relayUnlimited,
 				sessionId = request.sessionId,
 				url = url,
 				method = "POST",
@@ -1159,7 +1162,7 @@ return function(env)
 			end
 			if not owns() or registry.compatibilityKey(record) ~= requestScope or (request.aborted and request.aborted()) then return nil, "aborted" end
 			local switched, switchErr, switchRes = responses.complete(record, request,
-				{ deadlineMs = deadline, key = currentKey, rotationsLeft = rotationsLeft, owns = owns })
+				{ deadlineMs = deadline, relayUnlimited = relayUnlimited, key = currentKey, rotationsLeft = rotationsLeft, owns = owns })
 			if switched then
 				remember(record, responses.key())
 				return switched, nil, switchRes

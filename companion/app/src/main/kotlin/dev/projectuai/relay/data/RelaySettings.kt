@@ -13,6 +13,12 @@ interface RelaySettings {
     var token: String
     var userStopped: Boolean
     var autoStart: Boolean
+    var automaticUpdates: Boolean
+    var lastUpdateCheckAt: Long
+    var lastInstallVersion: String
+    var resumeAfterUpdate: Boolean
+    var updateInstallPending: Boolean
+    var updateInstallSessionId: Int
     fun rotateToken() { token = "" }
 }
 
@@ -35,11 +41,35 @@ class PrefsSettings(context: Context) : RelaySettings {
 
     override var userStopped: Boolean
         get() = prefs.getBoolean("userStopped", false)
-        set(value) = prefs.edit().putBoolean("userStopped", value).apply()
+        set(value) { check(prefs.edit().putBoolean("userStopped", value).commit()) { "Could not save relay stop preference" } }
 
     override var autoStart: Boolean
         get() = prefs.getBoolean("autoStart", true)
         set(value) = prefs.edit().putBoolean("autoStart", value).apply()
+
+    override var automaticUpdates: Boolean
+        get() = prefs.getBoolean("automaticUpdates", true)
+        set(value) = prefs.edit().putBoolean("automaticUpdates", value).apply()
+
+    override var lastUpdateCheckAt: Long
+        get() = prefs.getLong("lastUpdateCheckAt", 0)
+        set(value) = prefs.edit().putLong("lastUpdateCheckAt", value).apply()
+
+    override var lastInstallVersion: String
+        get() = prefs.getString("lastInstallVersion", "") ?: ""
+        set(value) { check(prefs.edit().putString("lastInstallVersion", value).commit()) { "Could not save installation state" } }
+
+    override var resumeAfterUpdate: Boolean
+        get() = prefs.getBoolean("resumeAfterUpdate", false)
+        set(value) { check(prefs.edit().putBoolean("resumeAfterUpdate", value).commit()) { "Could not save installation state" } }
+
+    override var updateInstallPending: Boolean
+        get() = prefs.getBoolean("updateInstallPending", false)
+        set(value) { check(prefs.edit().putBoolean("updateInstallPending", value).commit()) { "Could not save installation state" } }
+
+    override var updateInstallSessionId: Int
+        get() = prefs.getInt("updateInstallSessionId", -1)
+        set(value) { check(prefs.edit().putInt("updateInstallSessionId", value).commit()) { "Could not save installation state" } }
 
     companion object {
         const val DEFAULT_PORT = 8790
@@ -52,4 +82,10 @@ class MemorySettings(
     override var token: String = "",
     override var userStopped: Boolean = false,
     override var autoStart: Boolean = true,
+    override var automaticUpdates: Boolean = true,
+    override var lastUpdateCheckAt: Long = 0,
+    override var lastInstallVersion: String = "",
+    override var resumeAfterUpdate: Boolean = false,
+    override var updateInstallPending: Boolean = false,
+    override var updateInstallSessionId: Int = -1,
 ) : RelaySettings

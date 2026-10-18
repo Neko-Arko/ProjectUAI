@@ -30,7 +30,7 @@ with the location of your downloaded executable:
 {
   "mcpServers": {
     "projectuai": {
-      "command": "C:\\Tools\\UAI-Bridge-3.3.5-win-x64.exe",
+      "command": "C:\\Tools\\UAI-Bridge-3.5.6-win-x64.exe",
       "args": ["--mcp-stdio"]
     }
   }

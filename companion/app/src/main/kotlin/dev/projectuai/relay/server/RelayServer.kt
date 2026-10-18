@@ -42,6 +42,7 @@ class RelayServer(
     private val engine: JobEngine,
     private val log: RelayLog,
     private val onPaired: (token: String, placeId: Long) -> Unit = { _, _ -> },
+    private val onClientContact: (at: Long) -> Unit = {},
 ) {
     private var server: EmbeddedServer<*, *>? = null
     private val startedAt = System.currentTimeMillis()
@@ -51,6 +52,8 @@ class RelayServer(
 
     @Volatile
     var lastPlaceId: Long = 0
+        private set
+    @Volatile var lastClientAt: Long = 0
         private set
 
     fun start() {
@@ -69,7 +72,12 @@ class RelayServer(
 
     private fun Application.module() {
         routing {
-            get("/api/hello") { call.respondJson(Hello(instance = instance)) }
+            get("/api/hello") {
+                // Discovery remains public; only a valid saved bearer counts as
+                // continued client contact while Roblox is idle.
+                if (call.request.headers["Authorization"] != null) call.authorised()
+                call.respondJson(Hello(instance = instance))
+            }
             post("/api/pair") { handlePair(call) }
             post("/api/inference") {
                 if (!call.authorised()) { call.respondJson(ErrorBody("bad token"), HttpStatusCode.Unauthorized); return@post }
@@ -109,8 +117,9 @@ class RelayServer(
             token = newToken()
             settings.token = token
             log.add("Paired a client" + if (request.placeId > 0) " from place ${request.placeId}" else "")
-            onPaired(token, lastPlaceId)
         }
+        onPaired(token, lastPlaceId)
+        clientContact()
         call.respondJson(PairResponse(token = token, instance = instance))
     }
 
@@ -156,6 +165,8 @@ class RelayServer(
                 retainedBytes = engine.retained,
                 paired = settings.token.isNotEmpty(),
                 userStopped = settings.userStopped,
+                lastClientAt = lastClientAt,
+                activity = engine.activity(),
             ),
         )
     }
@@ -175,7 +186,14 @@ class RelayServer(
         val supplied = if (header.startsWith("Bearer ")) header.substring(7).trim() else header.trim()
         val expected = settings.token
         if (expected.isEmpty() || supplied.length != expected.length) return false
-        return MessageDigest.isEqual(supplied.toByteArray(Charsets.UTF_8), expected.toByteArray(Charsets.UTF_8))
+        val matches = MessageDigest.isEqual(supplied.toByteArray(Charsets.UTF_8), expected.toByteArray(Charsets.UTF_8))
+        if (matches) clientContact()
+        return matches
+    }
+
+    private fun clientContact() {
+        lastClientAt = System.currentTimeMillis()
+        onClientContact(lastClientAt)
     }
 
     private fun newToken(): String {
@@ -190,12 +208,13 @@ class RelayServer(
         private const val PAIR_LIMIT = 10
         private const val PAIR_WINDOW_MS = 60_000L
 
-        fun loopbackHost(host: String): Boolean =
-            host.startsWith("127.0.0.1") || host.startsWith("localhost") || host.startsWith("[::1]")
+        fun loopbackHost(host: String): Boolean {
+            val match = Regex("^(127\\.0\\.0\\.1|localhost|\\[::1\\])(?::([0-9]{1,5}))?$").matchEntire(host.lowercase()) ?: return false
+            return match.groupValues[2].isEmpty() || match.groupValues[2].toInt() in 1..65535
+        }
 
         fun loopbackOrigin(origin: String): Boolean =
-            origin.startsWith("http://127.0.0.1") || origin.startsWith("http://localhost") ||
-                origin.startsWith("http://[::1]")
+            origin.startsWith("http://") && loopbackHost(origin.removePrefix("http://"))
     }
 }
 

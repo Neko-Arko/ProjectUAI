@@ -4,13 +4,13 @@ A universal AI agent that runs inside a Roblox client. It works in any game,
 with Chat Completions and Anthropic Messages endpoints, including compatible
 local servers and relays.
 
-**Version 3.3.5 — October 18, 2026: stronger tool use and a better desktop bridge.**
-Main and worker prompts give models a precise tool-call contract and require
-observed results before reporting success. The desktop app has a refreshed
-dashboard and persistent OpenCode, MCP, browser and update controls. Closing it
-stops Cowork and exits; minimizing keeps it on the taskbar. Review, edit and
-reorder pending follow-ups, and read clearer assistant responses and tool receipts
-in the bridge. The installed OpenCode CLI remains an optional native connection.
+**Version 3.5.6 — October 18, 2026: mobile relay reliability and automatic updates.**
+The Android companion accepts finite timeout values correctly and supports
+unlimited default inference through short executor polls. Saved pairing is
+authenticated and repaired when rejected; live contact, request activity and
+received bytes make connection problems visible. The signed companion checks
+and downloads verified updates automatically, then waits for idle work and
+Android installation approval. Explicit deadlines and Stop remain effective.
 
 Start chatting with **Project UAI Free** without supplying an API key. It is the
 default when no provider is configured. Its adaptive router measures small tool
@@ -33,7 +33,8 @@ workspace. Go keeps its own catalog and routes; the optional free CLI backend
 does not intercept it. Subscription and workspace region refusals identify the
 setting to check. See [provider setup](docs/PROVIDER_COMPATIBILITY.md).
 
-Client, bridge and desktop are 3.3.5; UI LIB remains 1.3.0 and SDK 1.0.0.
+Client, bridge, desktop and Android companion are 3.5.6; UI LIB remains 1.3.0
+and SDK 1.0.0.
 Model pricing and context/reply limits use a refreshed provider-specific catalog;
 included Project UAI Free access is counted at zero cost.
 See the [release notes](CHANGELOG.md), [script development manual](docs/SCRIPT_DEVELOPMENT.md)
@@ -48,9 +49,13 @@ it. The model modal edits the same global effort setting, including for other
 models when **Options → Reasoning support** is enabled. The Thinking row estimates
 visible text only. A long retained trace is labelled
 **Excerpt**, not a 5,999-token model limit. See [provider behavior](docs/PROVIDER_COMPATIBILITY.md).
-Use the [3.3.5 verification record](docs/TESTING_3.3.5.md) for focused bridge checks
-and native follow-up. The earlier [3.0.0 audit ledger](docs/AUDIT_3.0.0.md) retains
-its module and tool coverage.
+See [3.5.6 verification](docs/TESTING_3.5.6.md),
+[mobile research](docs/OPENCODE_MOBILE_RESEARCH.md) and
+[companion update checks](companion/UPDATES.md). Native Android, mobile executor
+behavior and OpenCode acceptance on a phone remain unverified; the successful
+OpenCode text/tool/replay probes used the companion's Java HTTP library on Windows.
+The [3.3.5 verification record](docs/TESTING_3.3.5.md) retains earlier bridge checks,
+and the [3.0.0 audit ledger](docs/AUDIT_3.0.0.md) retains its module and tool coverage.
 
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Project-Ptolemy/ProjectUAI/main/dist/uai.lua"))()
@@ -685,7 +690,7 @@ first two entirely.
 
 Cowork gives your Roblox conversation more room in the browser. Keep Roblox and
 its local bridge running on the same computer. The [Windows desktop launcher](desktop/README.md)
-is a single **UAI-Bridge-3.3.5-win-x64.exe** download. Open it directly,
+is a single **UAI-Bridge-3.5.6-win-x64.exe** download. Open it directly,
 complete Node setup if needed using **Get Node.js** or an existing
 installation, click **Start Cowork**, and load the updated UAI script. It discovers the app on dedicated port
 **28791** and reconnects automatically after app restarts. The executable includes
@@ -722,7 +727,7 @@ Stop cancels the original request without submitting it again.
 Bridge releases download automatically from GitHub and apply when work is idle.
 The desktop app also downloads its own updates and applies them on restart.
 Both verify package hashes and keep a working fallback. Existing desktop 1.0
-users need one manual download of the 3.3.5 executable to gain the updater.
+users need one manual download of the current executable to gain the updater.
 
 The browser includes conversations, provider/model controls, code attachments,
 permissions, tool forms, subagents, chat loops, memory, logs, exports and settings.
@@ -745,6 +750,32 @@ The bridge binds to loopback, requires a token, checks browser origins, and load
 local UI assets without a CDN. Full configuration exports include API keys;
 ordinary browser state does not. See the [bridge guide](bridge/README.md) for
 troubleshooting, limits, architecture, and organized Node/Lua/browser tests.
+
+## Android companion
+
+Install [UAI Relay 3.5.6](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.5.6/UAI-Relay-3.5.6.apk)
+on Android 8 or later, start the relay, and load the current UAI script in your
+executor. With Relay mode set to Auto, the client discovers and pairs with the
+companion on the same phone. The relay holds the provider connection while the
+executor makes short result polls. Long requests can continue beyond five minutes
+with the default unlimited setting; provider limits and explicit deadlines still
+apply. Each active request must keep polling: two minutes without its owner's
+polls cancels abandoned work.
+
+The companion checks official releases at startup and every 15 minutes while its
+process is alive. Compatible updates download automatically and pass package,
+version, size, hash and signing-certificate checks. Choose **Install update** when
+the relay is idle, then approve Android's installation prompt. Manual checks and
+downloads remain available if automatic downloads are disabled. Read
+[companion updates](companion/UPDATES.md) for interrupted-install recovery and the
+one-time transition from an old debug-signed APK.
+
+The relay does not provide a mobile executor. Its Android networking, background
+survival, installer and actual executor compatibility still require phone testing.
+OpenCode free models remain unsupported on mobile. Use **Project UAI Free** or
+another supported provider; [executor probes](companion/tools/README.md) can
+measure loopback and delayed-request behavior without provider credentials.
+See the [companion guide](companion/README.md) for setup and diagnostics.
 
 ## Embedding
 

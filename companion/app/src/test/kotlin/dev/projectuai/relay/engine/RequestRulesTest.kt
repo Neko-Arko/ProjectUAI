@@ -39,6 +39,8 @@ class RequestRulesTest {
 
     @Test
     fun `clamps the timeout to the contract range`() {
+        assertEquals(0, RequestRules.clampTimeout(0))
+        assertEquals(10, RequestRules.clampTimeout(-1))
         assertEquals(10, RequestRules.clampTimeout(1))
         assertEquals(180, RequestRules.clampTimeout(180))
         assertEquals(86400, RequestRules.clampTimeout(999999))

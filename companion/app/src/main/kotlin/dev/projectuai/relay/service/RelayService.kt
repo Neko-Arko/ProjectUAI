@@ -20,17 +20,21 @@ import dev.projectuai.relay.RelayApp
 import dev.projectuai.relay.RelayLog
 import dev.projectuai.relay.data.RelaySettings
 import dev.projectuai.relay.engine.JobEngine
+import dev.projectuai.relay.protocol.ActivitySnapshot
 import dev.projectuai.relay.server.RelayServer
+import dev.projectuai.relay.update.InstallationRecord
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import okhttp3.OkHttpClient
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 
 sealed interface RelayState {
     data object Stopped : RelayState
@@ -54,15 +58,10 @@ class RelayService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var engine: JobEngine? = null
     private var server: RelayServer? = null
+    private var maintenance: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(0, TimeUnit.MILLISECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .callTimeout(0, TimeUnit.MILLISECONDS)
-        .retryOnConnectionFailure(false)
-        .build()
+    private val client = JobEngine.providerClient()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -71,6 +70,7 @@ class RelayService : Service() {
         val app = application as RelayApp
         settings = app.settings
         log = app.log
+        synchronized(installLock) { liveService = this; installPending = settings.updateInstallPending }
         createChannel()
         ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(settings.port, false), foregroundType())
         _state.value = RelayState.Stopped
@@ -81,6 +81,10 @@ class RelayService : Service() {
             ACTION_KILL -> {
                 kill()
                 return START_NOT_STICKY
+            }
+            ACTION_RESTART -> {
+                shutdown()
+                start()
             }
             else -> start()
         }
@@ -98,29 +102,53 @@ class RelayService : Service() {
 
     override fun onDestroy() {
         shutdown()
+        synchronized(installLock) { if (liveService === this) liveService = null }
         scope.cancel()
         super.onDestroy()
     }
 
     private fun start() {
-        settings.userStopped = false
-        if (server != null) return
-        val instance = UUID.randomUUID().toString()
-        val createdEngine = JobEngine(instance, scope, client, onChanged = { updateNotification() })
-        val createdServer = RelayServer(settings.port, instance, settings, createdEngine, log,
-            onPaired = { token, place -> _token.value = token; _place.value = place })
-        createdServer.start()
-        engine = createdEngine
-        server = createdServer
-        _token.value = settings.token
-        _state.value = RelayState.Running(settings.port, instance, settings.token.isNotEmpty(), System.currentTimeMillis())
-        log.add("Relay service started on port ${settings.port}")
-        scheduleWatchdog(this, immediate = false)
-        updateNotification()
+        synchronized(installLock) {
+            // A queued automatic start must never override a newer explicit Stop.
+            if (settings.userStopped) {
+                shutdown()
+                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return
+            }
+            if (installPending || settings.updateInstallPending) {
+                log.add("Finish or cancel Android installation before starting the relay")
+                return
+            }
+            if (server != null) return
+            val instance = UUID.randomUUID().toString()
+            val createdEngine = JobEngine(instance, scope, client, onChanged = { updateActivity() })
+            val createdServer = RelayServer(settings.port, instance, settings, createdEngine, log,
+                onPaired = { token, place -> _token.value = token; _place.value = place },
+                onClientContact = { at -> _lastClientAt.value = at })
+            engine = createdEngine
+            server = createdServer
+            _activity.value = ActivitySnapshot()
+            _lastClientAt.value = 0
+            _place.value = 0
+            createdServer.start()
+            maintenance = scope.launch {
+                while (isActive) {
+                    delay(5_000)
+                    if (engine !== createdEngine) break
+                    createdEngine.sweep()
+                }
+            }
+            _token.value = settings.token
+            _state.value = RelayState.Running(settings.port, instance, settings.token.isNotEmpty(), System.currentTimeMillis())
+            log.add("Relay service started on port ${settings.port}")
+            scheduleWatchdog(this, immediate = false)
+            updateNotification()
+        }
     }
 
     private fun kill() {
-        settings.userStopped = true
+        InstallationRecord.stopRequested(settings)
         shutdown()
         log.add("Relay stopped by the user")
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -128,15 +156,38 @@ class RelayService : Service() {
     }
 
     private fun shutdown() {
+        maintenance?.cancel()
+        maintenance = null
+        engine?.close()
         server?.stop()
         server = null
-        engine?.cancelAll()
         engine = null
         cancelWatchdog(this)
         releaseWakeLock()
         _state.value = RelayState.Stopped
+        _lastClientAt.value = 0
     }
 
+    @Synchronized
+    private fun updateActivity() {
+        val current = engine?.activity() ?: return
+        val previous = _activity.value
+        _activity.value = current
+        if (current.acceptedJobs > previous.acceptedJobs) log.add("Request accepted; waiting for the provider")
+        if (current.completedJobs > previous.completedJobs) log.add("Provider response received")
+        if (current.failedJobs > previous.failedJobs) {
+            val category = current.recent.firstOrNull { it.errorCode != null }?.errorCode ?: "transport"
+            log.add("Request failed: $category; not repeated")
+        }
+        if (current.cancelledJobs > previous.cancelledJobs) {
+            val disconnected = current.recent.any { job -> job.errorCode == "client_disconnected" &&
+                previous.recent.none { before -> before.id == job.id && before.errorCode == "client_disconnected" } }
+            log.add(if (disconnected) "Roblox stopped polling; abandoned request cancelled" else "Request cancelled")
+        }
+        updateNotification()
+    }
+
+    @Synchronized
     private fun updateNotification() {
         val engine = engine ?: return
         val working = engine.activeCount > 0
@@ -158,7 +209,8 @@ class RelayService : Service() {
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(getString(R.string.notification_title))
-            .setContentText(if (working) "Inference running on port $port" else "Listening on 127.0.0.1:$port")
+            .setContentText(if (installPending) "Relay paused for Android update confirmation"
+                else if (working) "Inference running on port $port" else "Listening on 127.0.0.1:$port")
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(
@@ -171,13 +223,17 @@ class RelayService : Service() {
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
 
+    @Synchronized
     private fun acquireWakeLock() {
         if (wakeLock?.isHeld == true) return
         val manager = getSystemService(PowerManager::class.java) ?: return
         wakeLock = manager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "uai-relay:job")
-        wakeLock?.acquire(10 * 60_000L)
+        // Accepted jobs release this in every terminal path and service shutdown.
+        // A fixed ten-minute lease silently dropped protection for long reasoning.
+        wakeLock?.acquire()
     }
 
+    @Synchronized
     private fun releaseWakeLock() {
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
@@ -193,6 +249,7 @@ class RelayService : Service() {
     companion object {
         const val ACTION_START = "dev.projectuai.relay.action.START"
         const val ACTION_KILL = "dev.projectuai.relay.action.KILL"
+        private const val ACTION_RESTART = "dev.projectuai.relay.action.RESTART"
         private const val NOTIFICATION_ID = 41
         private const val CHANNEL_ID = "relay"
         private const val WATCHDOG_REQUEST = 7
@@ -204,13 +261,63 @@ class RelayService : Service() {
         val token: StateFlow<String> = _token.asStateFlow()
         private val _place = MutableStateFlow(0L)
         val place: StateFlow<Long> = _place.asStateFlow()
+        private val _lastClientAt = MutableStateFlow(0L)
+        val lastClientAt: StateFlow<Long> = _lastClientAt.asStateFlow()
+        private val _activity = MutableStateFlow(ActivitySnapshot())
+        val activity: StateFlow<ActivitySnapshot> = _activity.asStateFlow()
+        private val installLock = Any()
+        private var installPending = false
+        private var liveService: RelayService? = null
 
-        fun start(context: Context) {
+        /** Reserve installation before Android opens its confirmation screen. */
+        fun beginUpdateInstall(context: Context, version: String): Boolean = synchronized(installLock) {
+            val settings = (context.applicationContext as RelayApp).settings
+            if (installPending || settings.updateInstallPending) return false
+            val service = liveService
+            if (service?.engine?.pauseForUpdate() == false) return false
+            try {
+                settings.lastInstallVersion = version
+                settings.resumeAfterUpdate = service?.server != null && !settings.userStopped
+                settings.updateInstallPending = true
+            } catch (failure: RuntimeException) {
+                // No Android commit can occur when reservation persistence fails.
+                service?.engine?.resumeAfterUpdate()
+                throw failure
+            }
+            installPending = true
+            service?.updateNotification()
+            true
+        }
+
+        fun endUpdateInstall(context: Context, preserveResume: Boolean = false) = synchronized(installLock) {
+            val settings = (context.applicationContext as RelayApp).settings
+            settings.updateInstallPending = false
+            if (!preserveResume) settings.resumeAfterUpdate = false
+            liveService?.engine?.resumeAfterUpdate()
+            installPending = false
+            liveService?.updateNotification()
+        }
+
+        fun start(context: Context, userInitiated: Boolean = false) {
+            synchronized(installLock) {
+                val settings = (context.applicationContext as RelayApp).settings
+                if (installPending || settings.updateInstallPending) return
+                if (userInitiated) settings.userStopped = false
+                if (settings.userStopped) return
+            }
             ContextCompat.startForegroundService(context, Intent(context, RelayService::class.java).setAction(ACTION_START))
         }
 
         fun kill(context: Context) {
+            synchronized(installLock) {
+                InstallationRecord.stopRequested((context.applicationContext as RelayApp).settings)
+            }
             context.startService(Intent(context, RelayService::class.java).setAction(ACTION_KILL))
+        }
+
+        /** Apply a settings change while preserving a Stop issued before delivery. */
+        fun restart(context: Context) {
+            context.startService(Intent(context, RelayService::class.java).setAction(ACTION_RESTART))
         }
 
         fun scheduleWatchdog(context: Context, immediate: Boolean) {
