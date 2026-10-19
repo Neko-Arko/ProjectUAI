@@ -138,10 +138,28 @@ const { startBridge } = require('./helpers/bridge');
     await screenshot('rework-response-01-waiting', true);
     assert.equal(await page.locator('.stream-indicator').getAttribute('aria-hidden'), 'true');
     assert.notEqual(await page.locator('.stream-indicator i').first().evaluate(node => getComputedStyle(node).animationName), 'none', 'waiting has a visible activity animation');
-    write({ reasoning_content: 'I will look at the existing paths, light, and scale before suggesting a small change.' });
+    const liveReasoning = '### Understand the space\n\nI will look at the existing **paths, light, and scale** before suggesting a small change.';
+    write({ reasoning_content: liveReasoning });
     await responseState('thinking');
-    await page.locator('.thinking').waitFor({ state: 'visible' });
+    await page.locator('.thinking').waitFor({ state: 'attached' });
+    assert.equal(await page.locator('.thinking').isVisible(), false, 'reasoning waits inside the optional activity drawer');
     await screenshot('rework-response-02-thinking', true);
+    await page.locator('.activity-summary').click(); await page.locator('.thinking-summary').click();
+    await page.locator('.reasoning-body h3').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.reasoning-body strong').textContent(), 'paths, light, and scale', 'live reasoning formats before commitment');
+    await page.evaluate(() => {
+      window.reasoningParagraph = document.querySelector('.reasoning-body p');
+      const range = document.createRange(); range.selectNodeContents(window.reasoningParagraph);
+      getSelection().removeAllRanges(); getSelection().addRange(range); window.selectedReasoning = getSelection().toString();
+    });
+    write({ reasoning_content: '\n\n### Keep the route open\n\n- Check the space beside the path.\n- Preserve the main walking route.' });
+    await page.waitForFunction(() => document.querySelector('.thinking-state').textContent === 'In progress');
+    assert.equal(await page.evaluate(() => getSelection().toString() === window.selectedReasoning && window.reasoningParagraph.isConnected), true, 'reasoning deltas preserve a selected passage');
+    await page.evaluate(() => getSelection().removeAllRanges());
+    await page.waitForFunction(() => document.querySelectorAll('.reasoning-body li').length === 2);
+    assert.equal(await page.evaluate(() => document.querySelector('.reasoning-body p') === window.reasoningParagraph), true, 'reasoning resumes without replacing completed paragraphs');
+    await screenshot('rework-reasoning-live-expanded', true);
+    await page.locator('.activity-summary').click();
 
     await page.evaluate(() => {
       window.responseMotion = [];
@@ -246,7 +264,35 @@ const { startBridge } = require('./helpers/bridge');
     await responseState('writing');
     liveResponse.end(); // A stream without [DONE] is a real provider failure.
     await responseState('error');
+    const interrupted = page.locator('[data-request-id="older-failed"] .response-error');
+    assert.equal(await interrupted.locator('.error-title').textContent(), 'The response was interrupted');
+    assert.equal(await interrupted.locator('.error-details').getAttribute('open'), null);
+    assert.match(await interrupted.locator('.error-message').textContent(), /partial text is kept above/);
+    await page.locator('#input').fill('Keep this draft while I review the error.');
+    let retried = 0;
+    page.on('request', request => { if (request.method() === 'POST' && /\/api\/(?:command|inference)(?:$|\/)/.test(request.url())) retried++; });
+    await interrupted.getByRole('button', { name: 'Review message', exact: true }).click();
+    assert.equal(await page.locator('#input').inputValue(), 'Keep this draft while I review the error.');
+    assert.equal(retried, 0, 'reviewing a failed stream cannot automatically send it again');
+    await page.evaluate(() => UAI.theme.set('dark'));
+    await screenshot('rework-interrupted-response-dark');
     await push({ events: [event('turn:end')] });
+    await start('visual-cancelled');
+    write({ reasoning_content: '### Check the space\n\nConsider the width of the path.', content: 'A partial answer before stopping.' });
+    await responseState('writing');
+    await page.locator('#transcript').evaluate(node => { node.scrollTop = node.scrollHeight; });
+    const cancelled = await fetch(bridge.base + '/api/inference/visual-cancelled', { method: 'DELETE', headers: auth });
+    assert.equal(cancelled.status, 200);
+    await responseState('stopped');
+    const stopped = page.locator('[data-request-id="visual-cancelled"] .response-error');
+    assert.equal(await stopped.locator('.error-title').textContent(), 'Request stopped');
+    assert.equal(await stopped.getAttribute('data-tone'), 'neutral');
+    assert.equal(await stopped.getAttribute('role'), 'status');
+    assert.equal(await stopped.locator('.retry').count(), 0, 'Stop does not offer or trigger an automatic retry');
+    assert.equal(await stopped.evaluate(node => node.getBoundingClientRect().bottom <= document.querySelector('#transcript').getBoundingClientRect().bottom + 1), true, 'terminal cards stay visible when the reader was following the response');
+    assert.equal(await page.locator('.thinking[data-reasoning-request-id="visual-cancelled"] .thinking-state').textContent(), 'Stopped');
+    await screenshot('rework-stopped-response-dark');
+    await push({ events: [event('abort')] });
     await page.evaluate(() => { window.priorResponses = [...document.querySelectorAll('.message.agent')]; });
     await page.evaluate(() => UAI.theme.set('dark'));
     await start('late-greeting');
@@ -260,9 +306,9 @@ const { startBridge } = require('./helpers/bridge');
     const firstRace = await page.evaluate(() => {
       const nodes = [...document.querySelector('#transcript').children];
       const user = nodes.find(node => node.matches('.message.user') && node.querySelector(':scope > .body').textContent === 'hey');
-      const response = nodes.find(node => node.dataset.requestId === 'late-greeting');
-      return { ordered: nodes.indexOf(user) < nodes.indexOf(response), oldBefore: window.priorResponses.every(node => node.isConnected && nodes.indexOf(node) < nodes.indexOf(user)),
-        thoughts: response?.querySelectorAll(':scope > .thinking').length, detachedThoughts: document.querySelectorAll('#transcript > .thinking').length };
+      const response = document.querySelector('.message[data-request-id="late-greeting"]')?.closest('.response-turn');
+      return { ordered: nodes.indexOf(user) < nodes.indexOf(response), oldBefore: window.priorResponses.every(node => node.isConnected && nodes.indexOf(node.closest('.response-turn')) < nodes.indexOf(user)),
+        thoughts: response?.querySelectorAll('.thinking').length, detachedThoughts: document.querySelectorAll('#transcript > .thinking').length };
     });
     assert.deepEqual(firstRace, { ordered: true, oldBefore: true, thoughts: 1, detachedThoughts: 0 },
       'an early response must follow its delayed user without moving older complete/failed replies');
@@ -283,7 +329,7 @@ const { startBridge } = require('./helpers/bridge');
     const answerTwo = event('assistant:text', { requestId: 'late-tool-followup', text: followupText });
     await push({ events: [reasoningTwo, reasoningTwo, answerTwo, event('turn:end')] });
     await responseState('complete');
-    assert.equal(await page.locator('[data-request-id="late-tool-followup"] > .thinking').count(), 1, 'replayed reasoning joins its existing response once');
+    assert.equal(await page.locator('.thinking[data-reasoning-request-id="late-tool-followup"]').count(), 1, 'replayed reasoning joins its existing response once');
     await screenshot('rework-tool-followup-dark');
     await page.evaluate(() => { window.firstTurnResponses = [...document.querySelectorAll('.message.agent')]; });
 
@@ -299,7 +345,8 @@ const { startBridge } = require('./helpers/bridge');
     assert.equal(await page.evaluate(() => {
       const nodes = [...document.querySelector('#transcript').children];
       const user = nodes.find(node => node.matches('.message.user') && node.querySelector(':scope > .body').textContent === 'Add a bench near the path.');
-      return window.firstTurnResponses.every(node => node.isConnected && nodes.indexOf(node) < nodes.indexOf(user)) && nodes.indexOf(user) < nodes.findIndex(node => node.dataset.requestId === 'late-next-turn');
+      const response = document.querySelector('.message[data-request-id="late-next-turn"]')?.closest('.response-turn');
+      return window.firstTurnResponses.every(node => node.isConnected && nodes.indexOf(node.closest('.response-turn')) < nodes.indexOf(user)) && nodes.indexOf(user) < nodes.indexOf(response);
     }), true, 'the next delayed user must not take responses from earlier turns');
     liveResponse.end('data: [DONE]\n\n'); await responseState('saving');
     const reasoningThree = event('assistant:reasoning', { requestId: 'late-next-turn', text: nextReason });
@@ -307,24 +354,24 @@ const { startBridge } = require('./helpers/bridge');
     await push({ events: [reasoningThree, answerThree, event('turn:end')] });
     await responseState('complete');
 
-    const raceView = () => page.locator('#transcript > *').evaluateAll(nodes => nodes.flatMap(node => {
+    const raceView = () => page.locator('#transcript .message, #transcript .tool-call').evaluateAll(nodes => nodes.flatMap(node => {
       const body = node.querySelector(':scope > .body');
       if (node.matches('.message.user') && ['hey', 'Add a bench near the path.'].includes(body.textContent)) return [{ kind: 'user', text: body.textContent }];
       if (node.dataset.requestId?.startsWith('late-')) return [{ kind: 'assistant', id: node.dataset.requestId, text: body.textContent,
-        thoughts: [...node.querySelectorAll(':scope > .thinking > .body')].map(detail => detail.textContent) }];
-      if (node.matches('.tool-call') && node.querySelector('summary strong')?.textContent === 'inspect_workspace') return [{ kind: 'tool', text: node.textContent }];
+        thoughts: [...node.closest('.response-turn').querySelectorAll('.thinking')].filter(detail => detail.dataset.reasoningRequestId === node.dataset.requestId).map(detail => detail.querySelector('.body').textContent) }];
+      if (node.matches('.tool-call') && node.querySelector('.tool-identity code')?.textContent === 'inspect_workspace') return [{ kind: 'tool', text: node.textContent }];
       return [];
     }));
     const liveOrder = await raceView();
     assert.deepEqual(liveOrder.map(item => item.kind === 'assistant' ? item.id : item.kind),
-      ['user', 'late-greeting', 'tool', 'late-tool-followup', 'user', 'late-next-turn']);
+      ['user', 'late-greeting', 'late-tool-followup', 'tool', 'user', 'late-next-turn']);
     await page.reload(); await page.locator('#app').waitFor({ state: 'visible' });
     await page.waitForFunction(() => document.querySelectorAll('[data-request-id^="late-"]').length === 3);
     assert.deepEqual(await raceView(), liveOrder, 'reload preserves the live conversation order, prose and integrated thought disclosures');
     const savedHistory = [delayedUser, event('turn:start'), reasoningOne, answerOne, toolCall, toolResult,
       reasoningTwo, reasoningTwo, answerTwo, event('turn:end'), nextUser, event('turn:start'), reasoningThree, answerThree, event('turn:end')];
     await push({ state, sessionId: 'visual', snapshot: savedHistory });
-    await page.waitForFunction(() => document.querySelectorAll('#transcript > .message').length === 5 && document.querySelectorAll('.message.restored[data-request-id^="late-"]').length === 3);
+    await page.waitForFunction(() => document.querySelectorAll('#transcript .message').length === 5 && document.querySelectorAll('.message.restored[data-request-id^="late-"]').length === 3);
     assert.deepEqual(await raceView(), liveOrder, 'a fresh saved snapshot has the same order and no duplicated reasoning');
     assert.equal(await page.locator('#transcript > .thinking').count(), 0);
     await screenshot('rework-response-order-final-dark');

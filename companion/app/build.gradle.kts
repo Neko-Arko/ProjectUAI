@@ -21,8 +21,8 @@ android {
         applicationId = "dev.projectuai.relay"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "3.5.7"
+        versionCode = 5
+        versionName = "3.6.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

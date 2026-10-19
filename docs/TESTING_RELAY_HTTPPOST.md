@@ -36,6 +36,24 @@ Those remain target-device checks after installing the new companion and client.
 
 Subsequently, the user confirmed OpenCode inference on a Delta Android phone
 through the UAI Relay app after manually retrying an initial
-`Relay rejected the request (400)`. The initial 400 remains an unresolved observed
-error; the retry confirms inference, not phone tool execution, tool-result replay
-or background survival. Mobile OpenCode requires the UAI Relay app from Discord.
+`Relay rejected the request (400)`. The initial 400 was unresolved at the time of
+that report; the retry confirms inference, not phone tool execution, tool-result
+replay or background survival. Mobile OpenCode requires the UAI Relay app from Discord.
+
+## 3.6.0 follow-up — October 19, 2026
+
+A focused reproduction using the pre-fix server from commit `9c3e747` established
+that plain pairing and authenticated status succeed (200), but a valid gzip JSON
+envelope returns the exact 400 body `{"error":"invalid executor request"}` before
+any job is accepted or upstream request is dispatched. The identical uncompressed
+envelope succeeds (202) and reaches one local mock upstream with its body preserved.
+
+Companion 3.6.0 accepts gzip request bodies, detecting gzip by its signature when an
+executor omits the encoding header, while bounding both compressed and expanded
+sizes. Authentication and the same-job retry identity are preserved. See the
+[3.6.0 verification record](TESTING_3.6.0.md) for current checks and evidence.
+
+The failing phone request's wire encoding was not captured. This reproduction
+proves the server's gzip defect; it does not establish the cause of that specific
+phone failure or provide fresh phone inference, tool replay, background survival
+or native rendering verification.

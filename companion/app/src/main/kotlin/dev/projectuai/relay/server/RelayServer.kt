@@ -21,7 +21,6 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
-import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
@@ -108,16 +107,13 @@ class RelayServer(
             call.request.headers["Content-Type"]?.substringBefore(';')?.trim()?.lowercase() != "application/json") {
             call.respondJson(ErrorBody("invalid executor transport origin"), HttpStatusCode.Forbidden); return
         }
-        val declared = call.request.headers["Content-Length"]?.toLongOrNull()
-        if (declared != null && declared > MAX_REQUEST_BYTES) {
-            call.respondJson(ErrorBody("request too large"), HttpStatusCode.PayloadTooLarge); return
-        }
-        val text = call.receiveText()
-        if (text.toByteArray(Charsets.UTF_8).size.toLong() > MAX_REQUEST_BYTES) {
-            call.respondJson(ErrorBody("request too large"), HttpStatusCode.PayloadTooLarge); return
-        }
+        val text = requestText(call, executor = true) ?: return
         val input = decodeJson<ExecutorRequest>(text)
-        if (input == null || input.schema != 1) { call.respondExecutor(ErrorBody("invalid executor request"), 400); return }
+        if (input == null || input.schema != 1) {
+            log.add("Executor request rejected: invalid JSON envelope or schema")
+            call.respondExecutor(ErrorBody("invalid executor request; update the UAI client and Relay app; resetting pairing will not fix request encoding"), 400)
+            return
+        }
         if (!authorisedToken(input.token)) { call.respondExecutor(ErrorBody("bad token"), 401); return }
         val id = Regex("^/api/inference/([A-Za-z0-9_-]{1,128})$").matchEntire(input.path)?.groupValues?.get(1)
         when {
@@ -154,7 +150,7 @@ class RelayServer(
         if (!pairAllowed()) {
             call.respondJson(ErrorBody("too many pairing attempts"), HttpStatusCode.TooManyRequests); return
         }
-        val text = call.receiveText()
+        val text = requestText(call) ?: return
         val request = if (text.isBlank()) PairRequest() else decodeJson<PairRequest>(text)
         if (request == null) { call.respondJson(ErrorBody("invalid pairing request"), HttpStatusCode.BadRequest); return }
         if (request.placeId > 0) lastPlaceId = request.placeId
@@ -170,14 +166,7 @@ class RelayServer(
     }
 
     private suspend fun handleSubmit(call: ApplicationCall) {
-        val declared = call.request.headers["Content-Length"]?.toLongOrNull()
-        if (declared != null && declared > MAX_REQUEST_BYTES) {
-            call.respondJson(ErrorBody("request too large"), HttpStatusCode.PayloadTooLarge); return
-        }
-        val text = call.receiveText()
-        if (text.toByteArray(Charsets.UTF_8).size.toLong() > MAX_REQUEST_BYTES) {
-            call.respondJson(ErrorBody("request too large"), HttpStatusCode.PayloadTooLarge); return
-        }
+        val text = requestText(call) ?: return
         val request = decodeJson<SubmitRequest>(text)
         if (request == null) { call.respondJson(ErrorBody("invalid request"), HttpStatusCode.BadRequest); return }
         when (val result = engine.submit(request)) {
@@ -192,6 +181,16 @@ class RelayServer(
         val view: JobView = engine.poll(id)
             ?: run { call.respondJson(ErrorBody("Unknown inference ID; do not resubmit"), HttpStatusCode.NotFound); return }
         call.respondJson(view)
+    }
+
+    private suspend fun requestText(call: ApplicationCall, executor: Boolean = false): String? = try {
+        call.readRelayJson(MAX_REQUEST_BYTES)
+    } catch (failure: RequestBodyFailure) {
+        // Fixed categories only: never log bodies, token values or decoder exceptions.
+        log.add("Request rejected: ${failure.reason}")
+        if (executor) call.respondExecutor(ErrorBody(failure.reason), failure.status)
+        else call.respondJson(ErrorBody(failure.reason), HttpStatusCode.fromValue(failure.status))
+        null
     }
 
     private suspend fun handleCancel(call: ApplicationCall) {

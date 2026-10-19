@@ -28,7 +28,7 @@ internal sealed class BridgeProcess : IAsyncDisposable
     {
         "ready" => "Your installed OpenCode CLI is connected" + (OpenCodeVersion is { Length: > 0 } ? " (" + OpenCodeVersion + ")." : "."),
         "starting" => "Starting your installed OpenCode CLI...",
-        "missing" => "For the native route, install OpenCode Desktop and restart Cowork.",
+        "missing" => OpenCodeMessage ?? "Install OpenCode Desktop or the v2 CLI, then restart Cowork.",
         "failed" => OpenCodeMessage ?? "OpenCode could not start. Update OpenCode Desktop, then restart Cowork.",
         "disabled" => "Native OpenCode is off for this bridge session.",
         _ => "Use free models through your installed OpenCode CLI."

@@ -12,9 +12,20 @@ Android phone through UAI Relay after manually retrying an initial error:
 > resubmitted. (599).
 
 The retry produced inference. Mobile OpenCode now requires the UAI Relay app from
-Discord (https://discord.gg/9xYyyYuKap). The initial 400 is an unresolved observed
-error; a successful retry confirms inference, not phone tool execution, tool-result
-replay or background survival. The evidence below was gathered before that report.
+Discord (https://discord.gg/9xYyyYuKap). The initial 400 was unresolved at the time of
+that report; a successful retry confirms inference, not phone tool execution,
+tool-result replay or background survival. The investigation evidence below was
+gathered before that report.
+
+**October 19, 2026 / 3.6.0 follow-up:** an exact pre-fix server reproduction
+authenticated plain status successfully (200), then rejected valid gzip JSON with
+`{"error":"invalid executor request"}` (400) before accepting a job or dispatching
+upstream. The identical plain JSON succeeded (202) against a local mock upstream.
+Companion 3.6.0 adds bounded gzip decoding while preserving authentication and job
+identity; see the [3.6.0 verification record](TESTING_3.6.0.md). The failing phone's
+wire encoding was not captured, so this proves a server compression defect without
+establishing that phone failure's cause. It provides no fresh verification of
+on-device inference or rendering.
 
 The current evidence does **not** establish that OpenCode free models categorically
 exclude Android. There are viable transport and runtime candidates, but neither a

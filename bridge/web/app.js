@@ -12,6 +12,7 @@ if(fromHash||requestedSettings)history.replaceState(null,'',location.pathname);
 let state={},bridgeUpdate={},page='chat',stream,busy=false,connected=false,sending=false,stopping=false,sessionId=null,events=[],uploads=[],instance=stored('sessionStorage','uai.instance');
 let drafts={};try{const value=JSON.parse(stored('sessionStorage','uai.drafts')||'{}');if(value&&typeof value==='object'&&!Array.isArray(value))drafts=value;}catch{}
 const tools=new Map(),dirtyDrafts=new Set();
+let currentResponse=null,responseUser=null,transcriptOrder=0;
 let toastTimer,draftTimer,storageWarning=false,renderingSnapshot=false,eventBytes=0,sendOperation=null,connectionRetry,readingFiles=0,modalRefresh=null,panelRefreshPending=false,panelPointerActive=false,panelPointerTimer;
 const draftLoads=new Map();
 const MAX_DRAFT_BYTES=16*1024*1024,MAX_EVENTS_BYTES=8*1024*1024;
@@ -157,6 +158,7 @@ function saveDraft(){
 }
 function changeSession(id){
   if(!id||id===sessionId)return;
+  currentResponse=null;responseUser=null;
   saveDraft();persistDrafts();if(sessionId)renderer.dropSession(sessionId);sessionId=id;
   $('input').value=typeof drafts[id]?.text==='string'?drafts[id].text:'';
   uploads=Array.isArray(drafts[id]?.uploads)?drafts[id].uploads.filter(f=>f&&typeof f.name==='string'&&typeof f.text==='string').map(f=>({...f,id:f.id||uuid()})):[];
@@ -260,17 +262,99 @@ function chatLayout(empty){
     });
   }
 }
-function append(node){const pinned=!renderingSnapshot&&stick();const root=$('transcript');chatLayout(false);root.querySelector('.welcome')?.remove();if(renderingSnapshot)node.classList.add('restored');root.append(node);while(root.children.length>450){const old=root.firstElementChild;if(old.contains(document.activeElement))break;old.remove();}if(pinned)scrollToEnd();}
+function trimTranscript(){
+  const root=$('transcript'),selector='.message,.tool-call,.thinking,.activity-note,.subagent-report';
+  // A grouped turn can contain many entries. Bound the leaves as well as the
+  // top-level history; never let a focused old control block all later eviction.
+  const retained=[...root.querySelectorAll(selector)].sort((a,b)=>a._uaiTranscriptOrder-b._uaiTranscriptOrder);let excess=retained.length-450;
+  const remove=node=>{
+    const response=responseFor(node);
+    renderer.dropNode(node);
+    for(const message of [node,...node.querySelectorAll('.message.agent')])if(message._uaiReasoning){message._uaiReasoning.remove();message._uaiReasoning=null;}
+    if(node._uaiReasoningOwner)node._uaiReasoningOwner._uaiReasoning=null;
+    for(const [key,row]of tools)if(node.contains(row.node))tools.delete(key);
+    node.remove();
+    if(response){if(!response.node.querySelector(selector))response.node.remove();else updateResponse(response);}
+  };
+  for(const node of retained){
+    if(excess<=0)break;
+    if(!node.isConnected){excess--;continue;}
+    if(node.contains(document.activeElement)||node._uaiReasoning?.contains(document.activeElement))continue;
+    remove(node);excess--;
+  }
+  for(const node of [...root.children]){if(root.children.length<=450)break;if(!node.contains(document.activeElement))remove(node);}
+}
+function append(node,parent=$('transcript')){const pinned=!renderingSnapshot&&stick();const root=$('transcript');chatLayout(false);root.querySelector('.welcome')?.remove();if(renderingSnapshot)node.classList.add('restored');node._uaiTranscriptOrder=++transcriptOrder;parent.append(node);trimTranscript();if(pinned)scrollToEnd();}
+function resetResponses(){currentResponse=null;responseUser=null;}
+function responseFor(node){return node.closest('.response-turn')?._response;}
+function updateResponse(response){
+  if(!response?.node.isConnected)return;
+  const calls=[...response.activity.querySelectorAll('.tool-call>.tool')],running=calls.filter(node=>node.dataset.status==='running');
+  const failed=calls.filter(node=>['failed','timeout'].includes(node.dataset.status));
+  const declined=calls.filter(node=>node.dataset.status==='declined'),unknown=calls.filter(node=>node.dataset.status==='unknown');
+  const thoughts=response.activity.querySelectorAll('.thinking').length,notes=response.activity.querySelectorAll('.activity-note,.subagent-report').length;
+  const messages=[...response.content.querySelectorAll('.message.agent')],live=messages.findLast(node=>['waiting','thinking','writing','saving'].includes(node.dataset.responseState));
+  const latest=running.at(-1),progress=latest?.querySelector('.tool-progress');
+  const working=!response.ended&&(running.length||live);
+  const label=live?.dataset.responseState==='writing'?'Writing':live?.dataset.responseState==='thinking'?'Thinking':'Working';
+  response.status.textContent=response.stopped?'Stopped':working?label:'';
+  response.status.hidden=!response.status.textContent;
+  response.node.dataset.state=response.stopped?'stopped':working?'working':'complete';
+  response.activity.hidden=!calls.length&&!thoughts&&!notes;
+  response.activity.dataset.state=failed.length?'issue':working?'working':'complete';
+  response.activityTitle.textContent=working?'Working through your request':'Activity';
+  const counts=[];
+  if(calls.length)counts.push(calls.length+' '+(calls.length===1?'step':'steps'));
+  if(thoughts)counts.push('Reasoning');
+  if(notes)counts.push('Updates');
+  if(failed.length)counts.push(failed.length+' failed');
+  if(declined.length)counts.push(declined.length+' declined');
+  if(unknown.length)counts.push(unknown.length+' without a saved result');
+  response.activityMeta.textContent=counts.join(' · ');
+  const current=progress&&!progress.hidden?progress.textContent:latest?.querySelector('.tool-head>strong')?.textContent;
+  const issue=failed.at(-1)?.querySelector('.tool-outcome')?.textContent;
+  response.activityDetail.textContent=toolExcerpt(current||issue||'',180);
+  response.activityDetail.hidden=!response.activityDetail.textContent;
+  response.activityAction.textContent=response.activity.open?'Hide details':'View details';
+}
+function ensureResponse(model){
+  if(currentResponse?.node.isConnected&&!currentResponse.ended){if(model)currentResponse.model.textContent=model;return currentResponse;}
+  const node=el('section','response-turn'),heading=el('header','response-heading'),mark=el('span','answer-mark');
+  node.setAttribute('aria-label','Cowork response');mark.setAttribute('aria-hidden','true');
+  const modelName=el('small','response-model',model||state.agent?.model||''),status=el('span','response-status');
+  status.hidden=true;status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+  heading.append(mark,el('span','response-author','Cowork'),modelName,status);
+  const content=el('div','response-content'),activity=el('details','response-activity'),summary=el('summary','activity-summary'),activityTitle=el('span','activity-title','Activity');
+  const activityMeta=el('span','activity-meta'),activityDetail=el('span','activity-current'),activityAction=el('span','activity-action','View details'),list=el('div','activity-list');
+  summary.append(el('span','activity-dot'),activityTitle,activityMeta,activityAction,activityDetail);activity.append(summary,list);activity.hidden=true;
+  summary.querySelector('.activity-dot').setAttribute('aria-hidden','true');
+  const footer=el('footer','response-footer'),copy=button('Copy response',()=>copyText([...content.querySelectorAll('.message.agent')].map(message=>message._uaiText||'').filter(Boolean).join('\n\n')),'response-copy');
+  footer.hidden=true;footer.append(copy);node.append(heading,content,activity,footer);
+  const response={node,model:modelName,status,content,activity,list,activityTitle,activityMeta,activityDetail,activityAction,footer,user:responseUser,ended:false};
+  node._response=response;currentResponse=response;
+  activity.addEventListener('toggle',()=>updateResponse(response));append(node);return response;
+}
+function appendActivity(node,response=ensureResponse()){append(node,response.list);updateResponse(response);return response;}
+function finishResponse(stopped=false){
+  if(!currentResponse)return;
+  currentResponse.ended=true;currentResponse.stopped=stopped;responseUser=null;
+  for(const row of tools.values())if(responseFor(row.node)===currentResponse&&row.node.dataset.status==='running'){
+    row.node.dataset.status=stopped?'stopped':'unknown';row.verdict.textContent=stopped?'Stopped':'No saved result';row.progress.hidden=true;
+  }
+  updateResponse(currentResponse);
+}
 function message(who,text,model){
   const node=el('article','message '+who),byline=el('div','byline');
   if(who==='agent'){const mark=el('span','answer-mark');mark.setAttribute('aria-hidden','true');byline.append(mark);}
   byline.append(el('span','message-author',who==='user'?(state.player||'You'):'Cowork'),el('small','message-model',model||''));
   const body=el('div','body');if(who==='user')body.textContent=text;else body.innerHTML=md(text);node.append(byline,body);
-  const result={node,body};if(who==='user')decorateMessage(result,text);append(node);return result;
+  const result={node,body};if(who==='user')decorateMessage(result,text);append(node,who==='agent'?ensureResponse(model).content:$('transcript'));return result;
 }
 function decorateMessage(message,text,model){
   message.node._uaiText=text;
   if(model)message.node.querySelector('.message-model').textContent=model;
+  const response=responseFor(message.node);
+  if(response){if(model)response.model.textContent=model;response.footer.hidden=![...response.content.querySelectorAll('.message.agent')].some(node=>node._uaiText);updateResponse(response);return;}
   if(message.node.querySelector('.message-actions'))return;
   const actions=el('span','message-actions'),copy=button('',()=>copyText(message.node._uaiText),'icon-button');copy.append(icon('copy'));copy.title='Copy message';copy.setAttribute('aria-label','Copy message');actions.append(copy);
   if(message.node.classList.contains('agent')){const footer=el('div','message-footer');copy.append(el('span',null,'Copy'));footer.append(actions);message.node.append(footer);}
@@ -344,6 +428,42 @@ function toolErrorText(event,text){
   }
   return toolExcerpt(message,420);
 }
+function failureInfo(event,raw,tool=false){
+  const text=raw.replace(/\s*Help and updates:\s*https:\/\/discord\.gg\/9xYyyYuKap\s*/gi,'').trim();
+  const status=Number(event.status)||Number(text.match(/\b(?:HTTP|status|returned)\s*[:(]?\s*(\d{3})\b/i)?.[1]);
+  const stopped=event.state==='cancelled'||event.error==='aborted'||event.data?.status==='aborted';
+  const declined=event.denied===true;
+  if(stopped)return {title:tool?'Step stopped':'Request stopped',message:tool?'This step was stopped before it finished.':event.hasPreview?'The partial response is kept above. You can continue when you are ready.':'You can continue the conversation when you are ready.',tone:'neutral'};
+  if(declined)return {title:'Permission declined',message:'This step was skipped because permission was not granted.',tone:'neutral'};
+  if(tool)return {title:/timeout|timed out/i.test(text)||event.error==='timeout'?'This step took too long':'This step could not finish',message:toolErrorText(event,text),tone:'error'};
+  if(/invalid\s*executor.?request|companion could not read the executor|request encoding|invalid gzip request/i.test(text))return {title:'Update UAI Relay to continue',message:'Update the UAI Relay app and reload the UAI script. Keep your current pairing.',action:'connection',tone:'warning'};
+  if(/(?:bridge|relay)[\s\S]{0,120}(?:token|unauthorized|authentication|authorization)|(?:token|unauthorized|authentication|authorization)[\s\S]{0,80}(?:bridge|relay)|token no longer works/i.test(text))return {title:'Check your bridge connection',message:'The bridge did not accept this connection. Open Connection to check the current pairing details.',action:'connection',tone:'warning'};
+  if(status===429||/rate.?limit|too many requests/i.test(text))return {title:'Request limit reached',message:'The provider is limiting requests. Wait a moment before trying again.',tone:'warning'};
+  if(status===401||status===403||/invalid.{0,12}(?:api.?key|token)|authentication/i.test(text))return {title:'Check your provider access',message:'The request was not authorized. Check the selected provider’s API key and account access.',action:'providers',tone:'warning'};
+  if(/timeout|timed out|deadline/i.test(text))return {title:'The request took too long',message:'The provider or connection stopped waiting for a response. You can review your message before trying again.',tone:'warning'};
+  if(/stream.{0,40}(?:ended|closed|interrupted)|incomplete stream/i.test(text))return {title:'The response was interrupted',message:'The provider stopped sending before the response was complete.'+(event.hasPreview?' The partial text is kept above.':''),tone:'warning'};
+  if(/ECONN|ENOTFOUND|network|fetch failed|connection/i.test(text))return {title:'The connection was interrupted',message:'Your conversation is still here. Check the connection before trying again.',action:'connection',tone:'warning'};
+  if(status>=500)return {title:'The service could not complete the request',message:'The service returned an error. Review your message and try again when it is available.',tone:'error'};
+  const readable=toolErrorText(event,text).replace(/^Error:\s*/i,'');
+  const technical=!readable||/^\s*[<{\[]|stack|exception|traceback|\b(?:HTTP|ERR_|TypeError|SyntaxError)\b/i.test(readable)||readable.length>300;
+  return {title:'The request could not be completed',message:technical?'An error interrupted this request. You can review the details below before trying again.':readable,tone:'error'};
+}
+function renderFailure(root,event,{tool=false,raw:provided}={}){
+  const value=provided??event.message??event.error??event.providerError??'Unknown error';
+  let raw=typeof value==='string'?value:JSON.stringify(value,null,2);
+  if(!tool&&typeof event.providerError==='string'&&event.providerError!==value)raw+='\n\nProvider detail:\n'+event.providerError;
+  const info=failureInfo(event,raw,tool);
+  root.classList.add('response-error');root.dataset.tone=info.tone;
+  const copy=el('div','error-copy'),head=el('div','error-heading'),mark=el('span','error-mark',info.tone==='neutral'?'—':'!');
+  mark.setAttribute('aria-hidden','true');head.append(mark,el('h3','error-title',info.title));
+  copy.append(head,el('p','error-message',info.message));
+  const details=el('details','error-details');details.append(el('summary',null,'Technical details'),codeListing(raw,tool?'Full error':'Error details',{wrap:true}));
+  const actions=el('div','error-actions');
+  if(info.action==='providers')actions.append(button('Open providers',()=>show('providers'),'outline'));
+  if(info.action==='connection')actions.append(button('Check connection',()=>show('cowork'),'outline'));
+  if(!tool&&info.tone!=='neutral')deadlineHelp(actions,raw,event.status);
+  root.replaceChildren(copy,actions,details);return actions;
+}
 function toolResultSummary(event,text){
   if(typeof event.summary==='string'&&event.summary.trim())return toolExcerpt(event.summary);
   let parsed;try{parsed=JSON.parse(text);}catch{}
@@ -354,9 +474,9 @@ function toolResultSummary(event,text){
   return toolExcerpt(first.replace(/^\s*(?:#{1,6}|>|[-*+])\s+/,'').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1')
     .replace(/(`+)(.*?)\1/g,'$2').replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'$1'));
 }
-function toolOutput(text,failed){
+function toolOutput(text){
   let parsed;try{parsed=JSON.parse(text);}catch{}
-  if(failed||parsed!==undefined)return codeListing(text,failed?'Full error':'Result',{wrap:true,display:parsed!==undefined?JSON.stringify(parsed,null,2):text});
+  if(parsed!==undefined)return codeListing(text,'Result',{wrap:true,display:JSON.stringify(parsed,null,2)});
   const output=el('div','tool-output'),head=el('div','code-head'),copy=button('Copy',()=>copyText(text));
   copy.setAttribute('aria-label','Copy Result');head.append(el('span',null,'Result'),copy);
   const body=el('div','body tool-result-content');body.innerHTML=md(text);output.append(head,body);return output;
@@ -376,7 +496,7 @@ function openTool(e){
   const body=el('div','tool-body'),identity=el('div','tool-identity');
   identity.append(el('code',null,e.name||'Tool'),el('span',null,e.kind==='subagent:tool'?'Subagent tool call':'Tool call'));
   body.append(identity,toolDetail('Input',toolInput(args,raw)));node.append(body);wrapper.append(node);
-  append(wrapper);tools.set(toolKey(e),{node,body,preview,progress,verdict,duration,outcome,restored:renderingSnapshot});
+  appendActivity(wrapper);tools.set(toolKey(e),{node,body,preview,progress,verdict,duration,outcome,restored:renderingSnapshot});
 }
 function finishTool(e){
   const key=toolKey(e),row=tools.get(key);
@@ -389,34 +509,45 @@ function finishTool(e){
   if(Number.isFinite(e.ms))row.duration.textContent=e.ms<1000?Math.round(e.ms)+' ms':(e.ms/1000).toFixed(1)+' s';
   const text=typeof e.text==='string'?e.text:String(e.summary||e.error||(e.data?JSON.stringify(e.data,null,2):'(No output)'));
   row.outcome.textContent=failed?toolErrorText(e,text):toolResultSummary(e,text);row.outcome.hidden=!row.outcome.textContent;
-  const output=el('div');output.append(toolOutput(text,failed));
+  const output=el('div');
+  if(failed){const error=el('div');renderFailure(error,e,{tool:true,raw:text});output.append(error);}
+  else output.append(toolOutput(text));
   if(e.data&&typeof e.data==='object')output.append(toolDetail('Result data',codeListing(JSON.stringify(e.data,null,2),'Result data',{wrap:true})));
   if(e.truncated)output.append(el('p','tool-retention-note','This is the retained excerpt. Ask the agent for a narrower result if you need more.'));
   if(timeout)deadlineHelp(output,e.error||e.text,e.status);
   row.body.append(toolDetail(stopped||e.denied?'Details':failed?'Error details':'Result',output,true));
+  updateResponse(responseFor(row.node));
   tools.delete(key);
 }
 function renderEvent(e){
   if(e.sessionId&&sessionId&&e.sessionId!==sessionId)return;
   const pinned=!renderingSnapshot&&stick();
   switch(e.kind){
-    case 'user':{const m=message('user',e.text||'');renderer.anchorUser(e,m.node);if(window.UAI&&UAI.pictures)UAI.pictures.correlateUser(m,e);break;}
+    case 'user':{
+      const pending=currentResponse?.node.querySelector('.message:is([data-response-state=waiting],[data-response-state=thinking],[data-response-state=writing],[data-response-state=saving]),.tool[data-status=running]');
+      const early=currentResponse?.node.isConnected&&!currentResponse.user&&!currentResponse.ended&&pending?currentResponse:null;
+      if(!early)currentResponse=null;
+      const m=message('user',e.text||'');responseUser=m.node;const anchored=renderer.anchorUser(e,m.node);
+      if(early&&anchored===early.node)early.user=m.node;
+      else if(early)currentResponse=null;
+      if(window.UAI&&UAI.pictures)UAI.pictures.correlateUser(m,e);break;
+    }
     case 'assistant:text':renderer.commitText(e);break;
     case 'assistant:reasoning':renderer.commitReasoning(e);break;
     case 'tool:call':case 'subagent:tool':openTool(e);break;
     case 'tool:result':case 'tool:error':case 'subagent:tool:done':finishTool(e);break;
-    case 'tool:progress':{const row=tools.get(toolKey(e))||(!e.id&&tools.size===1?[...tools.values()][0]:null);if(row){row.progress.textContent=e.text||'';row.progress.hidden=!e.text;}break;}
-    case 'error':{const error=el('div','error');error.append(el('p','error-message',e.message||'Unknown error'));deadlineHelp(error,e.message,e.status);append(error);break;}
+    case 'tool:progress':{const row=tools.get(toolKey(e))||(!e.id&&tools.size===1?[...tools.values()][0]:null);if(row){row.progress.textContent=e.text||'';row.progress.hidden=!e.text;updateResponse(responseFor(row.node));}break;}
+    case 'error':{const error=el('div','error');error.setAttribute('role','alert');const actions=renderFailure(error,e);actions.prepend(button('Review message',()=>resendLast(e.sessionId||sessionId),'retry'));append(error);break;}
     case 'status':announce(e.text||'Ready');break;
     case 'turn:start':if(sendOperation&&sendOperation.sessionId===sessionId)sendOperation.sawTurn=true;clearTimeout(awaitTurnTimer);if(sendPhase!=='uncertain')sendPhase='idle';setBusy(true);break;
-    case 'turn:end':case 'abort':if(sendOperation&&sendOperation.sessionId===sessionId)sendOperation.sawTurn=true;clearTimeout(awaitTurnTimer);if(sendPhase!=='uncertain')sendPhase='idle';renderer.endTurn(sessionId,e.kind==='abort');setBusy(false);break;
-    case 'cleared':events=[];renderer.reset();tools.clear();if(window.UAI&&UAI.pictures)UAI.pictures.clearSession(sessionId);$('transcript').replaceChildren();welcome();break;
+    case 'turn:end':case 'abort':if(sendOperation&&sendOperation.sessionId===sessionId)sendOperation.sawTurn=true;clearTimeout(awaitTurnTimer);if(sendPhase!=='uncertain')sendPhase='idle';renderer.endTurn(sessionId,e.kind==='abort');finishResponse(e.kind==='abort');setBusy(false);break;
+    case 'cleared':events=[];renderer.reset();tools.clear();resetResponses();if(window.UAI&&UAI.pictures)UAI.pictures.clearSession(sessionId);$('transcript').replaceChildren();welcome();break;
     case 'provider:switch':append(el('div','note','Switched provider to '+e.to));break;
     case 'model:route':append(el('div','note',e.text||('Automatic free routing selected '+e.model+'. Turn it off in Settings → Agent → Automatic free routing.')));break;
     case 'request:retry':append(el('div','note',`Retrying ${e.provider||'provider'} · ${e.reason||''}`));break;
-    case 'subagent:start':append(el('div','note','Subagent · '+(e.task||e.label||'')));break;
-    case 'subagent:done':append(el('div','note','Subagent finished · '+(e.label||'')));break;
-    case 'subagent:text':{const report=el('details','subagent-report'),body=el('div','body');report.append(el('summary',null,(e.label||'Subagent')+' · report'));body.innerHTML=md(e.text||'');report.append(body);append(report);break;}
+    case 'subagent:start':appendActivity(el('div','note activity-note','Subagent · '+(e.task||e.label||'')));break;
+    case 'subagent:done':appendActivity(el('div','note activity-note','Subagent finished · '+(e.label||'')));break;
+    case 'subagent:text':{const report=el('details','subagent-report'),body=el('div','body');report.append(el('summary',null,(e.label||'Subagent')+' · report'));body.innerHTML=md(e.text||'');report.append(body);appendActivity(report);break;}
     case 'compact':append(el('div','note','Older context compacted'));break;
   }
   if(pinned)scrollToEnd();
@@ -434,24 +565,28 @@ function resendLast(target){
 const renderer=window.UAIStreamRenderer.create({
   md, escape:UAIMarkdown.escape,
   createAgentMessage:model=>message('agent','',model),
+  responseRoot:node=>node.closest('.response-turn')||node,
+  attachReasoning:(entry,details)=>{details.dataset.reasoningRequestId=entry.requestId||'';details._uaiReasoningOwner=entry.node;entry.node._uaiReasoning=details;appendActivity(details,responseFor(entry.node));},
+  onState:entry=>updateResponse(responseFor(entry.node)),
   getSession:()=>sessionId,
   defaultModel:()=>state.agent?.model,
   isPinned:stick,
   scrollToEnd,
   onActivity:active=>{document.body.dataset.streaming=active?'on':'off';},
   onRetry:resendLast,
-  onError:(root,event)=>deadlineHelp(root,event.error||event.providerError,event.status),
+  onCopyReasoning:copyText,
+  onError:renderFailure,
   onFinal:decorateMessage,
 });
 UAI.pictures=UAI.createPictures({token,browserId,getSession:()=>sessionId,api,toast,tray:$('pictureTray'),input:$('pictureInput'),pickerButton:$('attachPictures'),dropZone:$('composer'),onTextFiles:attachFiles,onChange:refresh});
 function apply(e){
   if(typeof e.kind!=='string')return;
   if(e.kind==='bridge:update'){bridgeUpdate=e.update||{};if(page==='cowork')requestPanelRefresh();return;}
-  if(e.kind==='bridge:reset'){events=[];eventBytes=0;renderer.reset();tools.clear();UAI.pictures.resetMessages();$('transcript').replaceChildren();welcome();if(e.resync)toast('Connection restored. Reloaded the latest saved conversation.');return;}
+  if(e.kind==='bridge:reset'){events=[];eventBytes=0;renderer.reset();tools.clear();resetResponses();UAI.pictures.resetMessages();$('transcript').replaceChildren();welcome();if(e.resync)toast('Connection restored. Reloaded the latest saved conversation.');return;}
   if(e.kind==='bridge:snapshot'){
     const readingSession=sessionId,readingY=$('transcript').scrollTop,wasPinned=stick();
     events=[];eventBytes=0;for(const event of Array.isArray(e.events)?e.events:[])retainEvent(event);
-    renderer.reset();tools.clear();UAI.pictures.resetMessages();$('transcript').replaceChildren();changeSession(e.sessionId);
+    renderer.reset();tools.clear();resetResponses();UAI.pictures.resetMessages();$('transcript').replaceChildren();changeSession(e.sessionId);
     renderingSnapshot=true;
     try{for(const event of events)renderEvent(event);}finally{renderingSnapshot=false;}
     welcome();
@@ -464,6 +599,7 @@ function apply(e){
     if(!state.agent?.busy)for(const row of tools.values())if(row.restored){
       row.restored=false;row.node.dataset.status='unknown';row.verdict.textContent='No saved result';
       row.outcome.textContent='No result was kept in this transcript.';row.outcome.hidden=false;
+      updateResponse(responseFor(row.node));
     }
     return;
   }

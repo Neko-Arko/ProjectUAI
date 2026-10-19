@@ -4,13 +4,15 @@ A universal AI agent that runs inside a Roblox client. It works in any game,
 with Chat Completions and Anthropic Messages endpoints, including compatible
 local servers and relays.
 
-**Version 3.5.6 — October 18, 2026: mobile relay reliability and automatic updates.**
-The Android companion accepts finite timeout values correctly and supports
-unlimited default inference through short executor polls. Saved pairing is
-authenticated and repaired when rejected; live contact, request activity and
-received bytes make connection problems visible. The signed companion checks
-and downloads verified updates automatically, then waits for idle work and
-Android installation approval. Explicit deadlines and Stop remain effective.
+**Version 3.6.0 — October 19, 2026: clearer conversations and reliable connections.**
+The public page has a responsive white monochrome design with an interactive 3D
+centerpiece and animated SVGs, with pause controls and reduced-motion support.
+Bridge responses put the answer first, with tools and thinking grouped into
+expandable activity. OpenCode discovery covers more installed CLI layouts and
+reports useful setup guidance. The redesigned Android companion makes starting
+and checking the connection simpler, and accepts compressed message submissions
+that previously failed JSON decoding after pairing. Both apps retain verified
+automatic updates, and Android installation still requires confirmation.
 
 Start chatting with **Project UAI Free** without supplying an API key. It is the
 default when no provider is configured. Its adaptive router measures small tool
@@ -34,7 +36,7 @@ workspace. Go keeps its own catalog and routes; the optional free CLI backend
 does not intercept it. Subscription and workspace region refusals identify the
 setting to check. See [provider setup](docs/PROVIDER_COMPATIBILITY.md).
 
-Client, bridge and desktop are 3.5.6 and the Android companion is 3.5.7; UI LIB
+Client, bridge, desktop and Android companion are 3.6.0; UI LIB
 remains 1.3.0 and SDK 1.0.0.
 Model pricing and context/reply limits use a refreshed provider-specific catalog;
 included Project UAI Free access is counted at zero cost.
@@ -50,7 +52,7 @@ it. The model modal edits the same global effort setting, including for other
 models when **Options → Reasoning support** is enabled. The Thinking row estimates
 visible text only. A long retained trace is labelled
 **Excerpt**, not a 5,999-token model limit. See [provider behavior](docs/PROVIDER_COMPATIBILITY.md).
-See [3.5.6 verification](docs/TESTING_3.5.6.md),
+See [3.6.0 verification](docs/TESTING_3.6.0.md),
 [mobile research](docs/OPENCODE_MOBILE_RESEARCH.md) and
 [companion update checks](companion/UPDATES.md). Native Android, mobile executor
 behavior, phone tool execution/replay and background survival remain unverified;
@@ -659,6 +661,20 @@ The check mode does not write files. Static checks verify HTML structure, local
 links, accessibility references, copy targets, catalog coverage, and publishing
 parity without opening a browser or loading media.
 
+For focused browser checks, install Playwright and its Chromium browser outside
+this repository. Point `PLAYWRIGHT_MODULE` at that installation's package directory:
+
+```powershell
+$env:PLAYWRIGHT_MODULE = 'C:\path\to\node_modules\playwright'
+node test/site_browser.js
+```
+
+The browser gate checks navigation and focus, exact loader copying and clipboard
+fallback, catalog filters, official release targets, responsive geometry, reduced
+motion, canvas pause/fallback, and usable content without JavaScript. Set
+`UAI_SCREENSHOTS` to a directory to save review images. Downloads are checked as
+links; the test does not fetch release binaries.
+
 For manual browser review, check narrow and wide layouts, 200% zoom, keyboard
 navigation and Escape, repeated copying and denied clipboard access, search with
 no results, clearing filters, and video playback. The catalog and navigation
@@ -693,7 +709,7 @@ first two entirely.
 
 Cowork gives your Roblox conversation more room in the browser. Keep Roblox and
 its local bridge running on the same computer. The [Windows desktop launcher](desktop/README.md)
-is a single **UAI-Bridge-3.5.6-win-x64.exe** download. Open it directly,
+is a single **UAI-Bridge-3.6.0-win-x64.exe** download. Open it directly,
 complete Node setup if needed using **Get Node.js** or an existing
 installation, click **Start Cowork**, and load the updated UAI script. It discovers the app on dedicated port
 **28791** and reconnects automatically after app restarts. The executable includes
@@ -756,7 +772,7 @@ troubleshooting, limits, architecture, and organized Node/Lua/browser tests.
 
 ## Android companion
 
-Install [UAI Relay 3.5.6](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.5.6/UAI-Relay-3.5.6.apk)
+Install [UAI Relay 3.6.0](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.6.0/UAI-Relay-3.6.0.apk)
 on Android 8 or later, start the relay, and load the current UAI script in your
 executor. With Relay mode set to Auto, the client discovers and pairs with the
 companion on the same phone. The relay holds the provider connection while the

@@ -77,6 +77,7 @@
     function state(entry, value, text) {
       if (entry.node.dataset.responseState !== value) entry.node.dataset.responseState = value;
       if (entry.statusCopy && text !== undefined && entry.statusCopy.textContent !== text) entry.statusCopy.textContent = text;
+      deps.onState?.(entry);
     }
     function identify(entry, e) {
       entry.sessionId = session(e); entry.requestId = identity(e);
@@ -93,15 +94,25 @@
     function reasoningState(entry, active) {
       const details = entry.reasonBody?.parentElement; if (!details) return;
       details.dataset.state = active ? 'thinking' : 'complete';
-      const summary = details.querySelector('summary');
-      const label = active ? 'Thinking through it' : 'Thought process';
-      if (summary && summary.textContent !== label) summary.textContent = label;
+      const status = details.querySelector('.thinking-state');
+      const label = active ? 'In progress' : entry.reasonCommitted ? 'Complete' : entry.reasoningStopped ? 'Stopped' : entry.failed ? 'Interrupted' : 'Complete';
+      if (status && status.textContent !== label) status.textContent = label;
+      entry.reasonBody.setAttribute('aria-busy', String(active));
     }
     function ensureReasoning(entry) {
       if (entry.reasonBody) return;
-      const details = node('details', 'thinking'), summary = node('summary', '', 'Thinking through it');
-      entry.reasonBody = node('div', 'body reasoning-body'); details.append(summary, entry.reasonBody);
-      entry.node.insertBefore(details, entry.body); contentState(entry, entry.finalText ?? entry.text);
+      const details = node('details', 'thinking'), summary = node('summary', 'thinking-summary');
+      const heading = node('span', 'thinking-heading');
+      heading.append(node('span', 'thinking-title', 'Reasoning'), node('span', 'thinking-caption', 'How this response was approached'));
+      summary.append(heading, node('span', 'thinking-state', 'In progress'));
+      entry.reasonBody = node('div', 'body reasoning-body rendered'); details.append(summary, entry.reasonBody);
+      if (deps.onCopyReasoning) {
+        const footer = node('div', 'thinking-footer'), copy = node('button', 'thinking-copy', 'Copy reasoning');
+        copy.type = 'button'; copy.onclick = () => deps.onCopyReasoning(entry.reasoningText || ''); footer.append(copy); details.append(footer);
+      }
+      if (deps.attachReasoning) deps.attachReasoning(entry, details);
+      else entry.node.insertBefore(details, entry.body);
+      contentState(entry, entry.finalText ?? entry.text);
       reasoningState(entry, entry.streaming && !entry.text && !entry.reasonCommitted);
     }
 
@@ -217,7 +228,19 @@
         entry.stableLength += cut;
       }
       entry.paintedTail = entry.text.slice(entry.stableLength);
-      if (entry.reasonBody && !entry.reasonCommitted && !selectedWithin(entry.reasonBody)) entry.reasonBody.textContent = entry.reasoning;
+      if (entry.reasonBody && !entry.reasonCommitted) {
+        const renderReasoning = () => {
+          if (!entry.reasonBody?.isConnected || isInteracting(entry.reasonBody)) return;
+          const fragment = document.createElement('template'); fragment.innerHTML = deps.md(entry.reasoningText || '');
+          morph(entry.reasonBody, fragment.content); cancelReasoning(entry);
+        };
+        if (!isInteracting(entry.reasonBody)) renderReasoning();
+        else if (!entry.reasonDeferred) {
+          entry.reasonDeferred = () => queueMicrotask(renderReasoning);
+          document.addEventListener('selectionchange', entry.reasonDeferred);
+          entry.reasonBody.addEventListener('focusout', entry.reasonDeferred);
+        }
+      }
       if (entry.streaming && (entry.text || entry.reasoning)) state(entry, entry.text ? 'writing' : 'thinking', entry.text ? 'Writing' : 'Thinking through it');
       reasoningState(entry, entry.streaming && !entry.text && !entry.reasonCommitted);
       if (pinned) deps.scrollToEnd();
@@ -267,7 +290,7 @@
       const entry = ensure(e); if (!entry) return;
       flush(entry);
       entry.text = ''; entry.stableLength = 0; entry.paintedTail = ''; entry.stable.replaceChildren(); entry.tail.replaceChildren();
-      if (!entry.reasonCommitted) { entry.reasoning = ''; if (entry.reasonBody) entry.reasonBody.textContent = ''; }
+      if (!entry.reasonCommitted) { entry.reasoning = ''; entry.reasoningText = ''; if (entry.reasonBody) entry.reasonBody.textContent = ''; }
       entry.lastSeq = Math.max(0, (e.from || entry.lastSeq + 1) - 1);
       if (!entry.gap) { entry.gap = node('p', 'stream-gap', 'Earlier live text is unavailable. The saved reply will replace this preview.'); entry.node.append(entry.gap); }
     }
@@ -286,6 +309,7 @@
         done({ ...e, state: 'failed', error: 'Live preview reached its size limit. Waiting for the saved reply.' }); return;
       }
       entry.text += text; entry.reasoning += reasoning;
+      if (reasoning) entry.reasoningText = entry.reasoning;
       if (reasoning && !entry.reasonBody) ensureReasoning(entry);
       contentState(entry, entry.text);
       if (text || reasoning) schedule(entry);
@@ -294,21 +318,23 @@
     function done(e) {
       if (!matches(e) || committed.has(key(e))) return;
       const entry = ensure(e); if (!entry) return;
+      const selection = document.getSelection(), pinned = deps.isPinned() && (!selection || selection.isCollapsed);
       flush(entry); entry.streaming = false; entry.node.classList.remove('streaming');
       entry.body.removeAttribute('aria-busy'); reasoningState(entry, false);
       const failure = (e.state && e.state !== 'completed') || e.status >= 400;
       if (failure) {
-        entry.failed = true;
+        entry.failed = true; entry.reasoningStopped = e.state === 'cancelled'; reasoningState(entry, false);
         state(entry, e.state === 'cancelled' ? 'stopped' : 'error');
-        entry.status.className = 'stream-error'; entry.status.setAttribute('role', 'alert');
+        entry.status.className = 'stream-error'; entry.status.setAttribute('role', e.state === 'cancelled' ? 'status' : 'alert');
         entry.status.replaceChildren(node('span', '', e.error || e.providerError || (e.state === 'cancelled' ? 'Request stopped.' : 'Request failed.')));
-        deps.onError?.(entry.status, e);
+        const actions = deps.onError?.(entry.status, { ...e, hasPreview: !!entry.text }) || entry.status;
         if (deps.onRetry && e.state !== 'cancelled') {
-          const retry = node('button', 'retry', 'Review & retry'); retry.type = 'button';
-          retry.onclick = () => deps.onRetry(entry.sessionId); entry.status.append(retry);
+          const retry = node('button', 'retry', 'Review message'); retry.type = 'button';
+          retry.onclick = () => deps.onRetry(entry.sessionId); actions.prepend(retry);
         }
       } else state(entry, 'saving', e.streamed === false ? 'Response received. Waiting for Roblox…' : 'Finishing up');
       signal();
+      if (pinned) deps.scrollToEnd();
     }
 
     function commitText(e) {
@@ -350,7 +376,7 @@
         state(entry, 'complete'); live.delete(entry.key); committed.set(entry.key, entry);
         if (!entry.reasonBody && e.text) ensureReasoning(entry);
         if (entry.reasonBody) {
-          cancelReasoning(entry); entry.reasonFinalText = e.text || '';
+          cancelReasoning(entry); entry.reasonFinalText = e.text || ''; entry.reasoningText = e.text || '';
           const render = () => {
             if (entry.reasonFinalText === null || isInteracting(entry.reasonBody)) return;
             const fragment = document.createElement('template'); fragment.innerHTML = deps.md(entry.reasonFinalText);
@@ -377,13 +403,15 @@
         const belongs = at !== null ? entry.startedAt >= at : !entry.turnUser;
         if (!belongs) continue;
         entry.turnUser = userNode;
-        if (entry.node.parentNode === userNode.parentNode && entry.node.compareDocumentPosition(userNode) & 4) {
-          if (!first || entry.node.compareDocumentPosition(first) & 4) first = entry.node;
+        const response = deps.responseRoot?.(entry.node) || entry.node;
+        if (response.parentNode === userNode.parentNode && response.compareDocumentPosition(userNode) & 4) {
+          if (!first || response.compareDocumentPosition(first) & 4) first = response;
         }
       }
       // Move the newly confirmed user row, preserving live response selection,
       // tool focus and every older completed or failed message in place.
       if (first) userNode.parentNode.insertBefore(userNode, first);
+      return first;
     }
 
     function endTurn(sessionId, stopped = false, at) {
@@ -391,7 +419,7 @@
       if (anchor && (!Number.isFinite(at) || !anchor.at || at >= anchor.at)) anchor.open = false;
       for (const entry of live.values()) if (entry.sessionId === sessionId) {
         if (Number.isFinite(at) && entry.startedAt > at) continue;
-        entry.turnEnded = true;
+        entry.turnEnded = true; entry.reasoningStopped = stopped;
         flush(entry); entry.streaming = false; entry.node.classList.remove('streaming');
         entry.body.removeAttribute('aria-busy'); reasoningState(entry, false);
         if (!entry.text && !entry.failed && !entry.reasonBody) entry.node.remove();
@@ -404,6 +432,19 @@
     function dropSession(sessionId) {
       for (const map of [live, committed]) for (const [id, entry] of map) if (entry.sessionId === sessionId) { cancel(entry, true); map.delete(id); }
       anchors.delete(sessionId); pendingReasoning.delete(sessionId);
+      signal();
+    }
+
+    function dropNode(removed) {
+      for (const map of [live, committed]) for (const [id, entry] of map) {
+        if (removed === entry.node || removed.contains(entry.node)) {
+          cancel(entry, true); entry.reasonBody?.parentElement?.remove(); map.delete(id);
+          if (pendingReasoning.get(entry.sessionId) === entry) pendingReasoning.delete(entry.sessionId);
+        } else if (entry.reasonBody && removed.contains(entry.reasonBody)) {
+          cancelReasoning(entry); entry.reasonBody = null; entry.reasonFinalText = null;
+        }
+      }
+      for (const [id, anchor] of anchors) if (removed === anchor.node || removed.contains(anchor.node)) anchors.delete(id);
       signal();
     }
 
@@ -422,7 +463,7 @@
     };
     document.addEventListener('visibilitychange', resume);
     reducedMotion.addEventListener('change', reduce);
-    return { start, delta, done, resync, commitText, commitReasoning, anchorUser, endTurn, dropSession, reset,
+    return { start, delta, done, resync, commitText, commitReasoning, anchorUser, endTurn, dropSession, dropNode, reset,
       destroy() { reset(); document.removeEventListener('visibilitychange', resume); reducedMotion.removeEventListener('change', reduce); },
       has: id => [...live.keys(), ...committed.keys()].some(value => value.endsWith(':' + id)) };
   }

@@ -1,6 +1,6 @@
 # Mobile Relay and Android Companion — Detailed Plan
 
-## OpenCode and free access on mobile (updated October 18, 2026)
+## OpenCode and free access on mobile (updated October 19, 2026)
 
 OpenCode now works on mobile through the UAI Relay app from Discord: install and
 start the app, then connect it in UAI. A user confirmed OpenCode inference on a
@@ -21,7 +21,23 @@ the original app design and historical implementation plan follow afterward.
 
 ## Current companion transport and diagnostics
 
-Companion version 3.5.6 (version code 3) adds these changes.
+Companion **3.6.0 (version code 5)** adds bounded gzip decoding for local JSON
+requests, including requests whose executor omits the gzip header. It also revises
+the setup and status screens to distinguish a running relay, a saved pairing and
+recent authenticated Roblox contact.
+
+The October 19, 2026 pre-fix reproduction showed successful plain pairing/status
+(200), followed by valid gzip JSON rejected with
+`{"error":"invalid executor request"}` (400) before accepting or dispatching a
+job. The identical plain JSON was accepted (202) and reached one local mock
+upstream. The 3.6.0 fix retains authentication, job identity and request-size limits.
+The failing phone's wire encoding was not captured, so this establishes the gzip
+defect without confirming that phone failure's cause. Native Android rendering,
+phone tool replay and background survival remain unverified. See the
+[3.6.0 verification record](TESTING_3.6.0.md) for the checks and their limits.
+
+The following transport and diagnostics behavior was established in companion
+3.5.6 (version code 3).
 
 The companion now advertises `capabilities.inference = {schema:1, unlimited:true}`
 in hello and authenticated status. Updated clients can send `timeout:0` to wait

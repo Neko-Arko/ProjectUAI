@@ -1019,7 +1019,9 @@ function updateBusy() {
 process.on('message', message => {
   if (message?.type === 'stop') shutdown();
   else if (message?.type === 'update-state') {
-    updateState = message.update;
+    // A newly listening worker may receive the supervisor's previous-version
+    // status before activation completes. Its own release is authoritative.
+    updateState = { ...message.update, currentVersion: RELEASE.version };
     broadcast({ kind: 'bridge:update', update: updateState });
   } else if (message?.type === 'prepare-update') {
     const idle = !stopping && !updateBusy();

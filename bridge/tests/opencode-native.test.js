@@ -55,12 +55,45 @@ test('disabled native tunnel never starts even with a configured binary', async 
 });
 
 test('incompatible installed API fails before creating a session', async t => {
-  const { backend, events } = native(t, { UAI_OPENCODE_FIXTURE_OLD_API: '1' });
+  const { backend, events } = native(t, { UAI_OPENCODE_FIXTURE_OLD_API: '1', UAI_OPENCODE_FIXTURE_VERSION: '1.19.3' });
   await assert.rejects(backend.start(), /incompatible server API/);
   assert.equal(backend.capability().state, 'failed');
   assert.equal(backend.capability().available, false);
   assert.match(backend.capability().message, /incompatible server API/);
+  assert.equal(backend.capability().version, '1.19.3');
+  assert.match(backend.capability().message, /1\.19\.3.*@opencode\/cli/);
   assert.ok(!events().some(event => event.type === 'session'));
+});
+
+test('an incompatible PATH CLI cannot hide the compatible installed npm CLI', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'uai-native-discovery-'));
+  let backend;
+  t.after(async () => { await backend?.close(); fs.rmSync(directory, { recursive: true, force: true }); });
+  const windows = process.platform === 'win32', name = windows ? 'opencode.exe' : 'opencode';
+  const direct = path.join(directory, 'bin');
+  const modules = path.join(directory, windows ? 'bin' : 'lib', 'node_modules');
+  const legacy = path.join(direct, name), compatible = path.join(modules, '@opencode', 'cli', 'bin', name);
+  for (const file of [legacy, compatible]) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    try { fs.linkSync(process.execPath, file); } catch { fs.copyFileSync(process.execPath, file); }
+  }
+  const log = path.join(directory, 'events.jsonl'), absent = path.join(directory, 'absent');
+  const env = { ...process.env, PATH: direct, LOCALAPPDATA: absent, APPDATA: absent, USERPROFILE: absent, HOME: absent,
+    ProgramFiles: absent, 'ProgramFiles(x86)': absent, BUN_INSTALL: absent, NVM_SYMLINK: absent, NVM_BIN: absent,
+    NPM_CONFIG_PREFIX: absent, PNPM_HOME: absent, UAI_OPENCODE_BINARY: '', UAI_OPENCODE_DISABLED: '0',
+    UAI_OPENCODE_FIXTURE_LOG: log, UAI_OPENCODE_FIXTURE_OLD_BINARY: fs.realpathSync(legacy) };
+  assert.equal(findBinary(env), fs.realpathSync(legacy), 'the legacy executable is the first discovery candidate');
+  backend = createOpenCode({ env, binaryArgs: [path.join(__dirname, 'fixtures', 'opencode-cli.js')], startupMs: 5000, pollMs: 10 });
+  const models = await backend.models();
+  assert.equal(models.data[0].id, 'fixture-free');
+  assert.equal(backend.capability().state, 'ready');
+  assert.equal(backend.capability().version, '2.0.32');
+  const events = fs.readFileSync(log, 'utf8').trim().split('\n').map(JSON.parse);
+  const ready = events.filter(event => event.type === 'ready');
+  assert.deepEqual(ready.map(event => event.legacy), [true, false]);
+  assert.throws(() => process.kill(ready[0].pid, 0), { code: 'ESRCH' }, 'the rejected server is stopped before replacement');
+  assert.equal(events.filter(event => event.type === 'session' || event.type === 'prompt').length, 0,
+    'candidate selection never submits inference');
 });
 
 test('native inference retains one job, translates tool handoff and cleans sessions', async t => {

@@ -9,6 +9,7 @@ import dev.projectuai.relay.protocol.ExecutorResponse
 import kotlinx.serialization.encodeToString
 import dev.projectuai.relay.protocol.RelayJson
 import dev.projectuai.relay.protocol.StatusResponse
+import dev.projectuai.relay.protocol.SubmitRequest
 import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +17,7 @@ import kotlinx.coroutines.cancel
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.mockwebserver.MockResponse
@@ -25,7 +27,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import okio.BufferedSink
+import java.io.ByteArrayOutputStream
 import java.net.ServerSocket
+import java.util.zip.GZIPOutputStream
 
 class RelayServerTest {
     private lateinit var upstream: MockWebServer
@@ -254,6 +259,84 @@ class RelayServerTest {
         assertEquals(202, executor(token, "POST", "/api/inference", body.replace("inference_executor", "inference_cancel")).status)
         assertEquals(200, executor(token, "DELETE", "/api/inference/inference_cancel").status)
         assertTrue(executor(token, "GET", "/api/inference/inference_cancel").body.contains("cancelled"))
+    }
+
+    private fun gzip(text: String): ByteArray = ByteArrayOutputStream().also { output ->
+        GZIPOutputStream(output).use { it.write(text.toByteArray(Charsets.UTF_8)) }
+    }.toByteArray()
+
+    private fun encodedCall(path: String, bytes: ByteArray, encoding: String? = "gzip", chunked: Boolean = false, token: String? = null): Response {
+        val body = object : RequestBody() {
+            override fun contentType() = "application/json".toMediaType()
+            override fun contentLength() = if (chunked) -1L else bytes.size.toLong()
+            override fun writeTo(sink: BufferedSink) { sink.write(bytes) }
+        }
+        val request = Request.Builder().url("http://127.0.0.1:${server.port}$path").post(body)
+        if (encoding != null) request.header("Content-Encoding", encoding)
+        if (token != null) request.header("Authorization", "Bearer $token")
+        return client.newCall(request.build()).execute()
+    }
+
+    @Test
+    fun `compressed executor messages preserve large nested JSON and same ID without repairing pairing`() {
+        val token = pair()
+        val providerBody = RelayJson.encodeToString(mapOf("message" to "A long message: \"quoted\" \\ path\n你好 🌿".repeat(4000)))
+        upstream.enqueue(MockResponse().setBody("large message answered"))
+        val submission = RelayJson.encodeToString(SubmitRequest("inference_compressed", "inst-test", upstream.url("/v1").toString(),
+            mapOf("Authorization" to "Bearer private-test-key"), providerBody, 0))
+        val envelope = RelayJson.encodeToString(ExecutorRequest(1, "POST", "/api/inference", token, submission))
+        // POST implementations may use a declared body length or chunked transfer,
+        // and may omit the encoding header. All retries refer to the same job.
+        for ((encoding, chunked) in listOf("gzip" to false, "gzip" to true, null to true)) {
+            encodedCall("/api/executor", gzip(envelope), encoding, chunked).use {
+                assertEquals(200, it.code)
+                assertEquals(202, RelayJson.decodeFromString<ExecutorResponse>(it.body!!.string()).status)
+            }
+        }
+        assertTrue(poll(token, "inference_compressed").contains("large message answered"))
+        val sent = upstream.takeRequest()
+        assertEquals(providerBody, sent.body.readUtf8())
+        assertEquals("Bearer private-test-key", sent.getHeader("Authorization"))
+        assertEquals(1, upstream.requestCount)
+        assertEquals(token, settings.token)
+        assertEquals(1, engine.activity().acceptedJobs)
+    }
+
+    @Test
+    fun `compressed pairing direct submission and authenticated polling keep their contracts`() {
+        val token = encodedCall("/api/pair", gzip("{}"), chunked = true).use {
+            assertEquals(200, it.code)
+            RelayJson.decodeFromString<dev.projectuai.relay.protocol.PairResponse>(it.body!!.string()).token
+        }
+        upstream.enqueue(MockResponse().setBody("direct gzip answer"))
+        val submission = RelayJson.encodeToString(SubmitRequest("inference_direct_gzip", "inst-test", upstream.url("/v1").toString(), body = "{}"))
+        encodedCall("/api/inference", gzip(submission), token = token).use { assertEquals(202, it.code) }
+        assertTrue(poll(token, "inference_direct_gzip").contains("direct gzip answer"))
+        val envelope = RelayJson.encodeToString(ExecutorRequest(1, "GET", "/api/status", "wrong-token"))
+        encodedCall("/api/executor", gzip(envelope)).use {
+            assertEquals(401, RelayJson.decodeFromString<ExecutorResponse>(it.body!!.string()).status)
+        }
+        assertEquals(1, upstream.requestCount)
+    }
+
+    @Test
+    fun `invalid compressed and oversized executor bodies cannot start work`() {
+        pair()
+        val cases = listOf(
+            Triple(gzip("{}").copyOf(12), "gzip", 400),
+            Triple("{}".toByteArray(), "br", 415),
+            Triple(byteArrayOf(0xc3.toByte(), 0x28), "identity", 400),
+            Triple(gzip("x".repeat(RelayServer.MAX_REQUEST_BYTES.toInt() + 1)), "gzip", 413),
+            Triple(ByteArray(RelayServer.MAX_REQUEST_BYTES.toInt() + 1) { 32 }, "identity", 413),
+        )
+        for ((bytes, encoding, expected) in cases) {
+            encodedCall("/api/executor", bytes, encoding, chunked = true).use {
+                assertEquals(200, it.code)
+                assertEquals(expected, RelayJson.decodeFromString<ExecutorResponse>(it.body!!.string()).status)
+            }
+        }
+        assertEquals(0, upstream.requestCount)
+        assertEquals(0, engine.activity().acceptedJobs)
     }
 
     private fun poll(token: String, id: String): String {

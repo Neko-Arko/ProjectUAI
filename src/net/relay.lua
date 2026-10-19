@@ -156,6 +156,9 @@ return function(env)
 				cancel()
 				local decoded = util.decode(response.body or "")
 				local reason = type(decoded) == "table" and type(decoded.error) == "string" and util.truncate(decoded.error, 400) or "Check the bridge token and restart state."
+				if target == "companion" and reason == "invalid executor request" then
+					reason = "The companion could not read the executor's message. Update UAI Relay and reload the UAI script. Resetting pairing will not fix request encoding."
+				end
 				return failure("Relay rejected the request (" .. response.status .. "): " .. reason .. " Inference was not resubmitted.")
 			elseif not submitted and attempts >= 3 then
 				cancel(); return failure("Could not confirm relay submission; stopped without resubmitting inference.")

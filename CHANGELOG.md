@@ -1,6 +1,35 @@
 # Changelog
 
-## Unreleased
+## 3.6.0 — October 19, 2026 — Clearer conversations and reliable connections
+
+- Rebuild the public Project UAI page with a white monochrome palette, responsive
+  layouts, an interactive animated 3D centerpiece and SVG motion. Keep installation,
+  downloads and the searchable tool catalog close at hand, with pause and
+  reduced-motion support.
+- Rebuild bridge conversations around the assistant's answer. Each turn has one
+  heading and a collapsed activity drawer for tools, thinking and delegated work.
+  Expand details when needed; approvals and failures remain visible.
+- Give reasoning a readable formatted view with its own Copy action. Present
+  errors with a clear explanation and recovery actions, keeping original
+  technical diagnostics available in a separate disclosure.
+- Find installed OpenCode CLI binaries behind npm and Bun launchers, in common
+  Windows user/system folders, active nvm paths and macOS app resources. Handle
+  quoted PATH entries and show detected versions with actionable setup guidance.
+- Decode compressed companion POST requests before JSON parsing. Previously,
+  gzip message bodies produced `invalid executor request` before inference could
+  start even when pairing succeeded. Bound both wire and expanded request sizes,
+  preserve authentication and same-job retries, and report malformed encodings
+  without logging credentials or message contents. The reported Delta failure
+  occurs at this decoding stage; its device-specific encoding remains unobserved.
+- Redesign UAI Relay around clear connection status, one Start/Stop action,
+  short setup steps and compact request activity. Keep advanced settings and
+  diagnostics out of the main setup flow while retaining update recovery controls.
+- Release client, bridge, Windows desktop and signed Android companion 3.6.0.
+  Existing production Android installs keep their signing identity and pairing.
+- Keep bridge update status tied to the version actually serving requests during
+  an automatic worker replacement.
+
+### Changes since 3.5.6
 
 - Correct the mobile OpenCode guidance. OpenCode now works on Android through the
   UAI Relay app from Discord: install and start the app, then connect it in UAI.

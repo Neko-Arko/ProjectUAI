@@ -1,6 +1,6 @@
 # UAI Relay (Android companion)
 
-Version **3.5.7** (Android version code 4).
+Version **3.6.0** (Android version code 5).
 
 A foreground service that holds the upstream provider connection while the
 Project UAI client submits and polls through short loopback calls. The client
@@ -48,15 +48,15 @@ the same production signer.
 
 ## Use
 
-1. Start the app and tap **Start**. The notification appears and the relay listens
+1. Start the app and tap **Start relay**. The notification appears and the relay listens
    on `127.0.0.1:8790` only.
 2. In Roblox, run the Project UAI script. The Cowork panel's Relay card shows the
    companion once paired — no token copying.
-3. Keep Roblox and the relay running. **Stop** in the app is authoritative: the
+3. Keep Roblox and the relay running. **Stop relay** in the app is authoritative: the
    watchdogs stay down until you start again.
 
 If Roblox cannot find the companion, first confirm that the app's status reads
-**Running** and both show the same port. Opening the app alone does not start its
+**Relay on this phone: Running** and both show the same port. Opening the app alone does not start its
 server. On that same phone, open `http://127.0.0.1:8790/api/hello` in a browser
 (replace the port if it was changed). A JSON reply containing `"server":"uai-relay"`
 and `"protocol":2` confirms that the local listener answered. This public endpoint
@@ -88,6 +88,20 @@ by itself establish Delta or OpenCode support on a phone. A later Delta report
 OpenCode requires the UAI Relay app from Discord. The
 [standard request API](https://docs.sunc.io/Miscellaneous/request/) documents
 optional Headers and does not document Timeout.
+
+Version 3.6.0 puts connection status and Start/Stop first. Setup steps explain what
+to do in Roblox. **Your messages** shows active work and received responses;
+expand recent messages for details. Connection settings and diagnostics are
+collapsed initially. App update progress, installation and recovery actions stay
+visible when needed.
+
+If pairing succeeds but a message returns `invalid executor request`, the outer
+HttpPost message could not be decoded; this is before provider dispatch and token
+validation. 3.6.0 accepts gzip bodies, including chunked uploads and wrappers that
+omit Content-Encoding. Earlier apps parsed these compressed bytes as JSON and
+rejected them. Update the app and reload the script; resetting pairing does not
+repair request encoding. Both compressed and expanded requests are limited to
+8 MiB. The reported Delta device's exact transmitted bytes remain unobserved.
 
 The Roblox status reports actual pairing or authenticated client contact in the
 current service run. A saved token alone is shown as saved pairing, not a live

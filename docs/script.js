@@ -94,41 +94,6 @@
     }
   }
 
-  function setupCounters() {
-    const nodes = [...document.querySelectorAll('[data-count]')];
-    if (!nodes.length) return;
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const run = element => {
-      const target = Number(element.dataset.count);
-      if (!Number.isFinite(target)) return;
-      if (reduce || !('requestAnimationFrame' in window)) {
-        element.textContent = String(target);
-        return;
-      }
-      const start = window.performance.now();
-      const step = now => {
-        const progress = Math.min(1, (now - start) / 900);
-        const eased = 1 - Math.pow(1 - progress, 3);
-        element.textContent = String(Math.round(target * eased));
-        if (progress < 1) window.requestAnimationFrame(step);
-        else element.textContent = String(target);
-      };
-      window.requestAnimationFrame(step);
-    };
-    if (!('IntersectionObserver' in window)) {
-      nodes.forEach(run);
-      return;
-    }
-    const observer = new IntersectionObserver((entries, obs) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        run(entry.target);
-        obs.unobserve(entry.target);
-      }
-    }, { threshold: 0.4 });
-    nodes.forEach(node => observer.observe(node));
-  }
-
   function setupDemo() {
     const tabs = document.getElementById('demoTabs');
     if (!tabs) return;
@@ -351,127 +316,271 @@
     document.getElementById('catalogActions').hidden = false;
   }
 
-  function setupScrollSpy() {
-    const nav = document.getElementById('siteNav');
-    const pill = document.getElementById('navPill');
-    if (!nav) return;
-    const links = new Map();
-    for (const link of nav.querySelectorAll('a[href^="#"]')) {
-      const id = link.getAttribute('href').slice(1);
-      const section = document.getElementById(id);
-      if (section) links.set(id, { link, section });
-    }
-    if (!links.size) return;
 
-    function movePill(targetLink) {
-      if (!pill || !targetLink) {
-        if (pill) pill.style.opacity = '0';
-        return;
-      }
-      const navRect = nav.getBoundingClientRect();
-      const linkRect = targetLink.getBoundingClientRect();
-      if (linkRect.width === 0 || linkRect.height === 0 || window.innerWidth < 1024) {
-        pill.style.opacity = '0';
-        return;
-      }
-      const left = linkRect.left - navRect.left;
-      const top = linkRect.top - navRect.top;
-      pill.style.width = linkRect.width + 'px';
-      pill.style.height = linkRect.height + 'px';
-      pill.style.transform = `translate3d(${left}px, ${top}px, 0)`;
-      pill.style.opacity = '1';
-    }
-
-    let activeId = null;
-
-    function setActive(id) {
-      if (activeId === id) return;
-      activeId = id;
-      let activeLink = null;
-      for (const [linkId, entry] of links) {
-        if (linkId === id) {
-          entry.link.setAttribute('aria-current', 'true');
-          activeLink = entry.link;
-        } else {
-          entry.link.removeAttribute('aria-current');
-        }
-      }
-      movePill(activeLink);
-    }
-
-    for (const [, entry] of links) {
-      entry.link.addEventListener('pointerenter', () => movePill(entry.link));
-      entry.link.addEventListener('pointerleave', () => {
-        const currentLink = activeId ? links.get(activeId)?.link : null;
-        movePill(currentLink);
-      });
-      entry.link.addEventListener('click', () => {
-        const id = entry.link.getAttribute('href').slice(1);
-        setActive(id);
-      });
-    }
-
-    window.addEventListener('resize', () => {
-      const currentLink = activeId ? links.get(activeId)?.link : null;
-      movePill(currentLink);
-    }, { passive: true });
-
-    if ('IntersectionObserver' in window) {
-      const visible = new Set();
-      const observer = new IntersectionObserver(entries => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) visible.add(entry.target.id);
-          else visible.delete(entry.target.id);
-        }
-        let current = null;
-        for (const [id] of links) {
-          if (visible.has(id)) { current = id; break; }
-        }
-        setActive(current);
-      }, { rootMargin: '-25% 0px -65% 0px' });
-      for (const { section } of links.values()) observer.observe(section);
-    }
-
-    const hash = window.location.hash.slice(1);
-    if (hash && links.has(hash)) {
-      setActive(hash);
-    }
-  }
-
-  function setupCardMotion() {
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) return;
-    const cards = document.querySelectorAll('.tile, .prompt-card, .code-card, .doc-pillar-card, .doc-table-card');
-    cards.forEach(card => {
-      card.addEventListener('pointermove', event => {
-        const rect = card.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        card.style.setProperty('--mouse-x', x + 'px');
-        card.style.setProperty('--mouse-y', y + 'px');
-      }, { passive: true });
-    });
-  }
-
-  function setupShowcaseVideo() {
+  function setupMotion() {
+    const toggle = document.getElementById('motionToggle');
+    const label = toggle?.querySelector('[data-motion-label]');
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let paused = reduced.matches;
     const video = document.querySelector('.showcase-media video');
-    if (!video) return;
-    video.removeAttribute('controls');
-    video.controls = false;
-    const playPromise = video.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => {});
+    const recording = document.querySelector('.recording-details');
+
+    const syncVideo = () => {
+      if (!video) return;
+      if (paused || document.hidden || !recording?.open) video.pause();
+      else video.play()?.catch(() => {});
+    };
+    const publish = () => {
+      document.body.classList.toggle('motion-paused', paused);
+      if (toggle) toggle.setAttribute('aria-pressed', String(paused));
+      if (label) label.textContent = paused ? 'Resume motion' : 'Pause motion';
+      document.dispatchEvent(new CustomEvent('site-motion-change', { detail: { paused } }));
+      syncVideo();
+    };
+    toggle?.addEventListener('click', () => { paused = !paused; publish(); });
+    const preferenceChanged = () => { paused = reduced.matches; publish(); };
+    if (reduced.addEventListener) reduced.addEventListener('change', preferenceChanged);
+    else reduced.addListener(preferenceChanged);
+    document.addEventListener('visibilitychange', () => {
+      document.body.classList.toggle('document-hidden', document.hidden);
+      syncVideo();
+    });
+    recording?.addEventListener('toggle', syncVideo);
+    // Collapsed recordings never play invisibly. Native controls remain usable.
+    if (video) {
+      video.controls = true;
+      video.autoplay = false;
+      video.pause();
     }
+    if (toggle) toggle.hidden = false;
+    publish();
+  }
+
+  function setupHero() {
+    const canvas = document.getElementById('heroCanvas');
+    const stage = document.getElementById('heroStage');
+    if (!canvas || !stage) return;
+    let context;
+    try { context = canvas.getContext('2d', { alpha: true }); } catch { return; }
+    if (!context) return;
+    let width = 0;
+    let height = 0;
+    let frame = 0;
+    let elapsed = 0;
+    let lastFrame = 0;
+    let visible = true;
+    let paused = document.body.classList.contains('motion-paused');
+    let pointerX = 0;
+    let pointerY = 0;
+    let targetX = 0;
+    let targetY = 0;
+    const tau = Math.PI * 2;
+    const surface = [];
+    const major = 48;
+    const minor = 14;
+    // A bounded 672-point surface. No libraries, textures, GPU, or external assets.
+    for (let ring = 0; ring < major; ring++) {
+      const u = ring / major * tau;
+      const points = [];
+      for (let side = 0; side < minor; side++) {
+        const v = side / minor * tau;
+        const tube = .47 + Math.sin(u * 3) * .07;
+        const radius = 1.52 + tube * Math.cos(v);
+        points.push([radius * Math.cos(u), tube * Math.sin(v), radius * Math.sin(u)]);
+      }
+      surface.push(points);
+    }
+
+    function rotate(point, x, y, z) {
+      const [px, py, pz] = point;
+      const cx = Math.cos(x), sx = Math.sin(x);
+      const cy = Math.cos(y), sy = Math.sin(y);
+      const cz = Math.cos(z), sz = Math.sin(z);
+      const ry = py * cx - pz * sx;
+      const rz = py * sx + pz * cx;
+      const rx = px * cy + rz * sy;
+      const depth = -px * sy + rz * cy;
+      return [rx * cz - ry * sz, rx * sz + ry * cz, depth];
+    }
+    function project(point) {
+      const scale = Math.min(width, height) * .78 / (4.8 - point[2]);
+      return { x: width * .5 + point[0] * scale, y: height * .5 + point[1] * scale, z: point[2] };
+    }
+    function path(points, color, lineWidth, close = false) {
+      context.beginPath();
+      points.forEach((point, index) => {
+        if (index) context.lineTo(point.x, point.y);
+        else context.moveTo(point.x, point.y);
+      });
+      if (close) context.closePath();
+      context.strokeStyle = color;
+      context.lineWidth = lineWidth;
+      context.stroke();
+    }
+
+    function draw() {
+      if (!width || !height) return;
+      const time = elapsed * .001;
+      const rx = .9 + Math.sin(time * .17) * .14 + pointerY * .12;
+      const ry = time * .105 + pointerX * .14;
+      const rz = -.47 + Math.sin(time * .13) * .12;
+      context.clearRect(0, 0, width, height);
+      const glow = context.createRadialGradient(width * .5, height * .5, 0, width * .5, height * .5, Math.min(width, height) * .45);
+      glow.addColorStop(0, 'rgba(52, 52, 52, .11)');
+      glow.addColorStop(.45, 'rgba(86, 86, 86, .055)');
+      glow.addColorStop(1, 'rgba(160, 160, 160, 0)');
+      context.fillStyle = glow;
+      context.fillRect(0, 0, width, height);
+
+      // Delicate orbital paths give the object a stable spatial reference.
+      for (let orbit = 0; orbit < 3; orbit++) {
+        const points = [];
+        for (let step = 0; step <= 96; step++) {
+          const angle = step / 96 * tau;
+          const raw = [Math.cos(angle) * 2.47, Math.sin(angle) * 2.47, 0];
+          points.push(project(rotate(raw, .8 + orbit * .64, .2 + orbit * .75, -.5)));
+        }
+        context.setLineDash(orbit === 1 ? [2, 7] : []);
+        path(points, orbit === 1 ? '#2626264a' : '#66666640', .7);
+        context.setLineDash([]);
+        const phase = (time * .028 + orbit / 3) % 1 * tau;
+        const dot = project(rotate([Math.cos(phase) * 2.47, Math.sin(phase) * 2.47, 0], .8 + orbit * .64, .2 + orbit * .75, -.5));
+        context.beginPath();
+        context.arc(dot.x, dot.y, 2.6, 0, tau);
+        context.fillStyle = '#111111';
+        context.fill();
+      }
+
+      const projected = surface.map(ring => ring.map(point => project(rotate(point, rx, ry, rz))));
+      const curves = [];
+      for (let ring = 0; ring < major; ring++) {
+        const points = projected[ring];
+        curves.push({ points, z: points.reduce((sum, p) => sum + p.z, 0) / minor, close: true });
+      }
+      for (let side = 0; side < minor; side += 2) {
+        const points = projected.map(ring => ring[side]);
+        curves.push({ points, z: points.reduce((sum, p) => sum + p.z, 0) / major, close: true });
+      }
+      curves.sort((a, b) => a.z - b.z);
+      curves.forEach(curve => {
+        const alpha = .19 + (curve.z + 2) / 4 * .44;
+        path(curve.points, 'rgba(32, 32, 32, ' + alpha.toFixed(3) + ')', .75, true);
+      });
+      for (let ring = 0; ring < major; ring += 4) {
+        for (let side = 0; side < minor; side += 3) {
+          const dot = projected[ring][side];
+          if (dot.z < -.5) continue;
+          context.fillStyle = 'rgba(13, 13, 13, ' + (.35 + dot.z * .22).toFixed(3) + ')';
+          context.fillRect(dot.x - .65, dot.y - .65, 1.3, 1.3);
+        }
+      }
+
+      const vertices = [
+        [-.57,-.57,-.57],[.57,-.57,-.57],[.57,.57,-.57],[-.57,.57,-.57],
+        [-.57,-.57,.57],[.57,-.57,.57],[.57,.57,.57],[-.57,.57,.57],
+      ].map(point => project(rotate(point, -.32 + pointerY * .1, .64 + time * .08 + pointerX * .1, -.16)));
+      const faces = [[0,1,2,3],[4,7,6,5],[0,4,5,1],[3,2,6,7],[0,3,7,4],[1,5,6,2]]
+        .map((ids, index) => ({ points: ids.map(id => vertices[id]), index, z: ids.reduce((sum, id) => sum + vertices[id].z, 0) / 4 }))
+        .sort((a,b) => a.z-b.z);
+      faces.forEach(face => {
+        context.beginPath();
+        face.points.forEach((point, index) => index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y));
+        context.closePath();
+        const gradient = context.createLinearGradient(width * .4, height * .35, width * .6, height * .65);
+        gradient.addColorStop(0, face.z > 0 ? '#212121ed' : '#8a8a8ae6');
+        gradient.addColorStop(1, face.z > 0 ? '#9c9c9ced' : '#c8c8c8ed');
+        context.fillStyle = gradient;
+        context.fill();
+        context.strokeStyle = 'rgba(9, 9, 9, ' + (face.z > 0 ? '.7' : '.2') + ')';
+        context.lineWidth = .9;
+        context.stroke();
+      });
+    }
+
+    const active = () => !paused && visible && !document.hidden;
+    function animate(now) {
+      frame = 0;
+      if (!active()) return;
+      if (!lastFrame) lastFrame = now;
+      const delta = now - lastFrame;
+      if (delta >= 1000 / 30) {
+        elapsed += Math.min(delta, 70);
+        lastFrame = now;
+        pointerX += (targetX - pointerX) * .08;
+        pointerY += (targetY - pointerY) * .08;
+        draw();
+      }
+      frame = window.requestAnimationFrame(animate);
+    }
+    function sync() {
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = 0;
+      lastFrame = 0;
+      if (active()) frame = window.requestAnimationFrame(animate);
+    }
+    function resize() {
+      const bounds = canvas.getBoundingClientRect();
+      width = bounds.width;
+      height = bounds.height;
+      const dpr = Math.min(window.devicePixelRatio || 1, width < 500 ? 1 : 1.5);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      draw();
+    }
+    stage.addEventListener('pointermove', event => {
+      if (paused || event.pointerType === 'touch') return;
+      const bounds = stage.getBoundingClientRect();
+      targetX = (event.clientX - bounds.left) / bounds.width * 2 - 1;
+      targetY = (event.clientY - bounds.top) / bounds.height * 2 - 1;
+    }, { passive: true });
+    stage.addEventListener('pointerleave', () => { targetX = 0; targetY = 0; });
+    document.addEventListener('site-motion-change', event => { paused = event.detail.paused; sync(); });
+    document.addEventListener('visibilitychange', sync);
+    let visibilityObserver;
+    if ('IntersectionObserver' in window) {
+      visibilityObserver = new IntersectionObserver(entries => { visible = entries[0].isIntersecting; sync(); }, { threshold: .01 });
+      visibilityObserver.observe(stage);
+    }
+    let resizeObserver;
+    if ('ResizeObserver' in window) {
+      resizeObserver = new ResizeObserver(resize);
+      resizeObserver.observe(stage);
+    } else window.addEventListener('resize', resize, { passive: true });
+    window.addEventListener('pagehide', () => { visible = false; sync(); });
+    window.addEventListener('pageshow', () => {
+      const bounds = stage.getBoundingClientRect();
+      visible = bounds.bottom > 0 && bounds.top < window.innerHeight;
+      sync();
+    });
+    resize();
+    stage.classList.add('canvas-ready');
+    sync();
+  }
+
+  function setupSectionTracking() {
+    if (!('IntersectionObserver' in window)) return;
+    const links = [...document.querySelectorAll('.site-nav a[href^="#"]')];
+    const sections = links.map(link => document.querySelector(link.getAttribute('href'))).filter(Boolean);
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        for (const link of links) {
+          if (link.getAttribute('href') === '#' + entry.target.id) link.setAttribute('aria-current', 'location');
+          else link.removeAttribute('aria-current');
+        }
+      }
+    }, { rootMargin: '-20% 0px -65% 0px' });
+    sections.forEach(section => observer.observe(section));
   }
 
   setupNavigation();
   setupProgress();
   setupReveal();
-  setupCounters();
   setupDemo();
   setupCopy();
   setupCatalog();
-  setupScrollSpy();
-  setupCardMotion();
-  setupShowcaseVideo();
+  setupMotion();
+  setupHero();
+  setupSectionTracking();
 })();

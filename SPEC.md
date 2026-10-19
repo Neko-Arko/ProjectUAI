@@ -1,8 +1,8 @@
 # Project UAI — contract
 
-Current client release: **3.5.6 — October 18, 2026**.
+Current client release: **3.6.0 — October 19, 2026**.
 
-Bridge and Windows desktop release 3.5.6 use verified automatic GitHub updates.
+Bridge and Windows desktop release 3.6.0 use verified automatic GitHub updates.
 Bridge worker replacement waits for idle work and retains its session token;
 desktop app updates stage for restart with a retained fallback. Desktop detects
 Node.js 18+ or downloads a verified LTS runtime per user instead of bundling Node.
@@ -1434,7 +1434,13 @@ node bridge/tests/run.js --browser-only # requires external Playwright
 node tools/build_site.js      # actual tool catalog and root/docs site copies
 node tools/build_site.js --check
 python test/site_static.py    # structural checks; no browser or image loading
+node test/site_browser.js     # responsive site behavior; requires external Playwright
 ```
+
+For browser checks, install Playwright and Chromium outside the repository and
+set `PLAYWRIGHT_MODULE` to the absolute Playwright package directory (for example,
+`$env:PLAYWRIGHT_MODULE = 'C:\path\to\node_modules\playwright'` in PowerShell).
+`UAI_SCREENSHOTS` optionally saves website review images.
 
 Authenticated bridge contact automatically selects Web runtime; disconnect
 restores Game for subsequent requests. Active Cowork inference has no overall
@@ -1563,6 +1569,14 @@ browser Origin/Fetch Metadata, and requires JSON and the constant-time token che
 It returns the operation status and JSON body in a schema-1 envelope. Job identity,
 leases, cancellation and native deadline/slot ownership retain their existing rules.
 Older companions cannot select this profile.
+
+Companion 3.6.0 decodes gzip POST bodies before interpreting JSON, including a
+gzip signature when the native wrapper omitted Content-Encoding. Both wire and
+expanded bodies have an 8 MiB limit, including chunked requests. Invalid gzip,
+invalid UTF-8 and unsupported encodings return fixed error categories without
+logging request content. Executor errors preserve their status in the POST
+response envelope. This fixes compressed submissions rejected before token or
+inference validation; it does not authorize inference replay or pairing resets.
 
 Updated companions advertise `capabilities.inference = {schema:1, unlimited:true}`.
 With the normal `agent.requestUnlimited` setting, default inference uses an

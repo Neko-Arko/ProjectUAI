@@ -17,7 +17,7 @@ const MAX_REPLY = 8 << 20;
 const WAIT_MS = 150;
 const REQUIRED_ROUTES = ['/api/model', '/api/session', '/api/session/{sessionID}', '/api/session/{sessionID}/prompt',
   '/api/session/{sessionID}/message', '/api/session/{sessionID}/interrupt', '/api/session/{sessionID}/permission', '/api/experimental/mcp/{server}'];
-const missing = 'Install OpenCode Desktop from https://opencode.ai, then restart Cowork. OpenCode free models require the desktop workaround. On mobile, OpenCode requires the UAI Relay app from Discord.';
+const missing = 'OpenCode CLI not found. Install OpenCode Desktop or run npm install -g @opencode/cli, then restart Cowork.';
 const pause = (ms, signal) => new Promise((resolve, reject) => {
   if (signal?.aborted) { reject(Error('Stopped')); return; }
   const abort = () => { clearTimeout(timer); reject(Error('Stopped')); };
@@ -33,28 +33,94 @@ function official(url) {
   } catch { return false; }
 }
 
-function findBinary(env = process.env, platform = process.platform) {
-  if (env.UAI_OPENCODE_DISABLED === '1') return null;
-  const names = platform === 'win32' ? ['opencode-cli.exe', 'opencode.exe'] : ['opencode-cli', 'opencode'];
-  const candidates = [];
-  if (env.UAI_OPENCODE_BINARY) candidates.push(env.UAI_OPENCODE_BINARY);
+function findBinaries(env = process.env, platform = process.platform, arch = process.arch) {
+  const value = name => env[name] ?? (platform === 'win32' ? env[Object.keys(env).find(key => key.toLowerCase() === name.toLowerCase())] : undefined);
+  if (value('UAI_OPENCODE_DISABLED') === '1') return [];
+  const clean = entry => typeof entry === 'string' ? entry.trim().replace(/^"(.*)"$/, '$1') : '';
+  const windows = platform === 'win32', extension = windows ? '.exe' : '';
+  const cli = 'opencode-cli' + extension, command = 'opencode' + extension;
+  const candidates = new Set(), modules = new Set();
+  const add = file => { if (file && path.isAbsolute(file)) candidates.add(file); };
+  const addModules = folder => { if (folder && path.isAbsolute(folder)) modules.add(folder); };
+  const addBin = folder => {
+    folder = clean(folder);
+    if (!path.isAbsolute(folder)) return;
+    add(path.join(folder, cli));
+    add(path.join(folder, 'resources', cli));
+    // A Desktop launcher on PATH has the same name as the CLI on Windows.
+    if (!windows || !fs.existsSync(path.join(folder, 'resources', 'app.asar'))) add(path.join(folder, command));
+    addModules(path.join(folder, 'node_modules'));
+    if (path.basename(folder) === '.bin') addModules(path.dirname(folder));
+    if (!windows) addModules(path.join(path.dirname(folder), 'lib', 'node_modules'));
+  };
+  const override = value('UAI_OPENCODE_BINARY');
+  if (override) add(clean(override));
   else {
-    if (platform === 'win32' && env.LOCALAPPDATA) candidates.push(path.join(env.LOCALAPPDATA, 'Programs', '@opencodedesktop', 'resources', 'opencode-cli.exe'));
-    if (platform === 'darwin') candidates.push('/Applications/OpenCode.app/Contents/MacOS/opencode-cli');
-    for (const folder of (env.PATH || env.Path || '').split(path.delimiter)) {
-      if (path.isAbsolute(folder)) for (const name of names) candidates.push(path.join(folder, name));
+    const home = clean(value(windows ? 'USERPROFILE' : 'HOME') || value('HOME'));
+    const local = clean(value('LOCALAPPDATA')), roaming = clean(value('APPDATA'));
+    if (windows) {
+      for (const root of [local && path.join(local, 'Programs'), value('ProgramFiles'), value('ProgramFiles(x86)'), local]) {
+        if (!root || !path.isAbsolute(root)) continue;
+        for (const name of ['@opencodedesktop', 'OpenCode']) {
+          add(path.join(root, name, 'resources', cli));
+          add(path.join(root, name, cli));
+        }
+      }
+    } else if (platform === 'darwin') {
+      for (const root of [home && path.join(home, 'Applications'), '/Applications'].filter(Boolean)) {
+        add(path.join(root, 'OpenCode.app', 'Contents', 'Resources', cli));
+        add(path.join(root, 'OpenCode.app', 'Contents', 'MacOS', cli));
+      }
     }
-    if (env.USERPROFILE || env.HOME) for (const name of names) candidates.push(path.join(env.USERPROFILE || env.HOME, '.opencode', 'bin', name));
+    for (const folder of (value('PATH') || '').split(windows ? ';' : ':')) addBin(folder);
+    for (const folder of [value('NPM_CONFIG_PREFIX'), value('NVM_SYMLINK'), value('NVM_BIN'),
+      windows && roaming && path.join(roaming, 'npm'), windows && value('ProgramFiles') && path.join(value('ProgramFiles'), 'nodejs'),
+      home && path.join(home, '.opencode', 'bin'), home && path.join(home, '.local', 'bin')]) if (folder) addBin(folder);
+    const bun = clean(value('BUN_INSTALL') || (home && path.join(home, '.bun')));
+    if (bun && path.isAbsolute(bun)) {
+      addBin(path.join(bun, 'bin'));
+      addModules(path.join(bun, 'install', 'global', 'node_modules'));
+    }
+    const pnpm = clean(value('PNPM_HOME'));
+    if (pnpm && path.isAbsolute(pnpm)) { addBin(pnpm); addModules(path.join(pnpm, 'global', '5', 'node_modules')); }
+    // npm and Bun expose shell shims on Windows. Resolve their installed native
+    // payloads directly instead of asking a shell to interpret the shim.
+    const nativePlatform = windows ? 'windows' : platform;
+    const variant = arch === 'x64' ? ['-baseline', ''] : [''];
+    for (const folder of modules) {
+      for (const name of ['@opencode/cli', 'opencode-ai']) {
+        const packageRoot = path.join(folder, name);
+        add(path.join(packageRoot, 'bin', command));
+        add(path.join(packageRoot, 'bin', '.opencode'));
+        for (const suffix of variant) {
+          const dependency = (name === '@opencode/cli' ? '@opencode/cli-' : 'opencode-') + nativePlatform + '-' + arch + suffix;
+          add(path.join(packageRoot, 'node_modules', dependency, 'bin', command));
+          add(path.join(folder, dependency, 'bin', command));
+        }
+      }
+    }
   }
+  const installed = new Set();
   for (const candidate of candidates) {
+    let descriptor;
     try {
-      if (!path.isAbsolute(candidate) || (platform === 'win32' && !candidate.toLowerCase().endsWith('.exe'))) continue;
       if (!fs.statSync(candidate).isFile()) continue;
-      fs.accessSync(candidate, platform === 'win32' ? fs.constants.F_OK : fs.constants.X_OK);
-      return fs.realpathSync(candidate);
-    } catch { /* Try the next installed native binary. Never invoke a shell shim. */ }
+      fs.accessSync(candidate, windows ? fs.constants.F_OK : fs.constants.X_OK);
+      descriptor = fs.openSync(candidate, 'r');
+      const header = Buffer.alloc(4);
+      if (fs.readSync(descriptor, header, 0, 4, 0) !== 4) continue;
+      const native = windows ? header[0] === 0x4d && header[1] === 0x5a
+        : platform === 'darwin' ? ['feedface', 'feedfacf', 'cefaedfe', 'cffaedfe', 'cafebabe', 'bebafeca', 'cafebabf', 'bfbafeca'].includes(header.toString('hex'))
+          : header.equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]));
+      if (native) installed.add(fs.realpathSync(candidate));
+    } catch { /* Missing, inaccessible or shell-only installation; try the next native payload. */ }
+    finally { if (descriptor !== undefined) fs.closeSync(descriptor); }
   }
-  return null;
+  return [...installed];
+}
+
+function findBinary(env = process.env, platform = process.platform, arch = process.arch) {
+  return findBinaries(env, platform, arch)[0] || null;
 }
 
 function jsonRequest(base, password, route, method = 'GET', body, signal, timeout = 5000) {
@@ -158,10 +224,12 @@ function responseBody(model, message, calls, responses) {
     finish_reason: message?.finish === 'length' ? 'length' : calls.length ? 'tool_calls' : 'stop' }] };
 }
 
-function createOpenCode({ env = process.env, binary = findBinary(env), binaryArgs = [], startupMs = 30000, pollMs = WAIT_MS } = {}) {
+function createOpenCode({ env = process.env, binary, binaryArgs = [], startupMs = 30000, pollMs = WAIT_MS } = {}) {
   let child, directory, base, password, rpcServer, rpcSecret, starting, closed = false;
   const enabled = env.UAI_OPENCODE_DISABLED !== '1';
-  if (!enabled) binary = null;
+  const binaries = !enabled ? [] : binary === undefined ? findBinaries(env) : binary ? [binary] : [];
+  binary = binaries[0] || null;
+  const unavailable = env.UAI_OPENCODE_BINARY ? 'The configured OpenCode CLI was not found. Check UAI_OPENCODE_BINARY, then restart Cowork.' : missing;
   let state = !enabled ? 'disabled' : binary ? 'starting' : 'missing', modelsCache = [], version;
   let failure = 'OpenCode could not start. Update OpenCode Desktop and restart Cowork.';
   const jobs = new Map();
@@ -171,12 +239,12 @@ function createOpenCode({ env = process.env, binary = findBinary(env), binaryArg
   const capability = () => ({ schema: 1, enabled, available: !!binary && !closed && state !== 'failed', state, models: '/api/opencode/models',
     ...(binary ? { binary: path.basename(binary) } : {}), ...(version ? { version } : {}),
     ...(state === 'disabled' ? { message: 'OpenCode tunnel is turned off. Enable it in the desktop app, then start Cowork again.' }
-      : state === 'missing' ? { message: help(missing) } : state === 'failed' ? { message: help(failure) } : {}) });
+      : state === 'missing' ? { message: help(unavailable) } : state === 'failed' ? { message: help(failure) } : {}) });
 
   async function start() {
     if (closed) throw Error('OpenCode bridge stopped');
     if (!enabled) throw Error('OpenCode tunnel is turned off');
-    if (!binary) throw Error(missing);
+    if (!binary) throw Error(unavailable);
     if (starting) return starting;
     starting = (async () => {
       directory = fs.mkdtempSync(path.join(os.tmpdir(), 'project-uai-opencode-'));
@@ -232,36 +300,52 @@ function createOpenCode({ env = process.env, binary = findBinary(env), binaryArg
       for (const name of Object.keys(isolated)) {
         if (/(?:^|_)(?:API_KEY|API_TOKEN|ACCESS_TOKEN|AUTH_TOKEN|SECRET_KEY)$/.test(name) || name === 'OPENCODE_AUTH_JSON') delete isolated[name];
       }
-      // Check the selected executable itself, not the desktop app's adjacent
-      // version file. Old compatible v2 builds may omit this diagnostic.
-      version = await new Promise(resolve => execFile(binary, [...binaryArgs, '--version'],
-        { cwd: directory, env: isolated, windowsHide: true, timeout: 4000, maxBuffer: 4096 }, (error, stdout) => {
-          const match = !error && /^opencode\s+v?(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)\s*$/i.exec(stdout.trim());
-          resolve(match ? match[1] : undefined);
-        }));
-      if (closed) throw Error('OpenCode bridge stopped');
-      child = spawn(binary, [...binaryArgs, 'serve', '--port', String(port), '--hostname', '127.0.0.1'],
-        { cwd: directory, env: isolated, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-      child.stdout.resume(); child.stderr.resume(); // Never expose credentials or provider output in launcher logs.
-      child.on('error', () => { state = 'failed'; });
-      child.on('exit', () => { if (!closed) state = 'failed'; });
-      const expires = Date.now() + startupMs;
-      while (!closed && Date.now() < expires) {
-        if (state === 'failed') break;
-        try {
-          const spec = await api('/openapi.json');
-          if (!REQUIRED_ROUTES.every(route => spec.paths?.[route])) {
-            failure = 'The installed OpenCode CLI has an incompatible server API. Install an updated OpenCode Desktop v2 and restart Cowork.';
+      for (const candidate of binaries) {
+        if (closed) throw Error('OpenCode bridge stopped');
+        binary = candidate; state = 'starting'; modelsCache = [];
+        failure = 'OpenCode could not start. Update OpenCode Desktop and restart Cowork.';
+        // Probe each installed native candidate before admitting inference. An
+        // old PATH installation must not hide a compatible npm/Desktop copy.
+        version = await new Promise(resolve => execFile(binary, [...binaryArgs, '--version'],
+          { cwd: directory, env: isolated, windowsHide: true, timeout: 4000, maxBuffer: 4096 }, (error, stdout) => {
+            const match = !error && /^(?:opencode\s+)?v?(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)\s*$/i.exec(stdout.trim());
+            resolve(match ? match[1] : undefined);
+          }));
+        if (closed) throw Error('OpenCode bridge stopped');
+        const owned = spawn(binary, [...binaryArgs, 'serve', '--port', String(port), '--hostname', '127.0.0.1'],
+          { cwd: directory, env: isolated, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+        child = owned;
+        let exited = false;
+        owned.stdout.resume(); owned.stderr.resume(); // Never expose credentials or provider output in launcher logs.
+        const ended = () => { exited = true; if (!closed && child === owned && state === 'ready') state = 'failed'; };
+        owned.on('error', ended); owned.on('exit', ended);
+        const expires = Date.now() + startupMs;
+        while (!closed && !exited && Date.now() < expires) {
+          try {
+            const spec = await api('/openapi.json');
+            if (!REQUIRED_ROUTES.every(route => spec.paths?.[route])) {
+              failure = 'OpenCode CLI' + (version ? ' ' + version : '') + ' has an incompatible server API. Install OpenCode Desktop v2 or npm install -g @opencode/cli, then restart Cowork.';
+              break;
+            }
+            const list = await api('/api/model');
+            modelsCache = modelRows(list);
+            if (modelsCache.length && !exited) { state = 'ready'; return; }
+            failure = 'OpenCode is installed but returned no supported free models. Update OpenCode and restart Cowork.';
+          } catch { /* The native server and its built-in provider plugin start independently. */ }
+          await pause(pollMs);
+        }
+        if (closed) throw Error('OpenCode bridge stopped');
+        // Never overlap two owned servers or change binaries after admission.
+        if (owned.pid && owned.exitCode === null && owned.signalCode === null) {
+          const stopped = once(owned, 'exit').catch(() => {});
+          owned.kill(); await Promise.race([stopped, pause(2500)]);
+          if (owned.exitCode === null && owned.signalCode === null) {
+            failure = 'OpenCode did not stop during setup. Stop and start Cowork to try again.';
             break;
           }
-          const list = await api('/api/model');
-          modelsCache = modelRows(list);
-          if (modelsCache.length) { state = 'ready'; return; }
-        } catch { /* The native server and its built-in provider plugin start independently. */ }
-        await pause(pollMs);
+        }
       }
-      if (closed) throw Error('OpenCode bridge stopped');
-      state = 'failed'; child?.kill();
+      state = 'failed';
       throw Error(failure);
     })().catch(error => { if (!closed) state = 'failed'; throw error; });
     return starting;

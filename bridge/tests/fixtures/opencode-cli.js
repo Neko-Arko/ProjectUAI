@@ -1,6 +1,7 @@
 'use strict';
 // Offline native-process fixture. It never contacts an upstream provider.
-if (process.argv.includes('--version')) { process.stdout.write('opencode v2.0.32\n'); process.exit(0); }
+const fixtureOldBinary = process.env.UAI_OPENCODE_FIXTURE_OLD_BINARY === process.execPath;
+if (process.argv.includes('--version')) { process.stdout.write((process.env.UAI_OPENCODE_FIXTURE_VERSION || (fixtureOldBinary ? '1.19.3' : 'opencode v2.0.32')) + '\n'); process.exit(0); }
 const http = require('node:http');
 const fs = require('node:fs');
 const sessions = new Map(), servers = new Map();
@@ -14,7 +15,7 @@ const server = http.createServer(async (req, res) => {
   let raw = ''; for await (const chunk of req) raw += chunk;
   const body = raw ? JSON.parse(raw) : {}, url = new URL(req.url, 'http://localhost');
   const parts = url.pathname.split('/'), id = parts[3], session = sessions.get(id);
-  if (url.pathname === '/openapi.json') return reply(res, { paths: Object.fromEntries((process.env.UAI_OPENCODE_FIXTURE_OLD_API === '1'
+  if (url.pathname === '/openapi.json') return reply(res, { paths: Object.fromEntries((fixtureOldBinary || process.env.UAI_OPENCODE_FIXTURE_OLD_API === '1'
     ? ['/api/model', '/api/session/{sessionID}/prompt']
     : ['/api/model', '/api/session', '/api/session/{sessionID}', '/api/session/{sessionID}/prompt', '/api/session/{sessionID}/message',
       '/api/session/{sessionID}/interrupt', '/api/session/{sessionID}/permission', '/api/experimental/mcp/{server}']).map(route => [route, {}])) });
@@ -60,5 +61,5 @@ const server = http.createServer(async (req, res) => {
   if (session && req.method === 'DELETE') { sessions.delete(id); log({ type: 'delete', id }); return reply(res, {}); }
   reply(res, {}, 404);
 });
-server.listen(port, '127.0.0.1', () => log({ type: 'ready', pid: process.pid, port, directory: process.cwd(), passwordLength: password.length,
+server.listen(port, '127.0.0.1', () => log({ type: 'ready', pid: process.pid, legacy: fixtureOldBinary, port, directory: process.cwd(), passwordLength: password.length,
   isolated: ['XDG_DATA_HOME', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME'].every(key => process.env[key].startsWith(process.cwd())) }));

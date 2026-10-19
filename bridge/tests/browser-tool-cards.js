@@ -1,4 +1,4 @@
-// Compact tool cards preserve exact inputs/results while making failures readable.
+// The activity drawer keeps tool details optional and preserves exact inputs/results.
 'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -48,7 +48,11 @@ const { startBridge } = require('./helpers/bridge');
       event({ kind: 'tool:call', id: 'shared', name: 'run_luau', arguments: rawArguments }),
       event({ kind: 'subagent:tool', id: 'child', callId: 'shared', name: 'run_luau', arguments: '{}' }),
     ] });
-    await cards.nth(1).waitFor();
+    await cards.nth(1).waitFor({ state: 'attached' });
+    assert.equal(await page.locator('.response-activity').count(), 1, 'main and delegated calls share one activity drawer');
+    assert.equal(await cards.first().isVisible(), false, 'individual tool calls stay out of the answer by default');
+    assert.equal(await page.locator('.activity-meta').textContent(), '2 steps');
+    await page.locator('.activity-summary').click();
     assert.equal(await cards.first().getAttribute('open'), null, 'running call starts compact');
     assert.equal(await cards.first().locator('.arguments').textContent(), '2 lines of Luau');
     assert.equal(await cards.first().locator('.tool-head > strong').textContent(), 'Run Luau', 'human-readable title retains the exact tool identity in details');
@@ -102,6 +106,9 @@ const { startBridge } = require('./helpers/bridge');
     assert.equal(await failed.locator('.tool-listing').first().isVisible(), false, 'raw payload stays out of the collapsed card');
     assert.equal(await failed.locator('.deadline-help').count(), 0, 'ordinary tool errors do not repeat support links');
     await failed.locator(':scope > summary').click();
+    assert.equal(await failed.locator('.error-title').textContent(), 'This step could not finish');
+    assert.equal(await failed.locator('.error-details').getAttribute('open'), null, 'full diagnostics stay optional inside the readable error');
+    await failed.locator('.error-details > summary').click();
     await failed.getByRole('button', { name: 'Copy Full error', exact: true }).click();
     assert.equal(await clipboard(), fullError, 'pretty error retains the exact original payload for Copy');
     const metadata = failed.locator('summary').filter({ hasText: /^Result data$/ }).locator('..');
@@ -139,6 +146,9 @@ const { startBridge } = require('./helpers/bridge');
     ];
     await push({ sessionId: 'tool-cards', snapshot: narrowEvents });
     await page.waitForFunction(() => document.querySelectorAll('.tool-status')[1]?.textContent === 'No saved result');
+    assert.equal(await page.locator('.response-activity').getAttribute('open'), null, 'replayed tool activity starts collapsed');
+    assert.match(await page.locator('.activity-meta').textContent(), /1 failed.*1 without a saved result/);
+    await page.locator('.activity-summary').click();
     assert.equal(await cards.nth(1).getAttribute('data-status'), 'unknown', 'restored idle call never invents an outcome');
     assert.equal(await cards.nth(1).locator('.tool-outcome').textContent(), 'No result was kept in this transcript.');
     for (const width of [390, 320]) {

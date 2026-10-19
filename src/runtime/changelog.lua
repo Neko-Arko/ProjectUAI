@@ -19,6 +19,34 @@ return function(env)
 	local CATEGORY_ORDER = { "added", "improved", "fixed" }
 	local ENTRIES = {
 		{
+			version = "3.6.0",
+			revision = "2026-10-19-clear-conversations",
+			date = "October 19, 2026",
+			title = "Clearer conversations and reliable connections",
+			highlights = "A new interactive website, answer-focused bridge conversations, better OpenCode detection, and a simpler companion with compressed-request support.",
+			sections = {
+				{ category = "improved", label = "Project UAI website", items = {
+					"A redesigned responsive page brings UAI to life with an interactive 3D centerpiece and animated SVGs. Explore tools, install the client and download the apps, with motion controls and reduced-motion support.",
+				} },
+				{ category = "improved", label = "Bridge conversations", items = {
+					"Each response has one heading and an uninterrupted answer. Tools, thinking and delegated work are grouped into a collapsed activity drawer; approvals and failures stay visible.",
+					"Reasoning opens into a formatted view with its own Copy action. Errors explain what happened and offer recovery actions, with technical details available separately.",
+				} },
+				{ category = "fixed", label = "OpenCode discovery", items = {
+					"Find installed native CLI files behind npm and Bun launchers, in common Windows installation folders and macOS app resources. Quoted PATH entries and active nvm installations are supported.",
+					"Show the detected CLI version and useful setup guidance when its server API is incompatible.",
+				} },
+				{ category = "fixed", label = "Companion message decoding", items = {
+					"Read compressed POST messages before JSON validation, fixing invalid executor request errors for gzip submissions even when pairing already works. Request size limits, authentication and the original job identity remain enforced.",
+					"Invalid encodings give clear guidance without exposing message contents. Resetting pairing is not a remedy for a message-decoding failure.",
+				} },
+				{ category = "improved", label = "UAI Relay setup", items = {
+					"A redesigned companion puts connection status, Start/Stop and short setup steps first. Request activity stays compact, with advanced settings and diagnostics available when needed.",
+					"Install the matching 3.6.0 companion and desktop releases. Production Android updates preserve the existing signing identity and pairing.",
+				} },
+			},
+		},
+		{
 			version = "3.5.6",
 			revision = "2026-10-18-mobile-relay-supported",
 			date = "October 18, 2026",

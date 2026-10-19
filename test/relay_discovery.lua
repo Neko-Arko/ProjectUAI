@@ -500,4 +500,22 @@ case("DataModel cancellation preserves the original accepted job", function()
 	f.finish()
 end)
 
+case("an old companion encoding rejection gives update guidance without another inference", function()
+	local f = dataModelFixture()
+	check("DataModel connects", f.probe())
+	local rejected = 0
+	f.override = function(step, request)
+		if step == "inference" and request.method == "POST" then
+			rejected = rejected + 1
+			return f.reply({ error = "invalid executor request" }, 400)
+		end
+	end
+	local response = f.infer()
+	check("the rejection remains terminal", response and response.status == 599 and response.terminal and rejected == 1)
+	local message = f.h.json.decode(response.body).error.message
+	check("the user can fix the installed version without unpairing", message:find("Update UAI Relay", 1, true)
+		and message:find("Resetting pairing will not fix", 1, true) and f.link.usable())
+	f.finish()
+end)
+
 suite.finish()

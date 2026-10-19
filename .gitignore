@@ -7,6 +7,7 @@ desktop/release/
 desktop/src/**/bin/
 desktop/src/**/obj/
 companion/.gradle/
+companion/.kotlin/
 companion/build/
 companion/app/build/
 companion/local.properties

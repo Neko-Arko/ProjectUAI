@@ -3,7 +3,7 @@
 Use UAI in your browser while Roblox runs your tools and keeps the conversation.
 Run both on the same computer. The [Windows desktop app](../desktop/README.md)
 detects installed Node.js and offers a verified download if needed. Open the
-single **UAI-Bridge-3.5.6-win-x64.exe** download, complete Node setup, click **Start
+single **UAI-Bridge-3.6.0-win-x64.exe** download, complete Node setup, click **Start
 Cowork**, and load the updated UAI script. The browser opens and Roblox connects
 automatically on dedicated port **28791**. No terminal or token copying is needed.
 
@@ -36,13 +36,26 @@ The retired OpenCode HTTPS proxy is never used; the proxy supports AgentRouter o
 endpoint directly and never enter the isolated native free-model connection.
 The desktop-only free-model restriction does not apply to Go subscriptions.
 
-The bridge detects OpenCode Desktop's Windows `resources/opencode-cli.exe`, native
-`opencode-cli`/`opencode` binaries on PATH, and `~/.opencode/bin`. A custom native
-binary may be selected with the absolute `UAI_OPENCODE_BINARY` environment variable.
-Shell shims are not executed. `UAI_OPENCODE_DISABLED=1` disables this optional route.
+The bridge detects OpenCode Desktop's per-user and all-user Windows installations,
+macOS app bundles, native `opencode-cli`/`opencode` binaries on PATH, and
+`~/.opencode/bin`. It also finds native payloads behind npm and Bun shims, including
+the Windows user npm folder when the desktop app inherited an older PATH, active
+nvm paths, and custom `NPM_CONFIG_PREFIX`/`BUN_INSTALL` locations. For the current
+standalone v2 CLI, use `npm install -g @opencode/cli`; the legacy `opencode-ai`
+package may still install an incompatible v1 server. After installing, stop and
+start Cowork. Quoted PATH folders are supported. A custom native binary may be
+selected with the absolute `UAI_OPENCODE_BINARY` environment variable; an invalid
+override is reported as missing instead of silently selecting another installation.
+Shell shims and the Electron Desktop launcher are not executed.
+`UAI_OPENCODE_DISABLED=1` disables this optional route.
 OpenCode's v2 server API is required (verified with CLI 2.0.32). The bridge checks
 all required routes before accepting requests and reports the selected binary's
 actual version. Incompatible installations produce an update instruction.
+If more than one native installation is present, setup checks the next candidate
+after stopping an incompatible or failed one. An older CLI on PATH cannot hide a
+working v2 installation. This happens before inference; a running request never
+switches CLI processes or repeats inference. An explicit binary override selects
+only that installation.
 The desktop app's **OpenCode tunnel** switch persists between launches and applies
 when Cowork starts. It controls this private local connection, not a public tunnel.
 
@@ -106,7 +119,7 @@ Failed downloads or startup keep a working version. Git checkouts and executor
 download packages are never overwritten; updates live in a per-install user cache.
 
 Publish `dist/bridge-release.json` and `dist/uai-bridge-package.json` on the same
-official `v3.5.6` or `bridge-v3.5.6` GitHub release. Generate them with
+official `v3.6.0` or `bridge-v3.6.0` GitHub release. Generate them with
 `node tools/build_bridge.js` after reviewing final bridge/web inputs, inspect
 the outputs, then run `node tools/build_bridge.js --check` and focused tests.
 Later releases must bump `bridge/release.js` and use the matching release tag.
@@ -132,6 +145,13 @@ and applies it on restart. An old 1.0 desktop ZIP needs one manual upgrade first
   An empty conversation centers the prompt and composer, with quick ideas below.
   Live answers format as they arrive; new text fades in while completed paragraphs
   and code remain steady. Thinking and tool details open when you want to read them.
+  Each user turn has one response heading and continuous answer text. Tools,
+  thinking and delegated updates share a collapsed **Activity** drawer below the
+  answer. Progress and failures remain visible in its summary; permission prompts
+  stay outside it. **Copy response** copies the answer without internal activity.
+  Expand reasoning for its formatted text and separate Copy action. Error cards
+  explain the problem and show recovery actions; the original diagnostic remains
+  available under technical details.
 - **Runtime follows the connection.** Successful authenticated bridge contact
   selects Web automatically, with live responses when the provider supports
   streaming. Disconnecting restores Game for subsequent requests. Roblox owns
@@ -259,9 +279,9 @@ short screens with full drafts, long task lists and model names, live question a
 selection updates, dialog errors, keyboard focus, contrast, and forced colors.
 Inspect the saved screenshots as well as checking geometry. These fixtures do not
 replace a live executor check. See the [UI audit](UI_AUDIT.md) for the findings.
-The [3.5.6 verification record](../docs/TESTING_3.5.6.md) records the current
-release checks. The [3.3.5 record](../docs/TESTING_3.3.5.md) remains available for
-the earlier release.
+The [3.6.0 verification record](../docs/TESTING_3.6.0.md) records the current
+release checks. The [3.5.6 record](../docs/TESTING_3.5.6.md) and
+[3.3.5 record](../docs/TESTING_3.3.5.md) remain available for the earlier releases.
 
 Protocol remains version 2. `/api/hello` advertises optional picture and normalized
 stream capabilities. `--legacy` disables pictures and uses compatibility delta

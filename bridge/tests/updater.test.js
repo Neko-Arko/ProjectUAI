@@ -202,6 +202,18 @@ test('queued commands and an unfinished request body block restart without dupli
   assert.equal((await inbox.json()).commands.filter(x => x.commandId === 'updater-queued-command').length, 1);
 });
 
+test('worker health keeps its actual version while supervisor activation status catches up', async t => {
+  const live = await running(t, fixture());
+  live.supervisor.send({ type: 'update-state', update: { state: 'restarting', currentVersion: '0.0.0', availableVersion: NEXT } });
+  let hello;
+  await until(async () => {
+    hello = await (await live.call('/api/hello')).json();
+    return hello.update.state === 'restarting';
+  }, 'worker receives activation metadata');
+  assert.equal(hello.update.currentVersion, CURRENT);
+  assert.equal(hello.update.availableVersion, NEXT);
+});
+
 test('active PC inference waits indefinitely; completion is retained until authoritative commit', async t => {
   const data = fixture(), live = await running(t, data); let providerResponse, received = 0;
   const provider = http.createServer((req, res) => { received++; providerResponse = res; req.resume(); });

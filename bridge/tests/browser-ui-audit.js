@@ -463,7 +463,9 @@ function contrast(foreground, background) {
     await navigate('chat');
     assert.equal(await page.locator('#transcript > .error .deadline-help').count(), 2, 'all error codes include Discord help');
     assert.equal(await page.locator('#transcript > .error .deadline-help').first().getAttribute('href'), 'https://discord.gg/9xYyyYuKap');
-    assert.equal(await page.locator('#transcript > .error .error-message').first().textContent(), timeoutText);
+    assert.equal(await page.locator('#transcript > .error .error-title').first().textContent(), 'The request took too long');
+    assert.equal(await page.locator('#transcript > .error .error-details pre').first().textContent(), timeoutText, 'the original diagnostic is retained behind its disclosure');
+    assert.equal(await page.locator('#transcript > .error .error-details').first().getAttribute('open'), null);
     await page.evaluate(() => {
       renderer.start({ id: 'deadline-preview', sessionId: 'audit' });
       renderer.done({ id: 'deadline-preview', sessionId: 'audit', state: 'failed', error: 'transport_timeout: request failed' });
