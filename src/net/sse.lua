@@ -16,6 +16,63 @@ return function(env)
 	-- tens of thousands of frames, and 10,000 cut it off -- discarding a whole
 	-- answer as "frame count exceeded".
 	local M = { limits = { body = 8 * 1024 * 1024, frame = 1024 * 1024, chunks = 200000, calls = 64, arguments = 256000 } }
+	local PROTOCOLS = {
+		chat = { label = "Chat Completions", marker = "[DONE] or finish_reason" },
+		anthropic = { label = "Anthropic Messages", marker = "message_stop or stop_reason" },
+		responses = { label = "Responses", marker = "response.completed" },
+		gemini = { label = "Google Gemini", marker = "finishReason" },
+	}
+	local RESPONSE_EVENTS = {
+		["response.created"] = true, ["response.in_progress"] = true, ["response.completed"] = true,
+		["response.failed"] = true, ["response.incomplete"] = true, ["response.cancelled"] = true,
+		["response.output_text.delta"] = true, ["response.output_text.done"] = true,
+		["response.output_item.added"] = true, ["response.output_item.done"] = true,
+		["response.content_part.added"] = true, ["response.content_part.done"] = true,
+		["response.function_call_arguments.delta"] = true, ["response.function_call_arguments.done"] = true,
+		["response.reasoning_summary_text.delta"] = true, ["response.reasoning_summary_text.done"] = true,
+		["response.reasoning_text.delta"] = true, ["response.reasoning_text.done"] = true,
+	}
+
+	-- Missing completion markers can mean truncation or the wrong wire protocol.
+	-- Observe only recognizable structures, retain no response text, and diagnose
+	-- a mismatch only when no events of the requested protocol were recognized.
+	-- This does not change completion criteria or reject optional vendor metadata.
+	function M.completionDiagnostic(protocol)
+		local expected = assert(PROTOCOLS[protocol], "unknown stream protocol")
+		local seen = {}
+		local self = {}
+		function self.observe(value, eventName)
+			if type(value) ~= "table" then return end
+			local kind = type(value.type) == "string" and value.type or eventName
+			local actual
+			if type(value.choices) == "table" and (type(value.choices[1]) == "table" or type(value.usage) == "table") then actual = "chat"
+			elseif (kind == "message_start" and type(value.message) == "table")
+				or (kind == "content_block_start" and type(value.content_block) == "table")
+				or ((kind == "content_block_delta" or kind == "message_delta") and type(value.delta) == "table")
+				or kind == "message_stop" then actual = "anthropic"
+			elseif RESPONSE_EVENTS[kind] and (type(value.response) == "table" or type(value.item) == "table"
+				or type(value.part) == "table" or type(value.delta) == "string" or type(value.text) == "string"
+				or type(value.arguments) == "string") then actual = "responses"
+			elseif (type(value.candidates) == "table" and type(value.candidates[1]) == "table")
+				or type(value.promptFeedback) == "table" then actual = "gemini" end
+			if actual then seen[actual] = (seen[actual] or 0) + 1 end
+		end
+		function self.error()
+			local actual, count
+			if not seen[protocol] then
+				for _, candidate in ipairs({ "chat", "anthropic", "responses", "gemini" }) do
+					if seen[candidate] and (not count or seen[candidate] > count) then actual, count = candidate, seen[candidate] end
+				end
+			end
+			local prefix = "malformed_stream: stream ended before completion; "
+			if actual then
+				return prefix .. "received " .. PROTOCOLS[actual].label .. " events while expecting " .. expected.label
+					.. ". Check the provider Protocol and Base URL."
+			end
+			return prefix .. "missing " .. expected.marker .. ". The provider or connection may have ended the response early."
+		end
+		return self
+	end
 
 	-- Keep a provider's actionable reason without retaining arbitrary response
 	-- objects. The terminal prefix prevents a failed stream from being retried.
@@ -305,6 +362,7 @@ return function(env)
 	-- text that has to be kept, not a second copy of every frame on the way in.
 	function M.parse(body)
 		local assembler = M.assembler()
+		local completion = M.completionDiagnostic("chat")
 		local streamError, done, frames = nil, false, 0
 		local decoder = M.decoder(function(frame)
 			frames = frames + 1
@@ -316,6 +374,7 @@ return function(env)
 			if payload == "[DONE]" then done = true; return true end
 			if payload ~= "" then
 				if type(decoded) == "table" then
+					completion.observe(decoded, frame.event)
 					assembler.feedChunk(decoded)
 				else streamError = streamError or "malformed_stream: invalid JSON frame" end
 			end
@@ -326,7 +385,7 @@ return function(env)
 		streamError = streamError or why
 		local result = assembler.result()
 		result.frames = frames
-		result.streamError = streamError or result.streamError or (not done and not result.finish and "malformed_stream: stream ended before completion" or nil)
+		result.streamError = streamError or result.streamError or (not done and not result.finish and completion.error() or nil)
 		return result
 	end
 

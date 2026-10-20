@@ -3271,7 +3271,6 @@ scenario("reasoning arrives folded, sized, and answers its switch", function()
 	handle.sessions.current().send("what is the answer")
 	harness.settle(10)
 
-	contains("the thinking is on screen", harness.textOf(), "weighing the options")
 	contains("under a header naming it", harness.textOf(), "Thinking")
 	-- Reasoning is billed as output and never appears in the reply, so its size is a
 	-- number the reader cannot get from anywhere else on the row.
@@ -3281,6 +3280,9 @@ scenario("reasoning arrives folded, sized, and answers its switch", function()
 	local card = harness.byName("Reasoning")
 	truthy("the row exists", card ~= nil)
 	truthy("and its body starts folded", card and harness.byName("Aside", card).Visible == false)
+	check("folded source does not occupy a native label", harness.byName("ThoughtText", card).Text, "")
+	harness.click(harness.byName("ReasoningHeader", card))
+	contains("opening shows the thinking", harness.textOf(), "weighing the options")
 
 	-- The switch used to be read only while a row was being built, so turning it off
 	-- left the conversation exactly as it was and read as a dead toggle.

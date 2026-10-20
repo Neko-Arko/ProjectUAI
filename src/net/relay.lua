@@ -32,13 +32,14 @@ return function(env)
 			clock.ms() + math.max(1, math.min(300, tonumber(spec.timeout) or 120)) * 1000)
 		local unlimited = transport.unlimited(spec, endpoint)
 		if unlimited then deadline = math.huge end
+		local nativeOwner = {}
 		local ended
 		local function short(method, path, body)
 			if clock.ms() >= deadline then return nil, "deadline: relay request budget expired" end
 			return call({ url = base .. path, method = method, body = body,
 				headers = { Authorization = "Bearer " .. token }, identity = "none", silent = true,
 				waitForSlot = true, timeout = math.min(5, (deadline - clock.ms()) / 1000), deadlineMs = deadline,
-				aborted = ended, executorProfile = executorProfile })
+				aborted = ended, executorProfile = executorProfile, nativeOwner = nativeOwner })
 		end
 		local cancelled = false
 		local function cancel()

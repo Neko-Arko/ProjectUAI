@@ -25,7 +25,7 @@ async function run(t, handler, opts = {}) {
   const id = 'job-' + Math.random().toString(36).slice(2);
   relay.start({ id, instance: relay.instance, url, sessionId: 's1', body: '{}' });
   for (let i = 0; i < 500 && relay.get(id).state === 'running'; i++) await sleep(5);
-  return { events, relay, id, view: relay.get(id) };
+  return { events, relay, id, url, view: relay.get(id) };
 }
 const done = events => events.find(e => e.kind === 'inference:done');
 const deltas = events => events.filter(e => e.kind === 'inference:delta');
@@ -125,6 +125,56 @@ test('a truncated stream (no [DONE]) fails instead of completing', async t => {
   });
   assert.equal(view.state, 'failed');
   assert.match(view.error, /ended before completion/i);
+});
+
+test('Chat and Messages final reasons complete at EOF without a separate sentinel', async t => {
+  for (const frames of [
+    [{ choices: [{ delta: { content: 'Ready' } }] }, { choices: [{ delta: {}, finish_reason: 'stop' }] }],
+    [{ type: 'content_block_delta', delta: { type: 'text_delta', text: 'Ready' } }, { type: 'message_delta', delta: { stop_reason: 'end_turn' } }],
+  ]) {
+    const raw = frames.map(frame => 'data: ' + JSON.stringify(frame)).join('\n\n');
+    let calls = 0;
+    const { events, view, relay, id, url } = await run(t, (req, res) => {
+      calls++; res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end(raw);
+    });
+    assert.equal(view.state, 'completed'); assert.equal(view.body, raw);
+    assert.equal(deltas(events).map(event => event.text).join(''), 'Ready');
+    assert.equal(done(events).state, 'completed');
+    assert.equal(relay.start({ id, instance: relay.instance, url, sessionId: 's1', body: '{}' }).state, 'completed');
+    assert.equal(calls, 1);
+  }
+});
+
+test('null, empty, invalid and unrelated finish reasons cannot complete truncated streams', async t => {
+  for (const final of [
+    ...[null, '', false, 1, {}].map(finish_reason => ({ choices: [{ delta: {}, finish_reason }] })),
+    ...[null, '', false, 1, {}].map(stop_reason => ({ type: 'message_delta', delta: { stop_reason } })),
+    { type: 'content_block_delta', delta: { text: 'Partial', stop_reason: 'end_turn' } },
+    { finish_reason: 'stop', stop_reason: 'end_turn' },
+    { type: 'response.output_text.delta', delta: 'Partial', stop_reason: 'end_turn' },
+  ]) {
+    const { view } = await run(t, (req, res) => {
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.end('data: ' + JSON.stringify(final) + '\n\n');
+    });
+    assert.equal(view.state, 'failed', JSON.stringify(final));
+    assert.match(view.error, /ended before completion/i);
+  }
+});
+
+test('a final reason does not hide a later streamed failure', async t => {
+  for (const final of [
+    { choices: [{ delta: { content: 'Partial' }, finish_reason: 'stop' }] },
+    { type: 'message_delta', delta: { stop_reason: 'end_turn' } },
+  ]) {
+    const { events, view } = await run(t, (req, res) => {
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.end('data: ' + JSON.stringify(final) + '\n\ndata: {"error":{"message":"late upstream failure"}}\n\n');
+    });
+    assert.equal(view.state, 'failed'); assert.equal(view.body, undefined);
+    assert.match(view.error, /late upstream failure/);
+    assert.equal(done(events).state, 'failed');
+  }
 });
 
 test('OpenCode Responses streams text, reasoning and tools and completes on response.completed', async t => {

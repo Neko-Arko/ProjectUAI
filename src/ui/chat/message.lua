@@ -908,17 +908,17 @@ return function(env)
 		local viewport = P.scroll(bodyRow, { name = "ThoughtViewport", size = UDim2.new(1, -indent, 0, 0),
 			position = UDim2.fromOffset(indent, 0), gap = theme.space.sm,
 			padding = { right = theme.space.sm, y = theme.space.xxs } })
-		-- Folded traces retain plain text. Format and measure only when opened;
-		-- repeated previews must not parse a long hidden trace on every frame.
-		local body = P.text(viewport.instance, { name = "ThoughtText", text = text, role = "small",
-			color = theme.color.textSecondary, rich = false, wrap = true, auto = "Y",
+		-- Retain folded traces in Lua only. Hidden AutoSize labels still hand their
+		-- full text to the engine, so defer that native layout work until opened.
+		local body = P.text(viewport.instance, { name = "ThoughtText", text = "", role = "small",
+			color = theme.color.textSecondary, rich = false, wrap = true,
 			alignY = "Top", size = UDim2.new(1, 0, 0, 0) })
 		P.text(viewport.instance, { name = "ReasoningNote",
 			text = "Visible reasoning may be summarized or shortened. Its estimated size is not the model's thinking budget or billed token usage.",
 			role = "caption", color = theme.color.textTertiary, wrap = true, auto = "Y",
 			size = UDim2.new(1, 0, 0, 0), layoutOrder = 1 })
 		local open = config.get("ui.expandThinking", false) == true
-		local formatted, plainText
+		local formatted, formattedText, formattedRich, plainText
 		local function drawBody()
 			if formatted ~= text then
 				local ok, rich = pcall(markdown.inline, text)
@@ -926,9 +926,10 @@ return function(env)
 				local plainOk, plain = pcall(markdown.plain, text)
 				plainText = ok and plainOk and type(plain) == "string" and plain or text
 				formatted = text
-				body.RichText = ok
-				body.Text = ok and rich or text
+				formattedRich, formattedText = ok, ok and rich or text
 			end
+			body.RichText = formattedRich
+			body.Text = formattedText
 		end
 		local fitting = false
 		local function fit()
@@ -955,9 +956,16 @@ return function(env)
 		holder.Destroying:Connect(unsubscribe)
 		local function setOpen(value)
 			open = value
+			if open then
+				drawBody()
+				body.AutomaticSize = Enum.AutomaticSize.Y
+			else
+				body.AutomaticSize = Enum.AutomaticSize.None
+				body.Text, body.RichText = "", false
+			end
 			bodyRow.Visible = open
 			P.animate(caret, "hover", { Rotation = open and 90 or 0 })
-			if open then drawBody(); fit() end
+			if open then fit() end
 		end
 		header.Activated:Connect(function() setOpen(not open) end)
 		setOpen(open)
@@ -970,10 +978,10 @@ return function(env)
 		function handle.setText(value, isTruncated)
 			local nextText = tostring(value or "")
 			if text == nextText and truncated == (isTruncated == true) then return end
+			if text ~= nextText then formatted, formattedText, formattedRich, plainText = nil, nil, nil, nil end
 			text = nextText
 			truncated = isTruncated == true
-			if open then drawBody()
-			else formatted = nil; body.RichText = false; body.Text = text end
+			if open then drawBody() end
 			tokenText.Text = tokenLabel()
 			fitHeader()
 			if open then fit() end

@@ -195,9 +195,8 @@ return function(env)
 				local wanted = math.ceil(math.max(0, height))
 				if scroll.instance.CanvasSize.Y.Offset ~= wanted then scroll.instance.CanvasSize = UDim2.fromOffset(0, wanted) end
 			end
-			if view.welcomeCard then move(0)
-			elseif view.pinned then
-				move(math.max(scroll.instance.AbsoluteCanvasSize.Y - scroll.instance.AbsoluteWindowSize.Y, 0))
+			if view.pinned then
+				move(view.welcomeCard and 0 or math.max(scroll.instance.AbsoluteCanvasSize.Y - scroll.instance.AbsoluteWindowSize.Y, 0))
 			elseif reading then
 				local y = reading.y or 0
 				local handle = reading.anchor and view.rows[reading.anchor]
@@ -242,10 +241,14 @@ return function(env)
 			local y = scroll.instance.CanvasPosition.Y
 			local upward = y < previousY - 0.5
 			previousY = y
-			if destroyed or adjusting or view.replaying then return end
+			if destroyed or adjusting or not visible then return end
 			-- Even a small upward scroll means read here. A generous bottom threshold
 			-- otherwise grabs the wheel back and snaps the reader down on the next row.
-			view.pinned = view.welcomeCard ~= nil or (not upward and scroll.atBottom(theme.space.hair))
+			-- Replay slices can arrive during a native swipe. Programmatic moves already
+			-- carry adjusting; replay must not suppress the reader's changed position.
+			-- The welcome card follows its top only until the reader scrolls its content.
+			view.pinned = view.welcomeCard and y <= theme.space.hair
+				or (not view.welcomeCard and not upward and scroll.atBottom(theme.space.hair))
 			if view.pinned then unread, unreadFailures = 0, 0 end
 			updateLatest()
 			remember()
@@ -418,7 +421,7 @@ return function(env)
 				view.welcomeCard = nil
 			end
 			view.welcomeCard = env.require("ui/panels/home").card(scroll.instance, nextOrder(), props)
-			scroll.instance.CanvasPosition = Vector2.new(0, 0)
+			move(0)
 			if providers.count() == 0 then
 				C.emptyState(view.welcomeCard, {
 					title = "No provider configured",

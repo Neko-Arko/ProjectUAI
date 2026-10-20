@@ -209,6 +209,11 @@ function createInference({ publish = () => {}, maxBytes = 16 * 1024 * 1024,
     if (parsed.response && typeof parsed.response.model === 'string') job.model = parsed.response.model;
     if (parsed.type === 'message_stop') job.sseDone = true;
     if (parsed.type === 'response.completed' && parsed.response && typeof parsed.response === 'object') job.sseDone = true;
+    // Match the native adapters for compatible gateways that close after the
+    // final reason without sending a separate sentinel. Completion still waits
+    // for EOF, and a later streamed provider error remains terminal.
+    if (Array.isArray(parsed.choices) && typeof parsed.choices[0]?.finish_reason === 'string' && parsed.choices[0].finish_reason) job.sseDone = true;
+    if (parsed.type === 'message_delta' && typeof parsed.delta?.stop_reason === 'string' && parsed.delta.stop_reason) job.sseDone = true;
     // Google ends with finishReason rather than a [DONE] event. The adapter
     // interprets refusal/length semantics from the retained original body.
     if (typeof parsed.candidates?.[0]?.finishReason === 'string' && parsed.candidates[0].finishReason) job.sseDone = true;

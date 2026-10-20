@@ -206,6 +206,8 @@ case("merged reasoning releases expired fragments while preserving its disclosur
 	local expected = thought.body.Text
 	view.refresh(); f.h.settle(2)
 	local rebuilt = named(view.scroll.instance, "Reasoning")
+	check("refreshed folded traces defer native body layout", #rebuilt == 1 and rebuilt[1]:FindFirstChild("ThoughtText", true).Text == "")
+	f.h.click(rebuilt[1]:FindFirstChild("ReasoningHeader", true))
 	check("refresh reconstructs exactly the retained combined trace", #rebuilt == 1 and rebuilt[1]:FindFirstChild("ThoughtText", true).Text == expected)
 	for i = 1, 140 do tool(session, "expire-thought-" .. i) end
 	check("a fully expired disclosure is released", #named(view.scroll.instance, "Reasoning") == 0)

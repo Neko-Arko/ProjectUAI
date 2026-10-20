@@ -298,21 +298,31 @@ return function(env)
 		-- it here as well as its short nested requests used to exhaust all eight
 		-- slots with only a few agents, taking the healthy bridge offline.
 		local relayed = spec.relay == true
+		local owner = spec.nativeOwner
+		if owner ~= nil and (relayed or type(owner) ~= "table") then
+			return nil, "invalid native HTTP owner", 0, "terminal"
+		end
 		if relayed then
 			if relayWorkers >= MAX_RELAY_WORKERS then return nil, "capacity: local relay request limit reached", 0, "terminal" end
 		else
+			-- A short poll deadline ends its Lua wait, not the native request. Keep
+			-- subsequent exchanges for that relay job behind the unfinished call.
+			-- Otherwise an unlimited job can fill every slot with abandoned polls.
+			while ((owner and owner.pending) or (spec.waitForSlot and workers >= MAX_WORKERS))
+				and clock.ms() < deadline and not aborted(spec) do clock.wait(0.05) end
+			if aborted(spec) then return nil, "aborted", clock.since(started), "terminal" end
+			if owner and owner.pending then
+				return nil, "capacity: previous native relay exchange is still running; this call was not dispatched", clock.since(started), "terminal"
+			end
 			-- Bridge control and result polls may share a busy host. Wait for an
 			-- actual slot within this call's short budget; never release a slot
 			-- still owned by a native call whose outcome is unknown.
-			if spec.waitForSlot then
-				while workers >= MAX_WORKERS and clock.ms() < deadline and not aborted(spec) do clock.wait(0.05) end
-			end
-			if aborted(spec) then return nil, "aborted", clock.since(started), "terminal" end
 			if workers >= MAX_WORKERS or clock.ms() >= deadline then
 				return nil, "capacity: native HTTP slots are busy; this call was not dispatched", clock.since(started), "terminal"
 			end
 		end
 		local pending = { done = false, accepting = true }
+		if owner then owner.pending = pending end
 		if relayed then relayWorkers = relayWorkers + 1 else workers = workers + 1 end
 		clock.spawn(function()
 			local ok, response, problem, failureKind = pcall(function()
@@ -333,6 +343,7 @@ return function(env)
 				return send(url, method, headers, spec.body, remaining / 1000, profile)
 			end)
 			if relayed then relayWorkers = math.max(0, relayWorkers - 1) else workers = math.max(0, workers - 1) end
+			if owner and owner.pending == pending then owner.pending = nil end
 			if pending.accepting then
 				-- A successful call normally returns nil for its error. An and/or
 				-- fallback would turn that nil into a failure beside every HTTP 200.

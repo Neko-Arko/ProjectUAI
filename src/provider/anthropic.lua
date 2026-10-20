@@ -303,6 +303,7 @@ return function(env)
 	-- SSE spec, not a vendor decision -- but the events inside are Anthropic's own:
 	-- message_start, content_block_start/delta/stop, message_delta, message_stop.
 	local function parseStream(body)
+		local completion = sse.completionDiagnostic("anthropic")
 		local content, reasoning = {}, {}
 		local slots, order = {}, {}
 		local model, id, usage, stop, streamError
@@ -349,6 +350,7 @@ return function(env)
 				local providerError = sse.providerError(event or payload, frame.event)
 				if providerError then streamError = streamError or providerError; return true end
 				if type(event) == "table" then
+					completion.observe(event, frame.event)
 					local kind = event.type or frame.event
 					if kind == "message_stop" then done = true
 					elseif kind == "message_start" and type(event.message) == "table" then
@@ -463,7 +465,7 @@ return function(env)
 			raw = raw,
 			chunks = frameCount,
 			frames = frameCount,
-			streamError = streamError or (not done and not stop and "malformed_stream: stream ended before completion" or nil),
+			streamError = streamError or (not done and not stop and completion.error() or nil),
 		}
 	end
 	function M.parseStream(body)

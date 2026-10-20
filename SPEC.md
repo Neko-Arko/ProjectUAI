@@ -458,7 +458,9 @@ is preserved, and listing it never sorts the persisted array in place.
 The transcript's 24,000-byte field retention is a display/storage bound, not a
 model reasoning budget. Reasoning events retain truncation metadata; the UI labels
 excerpts and estimates only visible text. Folded reasoning defers Markdown
-formatting and measurement until opened. Reopening and resizing reuse parsed text;
+formatting and measurement until opened. Its native text label stays empty with
+automatic sizing disabled while folded; opening assigns text and folding clears
+it again. Reopening and resizing reuse parsed text;
 formatting failures leave the original text readable.
 Live previews report independent `textLimited` and `reasoningLimited` flags,
 alongside the aggregate `limited` flag. Clipping one channel cannot label the
@@ -1462,7 +1464,10 @@ Up to 16 relay waiters are accounted separately from the eight native HTTP
 connection slots. Bridge control and result polls may wait for an available
 native slot within their individual call budget. A timed-out native call still
 owns its slot until it returns; a waiting relay job owns no native slot between
-polls. Local admission failures remain terminal and identify capacity, not a
+polls. Each job's short exchanges share native ownership: a timed-out exchange
+must return before another submission/result poll can dispatch for that job.
+Waiting stays within each exchange's deadline and Stop can independently send
+cancellation. Local admission failures remain terminal and identify capacity, not a
 provider timeout.
 
 The bridge's protocol, installation, browser workflow and verification are

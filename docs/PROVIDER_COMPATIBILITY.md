@@ -368,6 +368,10 @@ UAI socket gateway has its own upstream origin and cannot route this proxy switc
   reasoning, usage and indexed tool-argument fragments survive; a whole argument
   object is serialized to JSON. Mixed object/fragment arguments fail visibly.
   Corrupt or incomplete streams cannot become successful replies.
+  Missing-completion diagnostics name the expected final marker. Recognizable
+  events from another protocol identify the mismatch and direct the user to
+  check Protocol and Base URL. Partial text and complete tool JSON cannot prove
+  completion; `malformed_stream` remains terminal to avoid inference replay.
 - Clear 400/422 parameter refusals can teach bounded request repairs. FastAPI
   validation errors expose field locations/messages without echoing their `input`.
   Repairs and learned output limits follow the endpoint, protocol and model;

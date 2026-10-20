@@ -275,6 +275,7 @@ return function(env)
 	end
 
 	function M.parse(body)
+		local completion = sse.completionDiagnostic("responses")
 		local content, reasoning, slots, order = {}, {}, {}, {}
 		local usage, model, id, streamError, frames = nil, nil, nil, nil, 0
 		local completed = false
@@ -329,6 +330,7 @@ return function(env)
 				streamError = streamError or "malformed_stream: invalid JSON frame"
 				return true
 			end
+			completion.observe(decoded, frame.event)
 			local kind = tostring(decoded.type or frame.event or "")
 			local response = type(decoded.response) == "table" and decoded.response or nil
 			local status = response and response.status
@@ -413,7 +415,7 @@ return function(env)
 			id = id,
 			usage = usage,
 			frames = frames,
-			streamError = streamError or (not completed and "malformed_stream: stream ended before completion" or nil),
+			streamError = streamError or (not completed and completion.error() or nil),
 		}
 	end
 
