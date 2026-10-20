@@ -128,14 +128,112 @@ test('native stop interrupts the owned session and never dispatches again', asyn
   assert.ok(events().some(e => e.type === 'interrupt')); assert.ok(events().some(e => e.type === 'delete'));
 });
 
-test('native host actions are never approved and Responses text stays compatible', async t => {
+test('native blocked host actions return correction receipts and the next request hands off Roblox tools', async t => {
+  const { backend, events } = native(t), frames = [];
+  const relay = createInference({ opencode: backend }); t.after(() => relay.close());
+  await backend.start();
+  const request = { id: 'native_host_receipt', instance: relay.instance, url, body: JSON.stringify(input('HOST_ACTION')) };
+  relay.start(request); relay.start(request);
+  for (let attempt = 0; attempt < 300 && relay.get(request.id).state === 'running'; attempt++) await sleep(10);
+  const result = relay.get(request.id); assert.equal(result.state, 'completed', result.error);
+  const response = JSON.parse(result.body), call = response.choices[0].message.tool_calls[0];
+  assert.equal(response.choices[0].finish_reason, 'tool_calls');
+  assert.equal(call.function.name, 'opencode_host_action');
+  assert.deepEqual(JSON.parse(call.function.arguments), { name: 'bash' });
+  assert.doesNotMatch(result.body, /never execute this host command/);
+  relay.start(request);
+  assert.equal(events().filter(e => e.type === 'prompt').length, 1, 'retained receipts never repeat provider inference');
+  assert.ok(events().some(e => e.type === 'interrupt')); assert.ok(events().some(e => e.type === 'delete'));
+  const tools = [{ type: 'function', function: { name: 'lookup' } }];
+  const next = await backend.request({ body: JSON.stringify({ model: 'fixture-free', tools, messages: [
+    { role: 'user', content: 'HOST_ACTION' }, { role: 'assistant', tool_calls: [call] },
+    { role: 'tool', tool_call_id: call.id, content: 'No host action ran. Use the declared Roblox lookup tool.' },
+    { role: 'user', content: 'HOST_THEN_TOOL' }
+  ] }), url, onFrame: frame => {
+    if (frame.choices?.[0]?.delta?.tool_calls) {
+      const sessionID = events().filter(e => e.type === 'prompt').at(-1).id;
+      assert.ok(events().some(e => e.type === 'interrupt' && e.id === sessionID),
+        'the native session is interrupted before tool previews are delivered');
+    }
+    frames.push(frame);
+  } });
+  assert.equal(JSON.parse(next.body).choices[0].message.tool_calls[0].function.name, 'lookup');
+  assert.deepEqual(frames.flatMap(frame => frame.choices?.[0]?.delta?.tool_calls || []).map(value => value.function.name), ['lookup']);
+  assert.equal(events().filter(e => e.type === 'prompt').length, 2, 'each conversation request dispatches exactly once');
+  assert.equal(events().filter(e => e.type === 'delete').length, 2);
+  assert.ok(!events().some(e => e.type === 'permission-reply' || e.type === 'mcp-result'),
+    'host permissions and held remote MCP results are never completed in OpenCode');
+});
+
+test('native Responses carries blocked host receipts and ordinary text', async t => {
   const { backend, events } = native(t);
-  await assert.rejects(backend.request({ body: JSON.stringify(input('HOST_ACTION')), url }), /not approved/);
-  assert.equal(events().filter(e => e.type === 'prompt').length, 1);
-  assert.ok(events().some(e => e.type === 'delete'));
+  const blocked = await backend.request({ body: JSON.stringify(input('HOST_ACTION')), url: 'https://opencode.ai/inference/v1/responses' });
+  const call = JSON.parse(blocked.body).output.find(part => part.type === 'function_call');
+  assert.equal(call.name, 'opencode_host_action'); assert.deepEqual(JSON.parse(call.arguments), { name: 'bash' });
+  assert.equal(call.id, call.call_id);
   const reply = await backend.request({ body: JSON.stringify({ model: 'fixture-free', input: 'Reply PONG' }), url: 'https://opencode.ai/inference/v1/responses' });
   const response = JSON.parse(reply.body);
   assert.equal(response.status, 'completed'); assert.equal(response.output[1].content[0].text, 'PONG');
+  assert.equal(events().filter(e => e.type === 'prompt').length, 2);
+});
+
+test('native mixed tools preserve streamed order despite reverse MCP arrival and reordered argument keys', async t => {
+  const { backend, events } = native(t), frames = [], tools = [{ type: 'function', function: { name: 'lookup' } }];
+  const reply = await backend.request({ body: JSON.stringify({ ...input('MIXED_HOST_TOOL'), tools }), url, onFrame: frame => {
+    if (frame.choices?.[0]?.delta?.tool_calls) assert.ok(events().some(e => e.type === 'interrupt'));
+    frames.push(frame);
+  } });
+  const calls = JSON.parse(reply.body).choices[0].message.tool_calls;
+  assert.deepEqual(calls.map(call => call.function.name), ['lookup', 'opencode_host_action', 'lookup', 'opencode_host_action']);
+  assert.deepEqual(calls.map(call => JSON.parse(call.function.arguments)), [
+    { nested: { b: 2, a: 1 }, value: 'first' }, { name: 'bash' }, { value: 'last' }, { name: 'read' }
+  ]);
+  assert.equal(new Set(calls.map(call => call.id)).size, 4);
+  assert.deepEqual(events().filter(e => e.type === 'mcp-call').map(e => e.value), ['last', 'first']);
+  assert.deepEqual(frames.flatMap(frame => frame.choices?.[0]?.delta?.tool_calls || []).map(call => call.index), [0, 1, 2, 3]);
+  assert.doesNotMatch(reply.body, /never execute this host command|private-host-file/);
+  assert.equal(events().filter(e => e.type === 'prompt').length, 1);
+  assert.ok(!events().some(e => e.type === 'permission-reply' || e.type === 'mcp-result'));
+});
+
+test('native undeclared uai names produce blocked receipts without impersonating remote tools', async t => {
+  const { backend, events } = native(t), tools = [{ type: 'function', function: { name: 'lookup' } }];
+  const reply = await backend.request({ body: JSON.stringify({ ...input('UNKNOWN_UAI_TOOL'), tools }), url });
+  const call = JSON.parse(reply.body).choices[0].message.tool_calls[0];
+  assert.equal(call.function.name, 'opencode_host_action');
+  assert.deepEqual(JSON.parse(call.function.arguments), { name: 'uai_not_declared' });
+  assert.ok(!events().some(e => e.type === 'mcp-call' || e.type === 'permission-reply'));
+});
+
+test('native host handoff fails closed without matching blocked permission and successful interruption', async t => {
+  const { backend, events } = native(t), frames = [];
+  const rejectedRequests = ['HOST_ACTION HOST_COMPLETED', 'HOST_ACTION HOST_ERROR', 'HOST_ACTION WRONG_PERMISSION',
+    'HOST_ACTION WRONG_MESSAGE', 'HOST_ACTION WRONG_SESSION', 'HOST_ACTION WRONG_SOURCE', 'HOST_ACTION NO_PERMISSION',
+    'HOST_ACTION INTERRUPT_FAIL', 'HOST_ACTION FALSE_INTERRUPT'];
+  for (const text of rejectedRequests) {
+    await assert.rejects(backend.request({ body: JSON.stringify(input(text)), url, onFrame: frame => frames.push(frame) }),
+      /hand off|not approved|could not verify|permission.*matched|local API returned HTTP 500|interrupt/i, text);
+  }
+  assert.equal(events().filter(e => e.type === 'prompt').length, rejectedRequests.length);
+  assert.equal(events().filter(e => e.type === 'delete').length, rejectedRequests.length);
+  assert.ok(!frames.some(frame => frame.choices?.[0]?.delta?.tool_calls), 'failed interruption never exposes runnable handoff');
+  assert.ok(!events().some(e => e.type === 'permission-reply'));
+});
+
+test('native Stop cancels unfinished host streams and blocked requests before any handoff', async t => {
+  const { backend, events } = native(t); await backend.start();
+  for (const text of ['HOST_STREAMING', 'HOST_PENDING']) {
+    const controller = new AbortController(), frames = [], before = events().filter(e => e.type === 'prompt').length;
+    const pending = backend.request({ body: JSON.stringify(input(text)), url, signal: controller.signal, onFrame: frame => frames.push(frame) });
+    const rejected = assert.rejects(pending, /Stopped|aborted/i);
+    for (let attempt = 0; attempt < 200 && events().filter(e => e.type === 'prompt').length === before; attempt++) await sleep(10);
+    assert.equal(events().filter(e => e.type === 'prompt').length, before + 1);
+    await sleep(60); controller.abort(); await rejected;
+    assert.ok(!frames.some(frame => frame.choices?.[0]?.delta?.tool_calls));
+  }
+  assert.equal(events().filter(e => e.type === 'prompt').length, 2);
+  assert.equal(events().filter(e => e.type === 'delete').length, 2);
+  assert.ok(!events().some(e => e.type === 'permission-reply'));
 });
 
 test('native handoff waits for every streamed tool, indexes previews, and fails impossible handoffs', { timeout: 5000 }, async t => {
@@ -148,6 +246,8 @@ test('native handoff waits for every streamed tool, indexes previews, and fails 
   assert.ok(events().filter(e => e.type === 'tools').every(e => !fs.existsSync(e.location)), 'request location released before completion');
   await assert.rejects(backend.request({ body: JSON.stringify({ ...input('BROKEN_TOOL'), tools }), url }), /could not hand off/);
   await assert.rejects(backend.request({ body: JSON.stringify({ ...input('USE_TOOL OVERSIZED'), tools }), url }), /oversized tool arguments/);
+  await assert.rejects(backend.request({ body: JSON.stringify({ ...input('USE_TOOL MALFORMED'), tools }), url }), /invalid.*tool arguments/);
+  await assert.rejects(backend.request({ body: JSON.stringify({ ...input('USE_TOOL MISMATCHED'), tools }), url }), /unmatched tool call/);
 });
 
 test('only official routes and external native binaries qualify', async () => {

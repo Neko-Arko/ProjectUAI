@@ -4,7 +4,14 @@ A universal AI agent that runs inside a Roblox client. It works in any game,
 with Chat Completions and Anthropic Messages endpoints, including compatible
 local servers and relays.
 
-**Version 3.6.0 — October 19, 2026: clearer conversations and reliable connections.**
+**Version 3.6.1 — October 20, 2026: OpenCode tunnel tool recovery.**
+OpenCode desktop tool choices now return blocked-action feedback so the Roblox
+agent can select an available tool and continue. The bridge confirms interruption
+before handing off a complete batch and preserves tool order. Existing desktop
+3.6.0 fetches the bridge and web update automatically while idle; refresh the
+browser and reload the published Roblox client for the complete fix.
+
+The 3.6.0 app releases retain their existing downloads and automatic updates.
 The public page has a responsive white monochrome design with an interactive 3D
 centerpiece and animated SVGs, with pause controls and reduced-motion support.
 Bridge responses put the answer first, with tools and thinking grouped into
@@ -36,7 +43,7 @@ workspace. Go keeps its own catalog and routes; the optional free CLI backend
 does not intercept it. Subscription and workspace region refusals identify the
 setting to check. See [provider setup](docs/PROVIDER_COMPATIBILITY.md).
 
-Client, bridge, desktop and Android companion are 3.6.0; UI LIB
+Client and bridge are 3.6.1; desktop and Android companion remain 3.6.0. UI LIB
 remains 1.3.0 and SDK 1.0.0.
 Model pricing and context/reply limits use a refreshed provider-specific catalog;
 included Project UAI Free access is counted at zero cost.
@@ -52,7 +59,7 @@ it. The model modal edits the same global effort setting, including for other
 models when **Options → Reasoning support** is enabled. The Thinking row estimates
 visible text only. A long retained trace is labelled
 **Excerpt**, not a 5,999-token model limit. See [provider behavior](docs/PROVIDER_COMPATIBILITY.md).
-See [3.6.0 verification](docs/TESTING_3.6.0.md),
+See [3.6.1 verification](docs/TESTING_3.6.1.md), [3.6.0 verification](docs/TESTING_3.6.0.md),
 [mobile research](docs/OPENCODE_MOBILE_RESEARCH.md) and
 [companion update checks](companion/UPDATES.md). Native Android, mobile executor
 behavior, phone tool execution/replay and background survival remain unverified;

@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.6.1 — October 20, 2026 — OpenCode tunnel tool recovery
+
+- Keep OpenCode conversations running when the model selects a desktop tool.
+  Verify that its permission is blocked, interrupt the native session, and return
+  a non-executable receipt so the Roblox agent can select a real available tool.
+- Preserve provider order for mixed desktop/Roblox tool batches, including MCP
+  calls that arrive out of order. Stop, invalid handoffs and provider errors remain
+  terminal; desktop actions are never approved and native prompts are not replayed.
+- Release client and bridge 3.6.1. Existing desktop 3.6.0 fetches the bridge and
+  web files automatically while idle; refresh the browser and reload the published
+  Roblox client. Desktop and Android app downloads remain 3.6.0.
+
 ## 3.6.0 — October 19, 2026 — Clearer conversations and reliable connections
 
 - Rebuild the public Project UAI page with a white monochrome palette, responsive

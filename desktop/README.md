@@ -104,6 +104,10 @@ bridge together when building a desktop distribution.
 Bridge releases download automatically, are verified, and activate only when
 active work and retained receipts/pictures are idle. An automatic worker restart
 keeps the same pairing token. The browser reconnects to the updated bridge.
+This includes bridge/web assets: desktop 3.6.0 receives the 3.6.1 tunnel fix
+without a new executable. Refresh an open browser page and reload the published
+Roblox loader for the improved client tool feedback. **Copy client script** still
+copies the client embedded in the desktop executable.
 
 The desktop app separately checks stable releases in
 `Project-Ptolemy/ProjectUAI` on startup and every 15 minutes. It downloads and

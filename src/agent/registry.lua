@@ -20,10 +20,15 @@ return function(env)
 		loaded = false,
 	}
 	local registrations, sequence = {}, 0
+	local HOST_ACTION_TOOL = "opencode_host_action"
 
 	function M.register(tool)
 		if type(tool) ~= "table" or type(tool.name) ~= "string" or util.trim(tool.name) == "" or type(tool.run) ~= "function" then
 			log.warn("tools", "ignored a malformed tool definition")
+			return false
+		end
+		if tool.name == HOST_ACTION_TOOL then
+			log.warn("tools", "reserved tool name: " .. tool.name)
 			return false
 		end
 		if M.tools[tool.name] then
@@ -257,7 +262,24 @@ return function(env)
 		grep = { "file_search", "code_search" },
 		list = { "file_list", "code_tabs" },
 	}
-	local function unknownToolMessage(name, ctx)
+	local HOST_TOOL_SUGGESTIONS = {
+		execute = { "run_luau", "check_luau", "code_run" },
+		terminal = { "run_luau", "check_luau", "code_run" },
+		shell = { "run_luau", "check_luau", "code_run" },
+		filesystem = { "file_read", "file_read_many", "file_list", "file_search", "file_edit", "file_write" },
+		search = { "file_search", "code_search", "instance_find", "web_search" },
+		task = { "dispatch_agent", "agent_status", "agent_followup" },
+		web = { "web_search", "web_read", "http_get" },
+		websearch = { "web_search" },
+		webfetch = { "web_read", "http_get" },
+		skill = { "skills_list", "skills_read" },
+		question = { "ask_user" },
+		permission = { "ask_user" },
+		plan = { "todo_write", "todo_read" },
+		todowrite = { "todo_write" },
+		todoread = { "todo_read" },
+	}
+	local function unknownToolMessage(name, ctx, hostAction)
 		local owner = ctx and ctx.session or {}
 		local definitions = M.definitions({ only = owner.toolFilter, groups = owner.toolGroups, exclude = owner.toolExclude })
 		local available, names, seen = {}, {}, {}
@@ -267,16 +289,22 @@ return function(env)
 				names[#names + 1], seen[candidate] = candidate, true
 			end
 		end
-		for _, candidate in ipairs(COMPATIBILITY_TOOLS[name] or {}) do add(candidate) end
+		local suggestions = COMPATIBILITY_TOOLS[name] or (hostAction and HOST_TOOL_SUGGESTIONS[name]) or {}
+		for _, candidate in ipairs(suggestions) do add(candidate) end
 		for _, definition in ipairs(definitions) do add(definition["function"].name) end
-		local message = string.format("No local tool named '%s'. This call did not run.", name)
-		if COMPATIBILITY_TOOLS[name] then
+		local message = hostAction and string.format("OpenCode desktop tool '%s' was blocked before execution. "
+			.. "Continue with the available Roblox tools using their declared arguments.", name)
+			or string.format("No local tool named '%s'. This call did not run.", name)
+		if not hostAction and COMPATIBILITY_TOOLS[name] then
 			message = message .. " OpenCode may advertise this name only for provider compatibility."
+		end
+		if hostAction and (name == "execute" or name == "terminal" or name == "shell" or name == "bash") then
+			message = message .. " Desktop commands and host code are not Luau source."
 		end
 		if #names > 0 then
 			return message .. " Available tools include: " .. table.concat(names, ", ")
 				.. ". Use their declared arguments."
-				.. (name == "bash" and " Shell commands are not Luau source." or "")
+				.. (not hostAction and name == "bash" and " Shell commands are not Luau source." or "")
 		end
 		return message .. " No tools are available in this conversation."
 	end
@@ -288,6 +316,20 @@ return function(env)
 		local name = fn.name or call.name or "unknown"
 		local started = clock.ms()
 		local result = { id = call.id, name = name, ok = false, text = "", ms = 0 }
+
+		-- This is a refusal receipt from the native tunnel, never an executable
+		-- tool. Reserve it before lookup even if a host directly mutates the registry.
+		if name == HOST_ACTION_TOOL then
+			local raw = fn.arguments or call.arguments or "{}"
+			local args = type(raw) == "string" and #raw <= 4096 and util.decode(raw) or nil
+			local nativeName = type(args) == "table" and type(args.name) == "string"
+				and args.name:sub(1, 100):gsub("[^%w_.-]", "") or "unknown"
+			if nativeName == "" then nativeName = "unknown" end
+			result.text = unknownToolMessage(nativeName, ctx, true)
+			result.error = "OpenCode host action"
+			result.ms = clock.since(started)
+			return result
+		end
 
 		local tool = M.tools[name]
 		local registration = registrations[name]

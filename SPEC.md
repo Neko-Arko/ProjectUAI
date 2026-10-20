@@ -1,8 +1,8 @@
 # Project UAI — contract
 
-Current client release: **3.6.0 — October 19, 2026**.
+Current client and bridge release: **3.6.1 — October 20, 2026**.
 
-Bridge and Windows desktop release 3.6.0 use verified automatic GitHub updates.
+Bridge 3.6.1 and Windows desktop 3.6.0 use verified automatic GitHub updates.
 Bridge worker replacement waits for idle work and retains its session token;
 desktop app updates stage for restart with a retained fallback. Desktop detects
 Node.js 18+ or downloads a verified LTS runtime per user instead of bundling Node.
@@ -289,7 +289,13 @@ v2 API routes, lists verified CLI models at `/api/opencode/models`, and routes s
 models through its existing inference job protocol. Missing CLI and models outside
 its verified public catalog retain direct HTTP behavior. The native server binds
 loopback, uses private authentication and isolated owned sessions, and leaves UAI
-tools to Roblox. Capability and catalog data cannot survive a changed connection.
+tools to Roblox. Blocked native tool choices return a reserved, non-executable
+`opencode_host_action` receipt after their pending permissions are verified and
+interruption is confirmed. The ordinary Roblox agent step records that refusal
+and can choose an available tool within the same conversation's scope. The bridge
+never submits a corrective native prompt or approves desktop execution. Mixed tool
+batches retain provider order even when MCP calls arrive out of order.
+Capability and catalog data cannot survive a changed connection.
 
 Project UAI Free uses the existing intentionally distributed HCNSEC community key
 and the provider-supported `auto` router, verified through live discovery and tool

@@ -11,10 +11,12 @@ const http = require('node:http');
 const crypto = require('node:crypto');
 const { spawn, execFile } = require('node:child_process');
 const { once } = require('node:events');
+const { isDeepStrictEqual } = require('node:util');
 const { help } = require('./support');
 
 const MAX_REPLY = 8 << 20;
 const WAIT_MS = 150;
+const HOST_ACTION = 'opencode_host_action';
 const REQUIRED_ROUTES = ['/api/model', '/api/session', '/api/session/{sessionID}', '/api/session/{sessionID}/prompt',
   '/api/session/{sessionID}/message', '/api/session/{sessionID}/interrupt', '/api/session/{sessionID}/permission', '/api/experimental/mcp/{server}'];
 const missing = 'OpenCode CLI not found. Install OpenCode Desktop or run npm install -g @opencode/cli, then restart Cowork.';
@@ -154,7 +156,7 @@ function toolDefinitions(body) {
   const legacy = new Set(['bash', 'read', 'edit', 'glob', 'grep', 'list', 'shell']);
   return body.tools.filter(tool => !legacy.has((tool.function || tool)?.name)).map(tool => {
     const f = tool.type === 'function' ? tool.function || tool : null;
-    if (!f || typeof f.name !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(f.name) || seen.has(f.name)) throw Error('OpenCode requires unique UAI function tools');
+    if (!f || typeof f.name !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(f.name) || seen.has(f.name) || f.name === HOST_ACTION) throw Error('OpenCode requires unique UAI function tools; opencode_host_action is reserved for blocked desktop actions');
     seen.add(f.name);
     return { name: f.name, description: String(f.description || ''), inputSchema: f.parameters || { type: 'object', properties: {} } };
   });
@@ -169,6 +171,8 @@ function promptFor(body) {
     'You are Project UAI, operating in Roblox through its supplied remote tools.',
     'The JSON below is the conversation to continue. Respect its system/developer instructions and message roles.',
     'Only the uai MCP tools act in Roblox. They are exposed directly as uai_<original tool name>. Call these top-level tools directly; never use execute, search, filesystem, terminal, web, task, permission or other host tools.',
+    'Tool names in the conversation and tool feedback use their original Roblox names. For example, file_read means uai_file_read and run_luau means uai_run_luau here. Use each supplied tool\'s declared arguments.',
+    'An opencode_host_action result records a desktop tool that was blocked before execution. Continue the user\'s work with the suggested uai tools; do not repeat that desktop action or call the receipt tool.',
     'Return the assistant answer or call the requested uai tools. Tool results will arrive in the next conversation. Do not invent results.',
   ];
   if (typeof body.instructions === 'string') instructions.push(body.instructions);
@@ -222,6 +226,42 @@ function responseBody(model, message, calls, responses) {
   if (calls.length) result.tool_calls = calls.map(call => ({ id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.arguments) } }));
   return { id, object: 'chat.completion', model, ...(usage ? { usage } : {}), choices: [{ index: 0, message: result,
     finish_reason: message?.finish === 'length' ? 'length' : calls.length ? 'tool_calls' : 'stop' }] };
+}
+
+// A native tool choice is recoverable only while its permission is still held.
+// The receipt never carries executable host arguments or an original tool name
+// that could collide with a Roblox/custom handler. Correction belongs to UAI's
+// next ordinary agent step, with the caller's history as the source of truth.
+function toolHandoff(parts, tools, job, permissions, messageID, sessionID) {
+  const ids = new Set(), used = new Set(), calls = [];
+  let remoteCount = 0, waiting = false;
+  if (parts.length > 64) throw Error('OpenCode returned too many tool calls');
+  for (const part of parts) {
+    if (typeof part.id !== 'string' || !/^[\w-]{1,160}$/.test(part.id) || ids.has(part.id) ||
+        typeof part.name !== 'string' || !/^[\w-]{1,100}$/.test(part.name))
+      throw Error('OpenCode returned an invalid tool handoff');
+    ids.add(part.id);
+    if (part.state?.status !== 'running' || !part.state.input || typeof part.state.input !== 'object' || Array.isArray(part.state.input))
+      throw Error('OpenCode could not hand off the requested tool call. No desktop action was approved; the request was not repeated.');
+    if (tools.some(tool => 'uai_' + tool.name === part.name)) {
+      remoteCount++;
+      const index = job.calls.findIndex((call, i) => !used.has(i) && 'uai_' + call.name === part.name && isDeepStrictEqual(call.arguments, part.state.input));
+      if (index < 0) waiting = true;
+      else { used.add(index); calls.push(job.calls[index]); }
+    } else {
+      if (!permissions.some(permission => permission?.sessionID === sessionID && permission?.source?.type === 'tool' &&
+          permission.source.id === part.id && permission.source.messageID === messageID))
+        throw Error('OpenCode could not verify that a desktop tool was blocked. No desktop action was approved; the request was not repeated.');
+      calls.push({ id: 'call_' + crypto.randomBytes(12).toString('hex'), name: HOST_ACTION, arguments: { name: part.name } });
+    }
+  }
+  if (permissions.some(permission => permission?.sessionID !== sessionID || permission?.source?.messageID !== messageID ||
+      !parts.some(part => part.id === permission?.source?.id && permission.source.type === 'tool' &&
+        !tools.some(tool => 'uai_' + tool.name === part.name))))
+    throw Error('OpenCode returned a permission that could not be matched to a blocked desktop tool.');
+  if (job.calls.length > remoteCount || (waiting && job.calls.length === remoteCount) || (!waiting && used.size !== job.calls.length))
+    throw Error('OpenCode returned an unmatched tool call');
+  return waiting ? null : calls;
 }
 
 function createOpenCode({ env = process.env, binary, binaryArgs = [], startupMs = 30000, pollMs = WAIT_MS } = {}) {
@@ -396,7 +436,7 @@ function createOpenCode({ env = process.env, binary, binaryArgs = [], startupMs 
       session = created?.data?.id;
       if (typeof session !== 'string' || !/^[\w-]+$/.test(session)) throw Error('OpenCode returned an invalid session');
       await api('/api/session/' + session + '/prompt', 'POST', prompt, signal);
-      let message, textSize = 0, reasoningSize = 0;
+      let message, calls, textSize = 0, reasoningSize = 0;
       for (;;) {
         if (closed || signal?.aborted || state !== 'ready') throw Error(signal?.aborted ? 'Stopped' : 'OpenCode stopped during the request');
         if (job.failure) throw Error(job.failure);
@@ -410,23 +450,32 @@ function createOpenCode({ env = process.env, binary, binaryArgs = [], startupMs 
         if (reasoning.length > reasoningSize) onFrame({ choices: [{ delta: { reasoning_content: reasoning.slice(reasoningSize) } }] });
         textSize = text.length; reasoningSize = reasoning.length;
         const nativeTools = parts.filter(part => part.type === 'tool');
-        if (nativeTools.some(part => !tools.some(tool => 'uai_' + tool.name === part.name)))
-          throw Error('OpenCode requested a local desktop action. UAI runs tools only in Roblox; the desktop action was not approved.');
         // OpenCode v2 records time.streamed when the provider stream ends,
         // before waiting for MCP results. time.completed waits for those
         // results, which intentionally remain held for the Roblox handoff.
-        if (message?.time?.streamed && nativeTools.length && job.calls.length === nativeTools.length) break;
-        if (message?.time?.completed && !nativeTools.length) break;
-        if (message?.time?.completed || nativeTools.some(part => ['error', 'completed'].includes(part.state?.status)))
-          throw Error('OpenCode could not hand off the requested tool call. No desktop action was approved; the request was not repeated.');
         const permissions = await api('/api/session/' + session + '/permission', 'GET', undefined, signal);
-        if (Array.isArray(permissions?.data) && permissions.data.length) throw Error('OpenCode requested a local desktop action. UAI runs tools only in Roblox; the desktop action was not approved.');
+        if (!Array.isArray(permissions?.data)) throw Error('OpenCode returned an invalid permission list');
+        if (message?.time?.completed) {
+          if (nativeTools.length || job.calls.length || permissions.data.length)
+            throw Error('OpenCode could not hand off the requested tool call. No desktop action was approved; the request was not repeated.');
+          calls = []; break;
+        }
+        if (message?.time?.streamed && nativeTools.length) {
+          calls = toolHandoff(nativeTools, tools, job, permissions.data, message.id, session);
+          if (calls) break;
+        }
+        if (nativeTools.some(part => ['error', 'completed'].includes(part.state?.status)))
+          throw Error('OpenCode could not hand off the requested tool call. No desktop action was approved; the request was not repeated.');
         await pause(pollMs, signal);
       }
       if (!message) throw Error('OpenCode returned no assistant response');
-      if (job.calls.length) await api('/api/session/' + session + '/interrupt', 'POST', {});
-      for (const [index, call] of job.calls.entries()) onFrame({ choices: [{ delta: { tool_calls: [{ index, id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.arguments) } }] } }] });
-      const payload = responseBody(input.model, message, job.calls, new URL(url).pathname.endsWith('/responses'));
+      if (calls.length) {
+        const stopped = await api('/api/session/' + session + '/interrupt', 'POST', {}, signal);
+        if (stopped?.interrupted !== true) throw Error('OpenCode did not confirm interruption; the tool handoff was not delivered.');
+      }
+      if (closed || signal?.aborted || state !== 'ready') throw Error(signal?.aborted ? 'Stopped' : 'OpenCode stopped during the request');
+      for (const [index, call] of calls.entries()) onFrame({ choices: [{ delta: { tool_calls: [{ index, id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.arguments) } }] } }] });
+      const payload = responseBody(input.model, message, calls, new URL(url).pathname.endsWith('/responses'));
       return { status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) };
     } finally {
       signal?.removeEventListener('abort', abort);

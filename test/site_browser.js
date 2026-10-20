@@ -10,6 +10,13 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
 const root = path.resolve(__dirname, '..');
 const version = JSON.parse(fs.readFileSync(path.join(root, 'dist/uai.manifest.json'), 'utf8')).buildId.split('-')[0];
+const desktopVersion = fs.readFileSync(path.join(root, 'desktop/src/UaiBridge/UaiBridge.csproj'), 'utf8').match(/<Version>(\d+\.\d+\.\d+)<\/Version>/)?.[1];
+const relayVersion = fs.readFileSync(path.join(root, 'companion/app/build.gradle.kts'), 'utf8').match(/\bversionName\s*=\s*"(\d+\.\d+\.\d+)"/)?.[1];
+assert.ok(desktopVersion && relayVersion, 'desktop and relay release versions are declared');
+const downloadAssets = new Map([
+  ['UAI-Bridge-' + desktopVersion + '-win-x64.exe', desktopVersion],
+  ['UAI-Relay-' + relayVersion + '.apk', relayVersion],
+]);
 const loader = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/Project-Ptolemy/ProjectUAI/main/dist/uai.lua"))()';
 const mime = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml',
   '.png': 'image/png', '.ico': 'image/x-icon', '.mp4': 'video/mp4', '.webm': 'video/webm' };
@@ -130,10 +137,15 @@ async function copyAndDownloads(page) {
     const url = new URL(link.href);
     assert.equal(url.origin, 'https://github.com');
     assert.ok(url.pathname.startsWith('/Project-Ptolemy/ProjectUAI/releases/'), 'download stays in the official repository');
-    if (/\/releases\/(?:tag|download)\//.test(url.pathname)) assert.equal(url.pathname.split('/')[5], 'v' + version, 'release link matches the published client version');
+    if (/\/releases\/tag\//.test(url.pathname)) assert.equal(url.pathname.split('/')[5], 'v' + version, 'release link matches the published client version');
+    if (/\/releases\/download\//.test(url.pathname)) {
+      const asset = url.pathname.split('/').at(-1);
+      assert.ok(downloadAssets.has(asset), 'download names a current desktop or relay asset');
+      assert.equal(url.pathname.split('/')[5], 'v' + downloadAssets.get(asset), 'download tag matches its component release version');
+    }
     assert.ok(link.name, 'download links have accessible text');
   }
-  for (const asset of ['UAI-Bridge-' + version + '-win-x64.exe', 'UAI-Relay-' + version + '.apk']) {
+  for (const asset of downloadAssets.keys()) {
     assert.ok(links.some(link => new URL(link.href).pathname.endsWith('/' + asset)), 'current download is present: ' + asset);
   }
   await geometry(page, 'downloads at 390px');

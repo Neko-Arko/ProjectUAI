@@ -19,6 +19,22 @@ return function(env)
 	local CATEGORY_ORDER = { "added", "improved", "fixed" }
 	local ENTRIES = {
 		{
+			version = "3.6.1",
+			revision = "2026-10-20-opencode-tool-recovery",
+			date = "October 20, 2026",
+			title = "OpenCode tunnel tool recovery",
+			highlights = "OpenCode desktop tool choices become recoverable feedback so Roblox conversations can continue.",
+			sections = {
+				{ category = "fixed", label = "OpenCode tunnel", items = {
+					"When OpenCode selects a desktop tool, block execution and return feedback that guides the next agent step to an available Roblox tool. The conversation keeps its tool scope and history.",
+					"Preserve mixed tool call order even when remote calls arrive out of order. Cancellation and invalid handoffs still stop the request; desktop actions are never approved.",
+				} },
+				{ category = "improved", label = "Patch update", items = {
+					"Existing desktop 3.6.0 automatically fetches bridge 3.6.1 and its web files when idle. Refresh the browser and reload the published Roblox client for the complete fix.",
+				} },
+			},
+		},
+		{
 			version = "3.6.0",
 			revision = "2026-10-19-clear-conversations",
 			date = "October 19, 2026",
