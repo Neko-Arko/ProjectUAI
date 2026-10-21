@@ -128,6 +128,12 @@ Native workspace:
   coverage, incomplete values and drops. Prepare replay, review its digest and
   dispatch once when authorized; follow returned detail readers.]]
 
+	local CAPTURE = [[
+Network capture:
+- net_capture observes HTTP requests and compiled chunks without executing them.
+  Start it before the loader, then use net_capture_read list/read/chain and check
+  coverage. Prefer pasted source when the user has it. Stop when done.]]
+
 	local SCRIPT_UI = [[
 Script interfaces:
 - New script UIs use Project UAI UI LIB:
@@ -221,6 +227,7 @@ Background chat:
 		include(offered(names, "file_", "check_luau", "run_luau", "project_", "script_", "code_"), FILESYSTEM)
 		include(offered(names, "file_", "check_luau", "run_luau", "project_", "script_", "code_"), LUAU)
 		include(offered(names, "code_", "explorer_", "instance_", "remotes_", "changes_"), NATIVE)
+		include(offered(names, "net_capture"), CAPTURE)
 		include(offered(names, "file_write", "file_edit", "file_append", "run_luau", "code_", "project_", "ui_library_docs"), SCRIPT_UI)
 		include(offered(names, "project_", "script_analyze", "script_test"), PROJECTS)
 		include(offered(names, "dispatch_agent", "agent_followup", "agent_status"), DELEGATION)

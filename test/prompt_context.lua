@@ -23,6 +23,9 @@ case("prompt size stays bounded and workflows follow the offered tools", functio
 	check("read tools keep exact file conventions without authoring workflows", has(readOnly, "share one namespace")
 		and not has(readOnly, "Script interfaces:") and not has(readOnly, "Modular projects:")
 		and not has(readOnly, "Delegation:") and not has(readOnly, "Background chat:"))
+	local capture = prompt.build({ tools = { { ["function"] = { name = "net_capture" } } } })
+	check("network capture guidance follows the offered tool", has(capture, "net_capture observes")
+		and not has(readOnly, "net_capture observes"))
 	local noTools = prompt.subagent("Explain the result", { tools = {} })
 	check("empty tool catalogue is distinct from an unscoped preview", #noTools < #child / 2
 		and not has(noTools, "Skills:") and not has(noTools, "Files and source") and not has(noTools, "Tool calls:"))
