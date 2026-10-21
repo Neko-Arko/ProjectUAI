@@ -1,6 +1,6 @@
 # UAI Relay (Android companion)
 
-Version **3.6.0** (Android version code 5).
+Version **3.6.5** (Android version code 6).
 
 A foreground service that holds the upstream provider connection while the
 Project UAI client submits and polls through short loopback calls. The client
@@ -19,6 +19,8 @@ serving, no agent state, no commands. Just the relay contract in
   plain-HTTP; the executor must perform requests locally on the phone.
 - The client's `relay.mode` is `auto` by default: the script probes
   `127.0.0.1:8790`, pairs once for a stable token, and relays from then on.
+  **Always** requires a relay and reports an unavailable companion instead of
+  opening a direct provider request. Auto retains its direct fallback.
 
 ## Build
 
@@ -102,6 +104,22 @@ omit Content-Encoding. Earlier apps parsed these compressed bytes as JSON and
 rejected them. Update the app and reload the script; resetting pairing does not
 repair request encoding. Both compressed and expanded requests are limited to
 8 MiB. The reported Delta device's exact transmitted bytes remain unobserved.
+
+Version 3.6.5 also caps the complete UTF-8 reply sent to the executor at 8 MiB,
+including JSON escaping and the extra `/api/executor` envelope. It counts the
+retained body's encoded size before allocating that expanded reply. An oversized
+reply returns HTTP 413, or status 413 inside the executor envelope, with a fixed
+`response_limit` category. The client stops polling that job without resubmitting
+inference; resetting pairing cannot repair a response-size refusal.
+
+The updated client serializes ordinary native HTTP exchanges on touch-only
+hosts, keeping a still-running native call's ownership after a Lua timeout,
+Stop or client reload. Cancellation has a separate bounded lane. Expanded
+thinking on touch-only hosts uses an 8 KiB presentation excerpt before Markdown
+formatting and native measurement; oversized RichText falls back to plain text.
+Original provider reasoning stays in model context and persistence. These changes
+reduce avoidable native work; they do not attribute or establish a fix for the
+reported Roblox native crash. See [the investigation](../docs/INVESTIGATION_MOBILE_CRASHES.md).
 
 The Roblox status reports actual pairing or authenticated client contact in the
 current service run. A saved token alone is shown as saved pairing, not a live

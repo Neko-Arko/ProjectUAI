@@ -1,9 +1,9 @@
 # Project UAI — contract
 
-Current client release: **3.6.1 — October 20, 2026**.
-Current bridge release: **3.6.2 — October 21, 2026**.
+Current client, bridge, Windows app and Android companion release:
+**3.6.5 — October 21, 2026**.
 
-Bridge 3.6.2 and Windows desktop 3.6.0 use verified automatic GitHub updates.
+Bridge and Windows desktop 3.6.5 use verified automatic GitHub updates.
 Bridge worker replacement waits for idle work and retains its session token;
 desktop app updates stage for restart with a retained fallback. Desktop detects
 Node.js 18+ or downloads a verified LTS runtime per user instead of bundling Node.
@@ -184,6 +184,13 @@ credentials or raw error bodies. Runtime modules do not depend on `net/*`.
   Streamed error events retain bounded, redacted error codes/messages, including
   explicit plain-text SSE errors. Partial output or a later completion marker does
   not turn a failed stream into a successful response.
+* Touch-only HTTP calls share one native exchange lane and a separate bounded
+  cancellation lane. Native completion releases ownership; Lua timeout, Stop,
+  discovery and unload do not. Executor globals retain ownership across client
+  replacement where available. Relay `always` mode requires a relay even after a
+  failed health check. Oversized or malformed relay replies stop polling once;
+  the companion checks complete JSON envelope bytes before expanding provider
+  bodies, returning a small terminal 413 when the wire response would exceed 8 MiB.
 * Both adapters parse context-length refusals separately from output-token limits.
   A named window of at least 512 tokens is saved under the lowercased model id in
   `agent.forceContext`, only lowering an existing value. Like `record.maxTokensCap`,

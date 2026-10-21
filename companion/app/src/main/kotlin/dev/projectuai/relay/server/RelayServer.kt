@@ -268,12 +268,35 @@ class RelayServer(
 }
 
 private suspend inline fun <reified T> ApplicationCall.respondJson(value: T, status: HttpStatusCode = HttpStatusCode.OK) {
-    respondText(RelayJson.encodeToString(value), ContentType.Application.Json, status)
+    if (value is JobView && ResponseBodySize.bytes(value) > ResponseBodySize.LIMIT) {
+        respondText(RelayJson.encodeToString(ErrorBody(ResponseBodySize.FAILURE)), ContentType.Application.Json, HttpStatusCode.PayloadTooLarge)
+        return
+    }
+    val json = RelayJson.encodeToString(value)
+    if (ResponseBodySize.bytes(json) > ResponseBodySize.LIMIT) {
+        respondText(RelayJson.encodeToString(ErrorBody(ResponseBodySize.FAILURE)), ContentType.Application.Json, HttpStatusCode.PayloadTooLarge)
+        return
+    }
+    respondText(json, ContentType.Application.Json, status)
 }
 
 private suspend inline fun <reified T> ApplicationCall.respondExecutor(value: T, status: Int = 200) {
     response.headers.append("Cache-Control", "no-store")
-    respondJson(ExecutorResponse(status = status, body = RelayJson.encodeToString(value)))
+    if (value is JobView && ResponseBodySize.bytes(value, status) > ResponseBodySize.LIMIT) {
+        respondExecutorLimit()
+        return
+    }
+    val json = RelayJson.encodeToString(value)
+    if (ResponseBodySize.bytes(json, status) > ResponseBodySize.LIMIT) {
+        respondExecutorLimit()
+        return
+    }
+    respondJson(ExecutorResponse(status = status, body = json))
+}
+
+private suspend fun ApplicationCall.respondExecutorLimit() {
+    val body = RelayJson.encodeToString(ErrorBody(ResponseBodySize.FAILURE))
+    respondJson(ExecutorResponse(status = 413, body = body))
 }
 
 private inline fun <reified T> decodeJson(text: String): T? =

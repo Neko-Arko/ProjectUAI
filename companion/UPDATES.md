@@ -1,5 +1,10 @@
 # Android companion updates
 
+Current companion: **3.6.5 (Android version code 6)**. It bounds the complete
+executor-visible UTF-8 reply, including JSON escaping and the executor envelope,
+at 8 MiB. Oversized replies return status 413 without resubmitting inference.
+The APK retains the existing production signing identity and application ID.
+
 The companion checks the official `Project-Ptolemy/ProjectUAI` GitHub releases at
 startup and every 15 minutes while its app or relay process is alive. Compatible
 updates download automatically by default. Turning off **Download updates

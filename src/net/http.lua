@@ -18,6 +18,24 @@ return function(env)
 	local HISTORY_LIMIT = 60
 	local MAX_BODY, MAX_WORKERS, MAX_RELAY_WORKERS = 8 * 1024 * 1024, 8, 16
 	local workers, relayWorkers, alive = 0, 0, true
+	-- Native calls can outlive Stop, discovery and even this client generation.
+	-- On touch-only hosts keep one shared exchange lane and one cancellation lane.
+	-- Never clear a lane on a Lua deadline or unload; its worker releases it.
+	local nativeLanes = { schema = 1 }
+	if caps.fn.getgenv then
+		pcall(function()
+			local globals = caps.fn.getgenv()
+			if type(globals) ~= "table" then return end
+			local retained = rawget(globals, "__UAI_NATIVE_HTTP_V1")
+			if type(retained) == "table" and retained.schema == 1 then nativeLanes = retained
+			else rawset(globals, "__UAI_NATIVE_HTTP_V1", nativeLanes) end
+		end)
+	end
+	local function mobileNativeLane(spec)
+		local ok, touch, mouse = pcall(function() return env.uis.TouchEnabled, env.uis.MouseEnabled end)
+		if not ok or touch ~= true or mouse == true then return nil end
+		return spec.nativeControl == true and "control" or "exchange"
+	end
 	local function aborted(spec)
 		if not alive then return true end
 		if not spec.aborted then return false end
@@ -299,6 +317,7 @@ return function(env)
 		-- slots with only a few agents, taking the healthy bridge offline.
 		local relayed = spec.relay == true
 		local owner = spec.nativeOwner
+		local lane = not relayed and mobileNativeLane(spec) or nil
 		if owner ~= nil and (relayed or type(owner) ~= "table") then
 			return nil, "invalid native HTTP owner", 0, "terminal"
 		end
@@ -308,11 +327,14 @@ return function(env)
 			-- A short poll deadline ends its Lua wait, not the native request. Keep
 			-- subsequent exchanges for that relay job behind the unfinished call.
 			-- Otherwise an unlimited job can fill every slot with abandoned polls.
-			while ((owner and owner.pending) or (spec.waitForSlot and workers >= MAX_WORKERS))
+			while ((owner and owner.pending) or (lane and nativeLanes[lane]) or (spec.waitForSlot and workers >= MAX_WORKERS))
 				and clock.ms() < deadline and not aborted(spec) do clock.wait(0.05) end
 			if aborted(spec) then return nil, "aborted", clock.since(started), "terminal" end
 			if owner and owner.pending then
 				return nil, "capacity: previous native relay exchange is still running; this call was not dispatched", clock.since(started), "terminal"
+			end
+			if lane and nativeLanes[lane] then
+				return nil, "capacity: previous mobile native HTTP exchange is still running; this call was not dispatched", clock.since(started), "terminal"
 			end
 			-- Bridge control and result polls may share a busy host. Wait for an
 			-- actual slot within this call's short budget; never release a slot
@@ -323,6 +345,7 @@ return function(env)
 		end
 		local pending = { done = false, accepting = true }
 		if owner then owner.pending = pending end
+		if lane then nativeLanes[lane] = pending end
 		if relayed then relayWorkers = relayWorkers + 1 else workers = workers + 1 end
 		clock.spawn(function()
 			local ok, response, problem, failureKind = pcall(function()
@@ -344,6 +367,7 @@ return function(env)
 			end)
 			if relayed then relayWorkers = math.max(0, relayWorkers - 1) else workers = math.max(0, workers - 1) end
 			if owner and owner.pending == pending then owner.pending = nil end
+			if lane and nativeLanes[lane] == pending then nativeLanes[lane] = nil end
 			if pending.accepting then
 				-- A successful call normally returns nil for its error. An and/or
 				-- fallback would turn that nil into a failure beside every HTTP 200.
@@ -389,7 +413,7 @@ return function(env)
 			-- Cloudflare 403 carries `server` and `cf-ray` and usually `cf-mitigated`,
 			-- and the API's own 403 carries a JSON body. Kept short -- this is what the
 			-- Requests view shows, not an archive.
-			response = res and log.redact(util.ellipsis(res.body, 400)) or nil,
+			response = not spec.silent and res and log.redact(util.ellipsis(util.truncate(res.body, 1600), 400)) or nil,
 			server = res and M.header(res, "server") or nil,
 			trace = res and (M.header(res, "cf-ray") or M.header(res, "x-request-id")) or nil,
 			mitigated = res and M.header(res, "cf-mitigated") or nil,

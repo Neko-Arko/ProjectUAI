@@ -42,9 +42,10 @@ return function(env)
 		if not M.coworkWeb() then relayLink.prepare() end
 	end
 
-	-- Images always need a resolver, so they relay whenever any relay exists.
+	-- Always mode requires a relay even while discovery is unavailable. Let the
+	-- relay report that failure rather than opening a long native provider call.
 	function M.shouldRelay(imageRequest)
-		return imageRequest == true or M.coworkWeb() or M.companionReady()
+		return imageRequest == true or M.coworkWeb() or M.companionReady() or relayLink.mode() == "always"
 	end
 
 	-- Streaming is forced only for Cowork; the companion returns the whole body.

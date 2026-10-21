@@ -18,7 +18,7 @@ internal static class Program
         int helper = Array.IndexOf(args, "--apply-update");
         if (helper >= 0 && helper + 1 < args.Length)
             return DesktopUpdater.RunHelperAsync(args[helper + 1]).GetAwaiter().GetResult();
-        bool offline = args.Any(argument => argument is "--smoke-test" or "--render-preview" or "--render-preview-compact" or "--self-test" or "--window-test");
+        bool offline = args.Any(argument => argument is "--smoke-test" or "--render-preview" or "--render-preview-compact" or "--render-preview-narrow" or "--self-test" or "--window-test" or "--startup-test");
         if (offline)
         {
             Environment.SetEnvironmentVariable("UAI_BRIDGE_TEST_NO_UPDATES", "1");
@@ -28,11 +28,14 @@ internal static class Program
             return DesktopSelfTest.RunAsync(args[1]).GetAwaiter().GetResult();
         if (args.Length == 2 && args[0] == "--smoke-test")
             return SmokeAsync(args[1]).GetAwaiter().GetResult();
+        if (args.Length == 2 && args[0] == "--startup-test")
+            return DesktopStartupTest.RunAsync(args[1]).GetAwaiter().GetResult();
         ApplicationConfiguration.Initialize();
         if (args.Length == 2 && args[0] == "--window-test") return DesktopWindowTest.Run(args[1]);
-        using var mutex = new Mutex(true, @"Local\ProjectUAI.Bridge.28791", out bool first);
-        using var show = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\ProjectUAI.Bridge.Show.28791");
-        if (!first) { show.Set(); return 0; }
+        string instanceName = offline && Environment.GetEnvironmentVariable("UAI_DESKTOP_TEST_INSTANCE") is { Length: > 0 } fixtureInstance
+            ? "ProjectUAI.Bridge.Test." + fixtureInstance : "ProjectUAI.Bridge.28791";
+        using var instance = new DesktopInstance(instanceName);
+        if (!instance.OwnsWindow) { instance.RestoreExisting(); return 0; }
         if (!offline && DesktopUpdater.TryDispatch(args)) return 0;
         var bridge = new BridgeProcess();
         using var form = new MainForm(bridge, offline);
@@ -51,18 +54,13 @@ internal static class Program
                 form.Close();
             }
         };
-        var waiter = ThreadPool.RegisterWaitForSingleObject(show, (_, _) =>
-        {
-            if (form.IsHandleCreated && !form.IsDisposed)
-                try { form.BeginInvoke(form.RestoreWindow); } catch (InvalidOperationException) { }
-        }, null, Timeout.Infinite, false);
-        if (args.Length == 2 && args[0] is "--render-preview" or "--render-preview-compact") form.RenderPreview(args[1], args[0] == "--render-preview-compact");
+        instance.Listen(form, form.RestoreWindow);
+        if (args.Length == 2 && args[0] is "--render-preview" or "--render-preview-compact" or "--render-preview-narrow")
+            form.RenderPreview(args[1], args[0] == "--render-preview-compact", args[0] == "--render-preview-narrow");
         try { Application.Run(form); }
         finally
         {
-            waiter.Unregister(null);
             bridge.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            mutex.ReleaseMutex();
         }
         return 0;
     }

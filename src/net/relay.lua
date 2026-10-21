@@ -16,6 +16,17 @@ return function(env)
 			.. "or enable the web bridge in Cowork settings." } }), headers = {}, via = "web", terminal = true }, nil
 	end
 
+	local function unusableResponse(problem)
+		local text = tostring(problem or ""):lower()
+		if text:find("response_limit:", 1, true) then
+			return "response_limit: Relay response exceeds the native response budget; stopped polling and inference was not resubmitted."
+		end
+		if text:find("malformed_stream:", 1, true) or text:find("malformed:", 1, true) then
+			return "malformed: Relay returned an unusable response; stopped polling and inference was not resubmitted."
+		end
+		return nil
+	end
+
 	function M.request(spec, headers, call)
 		local endpoint = spec.relayEndpoint or transport.endpoint()
 		if not endpoint then return noRelay() end
@@ -48,7 +59,7 @@ return function(env)
 			clock.spawn(function()
 				pcall(call, { url = base .. "/api/inference/" .. id, method = "DELETE",
 					headers = { Authorization = "Bearer " .. token }, identity = "none", silent = true, timeout = 2,
-					waitForSlot = true, executorProfile = executorProfile })
+					waitForSlot = true, executorProfile = executorProfile, nativeControl = true })
 			end)
 		end
 		pending[id] = cancel
@@ -135,12 +146,17 @@ return function(env)
 		local submitted, attempts = false, 0
 		while clock.ms() < deadline do
 			if ended() then cancel(); pending[id] = nil; return nil, "aborted" end
-			local response
+			local response, problem
 			if not submitted then
 				attempts = attempts + 1
-				response = short("POST", "/api/inference", payload)
-			else response = short("GET", "/api/inference/" .. id .. (previews and not frozen and ("?after=" .. cursor) or "")) end
+				response, problem = short("POST", "/api/inference", payload)
+			else response, problem = short("GET", "/api/inference/" .. id .. (previews and not frozen and ("?after=" .. cursor) or "")) end
 			if ended() then cancel(); pending[id] = nil; return nil, "aborted" end
+			-- Unknown deadlines/capacity can recover behind the original native
+			-- owner. A received response that cannot fit or be decoded cannot improve
+			-- by fetching the same completed body again, especially with no deadline.
+			local rejected = not response and unusableResponse(problem)
+			if rejected then cancel(); return failure(rejected) end
 			if response and response.ok then
 				local job = util.decode(response.body)
 				if type(job) ~= "table" or job.id ~= id then cancel(); return failure("Invalid relay response; inference was not resubmitted.") end

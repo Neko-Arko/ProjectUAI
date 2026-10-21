@@ -161,8 +161,12 @@ test('static serving resolves junctions before exposing files', async t => {
   fs.symlinkSync(outside, path.join(app, 'web/escape'), process.platform === 'win32' ? 'junction' : 'dir');
   let bridge;
   t.after(async () => {
-    await bridge?.stop(); assert.ok(path.resolve(temporary).startsWith(path.resolve(os.tmpdir()) + path.sep));
-    fs.rmSync(temporary, { recursive: true, force: true });
+    await bridge?.stop();
+    assert.equal(path.dirname(path.resolve(temporary)), path.resolve(os.tmpdir()));
+    assert.ok(path.basename(temporary).startsWith('uai-static-'));
+    // Windows can briefly retain fixture handles after the child reports exit.
+    // Retry only removal of this exact test-owned root, without hiding failures.
+    await fs.promises.rm(temporary, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
   bridge = await startBridge(null, [], path.join(app, 'server.js'));
   assert.equal((await rawReq(bridge.port, 'GET', '/escape/private.txt')).status, 403);

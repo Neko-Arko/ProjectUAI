@@ -29,6 +29,7 @@ return function(env)
 	-- is doing, and "Show all N lines" is on the block.
 	local CODE_LINES = 24
 	local ARG_PREVIEW = 90
+	local MOBILE_THOUGHT_BYTES, MOBILE_THOUGHT_RICH_BYTES = 8192, 32768
 
 	-- Average glyph advance for the mono families, as a fraction of the font size.
 	-- Used only to size the line-number gutter, which has to be wide enough for the
@@ -822,11 +823,16 @@ return function(env)
 	function M.reasoning(parent, text, order)
 		text = tostring(text or "")
 		local truncated = false
+		local function mobileThought()
+			return responsive.touch and not responsive.pointer and not responsive.console
+		end
 		local function tokenLabel()
 			-- Older transcripts predate explicit truncation metadata.
-			local excerpt = truncated or text:find("%.%.%. %[%d+ characters omitted") ~= nil
+			local excerpt = truncated or (mobileThought() and #text > MOBILE_THOUGHT_BYTES)
+				or text:find("%.%.%. %[%d+ characters omitted") ~= nil
+			if excerpt then return "Excerpt" end
 			local tokens = usage.estimateText(text)
-			return excerpt and "Excerpt" or ("~" .. util.formatNumber(tokens) .. (tokens == 1 and " token shown" or " tokens shown"))
+			return "~" .. util.formatNumber(tokens) .. (tokens == 1 and " token shown" or " tokens shown")
 		end
 		local holder = wrapper(parent, { name = "Reasoning", layoutOrder = order })
 		local card = P.column(holder, {
@@ -918,15 +924,22 @@ return function(env)
 			role = "caption", color = theme.color.textTertiary, wrap = true, auto = "Y",
 			size = UDim2.new(1, 0, 0, 0), layoutOrder = 1 })
 		local open = config.get("ui.expandThinking", false) == true
-		local formatted, formattedText, formattedRich, plainText
+		local formatted, formattedMobile, formattedText, formattedRich, plainText
 		local function drawBody()
-			if formatted ~= text then
-				local ok, rich = pcall(markdown.inline, text)
-				ok = ok and type(rich) == "string"
-				local plainOk, plain = pcall(markdown.plain, text)
-				plainText = ok and plainOk and type(plain) == "string" and plain or text
-				formatted = text
-				formattedRich, formattedText = ok, ok and rich or text
+			local mobile = mobileThought()
+			if formatted ~= text or formattedMobile ~= mobile then
+				-- A short viewport still lays out the whole native label. Bound the
+				-- phone's drawing source before formatting and measurement, retaining
+				-- the original trace for context and persistence outside presentation.
+				local shown = mobile and util.truncate(text, MOBILE_THOUGHT_BYTES) or text
+				local ok, rich = pcall(markdown.inline, shown)
+				ok = ok and type(rich) == "string" and (not mobile or #rich <= MOBILE_THOUGHT_RICH_BYTES)
+				local plainOk, plain = pcall(markdown.plain, shown)
+				plainText = ok and plainOk and type(plain) == "string" and plain or shown
+				formatted, formattedMobile = text, mobile
+				-- RichText tags can expand a small source. Fall back to its bounded
+				-- plain form rather than cutting through generated markup.
+				formattedRich, formattedText = ok, ok and rich or shown
 			end
 			body.RichText = formattedRich
 			body.Text = formattedText
@@ -937,7 +950,7 @@ return function(env)
 			fitting = true
 			local width = math.max(1, viewport.instance.AbsoluteSize.X - theme.space.sm)
 			local measured = math.max(body.TextBounds.Y, body.AbsoluteSize.Y,
-				P.measureText(plainText or text, { role = "small", width = width }).Y)
+				P.measureText(plainText or "", { role = "small", width = width }).Y)
 			local room = responsive.isMobile() and responsive.usableRect(env.root, 0).height or responsive.viewport.Y
 			local height = math.min(math.max(theme.text.small.height, measured) + theme.space.xxs * 2,
 				math.max(theme.text.small.height * 2, math.min(theme.size.thinkingViewport, room * 0.3)))
@@ -952,7 +965,12 @@ return function(env)
 			local width = viewport.instance.AbsoluteSize.X
 			if width ~= lastWidth then lastWidth = width; fit() end
 		end)
-		local unsubscribe = responsive.changed:connect(fit)
+		local unsubscribe = responsive.changed:connect(function()
+			if open then drawBody() end
+			tokenText.Text = tokenLabel()
+			fitHeader()
+			fit()
+		end)
 		holder.Destroying:Connect(unsubscribe)
 		local function setOpen(value)
 			open = value
@@ -978,7 +996,7 @@ return function(env)
 		function handle.setText(value, isTruncated)
 			local nextText = tostring(value or "")
 			if text == nextText and truncated == (isTruncated == true) then return end
-			if text ~= nextText then formatted, formattedText, formattedRich, plainText = nil, nil, nil, nil end
+			if text ~= nextText then formatted, formattedMobile, formattedText, formattedRich, plainText = nil, nil, nil, nil, nil end
 			text = nextText
 			truncated = isTruncated == true
 			if open then drawBody() end

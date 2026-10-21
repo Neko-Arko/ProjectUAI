@@ -2,6 +2,7 @@
 -- A scripted loopback companion stands in for the Android app; no device is used.
 package.path = "test/?.lua;test/mock/?.lua;" .. package.path
 local envMock, json = require("env"), require("json")
+local F = require("workspace_fixture")
 local passed = 0
 local function check(label, value, expected)
 	if expected ~= nil then assert(value == expected, label .. ": " .. tostring(value) .. " ~= " .. tostring(expected))
@@ -218,6 +219,82 @@ do
 	check("the companion was not asked to infer", companionInference, 0)
 	check("and the answer landed", last(session).content, "Cowork answer.")
 	app.destroy()
+end
+
+-- Source modules cover the dispatch decision before the generated client builds.
+local function sourceRelay(mode)
+	local f = F.new()
+	f.h.services.UserInputService.TouchEnabled, f.h.services.UserInputService.MouseEnabled = true, false
+	f.available, f.stuckHello, f.direct, f.submissions = false, false, 0, 0
+	f.token, f.instance = ("a"):rep(64), "required-relay-fixture"
+	f.h.http.handler = function()
+		f.direct = f.direct + 1
+		return { StatusCode = 200, Body = completion("Direct fixture answer.") }
+	end
+	f.h.http.relay = function(request)
+		if not f.available then return { StatusCode = 503, Body = '{"error":"app stopped"}' } end
+		if request.url:find("/api/hello", 1, true) then
+			local response = hello(f.instance)
+			if f.stuckHello then response.delay = 9 end
+			return response
+		end
+		if request.url:find("/api/pair", 1, true) then return paired(f.token, f.instance) end
+		if request.method == "DELETE" then return { StatusCode = 200, Body = '{"cancelled":true}' } end
+		if request.method == "POST" then
+			f.submissions = f.submissions + 1
+			local input = json.decode(request.body)
+			return { StatusCode = 202, Body = json.encode({ id = input.id, state = "running" }) }
+		end
+		local id = request.url:match("/api/inference/(.+)$")
+		return { StatusCode = 200, Body = json.encode({ id = id, state = "completed", status = 200,
+			body = completion("Required relay answer.") }) }
+	end
+	f.env.require("runtime/config").set("relay.mode", mode)
+	f.link = f.env.require("net/relay_link")
+	local record = f.env.require("provider/registry").blank("custom")
+	record.id, record.model, record.baseUrl, record.apiKey = "required-relay", "harness-model", "https://relay.test/v1", "fixture-key"
+	function f.send()
+		return f.run(function()
+			return f.env.require("provider/chat").complete(record, {
+				messages = { { role = "user", content = "hello" } }, stream = false,
+			})
+		end, 3)
+	end
+	return f
+end
+
+do
+	local f = sourceRelay("always")
+	local response, why = f.send()
+	check("Always mode fails visibly when the companion is absent", not response and why and why:find("local relay", 1, true))
+	check("Always mode never opens a direct provider request while discovery fails", f.direct == 0 and f.submissions == 0)
+	f.healthy(); f.close()
+end
+
+do
+	local f = sourceRelay("auto")
+	local response, why = f.send()
+	check("Auto mode preserves direct fallback when the companion is absent", response and response.content == "Direct fixture answer." and not why)
+	check("Auto fallback dispatches the provider once", f.direct == 1 and f.submissions == 0)
+	f.healthy(); f.close()
+end
+
+do
+	local f = sourceRelay("always")
+	f.available = true
+	check("Always mode pairs with a healthy companion", f.run(f.link.scan, 1) and f.link.usable())
+	f.stuckHello = true
+	local healthy = f.run(f.link.probe, 5.2)
+	check("a timed-out health check removes readiness while retaining native ownership", not healthy and not f.link.usable() and f.env.require("net/http").workers() == 1)
+	local response, why = f.send()
+	check("Always mode remains terminal through a failed health check", not response and why and f.direct == 0 and f.submissions == 0)
+	f.stuckHello = false
+	f.h.sched.advance(4)
+	check("the delayed health completion cannot restore readiness", not f.link.usable() and f.env.require("net/http").workers() == 0)
+	check("a fresh scan restores the same companion", f.run(f.link.scan, 1) and f.link.usable())
+	response, why = f.send()
+	check("Always mode resumes relayed inference after recovery", response and response.content == "Required relay answer." and not why and f.submissions == 1 and f.direct == 0)
+	f.healthy(); f.close()
 end
 
 print(string.format("%d mobile relay checks passed", passed))

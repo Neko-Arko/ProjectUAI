@@ -27,44 +27,47 @@ internal sealed class MainForm : Form
         ShowIcon = false; ShowInTaskbar = true;
         BackColor = Palette.Canvas; ForeColor = Palette.Ink;
         Font = new Font("Segoe UI", 10); AutoScaleMode = AutoScaleMode.Dpi;
-        ClientSize = new Size(980, 830); MinimumSize = new Size(870, 600);
+        ClientSize = new Size(1000, 854); MinimumSize = new Size(700, 560);
         StartPosition = FormStartPosition.CenterScreen;
 
-        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Palette.Canvas };
-        var layout = Column(Palette.Canvas, 28); layout.Dock = DockStyle.Top; layout.Height = 830;
+        var scroll = new DashboardScrollPanel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Palette.Canvas };
+        var layout = Column(Palette.Canvas, 28); layout.Dock = DockStyle.None; layout.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        layout.Size = new Size(ClientSize.Width, 854);
         layout.RowCount = 5;
-        foreach (int height in new[] { 44, 80, 202, 400, 48 }) layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        foreach (int height in new[] { 50, 86, 212, 400, 50 }) layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         scroll.Controls.Add(layout); Controls.Add(scroll);
-        var masthead = Grid(Palette.Canvas, 2); masthead.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); masthead.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210));
-        masthead.Controls.Add(TextLabel("cowork", 19, FontStyle.Bold, Palette.Ink), 0, 0);
+        var masthead = Grid(Palette.Canvas, 3); masthead.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42));
+        masthead.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); masthead.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210));
+        masthead.Controls.Add(new BrandMark { Size = new Size(30, 30), Anchor = AnchorStyles.Top | AnchorStyles.Left, Margin = new Padding(0, 3, 12, 0) }, 0, 0);
+        masthead.Controls.Add(TextLabel("cowork", 20, FontStyle.Bold, Palette.Ink), 1, 0);
         var edition = TextLabel($"PROJECT UAI   /   {DesktopUpdater.CurrentVersion}", 8.5f, FontStyle.Bold, Palette.Muted);
         edition.TextAlign = ContentAlignment.TopRight; edition.Padding = new Padding(0, 10, 0, 0);
-        masthead.Controls.Add(edition, 1, 0); layout.Controls.Add(masthead, 0, 0);
+        masthead.Controls.Add(edition, 2, 0); layout.Controls.Add(masthead, 0, 0);
 
         var intro = Column(Palette.Canvas);
-        intro.RowStyles.Add(new RowStyle(SizeType.Absolute, 43)); intro.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        intro.Controls.Add(TextLabel("Your workspace, connected.", 26, FontStyle.Bold, Palette.Ink), 0, 0);
-        intro.Controls.Add(TextLabel("A little bridge. A bigger place to build.", 10.5f, FontStyle.Regular, Palette.Muted), 0, 1);
+        intro.RowStyles.Add(new RowStyle(SizeType.Absolute, 46)); intro.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        intro.Controls.Add(TextLabel("Your ideas. Room to build.", 28, FontStyle.Bold, Palette.Ink), 0, 0);
+        intro.Controls.Add(TextLabel("Connect your browser, coding agent, and Roblox in one workspace.", 10.5f, FontStyle.Regular, Palette.Muted), 0, 1);
         layout.Controls.Add(intro, 0, 1);
 
-        var card = new SurfacePanel { Dock = DockStyle.Fill, Fill = Palette.Dark, Border = Palette.Dark, Padding = new Padding(25, 22, 25, 20), Margin = new Padding(0, 0, 0, 18) };
+        var card = new SurfacePanel { Dock = DockStyle.Fill, Fill = Palette.Dark, Border = Palette.Dark, Padding = new Padding(26, 23, 26, 22), Margin = new Padding(0, 0, 0, 18) };
         var cardContent = Grid(Palette.Dark, 2); cardContent.RowCount = 2;
-        cardContent.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 63)); cardContent.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 37));
+        cardContent.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60)); cardContent.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
         cardContent.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); cardContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         var status = Column(Palette.Dark);
-        status.RowStyles.Add(new RowStyle(SizeType.Absolute, 21)); status.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); status.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        status.Controls.Add(TextLabel("LIVE CONNECTION", 8, FontStyle.Bold, Color.FromArgb(161, 190, 165)), 0, 0);
-        StyleLabel(state, 20, FontStyle.Bold, Color.White); StyleLabel(detail, 9.5f, FontStyle.Regular, Color.FromArgb(200, 217, 204));
+        status.RowStyles.Add(new RowStyle(SizeType.Absolute, 23)); status.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); status.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        status.Controls.Add(TextLabel("YOUR WORKSPACE", 8, FontStyle.Bold, Palette.DarkMuted), 0, 0);
+        StyleLabel(state, 21, FontStyle.Bold, Color.White); StyleLabel(detail, 9.5f, FontStyle.Regular, Palette.DarkText);
         state.AccessibleName = "Bridge connection status"; detail.AccessibleName = "Connection instructions";
         status.Controls.Add(state, 0, 1); status.Controls.Add(detail, 0, 2); cardContent.Controls.Add(status, 0, 0);
-        connection.Dock = DockStyle.Fill; connection.Margin = new Padding(18, 15, 4, 10); connection.AccessibleName = "Desktop, bridge and Roblox connection";
+        connection.Dock = DockStyle.Fill; connection.Margin = new Padding(12, 5, 0, 10); connection.AccessibleName = "Desktop, bridge and Roblox connection";
         cardContent.Controls.Add(connection, 1, 0);
         var actions = Grid(Palette.Dark, 3);
-        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 158)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 164)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         StyleButton(start, "Start Cowork", true, true); StyleButton(stop, "Stop bridge", false, true);
         start.Click += async (_, _) => { if (bridge.BrowserUrl is not null) OpenBrowser(); else await StartAsync(); };
         stop.Click += async (_, _) => await StopAsync(); actions.Controls.Add(start, 0, 0); actions.Controls.Add(stop, 1, 0);
-        var privateNote = TextLabel("PRIVATE  /  ON THIS COMPUTER", 8, FontStyle.Bold, Color.FromArgb(153, 183, 164)); privateNote.TextAlign = ContentAlignment.MiddleRight;
+        var privateNote = TextLabel("RUNS ON YOUR COMPUTER", 8, FontStyle.Bold, Palette.DarkMuted); privateNote.TextAlign = ContentAlignment.MiddleRight;
         actions.Controls.Add(privateNote, 2, 0); cardContent.Controls.Add(actions, 0, 1); cardContent.SetColumnSpan(actions, 2);
         card.Controls.Add(cardContent); layout.Controls.Add(card, 0, 2);
 
@@ -74,16 +77,16 @@ internal sealed class MainForm : Form
         left.RowStyles.Add(new RowStyle(SizeType.Absolute, 260)); left.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         var integrations = MakeCard(new Padding(0, 0, 0, 12)); var integrationContent = Column(Color.White);
         foreach (int height in new[] { 28, 86, 72, 22 }) integrationContent.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
-        integrationContent.Controls.Add(TextLabel("Connections", 12, FontStyle.Bold, Palette.Ink), 0, 0);
+        integrationContent.Controls.Add(TextLabel("Coding connections", 12, FontStyle.Bold, Palette.Ink), 0, 0);
         openCode.Checked = preferences.OpenCodeEnabled; mcp.Checked = preferences.McpEnabled;
         integrationContent.Controls.Add(Integration("OpenCode tunnel", openCode, openCodeStatus, openCodeDetail), 0, 1);
         integrationContent.Controls.Add(Integration("MCP access", mcp, mcpStatus, mcpDetail), 0, 2);
         StyleLabel(settingsNote, 8.5f, FontStyle.Regular, Palette.Muted);
         integrationContent.Controls.Add(settingsNote, 0, 3); integrations.Controls.Add(integrationContent); left.Controls.Add(integrations, 0, 0);
-        var behavior = MakeCard(Padding.Empty); behavior.Padding = new Padding(20, 13, 20, 13);
+        var behavior = MakeCard(Padding.Empty); behavior.Padding = new Padding(20, 15, 20, 13);
         var behaviorContent = Column(Color.White);
         behaviorContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 26)); behaviorContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 40)); behaviorContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 35));
-        behaviorContent.Controls.Add(TextLabel("Make yourself at home", 11, FontStyle.Bold, Palette.Ink), 0, 0);
+        behaviorContent.Controls.Add(TextLabel("Make it your workspace", 11, FontStyle.Bold, Palette.Ink), 0, 0);
         openBrowser.Checked = preferences.OpenBrowser; startOnLaunch.Checked = preferences.StartOnLaunch;
         behaviorContent.Controls.Add(PreferenceRow("Open browser when bridge starts", openBrowser), 0, 1);
         behaviorContent.Controls.Add(PreferenceRow("Start bridge when app opens", startOnLaunch), 0, 2);
@@ -94,7 +97,7 @@ internal sealed class MainForm : Form
         var nodeCard = MakeCard(new Padding(0, 0, 0, 12)); var nodeContent = Column(Color.White);
         foreach (int height in new[] { 29, 24, 49, 40 }) nodeContent.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         var nodeHeading = Grid(Color.White, 2); nodeHeading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); nodeHeading.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86));
-        nodeHeading.Controls.Add(TextLabel("Ready to run", 12, FontStyle.Bold, Palette.Ink), 0, 0);
+        nodeHeading.Controls.Add(TextLabel("Runtime", 12, FontStyle.Bold, Palette.Ink), 0, 0);
         var manualNode = Link("Manual setup", () => OpenExternal(NodeRuntime.DownloadPage)); manualNode.Padding = new Padding(0, 4, 0, 0);
         nodeHeading.Controls.Add(manualNode, 1, 0); nodeContent.Controls.Add(nodeHeading, 0, 0);
         StyleLabel(nodeState, 10, FontStyle.Bold, Palette.Ink); StyleLabel(nodeDetail, 9, FontStyle.Regular, Palette.Muted);
@@ -107,7 +110,7 @@ internal sealed class MainForm : Form
         nodeContent.Controls.Add(runtimeActions, 0, 3); nodeCard.Controls.Add(nodeContent); right.Controls.Add(nodeCard, 0, 0);
         var updateCard = MakeCard(Padding.Empty); var updateContent = Column(Color.White);
         foreach (int height in new[] { 27, 32, 31, 38, 38 }) updateContent.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
-        updateContent.Controls.Add(TextLabel("Always moving forward", 12, FontStyle.Bold, Palette.Ink), 0, 0);
+        updateContent.Controls.Add(TextLabel("Stay up to date", 12, FontStyle.Bold, Palette.Ink), 0, 0);
         automaticUpdates.Checked = preferences.AutomaticAppUpdates;
         updateContent.Controls.Add(PreferenceRow("Download app updates", automaticUpdates), 0, 1);
         StyleLabel(bridgeUpdate, 8.5f, FontStyle.Regular, Palette.Muted); StyleLabel(appUpdate, 8.5f, FontStyle.Regular, Palette.Muted);
@@ -128,6 +131,75 @@ internal sealed class MainForm : Form
             else OpenExternal("https://github.com/Project-Ptolemy/ProjectUAI/blob/main/bridge/MCP.md");
         }), 3, 0);
         footer.Controls.Add(Link("Get help", () => OpenExternal(BridgeProcess.Discord)), 4, 0); layout.Controls.Add(footer, 0, 4);
+
+        // Keep every action reachable on smaller screens. At narrow widths the
+        // settings cards form one column; the title bar remains native and fixed.
+        var footerNote = footer.GetControlFromPosition(0, 0)!;
+        var footerLinks = Enumerable.Range(1, 4).Select(column => footer.GetControlFromPosition(column, 0)!).ToArray();
+        bool? singleColumn = null;
+        float layoutScale = 0;
+        bool extentRefreshQueued = false;
+        void ReflowDashboard()
+        {
+            float scale = DeviceDpi / 96f;
+            layout.Width = scroll.ClientSize.Width;
+            bool narrow = scroll.ClientSize.Width < 800 * scale;
+            if (singleColumn == narrow && layoutScale == scale) return;
+            singleColumn = narrow; layoutScale = scale;
+            body.SuspendLayout(); layout.SuspendLayout();
+            body.ColumnCount = 2; body.RowCount = 2;
+            body.ColumnStyles.Clear(); body.RowStyles.Clear();
+            body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, narrow ? 100 : 56));
+            body.ColumnStyles.Add(new ColumnStyle(narrow ? SizeType.Absolute : SizeType.Percent, narrow ? 0 : 44));
+            body.RowStyles.Add(new RowStyle(SizeType.Absolute, (narrow ? 416 : 400) * scale));
+            body.RowStyles.Add(new RowStyle(SizeType.Absolute, narrow ? 400 * scale : 0));
+            body.SetCellPosition(right, new TableLayoutPanelCellPosition(narrow ? 0 : 1, narrow ? 1 : 0));
+            left.Margin = narrow ? new Padding(0, 0, 0, (int)(16 * scale)) : new Padding(0, 0, (int)(8 * scale), 0);
+            right.Margin = narrow ? Padding.Empty : new Padding((int)(8 * scale), 0, 0, 0);
+            layout.RowStyles[3].Height = (narrow ? 816 : 400) * scale;
+            connection.Visible = !narrow; cardContent.SetColumnSpan(status, narrow ? 2 : 1);
+            privateNote.Visible = !narrow;
+            // Footer links wrap into their own row when the cards stack.
+            footer.RowCount = narrow ? 2 : 1; footer.RowStyles.Clear(); footer.ColumnStyles.Clear();
+            if (narrow)
+            {
+                footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 26 * scale));
+                footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                for (int column = 0; column < 4; column++) footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+                footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 0));
+            }
+            else
+            {
+                footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                foreach (int width in new[] { 135, 121, 94, 72 }) footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, width * scale));
+            }
+            footer.SetColumnSpan(footerNote, narrow ? 5 : 1);
+            for (int index = 0; index < footerLinks.Length; index++)
+                footer.SetCellPosition(footerLinks[index], new TableLayoutPanelCellPosition(narrow ? index : index + 1, narrow ? 1 : 0));
+            layout.RowStyles[4].Height = (narrow ? 76 : 50) * scale;
+            int dashboardHeight = (int)((narrow ? 1296 : 854) * scale);
+            layout.Height = dashboardHeight;
+            layout.ResumeLayout(); body.ResumeLayout();
+            // Own the canvas extent explicitly: native docking can restore the
+            // previous child height during resize and leave lower cards unreachable.
+            scroll.AutoScrollMinSize = new Size(0, dashboardHeight);
+            if (!extentRefreshQueued && IsHandleCreated)
+            {
+                // ClientSizeChanged can run inside WinForms' scrollbar pass.
+                // Finish that pass before updating the native scroll range.
+                extentRefreshQueued = true;
+                BeginInvoke((Action)(() =>
+                {
+                    extentRefreshQueued = false;
+                    if (IsDisposed || exiting) return;
+                    layout.Width = scroll.ClientSize.Width;
+                    scroll.PerformLayout();
+                    scroll.RefreshExtent();
+                }));
+            }
+        }
+        scroll.ClientSizeChanged += (_, _) => ReflowDashboard();
+        Shown += (_, _) => ReflowDashboard();
 
         foreach (var toggle in new[] { openCode, mcp, openBrowser, automaticUpdates, startOnLaunch }) toggle.CheckedChanged += (_, _) => SavePreferences();
         bridge.Changed += OnChanged; updater.Changed += OnChanged;
@@ -342,14 +414,24 @@ internal sealed class MainForm : Form
         catch (Exception) { /* Closing still releases the owned job in Program's final cleanup. */ }
         lifetime.Cancel(); allowClose = true; Close();
     }
-    public void RenderPreview(string path, bool compact = false)
+    public void RenderPreview(string path, bool compact = false, bool narrow = false)
     {
         preview = true; StartPosition = FormStartPosition.Manual; Location = new Point(-30000, -30000); ShowInTaskbar = false;
-        if (compact) ClientSize = new Size(870, 650);
+        if (narrow) ClientSize = new Size(700, 650);
+        else if (compact) ClientSize = new Size(870, 650);
         Shown += async (_, _) =>
         {
             await FindNodeAsync(); await Task.Delay(250);
-            using var bitmap = new Bitmap(Width, Height); DrawToBitmap(bitmap, new Rectangle(Point.Empty, Size)); bitmap.Save(Path.GetFullPath(path));
+            string output = Path.GetFullPath(path);
+            using var bitmap = new Bitmap(Width, Height); DrawToBitmap(bitmap, new Rectangle(Point.Empty, Size)); bitmap.Save(output);
+            if (narrow)
+            {
+                var scroll = Controls.OfType<Panel>().Single(panel => panel.AutoScroll);
+                scroll.AutoScrollPosition = new Point(0, scroll.DisplayRectangle.Height);
+                await Task.Delay(100);
+                using var bottom = new Bitmap(Width, Height); DrawToBitmap(bottom, new Rectangle(Point.Empty, Size));
+                bottom.Save(Path.Combine(Path.GetDirectoryName(output)!, Path.GetFileNameWithoutExtension(output) + "-bottom.png"));
+            }
             allowClose = true; Close();
         };
     }

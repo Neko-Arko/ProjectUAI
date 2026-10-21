@@ -4,15 +4,17 @@ A universal AI agent that runs inside a Roblox client. It works in any game,
 with Chat Completions and Anthropic Messages endpoints, including compatible
 local servers and relays.
 
-**Bridge 3.6.2 — October 21, 2026: OpenCode execution permission gate.**
-The 3.6.1 patch still failed when OpenCode's native execution wrapper skipped its
-permission request or the request appeared after the tool. The bridge now installs
-a private execution gate, waits for the matching permission, and confirms
-interruption before returning blocked-action feedback. The Roblox agent can then
-select an available tool and continue. Existing desktop 3.6.0 installs fetch the
-bridge update automatically while idle. Client remains 3.6.1.
+**Project UAI 3.6.5 — October 21, 2026: unified client, bridge and app release.**
+The bridge includes the verified OpenCode execution guard and matching permission
+handling, so a blocked desktop action can return to the Roblox agent for
+continuation. The client bounds mobile native HTTP concurrency and expanded
+thinking presentation. The Android companion checks complete encoded replies
+before sending an oversized body to the executor. Relay **Always** requires a
+relay even while discovery is unavailable; **Auto** keeps direct fallback.
+The desktop launcher refreshes its connection dashboard and groups its settings.
+All four components and their downloads share version 3.6.5.
 
-The 3.6.0 app releases retain their existing downloads and automatic updates.
+The apps retain verified automatic downloads and updates.
 The public page has a responsive white monochrome design with an interactive 3D
 centerpiece and animated SVGs, with pause controls and reduced-motion support.
 Bridge responses put the answer first, with tools and thinking grouped into
@@ -44,7 +46,7 @@ workspace. Go keeps its own catalog and routes; the optional free CLI backend
 does not intercept it. Subscription and workspace region refusals identify the
 setting to check. See [provider setup](docs/PROVIDER_COMPATIBILITY.md).
 
-Client is 3.6.1 and bridge is 3.6.2; desktop and Android companion remain 3.6.0.
+Client, bridge, Windows desktop and Android companion are 3.6.5.
 UI LIB remains 1.3.0 and SDK 1.0.0.
 Model pricing and context/reply limits use a refreshed provider-specific catalog;
 included Project UAI Free access is counted at zero cost.
@@ -60,7 +62,8 @@ it. The model modal edits the same global effort setting, including for other
 models when **Options → Reasoning support** is enabled. The Thinking row estimates
 visible text only. A long retained trace is labelled
 **Excerpt**, not a 5,999-token model limit. See [provider behavior](docs/PROVIDER_COMPATIBILITY.md).
-See [bridge 3.6.2 verification](docs/TESTING_3.6.2.md),
+See [3.6.5 verification](docs/TESTING_3.6.5.md),
+[bridge 3.6.2 verification](docs/TESTING_3.6.2.md),
 [3.6.1 verification](docs/TESTING_3.6.1.md), [3.6.0 verification](docs/TESTING_3.6.0.md),
 [mobile research](docs/OPENCODE_MOBILE_RESEARCH.md) and
 [companion update checks](companion/UPDATES.md). Native Android, mobile executor
@@ -718,7 +721,8 @@ first two entirely.
 
 Cowork gives your Roblox conversation more room in the browser. Keep Roblox and
 its local bridge running on the same computer. The [Windows desktop launcher](desktop/README.md)
-is a single **UAI-Bridge-3.6.0-win-x64.exe** download. Open it directly,
+is a single [UAI-Bridge-3.6.5-win-x64.exe](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.6.5/UAI-Bridge-3.6.5-win-x64.exe)
+download. Open it directly,
 complete Node setup if needed using **Get Node.js** or an existing
 installation, click **Start Cowork**, and load the updated UAI script. It discovers the app on dedicated port
 **28791** and reconnects automatically after app restarts. The executable includes
@@ -781,7 +785,7 @@ troubleshooting, limits, architecture, and organized Node/Lua/browser tests.
 
 ## Android companion
 
-Install [UAI Relay 3.6.0](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.6.0/UAI-Relay-3.6.0.apk)
+Install [UAI Relay 3.6.5](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.6.5/UAI-Relay-3.6.5.apk)
 on Android 8 or later, start the relay, and load the current UAI script in your
 executor. With Relay mode set to Auto, the client discovers and pairs with the
 companion on the same phone. The relay holds the provider connection while the

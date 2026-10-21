@@ -21,10 +21,28 @@ the original app design and historical implementation plan follow afterward.
 
 ## Current companion transport and diagnostics
 
-Companion **3.6.0 (version code 5)** adds bounded gzip decoding for local JSON
-requests, including requests whose executor omits the gzip header. It also revises
-the setup and status screens to distinguish a running relay, a saved pairing and
-recent authenticated Roblox contact.
+Companion **3.6.5 (version code 6)** caps the full UTF-8 reply to the executor at
+8 MiB, including JSON escaping and the additional `/api/executor` envelope. It
+counts the retained body's encoded size before allocating an oversized reply.
+Overflow returns HTTP 413, or status 413 inside the executor envelope, with a
+fixed `response_limit` category. The client stops polling without resubmitting
+inference. Exact provider bodies and job identities remain unchanged within the
+limit; resetting pairing cannot repair an oversized response.
+
+The updated client keeps one native HTTP exchange lane on touch-only hosts and
+a separate cancellation lane. Lua timeouts, Stop and client reload do not release
+a still-running native call. Relay **Always** requires a relay when discovery is
+unavailable; Auto keeps direct fallback. Touch-only expanded reasoning uses an
+8 KiB presentation excerpt before formatting and native measurement, with plain
+text fallback if RichText expands beyond 32 KiB. Original provider reasoning in
+context and persistence remains intact. These reduce avoidable transport/layout
+work; they do not identify the native component responsible for the reported
+Roblox `SIGSEGV`. See [the investigation](INVESTIGATION_MOBILE_CRASHES.md).
+
+Companion 3.6.0 (version code 5) introduced bounded gzip decoding for local JSON
+requests, including requests whose executor omits the gzip header. Its setup and
+status screens distinguish a running relay, a saved pairing and recent
+authenticated Roblox contact.
 
 The October 19, 2026 pre-fix reproduction showed successful plain pairing/status
 (200), followed by valid gzip JSON rejected with

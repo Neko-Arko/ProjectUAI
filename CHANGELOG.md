@@ -1,5 +1,26 @@
 # Changelog
 
+## 3.6.5 — October 21, 2026 — Reliable connections and a refreshed desktop
+
+- Release the client, bridge, Windows app and signed Android companion together
+  as 3.6.5. Preserve verified updates and the Android production signing identity.
+- Refresh the Windows launcher with clearer connection status, setup, runtime
+  and update controls. Correct single-instance startup so an unowned existing
+  mutex does not silently discard the first launch; retain early restore requests.
+- Share unfinished native HTTP ownership on touch-only devices across discovery,
+  new requests, Stop and supported client reloads. Keep one independent bounded
+  cancellation lane, and retain desktop parallel capacity.
+- Enforce Always use relay after failed discovery. Stop oversized or malformed
+  relay replies once without polling the same unusable response indefinitely.
+- Check the complete UTF-8 companion response, including both JSON escaping
+  layers, before expanding large provider bodies. Return a small 413 error above
+  8 MiB, preserving the exact receipt and original provider submission.
+- Bound expanded mobile reasoning before Markdown formatting and native layout.
+  Label the excerpt and preserve full reasoning in model context and persistence.
+- Include bridge 3.6.2's verified OpenCode execution permission gate. The reported
+  Android SIGSEGV has no native backtrace; these fixes remove reproduced defects
+  without claiming to identify or reproduce that device crash.
+
 ## Bridge 3.6.2 — October 21, 2026 — OpenCode execution permission gate
 
 - Fix the remaining `OpenCode could not verify that a desktop tool was blocked`

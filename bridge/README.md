@@ -3,7 +3,8 @@
 Use UAI in your browser while Roblox runs your tools and keeps the conversation.
 Run both on the same computer. The [Windows desktop app](../desktop/README.md)
 detects installed Node.js and offers a verified download if needed. Open the
-single **UAI-Bridge-3.6.0-win-x64.exe** download, complete Node setup, click **Start
+single [UAI-Bridge-3.6.5-win-x64.exe](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.6.5/UAI-Bridge-3.6.5-win-x64.exe)
+download, complete Node setup, click **Start
 Cowork**, and load the updated UAI script. The browser opens and Roblox connects
 automatically on dedicated port **28791**. No terminal or token copying is needed.
 
@@ -128,18 +129,21 @@ Failed downloads or startup keep a working version. Git checkouts and executor
 download packages are never overwritten; updates live in a per-install user cache.
 
 Publish `dist/bridge-release.json` and `dist/uai-bridge-package.json` on the same
-official `bridge-v3.6.2` GitHub release. Generate them with
+official `v3.6.5` GitHub release together with the matching client, desktop and
+Android assets. Generate them with
 `node tools/build_bridge.js` after reviewing final bridge/web inputs, inspect
 the outputs, then run `node tools/build_bridge.js --check` and focused tests.
 Later releases must bump `bridge/release.js` and use the matching release tag.
 The release builder embeds OpenCode, MCP and support helpers into the original
-permitted root filenames so installed 3.1 updaters can verify and activate 3.3. Checkout,
+permitted root filenames so installed 3.1 updaters can verify and activate 3.6.5. Checkout,
 executor downloads and desktop payloads retain the separate source modules.
 
-Existing desktop 3.6.0 receives bridge 3.6.2 and all web files through this updater;
-no new desktop executable is needed. Refresh an open browser page to load changed
-web assets. Client remains 3.6.1; the desktop's **Copy client script** retains its
-embedded client version. See [bridge 3.6.2 verification](../docs/TESTING_3.6.2.md).
+The unified 3.6.5 release supplies the matching bridge, web, client and app
+versions. Existing compatible installs receive bridge and web updates while idle.
+Refresh an open browser page to load changed web assets. The desktop's **Copy
+client script** uses its embedded client; update the desktop app to refresh that
+copy. See [3.6.5 verification](../docs/TESTING_3.6.5.md) and the earlier
+[bridge 3.6.2 record](../docs/TESTING_3.6.2.md).
 
 The [desktop app](../desktop/README.md) independently downloads its own release
 and applies it on restart. An old 1.0 desktop ZIP needs one manual upgrade first.
@@ -293,8 +297,9 @@ short screens with full drafts, long task lists and model names, live question a
 selection updates, dialog errors, keyboard focus, contrast, and forced colors.
 Inspect the saved screenshots as well as checking geometry. These fixtures do not
 replace a live executor check. See the [UI audit](UI_AUDIT.md) for the findings.
-The [3.6.0 verification record](../docs/TESTING_3.6.0.md) records the current
-release checks. The [3.5.6 record](../docs/TESTING_3.5.6.md) and
+The [3.6.5 verification record](../docs/TESTING_3.6.5.md) records the current
+release checks. The [3.6.0 record](../docs/TESTING_3.6.0.md),
+[3.5.6 record](../docs/TESTING_3.5.6.md) and
 [3.3.5 record](../docs/TESTING_3.3.5.md) remain available for the earlier releases.
 
 Protocol remains version 2. `/api/hello` advertises optional picture and normalized

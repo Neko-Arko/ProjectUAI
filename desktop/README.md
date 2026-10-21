@@ -5,10 +5,15 @@ updated Roblox script automatically. The desktop project is separate from the
 existing bridge and uses its server in `--desktop` mode on **127.0.0.1:28791**.
 Manual terminal startup keeps port 8790 and its existing token workflow.
 
-Download and open **UAI-Bridge-3.6.0-win-x64.exe**, then click
+Download and open [UAI-Bridge-3.6.5-win-x64.exe](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.6.5/UAI-Bridge-3.6.5-win-x64.exe), then click
 **Start Cowork**. The window shows connection, Node.js setup, OpenCode and
 update status. It detects Node.js 18+ on your computer. If none is available,
 choose **Get Node.js** or **Manual setup**, then **Check again**.
+
+The 3.6.5 dashboard groups connection, coding integrations, preferences and
+updates into cards, with a single scrolling column on narrow windows. The first
+launch opens even when a previous instance left an unowned mutex behind. A second
+launch brings the existing window forward, including requests made during startup.
 The app downloads the current Windows x64 LTS executable from nodejs.org, checks
 its official SHA-256, and installs it for your account without administrator
 access.
@@ -33,9 +38,9 @@ and closing the window shut them down. The bridge also supports an absolute
 The existing direct desktop workaround still works without this app. This native
 route provides an additional desktop option; on mobile, OpenCode requires the UAI
 Relay app from Discord.
-UAI tools are returned to Roblox for execution. Bridge 3.6.2 installs a private
-execution permission gate and waits for matching pending permissions before
-returning blocked-action feedback. The CLI never receives permission to run local
+UAI tools are returned to Roblox for execution. Bridge 3.6.5 includes the private
+execution guard and matching permission handling before returning
+blocked-action feedback. The CLI never receives permission to run local
 desktop tools. Provider keys and existing OpenCode credentials are not
 copied into its isolated session. OpenCode's retired HTTPS proxy is not used.
 
@@ -106,10 +111,10 @@ bridge together when building a desktop distribution.
 Bridge releases download automatically, are verified, and activate only when
 active work and retained receipts/pictures are idle. An automatic worker restart
 keeps the same pairing token. The browser reconnects to the updated bridge.
-This includes bridge/web assets: desktop 3.6.0 receives the bridge 3.6.2 tunnel fix
-without a new executable. Client remains 3.6.1. Refresh an open browser page to
-load changed web assets. **Copy client script** still copies the client embedded
-in the desktop executable. See [bridge 3.6.2 verification](../docs/TESTING_3.6.2.md).
+The unified 3.6.5 release supplies matching bridge, web, client and app versions.
+Refresh an open browser page to load changed web assets. **Copy client script**
+copies the client embedded in the desktop executable. Install the current desktop
+app to update that embedded client. See [3.6.5 verification](../docs/TESTING_3.6.5.md).
 
 The desktop app separately checks stable releases in
 `Project-Ptolemy/ProjectUAI` on startup and every 15 minutes. It downloads and
@@ -124,7 +129,7 @@ cannot start. The original shortcut continues to work. Bridge cache identity
 stays stable across desktop updates. Failed network or integrity checks leave
 the current app usable and retry later.
 
-Desktop 1.0 has no updater, so its users need one manual download of 3.6.0 first.
+Desktop 1.0 has no updater, so its users need one manual download of 3.6.5 first.
 For each future release, publish `desktop-release.json`,
 `UAI-Bridge-<version>-win-x64.exe`, and its adjacent `.sha256` on the same official
 `v<version>` or `desktop-v<version>` GitHub release. The manifest includes the

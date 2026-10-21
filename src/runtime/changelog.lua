@@ -19,6 +19,27 @@ return function(env)
 	local CATEGORY_ORDER = { "added", "improved", "fixed" }
 	local ENTRIES = {
 		{
+			version = "3.6.5",
+			revision = "2026-10-21-unified-mobile-desktop",
+			date = "October 21, 2026",
+			title = "Reliable connections and a refreshed desktop",
+			highlights = "Matching client, bridge, Windows and Android releases with bounded mobile transport and a refreshed desktop launcher.",
+			sections = {
+				{ category = "improved", label = "Desktop", items = {
+					"A refreshed Cowork launcher brings clearer connection status, setup and update controls. Open the executable once to start; an existing window can be brought forward during startup.",
+					"Client, bridge, Windows app and Android companion now share version 3.6.5 in one release. Existing update flows retain their verified downloads and production identity.",
+				} },
+				{ category = "fixed", label = "Mobile transport", items = {
+					"Unfinished mobile native HTTP calls keep ownership across discovery, Stop, new requests and supported client reloads. A separate bounded cancellation lane keeps Stop responsive.",
+					"Always use relay stays enforced after a failed health check. Oversized or malformed replies stop polling without resubmitting inference; the companion checks the complete encoded reply before sending it.",
+					"Expanded thinking on touch-only devices draws a bounded excerpt while retaining the original reasoning in conversation context and saved history.",
+				} },
+				{ category = "fixed", label = "OpenCode", items = {
+					"Includes the verified OpenCode execution gate from bridge 3.6.2. Desktop tool selections return blocked-action feedback so the Roblox conversation can continue with available tools.",
+				} },
+			},
+		},
+		{
 			version = "3.6.1",
 			revision = "2026-10-20-opencode-tool-recovery",
 			date = "October 20, 2026",

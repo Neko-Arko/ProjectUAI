@@ -47,11 +47,13 @@ local function companion()
 			return reply({ ok = true, protocol = 2, instance = f.instance, token = f.token })
 		elseif request.method == "DELETE" then
 			f.deletes = f.deletes + 1
+			f.deletedId = request.url:match("/api/inference/([^?]+)$")
 			return reply({ cancelled = true })
 		elseif request.method == "POST" then
 			f.submissions = f.submissions + 1
 			local input = f.h.json.decode(request.body)
 			f.id = input.id
+			if f.onSubmit then return f.onSubmit(request) end
 			return reply({ id = input.id, state = "running" }, 202)
 		end
 		f.polls = f.polls + 1
@@ -65,9 +67,47 @@ local function companion()
 	check("companion is authenticated", f.run(f.env.require("net/relay_link").scan, 1))
 	function f.send(stopped)
 		return http.send({ url = "https://provider.fixture/v1/chat/completions", method = "POST", body = "{}", relay = true,
-			aborted = stopped })
+			aborted = stopped, attempts = 3 })
 	end
 	return f, reply
+end
+
+case("an oversized completed envelope stops unlimited polling after one response", function()
+	local f, reply = companion()
+	local providerBody = string.rep('"', f.http.limits.body / 2)
+	f.onPoll = function()
+		local response = reply({ id = f.id, state = "completed", status = 200, body = providerBody })
+		check("a provider body within its budget can exceed the native envelope limit", #providerBody < f.http.limits.body and #response.Body > f.http.limits.body)
+		return response
+	end
+	local response, why = f.run(function() return f.send() end, 3)
+	check("the unusable result ends the relay with a bounded terminal failure", response and response.terminal and response.status == 599 and not why
+		and response.body:find("response_limit:", 1, true) and #response.body < 400)
+	check("the same job is cancelled once without a second poll or inference", f.polls == 1 and f.submissions == 1 and f.deletes == 1 and f.deletedId == f.id)
+	f.h.sched.advance(20)
+	check("no waiter or later poll survives the terminal envelope failure", f.http.workers() == 0 and f.http.relayWorkers() == 0 and f.polls == 1 and f.submissions == 1 and f.deletes == 1)
+	f.healthy(); f.close()
+end)
+
+for _, stage in ipairs({ "submission", "poll" }) do
+	for _, kind in ipairs({ "malformed", "malformed_stream" }) do
+		case(stage .. " " .. kind .. " cannot trigger another exchange or provider replay", function()
+			local f = companion()
+			local function badReply()
+				if kind == "malformed" then return { StatusCode = 200, Body = {} } end
+				error("malformed_stream: private fixture failure " .. f.token, 0)
+			end
+			if stage == "submission" then f.onSubmit = badReply else f.onPoll = badReply end
+			local response, why = f.run(function() return f.send() end, 3)
+			check("invalid native response ends the request without exposing its raw error", response and response.terminal and response.status == 599 and not why
+				and response.body:find("malformed:", 1, true) and not response.body:find(f.token, 1, true))
+			check("cancellation targets the accepted identity once", f.submissions == 1 and f.deletes == 1 and f.deletedId == f.id and f.polls == (stage == "poll" and 1 or 0))
+			f.h.sched.advance(20)
+			check("terminal malformed response leaves no native or relay waiter", f.http.workers() == 0 and f.http.relayWorkers() == 0 and f.submissions == 1 and f.deletes == 1
+				and f.polls == (stage == "poll" and 1 or 0))
+			f.healthy(); f.close()
+		end)
+	end
 end
 
 case("unlimited thinking cannot accumulate overlapping stuck polls and Stop remains independent", function()

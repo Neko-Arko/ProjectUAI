@@ -10,6 +10,9 @@ import kotlinx.serialization.encodeToString
 import dev.projectuai.relay.protocol.RelayJson
 import dev.projectuai.relay.protocol.StatusResponse
 import dev.projectuai.relay.protocol.SubmitRequest
+import dev.projectuai.relay.protocol.ErrorBody
+import dev.projectuai.relay.protocol.JobState
+import dev.projectuai.relay.protocol.JobView
 import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -259,6 +262,69 @@ class RelayServerTest {
         assertEquals(202, executor(token, "POST", "/api/inference", body.replace("inference_executor", "inference_cancel")).status)
         assertEquals(200, executor(token, "DELETE", "/api/inference/inference_cancel").status)
         assertTrue(executor(token, "GET", "/api/inference/inference_cancel").body.contains("cancelled"))
+    }
+
+    @Test
+    fun `executor rejects expanded response before native delivery without discarding or replaying receipt`() {
+        val token = pair()
+        // This provider body fits the raw cap and the direct JSON response, but
+        // the second layer of escaping exceeds the native 8 MiB response cap.
+        val answer = "\"".repeat((ResponseBodySize.LIMIT / 4).toInt())
+        val id = "inference_executor_limit"
+        upstream.enqueue(MockResponse().setBody(answer))
+        val submission = RelayJson.encodeToString(SubmitRequest(id, "inst-test", upstream.url("/v1").toString(), body = "{}"))
+        assertEquals(202, executor(token, "POST", "/api/inference", submission).status)
+        val receipt = awaitReceipt(id)
+        assertEquals(JobState.COMPLETED, receipt.state)
+        assertTrue(ResponseBodySize.bytes(receipt) < ResponseBodySize.LIMIT)
+        assertTrue(ResponseBodySize.bytes(receipt, 200) > ResponseBodySize.LIMIT)
+        repeat(2) {
+            val response = executor(token, "GET", "/api/inference/$id")
+            assertEquals(413, response.status)
+            assertEquals(ResponseBodySize.FAILURE, RelayJson.decodeFromString<ErrorBody>(response.body).error)
+            assertTrue(response.body.length < 256)
+            assertEquals(answer, engine.poll(id)!!.body)
+        }
+        // A matching retry is still the original completed job, even when its
+        // executor response cannot be delivered. No second provider submission.
+        assertEquals(413, executor(token, "POST", "/api/inference", submission).status)
+        call("/api/inference/$id", token = token).use {
+            assertEquals(200, it.code)
+            assertEquals(answer, RelayJson.decodeFromString<JobView>(it.body!!.string()).body)
+        }
+        assertEquals(1, upstream.requestCount)
+        assertEquals(1, engine.activity().acceptedJobs)
+        assertEquals(token, settings.token)
+    }
+
+    @Test
+    fun `direct polling rejects response expansion while retaining the exact completed body`() {
+        val token = pair()
+        val answer = "\"".repeat((ResponseBodySize.LIMIT / 2).toInt())
+        val id = "inference_direct_limit"
+        upstream.enqueue(MockResponse().setBody(answer))
+        val submission = RelayJson.encodeToString(SubmitRequest(id, "inst-test", upstream.url("/v1").toString(), body = "{}"))
+        call("/api/inference", "POST", submission, token = token).use { assertEquals(202, it.code) }
+        assertEquals(JobState.COMPLETED, awaitReceipt(id).state)
+        repeat(2) {
+            call("/api/inference/$id", token = token).use {
+                assertEquals(413, it.code)
+                val body = it.body!!.string()
+                assertTrue(body.length < 256)
+                assertEquals(ResponseBodySize.FAILURE, RelayJson.decodeFromString<ErrorBody>(body).error)
+            }
+            assertEquals(answer, engine.poll(id)!!.body)
+        }
+        assertEquals(1, upstream.requestCount)
+    }
+
+    private fun awaitReceipt(id: String): JobView {
+        val deadline = System.currentTimeMillis() + 5000
+        while (System.currentTimeMillis() < deadline) {
+            engine.poll(id)?.let { if (it.state != JobState.RUNNING) return it }
+            Thread.sleep(20)
+        }
+        error("job did not finish")
     }
 
     private fun gzip(text: String): ByteArray = ByteArrayOutputStream().also { output ->
