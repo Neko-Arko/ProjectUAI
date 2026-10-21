@@ -47,6 +47,30 @@ permission was approved and no real Roblox action was executed; these probes
 verify provider transport and continuation with synthetic tool results. The full
 native suite and Roblox rendering/input were not exercised for this bridge patch.
 
+## Follow-up with the handover API key
+
+The initial native CLI checks above used the official free-model connection
+without supplying a provider API key. A follow-up used the designated secondary
+OpenCode key from the private handover, read only into memory.
+
+Requests carrying that key through the production inference bridge passed
+DeepSeek text, continuation from the actual blocked `execute` receipt, and
+tool-result replay, all HTTP 200. Duplicate submissions retained the same job.
+The native backend intentionally does not forward provider keys into the CLI.
+
+Direct requests to `/zen/v1/chat/completions` sent the same real key upstream
+and used the production Lua adapter's request builder, desktop headers, seven
+compatibility declarations and response parser. DeepSeek passed exact text,
+`uai_lookup` invocation and replay of the returned call ID, arguments and
+reasoning. The complete tool stream ended with `tool_calls`; synthetic results
+were supplied without executing a host or Roblox action.
+
+The previously verified `muse-spark-1.3-contributor-free` Responses model returned
+HTTP 410 `ModelDeprecated`. The authenticated current model list supplied no
+free Muse/GPT/Grok replacement, so direct keyed Responses inference was not
+verified in this follow-up. Native Responses checks above remain valid for the
+tested CLI catalog. No private key was written to source, artifacts or logs.
+
 The stable release is `bridge-v3.6.2` with `bridge-release.json` and
 `uai-bridge-package.json`. Installed desktop 3.6.0 checks this release through its
 existing bridge updater and activates it when work and retained receipts are idle.
