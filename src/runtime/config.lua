@@ -160,6 +160,10 @@ return function(env)
 			-- profile hides the long tail behind tool_search without changing
 			-- dispatch scope or permissions.
 			toolProfile = "all",
+			-- Durable evidence policy. "large" copies only results at or above
+			-- evidenceMinBytes; source and file tools already have a durable home.
+			evidence = "large",
+			evidenceMinBytes = 8192,
 			-- The language the agent is asked to answer in, when one has been named.
 			-- Empty means "whatever the conversation is in".
 			--

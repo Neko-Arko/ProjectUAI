@@ -28,10 +28,15 @@
   default; leaner profiles declare a core set, while hidden tools remain callable
   with the same permissions, groups and conversation scope. See
   [the tool context guide](docs/TOOL_CONTEXT.md).
-- Retain tool results in a durable per-conversation evidence ledger without
-  changing the inline receipt. `evidence` lists, searches and pages full text or
-  structured data after compaction; the newest 200 records per conversation are
-  kept and other conversations remain unreadable.
+- Retain large tool results in a durable per-conversation evidence ledger without
+  changing the inline receipt. The default 8 KiB threshold skips small results and
+  tools with their own persistent home, and identical results are deduplicated.
+  Writes are queued and batched off the tool path with a 64-result / 4 MiB bound,
+  so a fast model cannot grow the queue or block every call on disk. Settings →
+  Agent → Tool evidence can switch to all, large or off. `evidence`
+  lists, searches and pages full text or structured data after compaction, while
+  `evidence_clear` removes a conversation's ledger. Other conversations remain
+  unreadable.
 - Add a local, redacted support bundle for bug reports. It collects capabilities,
   provider health, permissions, enabled tools, session metadata, recent HTTP
   failures and logs, while excluding API keys, memory, custom instructions,

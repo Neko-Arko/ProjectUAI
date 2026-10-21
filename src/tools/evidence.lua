@@ -52,5 +52,19 @@ return function(env)
 				return H.fail("unknown action")
 			end,
 		},
+		{
+			name = "evidence_clear",
+			risk = "write",
+			needs = { "fs" },
+			description = "Delete retained tool evidence for this conversation. Does not delete files, conversations or captured records.",
+			parameters = { type = "object", properties = {}, required = {} },
+			run = function(_, ctx)
+				local before = evidence.state(ctx and ctx.session)
+				evidence.clear(ctx and ctx.session)
+				local after = evidence.state(ctx and ctx.session)
+				return { text = string.format("Evidence cleared: %d record(s), %.1f KiB removed.", before.records or 0,
+					((before.bytes or 0) - (after.bytes or 0)) / 1024), data = { before = before, after = after } }
+			end,
+		},
 	}
 end

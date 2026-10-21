@@ -36,20 +36,33 @@ missing a capability is not listed and cannot be called through the toolbox.
 
 ## Persistent evidence ledger
 
-Every tool result is copied under the app root (`evidence/<conversation>/`) with
-a compact per-conversation index. The normal inline result is unchanged, so this
-is additive rather than a replacement.
+Substantial tool results are copied under the app root
+(`evidence/<conversation>/`) with a compact per-conversation index. The normal
+inline result is unchanged, so this is additive rather than a replacement.
+
+The default **Large results** policy keeps results at or above 8 KiB, deduplicates
+identical results and skips tools that already have a durable home: source and
+file reads, memory, conversation reads, the toolbox and the capture readers. A
+small result costs more to index than to call again. **Settings → Agent → Tool
+evidence** can switch to **All results** or **Off**.
+
+Writes are batched off the tool path: at most 64 queued results / 4 MiB are held,
+then flushed in short batches of 8 / 2 MiB. If a fast model produces results
+faster than they can be written, new entries are dropped and counted rather than
+blocking a tool call or growing memory without bound. Each text/data field is
+capped at 256 KiB.
 
 The `evidence` tool reads it:
 
 - `list` / `search` — receipts with tool, time, bytes and a short preview.
 - `read` — full `text`, structured `data`, or a `summary`, paged by byte offset.
+- `evidence_clear` — remove this conversation's ledger.
 
 This is most useful after compaction removes an earlier tool result. The ledger
 is conversation-scoped: another conversation's records are not readable. The
-index keeps the newest 200 results per conversation and removes the oldest
-record files. Removing a conversation removes its ledger. Evidence is local; it
-is excluded from the support bundle.
+index keeps the newest 200 results / 16 MiB per conversation and removes the
+oldest record files. Removing a conversation removes its ledger. Evidence is
+local; it is excluded from the support bundle.
 
 ## Support bundle
 

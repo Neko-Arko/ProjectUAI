@@ -1009,6 +1009,20 @@ return function(env)
 				end,
 			},
 			{
+				name = "ClearEvidence",
+				text = "Clear evidence",
+				variant = "ghost",
+				onClick = function()
+					local current = sessions.activeId and sessions.get(sessions.activeId)
+					if not current then overlay.toast("No active conversation", "warn", 3); return end
+					local evidence = env.require("runtime/evidence")
+					local before = evidence.state(current)
+					evidence.clear(current)
+					overlay.toast(string.format("Cleared %d evidence record(s), %.1f KiB",
+						before.records or 0, (before.bytes or 0) / 1024), "good", 3)
+				end,
+			},
+			{
 				name = "CopyDiagnostics",
 				text = "Copy diagnostics",
 				variant = "ghost",
@@ -1154,6 +1168,16 @@ return function(env)
 			hint = "All keeps every tool declared. Other profiles declare a smaller core; hidden tools remain callable through tool_search with their normal permissions and scope.",
 			path = "agent.toolProfile",
 			options = env.require("agent/tool_profiles").options(),
+		})
+		R.select(agent, {
+			label = "Tool evidence",
+			hint = "Large keeps only results at or above 8 KiB for later recovery; source and file tools are already durable. All keeps every result; Off writes nothing.",
+			path = "agent.evidence",
+			options = {
+				{ value = "large", label = "Large results (8 KiB+)" },
+				{ value = "all", label = "All results" },
+				{ value = "off", label = "Off" },
+			},
 		})
 		R.number(agent, "Tool timeout",
 			"Seconds before a tool is abandoned. Subagents are exempt: they run to their own budget below.",

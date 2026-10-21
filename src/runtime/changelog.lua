@@ -31,7 +31,7 @@ return function(env)
 				} },
 				{ category = "added", label = "Tools and diagnostics", items = {
 					"Choose an opt-in tool profile in Settings → Agent to declare a smaller catalogue. All tools remains the default; hidden tools stay callable through tool_search with their normal permissions and conversation scope.",
-					"Retain tool results in a per-conversation evidence ledger. The evidence tool lists, searches and pages full text or structured data after compaction, without changing the inline result.",
+					"Retain large tool results in a per-conversation evidence ledger. The default 8 KiB threshold skips small results and already-persistent tools, deduplicates repeats and writes through a bounded queue instead of blocking each tool call. Switch to all or off in Settings. The evidence tool lists, searches and pages full text or structured data after compaction; evidence_clear removes a conversation's ledger.",
 					"Create a local, redacted support bundle from Diagnostics. It excludes API keys, memory, custom instructions, conversation text, file contents and captured payloads.",
 				} },
 				{ category = "improved", label = "Desktop", items = {

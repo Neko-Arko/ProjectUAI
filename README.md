@@ -203,9 +203,9 @@ hooks; nothing is rewritten, replayed or executed by the capture. See
 **Tool profiles, evidence and support.** The default **All tools** profile keeps
 the complete catalogue. Leaner profiles declare a core set for a smaller request,
 while `tool_search` lists, describes and calls every hidden tool with the same
-permissions and conversation scope. Tool results are also retained in a
-per-conversation evidence ledger (`evidence` list/search/read) so compaction does
-not lose the full receipt. `support_bundle` writes a local, redacted diagnostic
+permissions and conversation scope. Large tool results (8 KiB+ by default) are
+retained in a per-conversation evidence ledger (`evidence` list/search/read) so
+compaction does not lose the full receipt. `support_bundle` writes a local, redacted diagnostic
 file for bug reports, excluding keys, memory, conversation text, file contents
 and captured payloads. See [the tool context guide](docs/TOOL_CONTEXT.md).
 

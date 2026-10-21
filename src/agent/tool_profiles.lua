@@ -13,7 +13,7 @@ return function(env)
 		"skills_list", "skills_read",
 		"dispatch_agent", "agent_status", "agent_followup",
 		"conversation_search", "conversation_read",
-		"tool_search", "evidence", "support_bundle",
+		"tool_search", "evidence", "evidence_clear", "support_bundle",
 	}
 
 	local PROFILES = {
