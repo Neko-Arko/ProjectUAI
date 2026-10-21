@@ -59,7 +59,10 @@ for _, viewport in ipairs({ { 1280, 800, false }, { 390, 844, true }, { 844, 390
 	snapshot("overview")
 	window:SelectTab("Controls"); snapshot("controls")
 	window:Get("mode"):Open(); snapshot("dropdown"); window:_CloseOverlay()
-	window:SelectTab("Appearance"); window:Get("color"):Open(); snapshot("color"); window:_CloseOverlay()
+	window:SelectTab("__uai_appearance_tab"); snapshot("appearance")
+	window:Get("__uai_appearance_accent"):Open(); snapshot("color"); window:_CloseOverlay()
+	window:SetAppearance({ Colors = { Canvas = h.dt.Color3.fromRGB(19, 28, 34), Surface = h.dt.Color3.fromRGB(26, 38, 46) }, Accent = h.dt.Color3.fromRGB(122, 205, 191), CornerRadius = 4 })
+	snapshot("custom-appearance"); window:ResetAppearance()
 	window:SelectTab("Overview"); window:SetTheme("Light"); snapshot("light"); window:SetTheme("Dark")
 	window:Dialog({ Title = "Reset session?", Content = "Your selection and progress will return to their defaults.", Buttons = {
 		{ Text = "Cancel" }, { Text = "Reset", Style = "Danger" },

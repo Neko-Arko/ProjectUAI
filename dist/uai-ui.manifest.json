@@ -1,44 +1,49 @@
 {
   "format": "project-uai-ui",
-  "version": "1.3.0",
-  "sha256": "998f82bb6ca617b4cb9c699eaa00ad67702870a0759fb1bd829ba6a7541e0134",
-  "bytes": 163825,
+  "version": "1.4.0",
+  "sha256": "5d98d22c9b3b3c531a190dd8d7a1a8f2c7e4d054abf706f02fc622148bc782e2",
+  "bytes": 183395,
   "loaderSha256": "88447fb4987885e1435103b57cf660a58511564fbc5f4adb66c46ef348bfcbd5",
   "modules": [
     {
+      "id": "appearance",
+      "bytes": 5000,
+      "sha256": "d2f0d589835e8de2751909d903ac9d8cf411eb85f567c04cf51e3c7cb6157d67"
+    },
+    {
       "id": "choice",
-      "bytes": 20199,
-      "sha256": "9df3b785c99e7d6a54d792f324b69bccad995c978917577b8e86a1d78ae03e79"
+      "bytes": 20204,
+      "sha256": "3b860e4778bd21f37254441cb95f95c9a430626411f5dcb781e29fea1bbc8cb4"
     },
     {
       "id": "color",
-      "bytes": 15166,
-      "sha256": "81393ce07b52322251a8deb920e901ef3931957174bc8f9a0ca5c506b8702e45"
+      "bytes": 15184,
+      "sha256": "b0c9c4658a04c21bcd3c494f9294d5a515f94c29efa8cf399215a394f8a02155"
     },
     {
       "id": "config",
-      "bytes": 5445,
-      "sha256": "98af20993b1dff3d77607bb0eb136f1de1dbb78bdd623c87a84a2bfb38090697"
+      "bytes": 6741,
+      "sha256": "18ee046e683185240c2e0bac794dc42a8a655ce548055f5635c08ae52226a88a"
     },
     {
       "id": "containers",
-      "bytes": 10079,
-      "sha256": "ba492c79acf3c34abb99c981f1f8d5e5a3a8a7be0ea0f799aff89417684db2ea"
+      "bytes": 10804,
+      "sha256": "c4ae8fbf8a9ffa3319c4a70a5017703b071b588af3e616934066552212b7522a"
     },
     {
       "id": "controls",
-      "bytes": 24596,
-      "sha256": "2119070aca81b08015fefd02b1e2148e54c78ac46cd1fc2cfea418dd5cd7a823"
+      "bytes": 24733,
+      "sha256": "aa5eb692aaf3872d1fe5fab0c3b6820daedbdb449d04a8d6a17eeb8184619ab7"
     },
     {
       "id": "core",
-      "bytes": 23139,
-      "sha256": "e6e7f72b1be9b413e5865e3cb2918b896806190cbf8b5884f8ce1cca96b97b48"
+      "bytes": 23854,
+      "sha256": "8fef3492f523df4c4a2478dc638fe8ab3774b0d9d1d185c1af18282d3a4d3e89"
     },
     {
       "id": "library",
-      "bytes": 568,
-      "sha256": "92e407d28205bf29246f837e77617c52c3f1fb202d2cf24b73811a27a0a576e9"
+      "bytes": 3437,
+      "sha256": "b436472967f2e5f48ae46553eed59b59a62794428b38e85eaa3524cb4652acfa"
     },
     {
       "id": "motion",
@@ -47,23 +52,23 @@
     },
     {
       "id": "overlays",
-      "bytes": 14014,
-      "sha256": "97230ce252ddfbc105735cd4b4a483e1117b46ed9aa83835950cc4ba86e657e8"
+      "bytes": 14027,
+      "sha256": "05d9aeb4fd85bed77bb9dd99749be8d27a587c56072eab94e82ef2d1d8488025"
     },
     {
       "id": "profile",
-      "bytes": 4252,
-      "sha256": "12564a1156fca28d73ec4de8f66108d20f94e9f572f45e097f46cb92b325c0f5"
+      "bytes": 4257,
+      "sha256": "987c6f4ba5808c36409bd264e9ed2c15ccd014df7f76e1b2fda88f4e67a076c5"
     },
     {
       "id": "theme",
-      "bytes": 3169,
-      "sha256": "58d4140157797b994c1555f74fcfce45c707d185210cf8e70b1ad8a587d51d18"
+      "bytes": 5274,
+      "sha256": "0f001f42e59b3b4d8f403a28125c3c19f3082d7b72257948eca77ff22d061627"
     },
     {
       "id": "window",
-      "bytes": 36624,
-      "sha256": "02fe8f6461316d1f4b677049a5e53d94a98785c3451718f967578d607b306d67"
+      "bytes": 43242,
+      "sha256": "dd8fae73f0a339a55faf5438e6f08e10a0d1a6a943d5c283606b7db3976b72a5"
     }
   ]
 }

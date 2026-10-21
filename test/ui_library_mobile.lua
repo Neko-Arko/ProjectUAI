@@ -15,6 +15,100 @@ local changes, commits = 0, 0
 local slider = section:Slider({ Id = "slider", Text = "Value", Min = 0, Max = 100, Default = 50,
 	Callback = function() changes = changes + 1 end, OnCommit = function() commits = commits + 1 end })
 local E, V = h.sandbox.Enum, h.dt.Vector3
+local defaultWidth, defaultHeight = window:GetSize()
+local viewport = window._viewport.AbsoluteSize
+check("automatic phone dimensions leave game space around the window", defaultWidth <= viewport.X * 0.9 and defaultHeight <= viewport.Y * 0.76)
+local resize = h.byName("Resize", window.Frame)
+check("mobile resizing has a visible full touch target", resize.Visible and resize.Size.X.Offset >= 44 and resize.Size.Y.Offset >= 44)
+local resizeTile, resizeGlyph = h.byName("ResizeTile", resize), h.byName("ResizeGlyph", resize)
+check("the touch resize affordance is visible beside the attribution", resizeTile.Visible and resizeTile.Size.X.Offset == 26 and resizeGlyph.Size.X.Offset == 16
+	and resizeTile.AbsolutePosition.X > window.Frame.AbsolutePosition.X + window.Frame.AbsoluteSize.X / 2)
+check("mobile headers and navigation retain full touch targets", window._minimize.Size.Y.Offset >= 44 and window._close.Size.Y.Offset >= 44 and tab._button.Size.Y.Offset >= 44)
+local extraTabs = {}
+for index = 1, 4 do extraTabs[index] = window:Tab({ Id = "extra-" .. index, Title = "Extra tab " .. index }) end
+local function tabExtent(target)
+	local offset, count = window._navPad.PaddingLeft.Offset, 0
+	for _, candidate in ipairs(window.Tabs) do
+		if candidate.Alive and candidate.Visible then
+			if count > 0 then offset = offset + window._navLayout.Padding.Offset end
+			local finish = offset + candidate._button.Size.X.Offset
+			if candidate == target then return offset, finish end
+			offset, count = finish, count + 1
+		end
+	end
+end
+window:SelectTab("__uai_appearance_tab")
+local appearanceLeft, appearanceRight = tabExtent(window._appearanceTab)
+check("selecting automatic Appearance reveals its horizontal tab", window._nav.CanvasPosition.X > 0
+	and appearanceLeft >= window._nav.CanvasPosition.X and appearanceRight <= window._nav.CanvasPosition.X + window._nav.AbsoluteSize.X)
+local navScroll = window._nav.CanvasPosition.X
+window:SelectTab("__uai_appearance_tab"); window:_Layout()
+check("visible selected tabs retain the current navigation scroll", window._nav.CanvasPosition.X == navScroll)
+window:SetSize(280, 500)
+appearanceLeft, appearanceRight = tabExtent(window._appearanceTab)
+check("narrow reflow keeps the active tab fully visible", appearanceLeft >= window._nav.CanvasPosition.X
+	and appearanceRight <= window._nav.CanvasPosition.X + window._nav.AbsoluteSize.X)
+window:SetTextScale(1.5)
+appearanceLeft, appearanceRight = tabExtent(window._appearanceTab)
+check("larger text reveals the resized active navigation target", appearanceLeft >= window._nav.CanvasPosition.X
+	and appearanceRight <= window._nav.CanvasPosition.X + window._nav.AbsoluteSize.X and window._appearanceTab._button.Size.Y.Offset >= 54)
+window:SetTextScale(1); window:ResetSize()
+window:SelectTab(tab)
+check("selecting the first tab returns it into view", window._nav.CanvasPosition.X == 0)
+for _, extra in ipairs(extraTabs) do extra:Destroy() end
+window:_Layout()
+local resizeOrigin = V.new(resize.AbsolutePosition.X + resize.AbsoluteSize.X / 2, resize.AbsolutePosition.Y + resize.AbsoluteSize.Y / 2, 0)
+local resizeFinger = { UserInputType = E.UserInputType.Touch, UserInputState = E.UserInputState.Begin, Position = resizeOrigin }
+resize.InputBegan:Fire(resizeFinger)
+local resizeGesture = window._gesture
+resizeFinger.Position = resizeOrigin + V.new(-14, -40, 0); uis.InputChanged:Fire(resizeFinger)
+local firstWidth, firstHeight = window:GetSize()
+resizeFinger.Position = resizeOrigin + V.new(-28, -80, 0); uis.InputChanged:Fire(resizeFinger)
+local chosenWidth, chosenHeight = window:GetSize()
+check("one touch continuously resizes through its own reflow", resizeGesture ~= nil and window._gesture == resizeGesture
+	and chosenWidth < firstWidth and firstWidth < defaultWidth and chosenHeight < firstHeight and firstHeight < defaultHeight)
+local otherFinger = { UserInputType = E.UserInputType.Touch, UserInputState = E.UserInputState.Begin, Position = resizeOrigin + V.new(100, 100, 0) }
+uis.InputChanged:Fire(otherFinger); uis.InputEnded:Fire(otherFinger)
+check("an unrelated finger cannot resize or release the window", window._gesture == resizeGesture and window:GetSize() == chosenWidth)
+uis.InputEnded:Fire(resizeFinger)
+check("releasing a resize touch releases its gesture", window._gesture == nil)
+window:SetTextScale(1.1); window:SetTextScale(1)
+check("text reflow preserves a chosen mobile size", window:GetSize() == chosenWidth and select(2, window:GetSize()) == chosenHeight)
+h.setViewport(844, 390); window:_Layout()
+check("rotation clamps the chosen size without replacing it", select(2, window:GetSize()) < chosenHeight and window._requestedHeight == chosenHeight)
+h.setViewport(390, 844); window:_Layout()
+check("portrait restores the same chosen width and height", window:GetSize() == chosenWidth and select(2, window:GetSize()) == chosenHeight)
+uis.OnScreenKeyboardSize, uis.OnScreenKeyboardPosition = h.dt.Vector2.new(390, 624), h.dt.Vector2.new(0, 220)
+uis.OnScreenKeyboardVisible = true; window:_Layout()
+check("the keyboard temporarily fits the window above its edge", window.Frame.AbsolutePosition.Y + window.Frame.AbsoluteSize.Y <= 220 and window._requestedHeight == chosenHeight)
+uis.OnScreenKeyboardVisible = false; window:_Layout()
+check("dismissing the keyboard restores the chosen size", window:GetSize() == chosenWidth and select(2, window:GetSize()) == chosenHeight)
+window:SetSize(310, 420)
+check("scripts can set a preferred mobile size", window:GetSize() == 310 and select(2, window:GetSize()) == 420)
+window:SetSize(1, 1)
+check("programmatic sizes keep usable minimum dimensions", window:GetSize() == 280 and select(2, window:GetSize()) == 240)
+local beforeInvalidWidth, beforeInvalidHeight = window:GetSize()
+check("invalid size inputs fail before changing the window", not pcall(function() window:SetSize(0 / 0, 400) end)
+	and not pcall(function() window:SetSize(300, math.huge) end) and window:GetSize() == beforeInvalidWidth and select(2, window:GetSize()) == beforeInvalidHeight)
+window:ResetSize()
+check("reset restores automatic phone dimensions and centered placement", window:GetSize() == defaultWidth and select(2, window:GetSize()) == defaultHeight and window._position == nil)
+resizeOrigin = V.new(resize.AbsolutePosition.X + resize.AbsoluteSize.X / 2, resize.AbsolutePosition.Y + resize.AbsoluteSize.Y / 2, 0)
+resizeFinger = { UserInputType = E.UserInputType.Touch, UserInputState = E.UserInputState.Begin, Position = resizeOrigin }
+resize.InputBegan:Fire(resizeFinger)
+h.setViewport(844, 390); window:_Layout()
+check("rotation cancels an active window resize", window._gesture == nil)
+h.setViewport(390, 844); window:_Layout()
+resizeOrigin = V.new(resize.AbsolutePosition.X + resize.AbsoluteSize.X / 2, resize.AbsolutePosition.Y + resize.AbsoluteSize.Y / 2, 0)
+resizeFinger = { UserInputType = E.UserInputType.Touch, UserInputState = E.UserInputState.Begin, Position = resizeOrigin }
+resize.InputBegan:Fire(resizeFinger)
+window:Hide()
+check("hiding cancels an active window resize", window._gesture == nil)
+window:Show()
+local explicit = ui:CreateWindow({ Id = "mobile-explicit-size", Width = 330, Height = 610 })
+check("explicit constructor dimensions stay author preferences on touch", explicit:GetSize() == 330 and select(2, explicit:GetSize()) == 610)
+explicit:SetSize(300, 400); explicit:ResetSize()
+check("reset restores explicit constructor dimensions", explicit:GetSize() == 330 and select(2, explicit:GetSize()) == 610)
+explicit:Destroy()
 local hit = h.byName("Slider", slider.Frame)
 local track = h.byName("Track", slider.Frame)
 local function touch(fraction)
@@ -73,5 +167,17 @@ local color = section:ColorPicker({ Id = "color", Text = "Color" })
 panel = color:Open(); window:SetTextScale(1.5)
 check("color picker fields reflow while open", h.byName("Hex", panel.Root).Size.Y.Offset >= 54 and h.byName("Apply", panel.Root).Size.Y.Offset >= 54)
 panel:Close(); window:Destroy(); h.settle(0.2)
+uis.TouchEnabled, uis.MouseEnabled = false, true; h.setViewport(1280, 720)
+local desktop = ui:CreateWindow({ Id = "desktop-resize-regression" })
+local desktopWidth, desktopHeight = desktop:GetSize()
+local desktopResize = h.byName("Resize", desktop.Frame)
+check("desktop keeps its preferred dimensions and compact corner target", desktopWidth == 780 and desktopHeight == 580 and desktopResize.Size.X.Offset == 24)
+local mouseOrigin = V.new(desktopResize.AbsolutePosition.X + 12, desktopResize.AbsolutePosition.Y + 12, 0)
+local mouseDown = { UserInputType = E.UserInputType.MouseButton1, UserInputState = E.UserInputState.Begin, Position = mouseOrigin }
+desktopResize.InputBegan:Fire(mouseDown)
+uis.InputChanged:Fire({ UserInputType = E.UserInputType.MouseMovement, Position = mouseOrigin + V.new(-60, -70, 0) })
+uis.InputEnded:Fire(mouseDown)
+check("desktop mouse resizing remains continuous and releases cleanly", desktop:GetSize() == desktopWidth - 60 and select(2, desktop:GetSize()) == desktopHeight - 70 and desktop._gesture == nil)
+desktop:Destroy(); h.settle(0.2)
 check("mobile library changes leave no invalid properties or callback errors", #h.errors() == 0 and #h.instanceState.typeErrors == 0)
 print("UI library mobile: " .. passed .. " checks passed")

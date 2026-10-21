@@ -2,7 +2,9 @@
 
 A standalone Roblox interface library for script-owned tools. Its workbench uses
 graphite or porcelain surfaces, an inset workspace, strong tab headings, cream
-primary actions in Dark mode, and Project UAI's warm coral accent.
+primary actions in Dark mode, restrained corners, and Project UAI's warm coral accent.
+Every window automatically includes an Appearance tab for personal colors,
+corner rounding, text size, and motion preferences.
 It does not replace or redesign the agent client's interface.
 
 The source is [ui-lib/](../ui-lib/), the public artifact is
@@ -17,7 +19,7 @@ the local
 player's Roblox headshot beside their display name, username, and current game.
 No uploaded assets or logo downloads are required.
 
-This is the canonical API and application guide for **UI LIB 1.3.0**. For UAI
+This is the canonical API and application guide for **UI LIB 1.4.0**. For UAI
 sessions, custom agent tools, providers, hooks, and the full host lifecycle, use
 [Embedding Project UAI](EMBEDDING.md). A complete
 [assistant workbench](../examples/embedding/README.md) connects both bundles.
@@ -66,6 +68,10 @@ Use a stable, script-specific window `Id`. Rerunning a script with that same Id
 destroys its previous window and calls its registered cleanup functions, even
 when it loads a fresh copy of the library. Different Ids coexist. No unrelated
 ScreenGui is deleted.
+
+Appearance is supplied automatically; scripts do not need to declare settings
+controls. The first tab your script adds opens by default, and Appearance remains
+last in navigation. On mobile, drag the bottom-right grip to resize the window.
 
 Agents: read `ui_library_docs` sections `quickstart`, `controls`, and `lifecycle`
 before writing a script UI. Use declarative tabs, sections, and controls plus
@@ -235,7 +241,8 @@ press. A keybind's `Set` updates the binding, not its active state.
 
 `UI:CreateWindow(options)` accepts `Id`, `Title`, `Subtitle`, optional
 `Width = 780` / `Height = 580`, `Search = true`, `Theme = "Dark" / "Light"`, `ThemeToggle = true`,
-`Accent = Color3`, `TextScale = 1` (0.85–1.5), `ToggleKey = Enum.KeyCode.RightShift`
+`Accent = Color3`, `Colors = { token = Color3 }`, `CornerRadius = 10` (0–16),
+`TextScale = 1` (0.85–1.5), `ToggleKey = Enum.KeyCode.RightShift`
 (false disables it), `DisplayOrder = 80`, `Parent`, `OnDestroy`, optional
 `GameName`, and optional `ReducedMotion`.
 Supply a PlayerGui/CoreGui-compatible parent only when embedding.
@@ -243,12 +250,14 @@ The default parent is gethui, CoreGui, then PlayerGui, with capability detection
 When running under gethui or CoreGui, the library captures the loading thread's
 security identity and re-applies it before control updates and scheduled callbacks
 so engine events like Heartbeat can update values without losing Plugin capabilities.
-When Height is omitted, narrow touch windows use the available screen height;
-an explicit Height retains the requested size within the safe viewport.
+When Width or Height is omitted, touch windows prefer up to 90% of the screen
+width and 76% of its height, bounded by the default preferred dimensions and
+minimum 280 × 240 pixels. The safe viewport always takes priority. An explicit
+Width or Height retains the requested size within that viewport.
 
 The library handles safe insets, viewport/camera replacement, device rotation,
 keyboard obstruction, touch targets of at least 44 pixels, mouse dragging,
-desktop resizing, wrapped descriptions, independently scrolling tabs, and scroll
+mouse and touch resizing, wrapped descriptions, independently scrolling tabs, and scroll
 reveal for focused fields. It reflows at compact widths rather than shrinking
 the interface with UIScale. Navigation becomes a horizontal scrolling tab strip.
 On desktop, controls use a 40-pixel target, increasing with text scale.
@@ -258,7 +267,7 @@ The visual refresh keeps the v1 constructors, methods, callbacks and configurati
 format compatible. Existing scripts receive the new appearance without changing
 their declarations. Each tab has a heading and a live control/section count; these
 scroll with the content so they do not take space from short keyboard layouts.
-Search updates the count and keeps its empty state clear. Sections use rounded
+Search updates the count and keeps its empty state clear. Sections use gently rounded
 surfaces, fields use inset backgrounds, and selected choices have an accent edge.
 Focus and validation states survive theme changes. Text remains native at its
 final size throughout transitions; opening a view never scales its contents.
@@ -266,6 +275,9 @@ final size throughout transitions; opening a view never scales its contents.
 `window:Tab({ Id?, Title })` creates a text-only tab. Legacy `Icon` options
 are ignored, and consumer scripts must not supply new icons. `tab:Select()`, `tab:SetVisible(bool)`,
 and `tab:Destroy()` manage it.
+The automatic Appearance tab uses the reserved Id `__uai_appearance_tab`.
+Tab and control Ids beginning with `__uai_appearance_` belong to the library;
+consumer scripts must use their own Ids.
 
 `tab:Section({ Title, Description?, Collapsible?, Collapsed? })` creates a
 group. Sections support `SetCollapsed(bool)`, `SetVisible(bool)`, and `Destroy()`.
@@ -275,7 +287,15 @@ reveals matching collapsed sections, and displays a clear empty state.
 Window methods: `Show()`, `Hide()`, `Minimize()`, `Toggle()`, `Destroy()`,
 `SelectTab(idOrTab)`, `SetTitle(title, subtitle?)`,
 `SetTheme("Dark"|"Light", accent?)`, `GetTheme()`, `ToggleTheme()`, `SetTextScale(number)`,
-`SetReducedMotion(boolean)`, `Get(controlId)`.
+`SetReducedMotion(boolean)`, `Get(controlId)`,
+`SetSize(width, height)`, `GetSize()`, `ResetSize()`,
+`SetAppearance(options)`, `GetAppearance()`, `ResetAppearance()`.
+`GetSize()` returns the visible width and height in pixels. `SetSize` accepts
+finite pixel dimensions, clamped to 280–1600 wide and 240–1200 high, then fits
+them to the safe viewport. Dragging the grip uses the same bounds and keeps the
+top-left corner fixed. A chosen size survives text changes, rotation, and
+keyboard obstruction. `ResetSize()` restores constructor preferences and centers
+the window, including automatic mobile fitting for omitted dimensions.
 Minimize keeps a branded restore pill on screen: it shows the mark, title,
 subtitle and
 attribution, can be dragged anywhere in the safe viewport, and restores on a click
@@ -283,8 +303,9 @@ that was not a drag. Hide removes that pill too, and a notification that arrives
 while minimized updates its status. The top-right close button destroys the window. The
 Minimize and Close glyphs have no resting fill;
 hover brightens them and gamepad selection adds a focus outline. The mode icon
-sits beside them, to the left of Minimize. The desktop
-resize grip stays in the bottom-right corner. Each window has independent theme and state. The footer
+sits beside them, to the left of Minimize. The
+resize grip stays in the bottom-right corner on mouse and touch devices; its
+touch target is at least 44 pixels. Each window has independent theme and state. The footer
 remains pinned outside scrolling content. The sidebar profile stays below the
 scrolling tabs; compact and short layouts use the horizontal tabs and omit the
 profile to preserve room for controls. The profile places the game name on its
@@ -311,6 +332,44 @@ They settle active transitions without changing values, drafts, selection, or
 scroll positions. New components inherit the active palette. Each window stays
 independent; no shared global theme is applied to other scripts or the UAI client.
 Use the existing configuration methods below to retain a chosen mode.
+
+### Automatic Appearance settings
+
+Every window includes Appearance without any script declaration. Common settings
+cover Dark/Light mode, an accent color picker, corner radius, text size, and reduced
+motion. Collapsible groups expose surfaces, text, actions/status, interaction,
+border, and overlay colors. Changes repaint the current window immediately;
+open pickers, dialogs, and the minimized launcher share those preferences.
+Reset colors restores the current mode's palette. Reset all restores the starting
+appearance supplied at creation. The fixed attribution remains visible.
+
+`GetAppearance()` returns a fresh table containing `Theme`, optional `Accent`,
+`Colors` (custom token overrides), `CornerRadius`, `TextScale`, and `ReducedMotion`.
+`SetAppearance(options)` accepts any subset of these fields and validates the
+complete change before applying it. `Accent = false` restores the default accent.
+Supplying `Colors` replaces the whole override map; `Colors = {}` clears it.
+Omitted fields keep their current values. `SetTheme` and `ToggleTheme` preserve
+custom token overrides, and public setters silently reflect in the settings.
+
+```lua
+window:SetAppearance({
+	Theme = "Dark",
+	Accent = Color3.fromRGB(122, 205, 191),
+	Colors = { Canvas = Color3.fromRGB(19, 28, 34), Surface = Color3.fromRGB(26, 38, 46) },
+	CornerRadius = 4,
+})
+```
+
+Supported `Colors` keys are `Canvas`, `Sidebar`, `Chrome`, `Surface`, `Raised`,
+`Input`, `Hover`, `Pressed`, `Track`, `Border`, `Subtle`, `Edge`, `Text`, `Secondary`,
+`Muted`, `Disabled`, `OnAccent`, `Primary`, `OnPrimary`, `Success`, `Warning`,
+`Danger`, `Scrim`, `Selected`, and `AccentSoft`. Set the accent through `Accent`,
+which chooses a readable foreground automatically unless `OnAccent` is overridden.
+Custom primary actions likewise receive a readable `OnPrimary` unless supplied.
+Other color pairs follow the user's choices. All colors require finite RGB
+components in 0–1. Rounded window, panel, section, and field surfaces follow the
+corner preference; circular avatars, slider thumbs, and switch tracks retain
+their functional shapes.
 
 Windows, tabs, pickers, and notifications reveal their contents with a brief
 fade at fixed geometry. Tab switches preserve scroll positions and update only
@@ -425,12 +484,16 @@ any, ignore removed/unknown control Ids, and reject changed control types.
 Configuration JSON is limited to 256 KiB. Values marked `Persist = false` are
 neither exported nor imported.
 
-Exports also include the window's mode and optional custom accent in an optional
-`appearance` field. Imports validate appearance and all known control values
+Exports also include the window's mode, optional custom accent, color overrides,
+corner radius, text scale, and reduced motion in an optional `appearance` field.
+The automatic settings controls are not duplicated in `values`.
+Imports validate appearance and all known control values
 before changing either, and restore appearance even during silent import.
 Version-1 profiles without `appearance` remain supported and leave the current
-theme unchanged; the returned count still counts restored controls. Save/load
-uses this same format, so theme persistence needs no separate settings file.
+appearance unchanged. Older theme/accent-only records keep newer preferences,
+including following Roblox's motion preference if it has no explicit override.
+The returned count still counts restored application controls. Save/load uses
+this same format, so appearance persistence needs no separate settings file.
 
 Imports are silent by default: they update controls without starting application
 actions. `{ Silent = false }` invokes value callbacks after all values have been
@@ -939,6 +1002,7 @@ API; new reusable controls and lifecycle capabilities belong in `ui-lib/src`.
 | `choice.lua` | Choice-based controls and pickers |
 | `color.lua` | Color picker behavior |
 | `config.lua` | Typed state serialization, validation, import/export, file profiles |
+| `appearance.lua` | Automatic settings, silent preference reflection, palette editing |
 | `core.lua` | Resource scopes, instance helpers, layout/measurement, callbacks |
 | `theme.lua` | Shared visual tokens and theme values |
 | `motion.lua` | Owned reversible transitions and reduced-motion handling |
@@ -1006,6 +1070,8 @@ node tools/build_site.js
 # Manually inspect the generated bundles, manifests, guide, and catalog here.
 luajit test/ui_library.lua
 luajit test/ui_library_theme.lua
+luajit test/ui_library_mobile.lua
+luajit test/ui_library_appearance.lua
 luajit test/ui_library_agent.lua
 luajit test/embedding_examples.lua
 node tools/build_ui_lib.js --check

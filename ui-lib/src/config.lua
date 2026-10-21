@@ -1,6 +1,34 @@
 return function(env)
 	local C = env.require("core")
+	local T = env.require("theme")
 	local M = {}
+	local function encodeColor(color) return { color.R, color.G, color.B } end
+	local function decodeColor(rgb, label)
+		assert(type(rgb) == "table" and #rgb == 3, "Invalid appearance " .. label)
+		for key in pairs(rgb) do assert(key == 1 or key == 2 or key == 3, "Invalid appearance " .. label) end
+		for index = 1, 3 do
+			assert(C.finite(rgb[index]) and rgb[index] >= 0 and rgb[index] <= 1, "Invalid appearance " .. label)
+		end
+		return Color3.new(rgb[1], rgb[2], rgb[3])
+	end
+	local function decodeAppearance(value, current)
+		assert(type(value) == "table" and (value.theme == "Dark" or value.theme == "Light"), "Invalid appearance theme")
+		local patch = { Theme = value.theme, Accent = false }
+		if value.accent ~= nil then patch.Accent = decodeColor(value.accent, "accent") end
+		if value.colors ~= nil then
+			assert(type(value.colors) == "table", "Invalid appearance colors")
+			patch.Colors = {}
+			for token, rgb in pairs(value.colors) do
+				assert(type(token) == "string", "Invalid appearance color name")
+				patch.Colors[token] = decodeColor(rgb, "color " .. token)
+			end
+		end
+		patch.CornerRadius, patch.TextScale, patch.ReducedMotion = value.cornerRadius, value.textScale, value.reducedMotion
+		-- Keep omission meaningful for older profiles, including following Roblox's
+		-- motion preference when no saved override was present.
+		T.normalizeAppearance(patch, current)
+		return patch
+	end
 	function M.ExportConfig(self)
 		assert(self.Alive, "Window is destroyed")
 		local values = {}
@@ -11,8 +39,13 @@ return function(env)
 				values[id] = { kind = control.Kind, value = value }
 			end
 		end
-		local appearance = { theme = self._themeName }
-		if self._accent then appearance.accent = { self._accent.R, self._accent.G, self._accent.B } end
+		local current = self:GetAppearance()
+		local appearance = {
+			theme = current.Theme, colors = {}, cornerRadius = current.CornerRadius,
+			textScale = current.TextScale, reducedMotion = current.ReducedMotion,
+		}
+		if current.Accent then appearance.accent = encodeColor(current.Accent) end
+		for token, color in pairs(current.Colors) do appearance.colors[token] = encodeColor(color) end
 		return env.services.HttpService:JSONEncode({ format = "project-uai-ui", version = 1, window = self.Id, values = values, appearance = appearance })
 	end
 	function M.ImportConfig(self, source, options)
@@ -24,19 +57,11 @@ return function(env)
 			return false, "Unsupported or invalid UI configuration"
 		end
 		if document.window ~= self.Id then return false, "Configuration belongs to a different window Id" end
-		local appearance, accent = document.appearance
-		if appearance ~= nil then
-			if type(appearance) ~= "table" or (appearance.theme ~= "Dark" and appearance.theme ~= "Light") then
-				return false, "Invalid appearance theme"
-			end
-			if appearance.accent ~= nil then
-				local rgb = appearance.accent
-				if type(rgb) ~= "table" or #rgb ~= 3 then return false, "Invalid appearance accent" end
-				for index = 1, 3 do
-					if not C.finite(rgb[index]) or rgb[index] < 0 or rgb[index] > 1 then return false, "Invalid appearance accent" end
-				end
-				accent = Color3.new(rgb[1], rgb[2], rgb[3])
-			end
+		local appearance
+		if document.appearance ~= nil then
+			local valid, patch = pcall(decodeAppearance, document.appearance, self:GetAppearance())
+			if not valid then return false, tostring(patch) end
+			appearance = patch
 		end
 		local pending = {}
 		for id, record in pairs(document.values) do
@@ -51,7 +76,7 @@ return function(env)
 		table.sort(pending, function(a, b) return a.control.Id < b.control.Id end)
 		-- All values validate before the first write. Callbacks see the complete
 		-- restored configuration and are opt-in, so loading cannot start actions.
-		if appearance then self:SetTheme(appearance.theme, accent) end
+		if appearance then self:SetAppearance(appearance) end
 		local releases = {}
 		for _, item in ipairs(pending) do
 			if item.control._restore then

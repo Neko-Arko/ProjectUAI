@@ -30,7 +30,7 @@ return function(env)
 	M.Size = {
 		Target = 40, TouchTarget = 44, TouchSlop = 8, Gap = 12, Pad = 20, MobilePad = 12,
 		Header = 80, Footer = 30, Sidebar = 196, Tabs = 52, Avatar = 36,
-		Radius = 18, FieldRadius = 10, Scrollbar = 3,
+		Radius = 10, FieldRadius = 6, Scrollbar = 3,
 		Width = 780, Height = 580, Compact = 640,
 	}
 	M.Type = { Display = 26, Title = 20, Heading = 15, Body = 14, Caption = 12, Small = 11, Eyebrow = 10 }
@@ -39,22 +39,62 @@ return function(env)
 		if channel <= 0.04045 then return channel / 12.92 end
 		return ((channel + 0.055) / 1.055) ^ 2.4
 	end
-	function M.resolve(name, accent)
+	local function color(value, label)
+		assert(typeof(value) == "Color3", label .. " must be a Color3")
+		for _, channel in ipairs({ value.R, value.G, value.B }) do
+			assert(channel == channel and channel >= 0 and channel <= 1, label .. " components must be between 0 and 1")
+		end
+		return value
+	end
+	local function foreground(value)
+		local luminance = linear(value.R) * 0.2126 + linear(value.G) * 0.7152 + linear(value.B) * 0.0722
+		return (luminance + 0.05) / 0.05 >= 1.05 / (luminance + 0.05) and rgb(0, 0, 0) or rgb(255, 255, 255)
+	end
+	function M.normalizeAppearance(options, current)
+		assert(type(options) == "table", "Appearance must be a table")
+		current = current or { Theme = "Dark", Colors = {}, CornerRadius = M.Size.Radius, TextScale = 1, ReducedMotion = false }
+		local result = {}
+		for key, value in pairs(current) do result[key] = value end
+		for key, value in pairs(options) do
+			assert(key == "Theme" or key == "Accent" or key == "Colors" or key == "CornerRadius" or key == "TextScale" or key == "ReducedMotion", "Unknown appearance option: " .. tostring(key))
+			if key == "Theme" then
+				assert(value == "Dark" or value == "Light", "Theme must be Dark or Light")
+			elseif key == "Accent" then
+				if value ~= false then color(value, "Accent") end
+			elseif key == "Colors" then
+				assert(type(value) == "table", "Colors must be a table")
+			elseif key == "ReducedMotion" then
+				assert(type(value) == "boolean", "ReducedMotion must be a boolean")
+			else
+				local low, high = key == "CornerRadius" and 0 or 0.85, key == "CornerRadius" and 16 or 1.5
+				assert(type(value) == "number" and value == value and value >= low and value <= high, key .. " is outside its supported range")
+			end
+			result[key] = value
+		end
+		if result.Accent == false then result.Accent = nil end
+		local colors = {}
+		for key, value in pairs(result.Colors or {}) do
+			assert(M.Dark[key] ~= nil or key == "Selected" or key == "AccentSoft", "Unknown color token: " .. tostring(key))
+			assert(key ~= "Accent", "Use Accent to customize the accent color")
+			colors[key] = color(value, "Colors." .. key)
+		end
+		result.Colors = colors
+		return result
+	end
+	function M.resolve(name, accent, colors)
 		assert(name == nil or name == "Dark" or name == "Light", "Theme must be Dark or Light")
 		local result = {}
 		for key, value in pairs(M[name or "Dark"]) do result[key] = value end
 		if accent ~= nil then
-			assert(typeof(accent) == "Color3", "Accent must be a Color3")
-			for _, channel in ipairs({ accent.R, accent.G, accent.B }) do
-				assert(channel == channel and channel >= 0 and channel <= 1, "Accent components must be between 0 and 1")
-			end
-			result.Accent = accent
-			-- Compare actual sRGB contrast, rather than brightness in gamma space.
-			local luminance = linear(accent.R) * 0.2126 + linear(accent.G) * 0.7152 + linear(accent.B) * 0.0722
-			result.OnAccent = (luminance + 0.05) / 0.05 >= 1.05 / (luminance + 0.05) and rgb(0, 0, 0) or rgb(255, 255, 255)
+			result.Accent = color(accent, "Accent")
 		end
+		for key, value in pairs(colors or {}) do result[key] = value end
+		if accent or (colors and colors.Accent) then result.OnAccent = colors and colors.OnAccent or foreground(result.Accent) end
+		if colors and colors.Primary and not colors.OnPrimary then result.OnPrimary = foreground(result.Primary) end
 		result.Selected = result.Raised:Lerp(result.Accent, 0.16)
 		result.AccentSoft = result.Surface:Lerp(result.Accent, 0.12)
+		if colors and colors.Selected then result.Selected = colors.Selected end
+		if colors and colors.AccentSoft then result.AccentSoft = colors.AccentSoft end
 		return result
 	end
 	return M

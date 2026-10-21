@@ -2,6 +2,7 @@ return function(env)
 	local tokens = env.require("theme")
 	local M = { services = env.services, tokens = tokens }
 	local unpackValues = table.unpack or unpack
+	local nodeOwners = setmetatable({}, { __mode = "kv" })
 
 	-- Thread identity -----------------------------------------------------------
 	-- The window lives under gethui/CoreGui, where writes need the Plugin
@@ -173,6 +174,7 @@ return function(env)
 	end
 	function M.node(owner, class, parent, props, colors)
 		local instance = Instance.new(class)
+		nodeOwners[instance] = owner
 		if instance:IsA("GuiObject") then instance.BorderSizePixel = 0 end
 		if class == "TextButton" or class == "ImageButton" then
 			instance.AutoButtonColor = false
@@ -184,9 +186,16 @@ return function(env)
 		instance.Parent = parent
 		return instance
 	end
-	function M.corner(parent, radius)
+	function M.corner(parent, radius, owner)
 		local node = Instance.new("UICorner")
 		node.CornerRadius = UDim.new(0, radius or tokens.Size.FieldRadius)
+		owner = owner or (radius == nil and nodeOwners[parent])
+		if owner then
+			local base = radius or tokens.Size.FieldRadius
+			M.bind(owner, node, { CornerRadius = function()
+				return UDim.new(0, math.floor(base * (owner._window.CornerRadius or tokens.Size.Radius) / tokens.Size.Radius + 0.5))
+			end })
+		end
 		node.Parent = parent
 		return node
 	end
@@ -196,12 +205,16 @@ return function(env)
 	function M.chromeBand(owner, parent, props, bottom)
 		local band = M.node(owner, "Frame", parent, props)
 		band.BackgroundTransparency, band.ClipsDescendants = 1, true
-		local radius = tokens.Size.Radius
+		local radius = owner._window.CornerRadius or tokens.Size.Radius
 		local surface = M.node(owner, "Frame", band, {
 			Name = "Surface", Position = UDim2.fromOffset(0, bottom and -radius or 0),
 			Size = UDim2.new(1, 0, 1, radius),
 		}, { BackgroundColor3 = "Chrome" })
-		M.corner(surface, radius)
+		M.bind(owner, surface, {
+			Position = function() return UDim2.fromOffset(0, bottom and -(owner._window.CornerRadius or tokens.Size.Radius) or 0) end,
+			Size = function() return UDim2.new(1, 0, 1, owner._window.CornerRadius or tokens.Size.Radius) end,
+		})
+		M.corner(surface, tokens.Size.Radius, owner)
 		return band
 	end
 	function M.stroke(owner, parent, color)

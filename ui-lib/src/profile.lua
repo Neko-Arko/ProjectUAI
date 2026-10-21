@@ -22,7 +22,7 @@ return function(env)
 		local displayName = player and player.DisplayName or username
 		self.Frame = C.node(self, "Frame", parent, { Name = "Profile", ClipsDescendants = true }, { BackgroundColor3 = "Sidebar" })
 		local card = C.node(self, "Frame", self.Frame, { Name = "ProfileCard", Position = UDim2.fromOffset(10, 6), Size = UDim2.new(1, -20, 1, -12) }, { BackgroundColor3 = "Chrome" })
-		C.corner(card, 12); C.stroke(self, card, "Subtle")
+		C.corner(card, 8, self); C.stroke(self, card, "Subtle")
 		local avatar = C.node(self, "Frame", self.Frame, { Name = "Avatar", Size = UDim2.fromOffset(T.Size.Avatar, T.Size.Avatar) }, { BackgroundColor3 = "Raised" })
 		C.corner(avatar, T.Size.Avatar / 2)
 		local initial = C.text(self, avatar, displayName:match("^.[\128-\191]*") or "?", "Heading", "Text", { Name = "Initial", Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center })

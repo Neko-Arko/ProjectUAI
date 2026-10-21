@@ -88,6 +88,7 @@ return function(env)
 		local window = section._window
 		if options.Id then
 			assert(type(options.Id) == "string" and #options.Id > 0, "Control Id must be a nonempty string")
+			assert(window._mountingAppearance or options.Id:sub(1, 17) ~= "__uai_appearance_", "Control Id prefix __uai_appearance_ is reserved")
 			assert(not window.Controls[options.Id], "Duplicate control Id: " .. options.Id)
 		end
 		assert(options.Callback == nil or type(options.Callback) == "function", "Callback must be a function")

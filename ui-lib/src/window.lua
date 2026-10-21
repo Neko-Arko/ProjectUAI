@@ -80,6 +80,25 @@ return function(env)
 		self:_Layout()
 		return self
 	end
+	function Window:SetSize(width, height)
+		assert(self.Alive, "Window is destroyed")
+		assert(C.finite(width) and C.finite(height), "Window size must contain finite numbers")
+		self._requestedWidth, self._requestedHeight = C.clamp(width, 280, 1600), C.clamp(height, 240, 1200)
+		self._autoWidth, self._autoHeight = false, false
+		self:_Layout()
+		return self
+	end
+	function Window:GetSize()
+		return self.Frame.Size.X.Offset, self.Frame.Size.Y.Offset
+	end
+	function Window:ResetSize()
+		assert(self.Alive, "Window is destroyed")
+		self._requestedWidth, self._requestedHeight = self._initialWidth, self._initialHeight
+		self._autoWidth, self._autoHeight = self._initialAutoWidth, self._initialAutoHeight
+		self._position = nil
+		self:_Layout()
+		return self
+	end
 	function Window:SetTitle(title, subtitle)
 		assert(self.Alive, "Window is destroyed")
 		self.Title = tostring(title)
@@ -175,7 +194,7 @@ return function(env)
 		end
 		assert(tab and tab._window == self and tab.Alive, "Unknown tab")
 		if not tab.Visible then return self end
-		if self._activeTab == tab then return self end
+		if self._activeTab == tab then self:_RevealTab(); return self end
 		local previous = self._activeTab
 		if previous then C.releaseFocus(self, previous.Frame) end
 		self:_CloseOverlay()
@@ -187,8 +206,34 @@ return function(env)
 		if previous then previous._refresh() end
 		tab._refresh()
 		self:_Filter()
+		self:_RevealTab()
 		if previous then motion.reveal(self, self._content, self.Theme.Canvas, 14) end
 		return self
+	end
+	function Window:_RevealTab()
+		local tab, nav = self._activeTab, self._nav
+		if not self.Alive or not self._compact or not nav or not nav.Visible or not self._navPad or not tab or not tab.Alive or not tab.Visible then return end
+		local width = nav.Size.X.Scale * self.Frame.Size.X.Offset + nav.Size.X.Offset
+		if width < 1 then return end
+		-- All tab widths and their order belong to the library. Resolve their
+		-- canvas extents without depending on a later native list-layout pass.
+		local leftPad, rightPad, gap = self._navPad.PaddingLeft.Offset, self._navPad.PaddingRight.Offset, self._navLayout.Padding.Offset
+		local offset, count, left, right = leftPad, 0
+		for _, candidate in ipairs(self.Tabs) do
+			if candidate.Alive and candidate.Visible then
+				if count > 0 then offset = offset + gap end
+				local finish = offset + candidate._button.Size.X.Offset
+				if candidate == tab then left, right = offset, finish end
+				offset, count = finish, count + 1
+			end
+		end
+		if not left then return end
+		local x = nav.CanvasPosition.X
+		if right - left > width - leftPad - rightPad then x = left - leftPad
+		elseif left < x then x = left - leftPad
+		elseif right > x + width then x = right + rightPad - width end
+		x = C.clamp(x, 0, math.max(0, offset + rightPad - width))
+		if x ~= nav.CanvasPosition.X then nav.CanvasPosition = Vector2.new(x, nav.CanvasPosition.Y) end
 	end
 	function Window:_Filter()
 		local query = string.lower(self._search and self._search.Text or "")
@@ -248,7 +293,7 @@ return function(env)
 			ancestor = ancestor.Parent
 		end
 	end
-	function Window:_Layout()
+	function Window:_Layout(resizing)
 		if not self.Alive then return end
 		local uis = env.services.UserInputService
 		self.Touch = uis.TouchEnabled == true
@@ -269,15 +314,24 @@ return function(env)
 		end)
 		availableHeight = math.max(1, availableHeight)
 		local margin = math.min(self.Touch and 8 or 16, size.X / 10, availableHeight / 10)
-		local width = math.max(1, math.min(self._requestedWidth, size.X - margin * 2))
-		local height = math.max(1, math.min(self._requestedHeight, availableHeight - margin * 2))
-		if self.Touch and width < T.Size.Compact and self._autoHeight then height = math.max(1, availableHeight - margin * 2) end
+		local preferredWidth, preferredHeight = self._requestedWidth, self._requestedHeight
+		-- An automatic phone window leaves the game visible around it. Fit to
+		-- the full safe viewport before the keyboard clamp, so transient keyboard
+		-- space never replaces a chosen size or the automatic sizing preference.
+		if self.Touch and self._autoWidth then preferredWidth = math.min(preferredWidth, math.max(280, math.floor(size.X * 0.9))) end
+		if self.Touch and self._autoHeight then preferredHeight = math.min(preferredHeight, math.max(240, math.floor(size.Y * 0.76))) end
+		local width = math.max(1, math.min(preferredWidth, size.X - margin * 2))
+		local height = math.max(1, math.min(preferredHeight, availableHeight - margin * 2))
 		local x = self._position and self._position.X or (size.X - width) / 2
 		local y = self._position and self._position.Y or (availableHeight - height) / 2
 		x = C.clamp(x, margin, math.max(margin, size.X - width - margin))
 		y = C.clamp(y, margin, math.max(margin, availableHeight - height - margin))
 		self._rect = { x = margin, y = margin, width = math.max(1, size.X - margin * 2), height = math.max(1, availableHeight - margin * 2) }
-		if self.Touch and (self._width ~= width or self._height ~= height) then C.cancelGesture(self) end
+		local changedSpace = self._layoutSpace and (self._layoutSpace.width ~= size.X or self._layoutSpace.height ~= size.Y
+			or self._layoutSpace.x ~= origin.X or self._layoutSpace.y ~= origin.Y or self._layoutSpace.availableHeight ~= availableHeight
+			or self._layoutSpace.touch ~= self.Touch)
+		if changedSpace or (self.Touch and not resizing and (self._width ~= width or self._height ~= height)) then C.cancelGesture(self) end
+		self._layoutSpace = { width = size.X, height = size.Y, x = origin.X, y = origin.Y, availableHeight = availableHeight, touch = self.Touch }
 		self._width, self._height = width, height
 		local short = height < (self.Touch and 440 or 380)
 		self._compact = width < T.Size.Compact or short
@@ -304,14 +358,14 @@ return function(env)
 		local brand = math.min(22, math.max(14, math.floor(18 * self.TextScale)))
 		self._brand.Size = UDim2.fromOffset(brand, brand)
 		self._brand.Position = UDim2.fromOffset(26, math.floor((header - brand) / 2))
-		self._brand.Visible = header > 0 and width >= 300
+		local actionSpan = (self.Target + 4) * (self._themeButton and 3 or 2) - 4
+		self._brand.Visible = header > 0 and width - (26 + brand + 20) - actionSpan - 32 >= 80 * self.TextScale
 		self._brandTile.Visible = self._brand.Visible
 		self._brandTile.Position = UDim2.fromOffset(18, math.floor((header - brand) / 2) - 8)
 		self._brandTile.Size = UDim2.fromOffset(brand + 16, brand + 16)
 		local titleInset = self._brand.Visible and (26 + brand + 20) or 20
 		-- Theme, Minimize and Close share one header row; the mode action sits
 		-- to the left of Minimize, and the row keeps full-size targets.
-		local actionSpan = (self.Target + 4) * (self._themeButton and 3 or 2) - 4
 		self._title.Position = UDim2.fromOffset(titleInset, short and 12 or 14)
 		self._title.Size = UDim2.new(1, -(titleInset + actionSpan + 32), 0, titleHeight)
 		self._subtitle.Visible = not short and self._subtitle.Text ~= ""
@@ -342,11 +396,13 @@ return function(env)
 		self._nav.ScrollingDirection = self._compact and Enum.ScrollingDirection.X or Enum.ScrollingDirection.Y
 		self._nav.AutomaticCanvasSize = self._compact and Enum.AutomaticSize.X or Enum.AutomaticSize.Y
 		self._nav.ScrollBarThickness = self._compact and 0 or T.Size.Scrollbar
+		self._nav.CanvasPosition = self._compact and Vector2.new(self._nav.CanvasPosition.X, 0) or Vector2.new(0, self._nav.CanvasPosition.Y)
 		self._navPad.PaddingTop = UDim.new(0, self._compact and 4 or 10)
 		for _, tab in ipairs(self.Tabs) do
 			local tabWidth = self._compact and math.max(80, math.min(220, #tab.Title * 8 * self.TextScale + 28)) or sidebar - 24
 			tab._button.Size = UDim2.fromOffset(tabWidth, self.Target)
 		end
+		self:_RevealTab()
 		local top = header + nav
 		local inset = self._compact and 6 or 10
 		self._contentWidth = math.max(1, width - sidebar - inset * 2)
@@ -359,7 +415,11 @@ return function(env)
 			self._search.Position = UDim2.fromOffset(sidebar + inset + self._contentPad, top + 14)
 			self._search.Size = UDim2.fromOffset(math.max(1, self._contentWidth - self._contentPad * 2), self.Target)
 		end
-		self._resize.Visible = not self.Touch
+		self._resize.Visible = height >= 240
+		self._resize.Size = UDim2.fromOffset(self.Touch and self.Target or 24, self.Touch and self.Target or 24)
+		self._resizeTile.Visible = self.Touch
+		self._resizeGlyph.Size = UDim2.fromOffset(self.Touch and 16 or 12, self.Touch and 16 or 12)
+		self._resizeGlyph.Position = UDim2.new(1, self.Touch and -9 or -4, 1, self.Touch and -7 or -4)
 		-- The restore pill: title and a status line over the permanent
 		-- attribution. Its height follows the text scale, it remembers where it
 		-- was dragged, and it is clamped back into view on every reflow.
@@ -417,9 +477,11 @@ return function(env)
 			ReducedMotion = options.ReducedMotion == true, _motionOverride = options.ReducedMotion,
 			_requestedWidth = C.number(options.Width, T.Size.Width, 280, 1600),
 			_requestedHeight = C.number(options.Height, T.Size.Height, 240, 1200),
-			_autoHeight = options.Height == nil,
+			_autoWidth = options.Width == nil, _autoHeight = options.Height == nil,
 			ToggleKey = toggleKey,
 		}, Window)
+		self._initialWidth, self._initialHeight = self._requestedWidth, self._requestedHeight
+		self._initialAutoWidth, self._initialAutoHeight = self._autoWidth, self._autoHeight
 		self._window = self
 		self.ScreenGui = Instance.new("ScreenGui")
 		self.ScreenGui.Name = "ProjectUAI_UI_" .. id
@@ -432,11 +494,11 @@ return function(env)
 		if not ok then self.ScreenGui:Destroy(); error(why, 0) end
 		self._viewport = C.node(self, "Frame", self.ScreenGui, { Name = "SafeViewport", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) })
 		self.Frame = C.node(self, "Frame", self._viewport, { Name = "Window", Active = true, ClipsDescendants = true }, { BackgroundColor3 = "Chrome" })
-		C.corner(self.Frame, T.Size.Radius)
+		C.corner(self.Frame, T.Size.Radius, self)
 		C.stroke(self, self.Frame, "Edge")
 		self._header = C.node(self, "Frame", self.Frame, { Name = "Header", BackgroundTransparency = 1, Active = true })
 		self._brandTile = C.node(self, "Frame", self._header, { Name = "BrandTile" }, { BackgroundColor3 = "AccentSoft" })
-		C.corner(self._brandTile, 12)
+		C.corner(self._brandTile, 8, self)
 		C.stroke(self, self._brandTile, "Subtle")
 		self._brand = C.mark(self, self._header, 18)
 		self._title = C.text(self, self._header, self.Title, "Title", "Text", { TextWrapped = false, TextTruncate = Enum.TextTruncate.AtEnd })
@@ -506,9 +568,11 @@ return function(env)
 		self._nav.BackgroundTransparency = 0
 		self._navLayout = C.list(self._nav, false, 6)
 		self._navPad = C.pad(self._nav, 12, 14)
+		self._scope:Connect(self._navLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function() self:_RevealTab() end)
+		self._scope:Connect(self._nav:GetPropertyChangedSignal("AbsoluteWindowSize"), function() self:_RevealTab() end)
 		self._profile = env.require("profile").new(self, self.Frame, options.GameName)
 		self._workspace = C.node(self, "Frame", self.Frame, { Name = "Workspace", Active = false }, { BackgroundColor3 = "Canvas" })
-		C.corner(self._workspace, 14); C.stroke(self, self._workspace, "Subtle")
+		C.corner(self._workspace, 8, self); C.stroke(self, self._workspace, "Subtle")
 		self._content = C.node(self, "Frame", self.Frame, { Name = "Content", BackgroundTransparency = 1, ClipsDescendants = true })
 		self._empty = C.text(self, self._content, "No matching controls", "Body", "Muted", { Name = "EmptySearch", Visible = false, Position = UDim2.fromOffset(20, 28), Size = UDim2.new(1, -40, 0, 40) })
 		if options.Search ~= false then
@@ -526,16 +590,45 @@ return function(env)
 		C.footer(self, self.Frame)
 		self._resize = C.node(self, "TextButton", self.Frame, {
 			Name = "Resize", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 1), Position = UDim2.fromScale(1, 1),
-			Size = UDim2.fromOffset(24, 24), Selectable = false,
+			Size = UDim2.fromOffset(24, 24), Selectable = false, ZIndex = 5,
 		})
-		for index = 1, 3 do
-			C.node(self, "Frame", self._resize, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(7 + index * 3, 16), Size = UDim2.fromOffset(2, 2 + index * 3), Rotation = 45 }, { BackgroundColor3 = "Muted" })
+		local resizeHovered, resizeActive = false, false
+		local function resizeColor(theme) return (resizeHovered or resizeActive) and theme.Accent or theme.Secondary end
+		local function resizeFill(theme) return resizeActive and theme.Pressed or resizeHovered and theme.Hover or theme.Raised end
+		self._resizeTile = C.node(self, "Frame", self._resize, {
+			Name = "ResizeTile", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -4, 1, -2), Size = UDim2.fromOffset(26, 26), ZIndex = 5,
+		}, { BackgroundColor3 = resizeFill })
+		C.corner(self._resizeTile, 6, self)
+		local resizeEdge = C.stroke(self, self._resizeTile, "Edge")
+		C.bind(self, resizeEdge, { Color = function(theme) return (resizeHovered or resizeActive) and theme.Accent or theme.Edge end })
+		self._resizeGlyph = C.node(self, "Frame", self._resize, {
+			Name = "ResizeGlyph", BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(16, 16), ZIndex = 6,
+		})
+		local resizeLines = {}
+		for index = 0, 2 do
+			local line = C.node(self, "Frame", self._resizeGlyph, {
+				Name = "ResizeLine" .. (index + 1), AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.35 + index * 0.17, 0.35 + index * 0.17),
+				Size = UDim2.new(0.85 - index * 0.26, 0, 0, 1.5), Rotation = -45, ZIndex = 6,
+			}, { BackgroundColor3 = resizeColor })
+			C.corner(line, 1)
+			resizeLines[#resizeLines + 1] = line
 		end
+		local function repaintResize()
+			motion.to(self, self._resizeTile, { BackgroundColor3 = resizeFill(self.Theme) })
+			motion.to(self, resizeEdge, { Color = (resizeHovered or resizeActive) and self.Theme.Accent or self.Theme.Edge })
+			for _, line in ipairs(resizeLines) do motion.to(self, line, { BackgroundColor3 = resizeColor(self.Theme) }) end
+		end
+		local function releaseResize()
+			if resizeActive then resizeActive = false; repaintResize() end
+		end
+		self._scope:Connect(self._resize.MouseEnter, function() resizeHovered = true; repaintResize() end)
+		self._scope:Connect(self._resize.MouseLeave, function() resizeHovered = false; repaintResize() end)
 		-- The restore pill. It carries the mark, the window title and a status
 		-- line above the permanent attribution, it can be dragged anywhere in
 		-- the safe viewport, and it restores on a click that was not a drag.
 		self._launcher = C.node(self, "TextButton", self._viewport, { Name = "Restore", Visible = false, ClipsDescendants = true }, { BackgroundColor3 = "Canvas" })
-		C.corner(self._launcher, T.Size.Radius)
+		C.corner(self._launcher, T.Size.Radius, self)
 		local launcherDragged = false
 		C.bind(self, self._launcher, {
 			BackgroundColor3 = function(theme) return self._launcherHovered and theme.Hover or theme.Canvas end,
@@ -580,10 +673,20 @@ return function(env)
 		C.pointer(self, self._resize, function(input)
 			dragStart, sizeStart = input.Position, self.Frame.AbsoluteSize
 			self._position = Vector2.new(self.Frame.Position.X.Offset, self.Frame.Position.Y.Offset)
+			resizeActive = true
+			local gesture, release = self._gesture, self._gesture.release
+			gesture.release = function() release(); releaseResize() end
+			repaintResize()
 		end, function(input)
-			self._requestedWidth = math.max(280, sizeStart.X + input.Position.X - dragStart.X)
-			self._requestedHeight = math.max(240, sizeStart.Y + input.Position.Y - dragStart.Y)
-			self:_Layout()
+			local rect = self._rect
+			local maxWidth = math.min(1600, rect.x + rect.width - self._position.X)
+			local maxHeight = math.min(1200, rect.y + rect.height - self._position.Y)
+			self._requestedWidth = C.clamp(sizeStart.X + input.Position.X - dragStart.X, math.min(280, maxWidth), maxWidth)
+			self._requestedHeight = C.clamp(sizeStart.Y + input.Position.Y - dragStart.Y, math.min(240, maxHeight), maxHeight)
+			self._autoWidth, self._autoHeight = false, false
+			-- This reflow is part of the owning resize gesture. Other reflows,
+			-- rotation and keyboard changes still release touch ownership.
+			self:_Layout(true)
 		end)
 		local launcherOrigin, launcherStart
 		C.pointer(self, self._launcher, function(input)
@@ -639,7 +742,11 @@ return function(env)
 		end)
 		pcall(function()
 			local function preference()
-				if self._motionOverride == nil then self.ReducedMotion = env.services.GuiService.ReducedMotionEnabled == true; motion.stopAll(self, true) end
+				if self._motionOverride == nil then
+					self.ReducedMotion = env.services.GuiService.ReducedMotionEnabled == true
+					motion.stopAll(self, true)
+					if self._appearanceSync then self._appearanceSync() end
+				end
 			end
 			preference()
 			self._scope:Connect(env.services.GuiService:GetPropertyChangedSignal("ReducedMotionEnabled"), preference)

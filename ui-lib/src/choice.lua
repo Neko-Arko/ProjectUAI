@@ -268,7 +268,7 @@ return function(env)
 		local rows, childScope = {}, nil
 		C.bind(self, self._slot, { BackgroundColor3 = "Input" })
 		self._slot.BackgroundTransparency = 0
-		C.corner(self._slot, 12)
+		C.corner(self._slot, 6, self)
 		self._render = function()
 			for _, item in ipairs(rows) do
 				item.refresh()

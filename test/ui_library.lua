@@ -30,7 +30,7 @@ local function input(kind, x, y, key)
 end
 local function key(name) return input(E.UserInputType.Keyboard, 0, 0, E.KeyCode[name]) end
 check("fixed attribution is part of the window and launcher", node("Attribution", window.Frame).Text == "Project UAI | UI LIB." and node("Attribution", node("Restore")).Text == "Project UAI | UI LIB.")
-check("public metadata points to this repository", UI.Version == "1.3.0" and UI.URL:find("Project-Ptolemy/ProjectUAI/main/dist/uai-ui.lua", 1, true) ~= nil)
+check("public metadata points to this repository", UI.Version == "1.4.0" and UI.URL:find("Project-Ptolemy/ProjectUAI/main/dist/uai-ui.lua", 1, true) ~= nil)
 check("window chrome draws the mark and leaves the window controls unfilled",
 	node("Brand", window._header) ~= nil and h.byName("minus", window._minimize) ~= nil and h.byName("close", window._close) ~= nil
 		and window._minimize.BackgroundTransparency == 1 and window._close.BackgroundTransparency == 1)
@@ -319,13 +319,13 @@ for _, viewport in ipairs({ { 1280, 720, false }, { 390, 844, true }, { 844, 390
 	local size, position = window.Frame.AbsoluteSize, window.Frame.AbsolutePosition
 	check("window stays in " .. viewport[1] .. "x" .. viewport[2], position.X >= 0 and position.Y >= 0 and position.X + size.X <= viewport[1] and position.Y + size.Y <= viewport[2])
 	check("controls retain readable width at " .. viewport[1], slider._slot.AbsoluteSize.X > 150 and toggle._label.AbsoluteSize.X > 100)
-	check("the header mark stays visible at " .. viewport[1], window._brand.Visible)
+	check("the header prioritizes a readable title at " .. viewport[1], window._title.AbsoluteSize.X >= 70 and (size.X < 500 or window._brand.Visible))
 	check("the sidebar profile follows compact layout at " .. viewport[1], profile.Visible == not window._compact)
 	if viewport[3] then check("touch targets remain at least 44px", window.Target >= 44) end
 end
 window:SetTextScale(1.5)
 check("large text expands controls without shrinking the UI", window.Target >= 54 and slider.Frame.AbsoluteSize.Y > 90)
-check("large text preserves the mark and chrome on a small phone", window._brand.Visible and window._title.AbsoluteSize.X > 0 and window._close.AbsolutePosition.X + window._close.AbsoluteSize.X <= window.Frame.AbsolutePosition.X + window.Frame.AbsoluteSize.X)
+check("large text preserves the title and chrome on a small phone", window._title.AbsoluteSize.X >= 60 and window._close.AbsolutePosition.X + window._close.AbsoluteSize.X <= window.Frame.AbsolutePosition.X + window.Frame.AbsoluteSize.X)
 check("large-text status rows preserve label width on a small phone", badge._label.AbsoluteSize.X > 200 and badge._slot.AbsolutePosition.Y > badge._label.AbsolutePosition.Y)
 uis.OnScreenKeyboardVisible = true; uis.OnScreenKeyboardSize = dt.Vector2.new(320, 260); uis.OnScreenKeyboardPosition = dt.Vector2.new(0, 308)
 window:_Layout()

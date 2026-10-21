@@ -8,6 +8,7 @@ return function(env)
 		options = type(options) == "string" and { Title = options } or options or {}
 		local title = tostring(options.Title or "Tab")
 		local id = tostring(options.Id or title)
+		assert(window._mountingAppearance or id:sub(1, 17) ~= "__uai_appearance_", "Tab Id prefix __uai_appearance_ is reserved")
 		for _, tab in ipairs(window.Tabs) do assert(tab.Id ~= id, "Duplicate tab Id: " .. id) end
 		local tab = setmetatable(C.owner(window), Tab)
 		tab.Id, tab.Title, tab.Alive, tab.Visible, tab.Sections = id, title, true, true, {}
@@ -66,8 +67,16 @@ return function(env)
 		tab._scope:Connect(tab._button.SelectionLost, function() selected = false; tab._refresh() end)
 		tab._scope:Connect(tab._button.Activated, function() window:SelectTab(tab) end)
 		window.Tabs[#window.Tabs + 1] = tab
+		local firstApplication = window._appearanceTab and #window.Tabs == 2
+		if window._appearanceTab then
+			for index, candidate in ipairs(window.Tabs) do
+				if candidate == window._appearanceTab then table.remove(window.Tabs, index); break end
+			end
+			window.Tabs[#window.Tabs + 1] = window._appearanceTab
+		end
+		for index, candidate in ipairs(window.Tabs) do candidate._button.LayoutOrder = index end
 		window:_Layout()
-		if not window._activeTab then window:SelectTab(tab) end
+		if not window._activeTab or (firstApplication and window._activeTab == window._appearanceTab) then window:SelectTab(tab) end
 		return tab
 	end
 	function Tab:Select() self._window:SelectTab(self); return self end
@@ -84,6 +93,7 @@ return function(env)
 	end
 	function Tab:Destroy()
 		if not self.Alive then return end
+		if self._window._appearanceTab == self then self._window._appearanceTab, self._window._appearanceSync = nil, nil end
 		self:SetVisible(false)
 		self.Alive = false
 		for index = #self.Sections, 1, -1 do self.Sections[index]:Destroy() end
@@ -119,7 +129,7 @@ return function(env)
 		section._body = C.node(section, "Frame", section.Frame, {
 			Name = "Rows", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1, Visible = not section.Collapsed,
 		}, { BackgroundColor3 = "Surface" })
-		C.corner(section._body, 12); C.stroke(section, section._body, "Subtle")
+		C.corner(section._body, 8, section); C.stroke(section, section._body, "Subtle")
 		C.list(section._body, false, 0); C.pad(section._body, 0, 4)
 		C.reflow(section, function()
 			local width = math.max(1, window._contentWidth - window._contentPad * 2)

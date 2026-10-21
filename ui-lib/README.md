@@ -24,6 +24,16 @@ draws its own brand mark and window-control glyphs. A pinned sidebar profile sho
 the local player and game; Roblox supplies the headshot. Owned transitions support
 reduced motion. Scripts own application logic.
 
+Every window automatically includes an Appearance tab for palette colors,
+restrained corner rounding, text size, and motion. Detailed color groups collapse
+to keep common settings easy to reach. Existing setters stay reflected, and
+configuration profiles retain the full appearance. `SetAppearance`,
+`GetAppearance`, and `ResetAppearance` expose the same preferences to scripts.
+
+Mobile windows leave space for the game by default and resize with a 44px touch
+grip. `SetSize`, `GetSize`, and `ResetSize` expose sizing preferences while the
+library handles safe insets, rotation, and keyboard obstruction.
+
 The built-in Light/Dark action is a sun/moon header icon to the left of Minimize
 and uses the existing token palettes, including open
 pickers and dialogs. `GetTheme()` and `ToggleTheme()` complement `SetTheme()`;
