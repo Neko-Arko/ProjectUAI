@@ -20,14 +20,19 @@ return function(env)
 	local ENTRIES = {
 		{
 			version = "3.6.5",
-			revision = "2026-10-21-network-capture",
+			revision = "2026-10-21-tool-context",
 			date = "October 21, 2026",
 			title = "Reliable connections and a refreshed desktop",
-			highlights = "Matching client, bridge, Windows and Android releases with bounded mobile transport, a refreshed desktop launcher and read-only network capture.",
+			highlights = "Matching client, bridge, Windows and Android releases with bounded mobile transport, a refreshed desktop launcher, network capture and a smaller opt-in tool catalogue.",
 			sections = {
 				{ category = "added", label = "Network capture", items = {
 					"Add read-only network and payload capture. Start net_capture, run a loader, then read bounded HTTP records or the HTTP-to-chunk chain. UAI's own requests and compiles are excluded, and Stop restores the hooks.",
 					"Records redact credentials, link responses to compiled chunks by hash or thread, and flag code-like responses that never compile. Nothing is rewritten, replayed or executed by the capture.",
+				} },
+				{ category = "added", label = "Tools and diagnostics", items = {
+					"Choose an opt-in tool profile in Settings → Agent to declare a smaller catalogue. All tools remains the default; hidden tools stay callable through tool_search with their normal permissions and conversation scope.",
+					"Retain tool results in a per-conversation evidence ledger. The evidence tool lists, searches and pages full text or structured data after compaction, without changing the inline result.",
+					"Create a local, redacted support bundle from Diagnostics. It excludes API keys, memory, custom instructions, conversation text, file contents and captured payloads.",
 				} },
 				{ category = "improved", label = "Desktop", items = {
 					"A refreshed Cowork launcher brings clearer connection status, setup and update controls. Open the executable once to start; an existing window can be brought forward during startup.",

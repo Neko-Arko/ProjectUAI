@@ -996,6 +996,19 @@ return function(env)
 				onClick = describeCounts,
 			},
 			{
+				name = "CreateSupportBundle",
+				text = "Create support bundle",
+				variant = "ghost",
+				onClick = function()
+					local result, why = env.require("runtime/support_bundle").write()
+					if result then
+						overlay.toast("Support bundle written to " .. tostring(result.path or "the workspace"), "good", 4)
+					else
+						overlay.toast("Could not write the support bundle: " .. tostring(why), "warn", 4)
+					end
+				end,
+			},
+			{
 				name = "CopyDiagnostics",
 				text = "Copy diagnostics",
 				variant = "ghost",
@@ -1136,6 +1149,12 @@ return function(env)
 		})
 		R.number(agent, "Parallel tools", "Tool calls run at once within one step.",
 			"agent.toolConcurrency", 1, 8, 1)
+		R.select(agent, {
+			label = "Tool profile",
+			hint = "All keeps every tool declared. Other profiles declare a smaller core; hidden tools remain callable through tool_search with their normal permissions and scope.",
+			path = "agent.toolProfile",
+			options = env.require("agent/tool_profiles").options(),
+		})
 		R.number(agent, "Tool timeout",
 			"Seconds before a tool is abandoned. Subagents are exempt: they run to their own budget below.",
 			"agent.toolTimeout", 5, 60, 1)

@@ -24,6 +24,18 @@
   or thread, flag code-like responses that never compile, exclude UAI's own
   requests and compiles, and restore hooks on Stop. See
   [the capture guide](docs/NET_CAPTURE.md).
+- Add opt-in tool profiles and a `tool_search` toolbox. **All tools** stays the
+  default; leaner profiles declare a core set, while hidden tools remain callable
+  with the same permissions, groups and conversation scope. See
+  [the tool context guide](docs/TOOL_CONTEXT.md).
+- Retain tool results in a durable per-conversation evidence ledger without
+  changing the inline receipt. `evidence` lists, searches and pages full text or
+  structured data after compaction; the newest 200 records per conversation are
+  kept and other conversations remain unreadable.
+- Add a local, redacted support bundle for bug reports. It collects capabilities,
+  provider health, permissions, enabled tools, session metadata, recent HTTP
+  failures and logs, while excluding API keys, memory, custom instructions,
+  conversation text, file contents and captured payloads.
 - Include bridge 3.6.2's verified OpenCode execution permission gate. The reported
   Android SIGSEGV has no native backtrace; these fixes remove reproduced defects
   without claiming to identify or reproduce that device crash.

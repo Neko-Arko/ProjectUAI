@@ -26,6 +26,9 @@ case("prompt size stays bounded and workflows follow the offered tools", functio
 	local capture = prompt.build({ tools = { { ["function"] = { name = "net_capture" } } } })
 	check("network capture guidance follows the offered tool", has(capture, "net_capture observes")
 		and not has(readOnly, "net_capture observes"))
+	local toolbox = prompt.build({ tools = { { ["function"] = { name = "tool_search" } } }, profile = "lean" })
+	check("toolbox guidance appears only for a hiding profile", has(toolbox, "tool_search list")
+		and not has(main, "tool_search list"))
 	local noTools = prompt.subagent("Explain the result", { tools = {} })
 	check("empty tool catalogue is distinct from an unscoped preview", #noTools < #child / 2
 		and not has(noTools, "Skills:") and not has(noTools, "Files and source") and not has(noTools, "Tool calls:"))

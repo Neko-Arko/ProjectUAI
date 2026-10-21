@@ -367,10 +367,12 @@ return function(env)
 				exclude = util.copy(exclude or {})
 				exclude.conversation_rename = true
 			end
+			local profile = session.toolProfile or config.get("agent.toolProfile", "all")
 			local definitions = registry.definitions({
 				only = session.toolFilter,
 				groups = session.toolGroups,
 				exclude = exclude,
+				profile = profile,
 			})
 			-- A session may carry its own brief. A subagent does: it answers to the
 			-- parent agent rather than to the user, so inheriting the main prompt
@@ -379,7 +381,7 @@ return function(env)
 			local function requestFor(candidate)
 				local model, provider = candidate and candidate.model, candidate and candidate.label
 				if systemText == nil or candidate ~= promptRecord or model ~= promptModel or provider ~= promptProvider then
-					local options = { tools = definitions, model = model, provider = provider, session = session }
+					local options = { tools = definitions, model = model, provider = provider, session = session, profile = profile }
 					options.opencodeCompatibility = candidate and candidate.api ~= "anthropic" and providers.isOpencode(candidate) or false
 					if type(session.systemPrompt) == "function" then
 						systemText = session.systemPrompt(options)

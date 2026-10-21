@@ -200,6 +200,15 @@ responses that never compile, and excludes UAI's own traffic. Stop restores the
 hooks; nothing is rewritten, replayed or executed by the capture. See
 [the capture guide](docs/NET_CAPTURE.md).
 
+**Tool profiles, evidence and support.** The default **All tools** profile keeps
+the complete catalogue. Leaner profiles declare a core set for a smaller request,
+while `tool_search` lists, describes and calls every hidden tool with the same
+permissions and conversation scope. Tool results are also retained in a
+per-conversation evidence ledger (`evidence` list/search/read) so compaction does
+not lose the full receipt. `support_bundle` writes a local, redacted diagnostic
+file for bug reports, excluding keys, memory, conversation text, file contents
+and captured payloads. See [the tool context guide](docs/TOOL_CONTEXT.md).
+
 **Code workspace — v1.7.0, September 24, 2026.** Open **Code** and
 choose Editor, Files, Explorer, Remotes, Output, History, Library, or Game changes.
 The user and agent share live Luau documents and revisions. Source highlighting,

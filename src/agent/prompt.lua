@@ -85,6 +85,10 @@ Tool calls:
   the function; it is not an extra argument. Partial results do not prove absence.
   For expired/omitted details, narrow or reinspect.]]
 
+	local TOOLBOX = [[
+Toolbox:
+- A tool profile may hide tools. Use tool_search list to find one, describe for its exact schema, then call; hidden tools keep normal permissions and scope.]]
+
 	local SKILLS = [[
 Skills:
 - Use skills_read for explicitly requested/relevant skills before applying them.
@@ -211,6 +215,9 @@ Background chat:
 			or "You are UAI, an agent embedded in a running Roblox client.", CORE }
 		local function include(enabled, text) if enabled then parts[#parts + 1] = text end end
 		include(names == nil or next(names) ~= nil, TOOL_PROTOCOL)
+		-- The toolbox guidance only applies when a profile actually hides tools.
+		-- The default All profile keeps the previous prompt and workflow.
+		include(offered(names, "tool_search") and opts.profile and opts.profile ~= "all", TOOLBOX)
 		if opts.opencodeCompatibility then
 			local declarations = {}
 			for _, name in ipairs({ "bash", "read", "edit", "glob", "grep", "list", "shell" }) do

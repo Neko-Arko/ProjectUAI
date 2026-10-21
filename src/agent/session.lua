@@ -881,6 +881,8 @@ return function(env)
 		if subagents then subagents.stopAll(session) end
 		M.threads[id] = nil
 		if fsx.enabled then fsx.delete(THREAD_DIR .. "/" .. id .. ".json") end
+		local evidence = env.loadedModules and env.loadedModules["runtime/evidence"]
+		if evidence then pcall(evidence.clear, session) end
 		if M.activeId == id then
 			local remaining = M.list()
 			M.activeId = remaining[1] and remaining[1].id or nil
@@ -900,6 +902,8 @@ return function(env)
 				victim.removed = true; victim.abort(); victim.events:clear(); M.threads[victim.id] = nil
 				excess = excess - 1
 				attachments.clearUploads(victim.id)
+				local evidence = env.loadedModules and env.loadedModules["runtime/evidence"]
+				if evidence then pcall(evidence.clear, victim) end
 				local subagents = env.loadedModules and env.loadedModules["agent/subagent"]
 				if subagents then subagents.stopAll(victim) end
 			end

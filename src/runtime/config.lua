@@ -156,6 +156,10 @@ return function(env)
 			-- tool is offered, which is the coarser thing somebody who does not want the
 			-- agent near remotes in this game is asking for.
 			disabledGroups = {},
+			-- Declared-tool profile. "all" keeps every tool declared; another
+			-- profile hides the long tail behind tool_search without changing
+			-- dispatch scope or permissions.
+			toolProfile = "all",
 			-- The language the agent is asked to answer in, when one has been named.
 			-- Empty means "whatever the conversation is in".
 			--

@@ -111,6 +111,8 @@ return function(env)
 		world = "World",
 		remotes = "Remotes",
 		net_capture = "Network capture",
+		evidence = "Evidence",
+		support_bundle = "Support",
 		gui = "Interface",
 		perf = "Diagnostics",
 		meta = "Metadata",
@@ -213,10 +215,19 @@ return function(env)
 	function M.definitions(opts)
 		opts = opts or {}
 		M.load()
+		local profile
+		if opts.profile and opts.profile ~= "all" then
+			profile = env.require("agent/tool_profiles").get(opts.profile)
+		end
 		local out = {}
 		for _, name in ipairs(M.order) do
 			local tool = M.tools[name]
 			local allow = true
+			-- The toolbox is the one declared tool a preset may add without gaining
+			-- the rest of the agent family. Its own calls still use the target's
+			-- groups and scope, so this does not widen a subagent's access.
+			local toolbox = name == "tool_search"
+			if profile and not toolbox and not profile.tools[name] and not profile.groups[tool.group] then allow = false end
 			if M.missingCapability(tool) then allow = false end
 			if permissions.check(tool) == "deny" then allow = false end
 			if not M.groupEnabled(tool.group) then allow = false end
@@ -226,7 +237,7 @@ return function(env)
 			-- shown a tool will use it, and a turn spent learning the tool says no is a
 			-- wasted turn, which is the same reasoning as a missing capability.
 			if opts.exclude and opts.exclude[name] then allow = false end
-			if opts.groups and not opts.groups[tool.group] then allow = false end
+			if opts.groups and not opts.groups[tool.group] and not toolbox then allow = false end
 			if allow then
 				out[#out + 1] = {
 					type = "function",
@@ -574,6 +585,12 @@ return function(env)
 		if modelOk then result.modelText = modelText
 		else result.modelText = "Structured tool result could not be formatted. Narrow the original query; the original receipt remains in the UI." end
 		result.ms = clock.since(started)
+		if ctx and ctx.session and ctx.session.id then
+			local okEvidence, evidence = pcall(env.require, "runtime/evidence")
+			if okEvidence and evidence and evidence.enabled then
+				result.evidenceId = evidence.record(ctx.session, tool.name, text, after.data, { ok = handlerOk, ms = result.ms })
+			end
+		end
 		return result
 	end
 

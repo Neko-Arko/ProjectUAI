@@ -17,6 +17,8 @@ local GROUPS = {
 	"world",
 	"remotes",
 	"net_capture",
+	"evidence",
+	"support_bundle",
 	"gui",
 	"perf",
 	"meta",

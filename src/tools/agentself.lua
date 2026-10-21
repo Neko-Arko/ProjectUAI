@@ -278,7 +278,7 @@ return function(env)
 				conversationBytes = messageBytes, eventsScanned = math.min(events, SEARCH_EVENTS) } }
 	end
 
-	return {
+	local tools = {
 		{
 			name = "todo_write",
 			risk = "write",
@@ -776,4 +776,6 @@ return function(env)
 			end,
 		},
 	}
+	for _, tool in ipairs(env.require("tools/tool_search")) do tools[#tools + 1] = tool end
+	return tools
 end
