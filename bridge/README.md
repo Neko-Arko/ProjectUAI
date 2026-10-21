@@ -72,9 +72,13 @@ distinct; `binary` is only the executable's filename.
 Each request gets a temporary native session and location. UAI tools are exposed
 through a private MCP server, collected after the provider stream completes, and
 returned as ordinary tool calls for Roblox to execute. Native desktop actions are
-never approved. The native built-in schemas remain visible with ask permissions,
-as hiding them causes upstream `FreeTierError`. A desktop tool choice with a
-matching pending permission becomes a reserved `opencode_host_action` refusal
+never approved. A private plugin adds an execution permission gate even when a
+native tool wrapper omits its own permission request. Exact UAI tool names on the
+private remote MCP server remain available; other host execution must ask.
+The native built-in schemas remain visible, as hiding them causes upstream
+`FreeTierError`. The bridge waits for a tool's matching pending permission,
+including requests that appear after its tool state. A desktop tool choice with
+that permission becomes a reserved `opencode_host_action` refusal
 receipt after the stream finishes and interruption is confirmed. The next normal
 Roblox agent step can use an available tool; the bridge never repeats the native
 prompt or approves that desktop action. Mixed batches retain provider order even
@@ -124,7 +128,7 @@ Failed downloads or startup keep a working version. Git checkouts and executor
 download packages are never overwritten; updates live in a per-install user cache.
 
 Publish `dist/bridge-release.json` and `dist/uai-bridge-package.json` on the same
-official `v3.6.1` or `bridge-v3.6.1` GitHub release. Generate them with
+official `bridge-v3.6.2` GitHub release. Generate them with
 `node tools/build_bridge.js` after reviewing final bridge/web inputs, inspect
 the outputs, then run `node tools/build_bridge.js --check` and focused tests.
 Later releases must bump `bridge/release.js` and use the matching release tag.
@@ -132,10 +136,10 @@ The release builder embeds OpenCode, MCP and support helpers into the original
 permitted root filenames so installed 3.1 updaters can verify and activate 3.3. Checkout,
 executor downloads and desktop payloads retain the separate source modules.
 
-Existing desktop 3.6.0 receives bridge 3.6.1 and all web files through this updater;
+Existing desktop 3.6.0 receives bridge 3.6.2 and all web files through this updater;
 no new desktop executable is needed. Refresh an open browser page to load changed
-web assets. Reload the published Roblox client for the new refusal feedback;
-the desktop's **Copy client script** retains its embedded client version.
+web assets. Client remains 3.6.1; the desktop's **Copy client script** retains its
+embedded client version. See [bridge 3.6.2 verification](../docs/TESTING_3.6.2.md).
 
 The [desktop app](../desktop/README.md) independently downloads its own release
 and applies it on restart. An old 1.0 desktop ZIP needs one manual upgrade first.

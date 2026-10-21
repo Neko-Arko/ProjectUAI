@@ -1,5 +1,19 @@
 # Changelog
 
+## Bridge 3.6.2 — October 21, 2026 — OpenCode execution permission gate
+
+- Fix the remaining `OpenCode could not verify that a desktop tool was blocked`
+  failure after 3.6.1. OpenCode's native execution wrapper did not always ask for
+  permission, and a tool could appear before its pending permission request.
+- Install a private execution gate in the isolated OpenCode server, preserving
+  the native schemas required by free models. Host tool execution must ask for
+  permission; exact UAI calls on the private remote tool server remain available.
+  Wait for the matching permission and confirmed interruption before returning
+  blocked-action feedback to the Roblox conversation.
+- Publish the bridge package as `bridge-v3.6.2`. Existing desktop 3.6.0 installs
+  receive it automatically when idle. Client stays 3.6.1; desktop and Android
+  downloads stay 3.6.0.
+
 ## 3.6.1 — October 20, 2026 — OpenCode tunnel tool recovery
 
 - Keep OpenCode conversations running when the model selects a desktop tool.

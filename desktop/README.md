@@ -33,8 +33,10 @@ and closing the window shut them down. The bridge also supports an absolute
 The existing direct desktop workaround still works without this app. This native
 route provides an additional desktop option; on mobile, OpenCode requires the UAI
 Relay app from Discord.
-UAI tools are returned to Roblox for execution. The CLI never receives permission
-to run local desktop tools. Provider keys and existing OpenCode credentials are not
+UAI tools are returned to Roblox for execution. Bridge 3.6.2 installs a private
+execution permission gate and waits for matching pending permissions before
+returning blocked-action feedback. The CLI never receives permission to run local
+desktop tools. Provider keys and existing OpenCode credentials are not
 copied into its isolated session. OpenCode's retired HTTPS proxy is not used.
 
 OpenCode Go subscriptions use `https://opencode.ai/inference/go/v1` and your Go API
@@ -104,10 +106,10 @@ bridge together when building a desktop distribution.
 Bridge releases download automatically, are verified, and activate only when
 active work and retained receipts/pictures are idle. An automatic worker restart
 keeps the same pairing token. The browser reconnects to the updated bridge.
-This includes bridge/web assets: desktop 3.6.0 receives the 3.6.1 tunnel fix
-without a new executable. Refresh an open browser page and reload the published
-Roblox loader for the improved client tool feedback. **Copy client script** still
-copies the client embedded in the desktop executable.
+This includes bridge/web assets: desktop 3.6.0 receives the bridge 3.6.2 tunnel fix
+without a new executable. Client remains 3.6.1. Refresh an open browser page to
+load changed web assets. **Copy client script** still copies the client embedded
+in the desktop executable. See [bridge 3.6.2 verification](../docs/TESTING_3.6.2.md).
 
 The desktop app separately checks stable releases in
 `Project-Ptolemy/ProjectUAI` on startup and every 15 minutes. It downloads and

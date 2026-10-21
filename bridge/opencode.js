@@ -17,8 +17,10 @@ const { help } = require('./support');
 const MAX_REPLY = 8 << 20;
 const WAIT_MS = 150;
 const HOST_ACTION = 'opencode_host_action';
+const HOST_GUARD = 'project-uai.desktop-guard';
+const HANDOFF_WAIT_MS = 5000;
 const REQUIRED_ROUTES = ['/api/model', '/api/session', '/api/session/{sessionID}', '/api/session/{sessionID}/prompt',
-  '/api/session/{sessionID}/message', '/api/session/{sessionID}/interrupt', '/api/session/{sessionID}/permission', '/api/experimental/mcp/{server}'];
+  '/api/session/{sessionID}/message', '/api/session/{sessionID}/interrupt', '/api/session/{sessionID}/permission', '/api/experimental/mcp/{server}', '/api/plugin'];
 const missing = 'OpenCode CLI not found. Install OpenCode Desktop or run npm install -g @opencode/cli, then restart Cowork.';
 const pause = (ms, signal) => new Promise((resolve, reject) => {
   if (signal?.aborted) { reject(Error('Stopped')); return; }
@@ -241,7 +243,8 @@ function toolHandoff(parts, tools, job, permissions, messageID, sessionID) {
         typeof part.name !== 'string' || !/^[\w-]{1,100}$/.test(part.name))
       throw Error('OpenCode returned an invalid tool handoff');
     ids.add(part.id);
-    if (part.state?.status !== 'running' || !part.state.input || typeof part.state.input !== 'object' || Array.isArray(part.state.input))
+    if (part.executed !== true && part.state?.status === 'streaming') { waiting = true; continue; }
+    if (part.executed === true || part.state?.status !== 'running' || !part.state.input || typeof part.state.input !== 'object' || Array.isArray(part.state.input))
       throw Error('OpenCode could not hand off the requested tool call. No desktop action was approved; the request was not repeated.');
     if (tools.some(tool => 'uai_' + tool.name === part.name)) {
       remoteCount++;
@@ -249,17 +252,17 @@ function toolHandoff(parts, tools, job, permissions, messageID, sessionID) {
       if (index < 0) waiting = true;
       else { used.add(index); calls.push(job.calls[index]); }
     } else {
-      if (!permissions.some(permission => permission?.sessionID === sessionID && permission?.source?.type === 'tool' &&
-          permission.source.id === part.id && permission.source.messageID === messageID))
-        throw Error('OpenCode could not verify that a desktop tool was blocked. No desktop action was approved; the request was not repeated.');
-      calls.push({ id: 'call_' + crypto.randomBytes(12).toString('hex'), name: HOST_ACTION, arguments: { name: part.name } });
+      if (!permissions.some(permission => permission?.sessionID === sessionID && permission?.action === HOST_ACTION &&
+          permission?.source?.type === 'tool' && permission.source.id === part.id && permission.source.messageID === messageID)) waiting = true;
+      else calls.push({ id: 'call_' + crypto.randomBytes(12).toString('hex'), name: HOST_ACTION, arguments: { name: part.name } });
     }
   }
-  if (permissions.some(permission => permission?.sessionID !== sessionID || permission?.source?.messageID !== messageID ||
+  if (permissions.some(permission => permission?.action !== HOST_ACTION || permission?.sessionID !== sessionID || permission?.source?.messageID !== messageID ||
       !parts.some(part => part.id === permission?.source?.id && permission.source.type === 'tool' &&
         !tools.some(tool => 'uai_' + tool.name === part.name))))
     throw Error('OpenCode returned a permission that could not be matched to a blocked desktop tool.');
-  if (job.calls.length > remoteCount || (waiting && job.calls.length === remoteCount) || (!waiting && used.size !== job.calls.length))
+  if (!parts.some(part => part.state?.status === 'streaming') &&
+      (job.calls.length > remoteCount || (used.size !== job.calls.length && job.calls.length === remoteCount)))
     throw Error('OpenCode returned an unmatched tool call');
   return waiting ? null : calls;
 }
@@ -291,6 +294,21 @@ function createOpenCode({ env = process.env, binary, binaryArgs = [], startupMs 
       rpcSecret = crypto.randomBytes(32).toString('hex');
       password = crypto.randomBytes(32).toString('hex');
       rpcServer = http.createServer((req, res) => {
+        if (req.url === '/guard' && req.method === 'POST' && req.headers.origin === undefined &&
+            req.headers.authorization === 'Bearer ' + rpcSecret) {
+          let size = 0; const chunks = [];
+          req.on('error', () => {});
+          req.on('data', chunk => { size += chunk.length; if (size > 4096) req.destroy(); else chunks.push(chunk); });
+          req.on('end', () => {
+            let input;
+            try { input = JSON.parse(Buffer.concat(chunks).toString()); } catch { res.writeHead(400); res.end(); return; }
+            if (!input || typeof input.sessionID !== 'string' || typeof input.tool !== 'string') { res.writeHead(400); res.end(); return; }
+            const job = [...jobs.values()].find(value => value.session === input.sessionID);
+            const allowed = !!job && job.tools.some(tool => 'uai_' + tool.name === input.tool);
+            res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ allowed }));
+          });
+          return;
+        }
         const job = jobs.get(req.url?.slice('/mcp/'.length));
         if (req.method !== 'POST' || !req.url?.startsWith('/mcp/') || !job || req.headers.origin !== undefined ||
             req.headers.authorization !== 'Bearer ' + rpcSecret) { res.writeHead(403); res.end(); return; }
@@ -330,7 +348,32 @@ function createOpenCode({ env = process.env, binary, binaryArgs = [], startupMs 
       const port = reserve.address().port; await new Promise(resolve => reserve.close(resolve));
       if (closed) throw Error('OpenCode bridge stopped');
       base = 'http://127.0.0.1:' + port;
+      // The CLI's execute wrapper and several internal helpers have no native
+      // permission check. Install an awaited gate before every host tool, while
+      // retaining the schemas required by OpenCode's free-model endpoint.
+      const guard = path.join(directory, 'guard'); fs.mkdirSync(guard);
+      fs.writeFileSync(path.join(guard, 'package.json'), JSON.stringify({ type: 'module' }));
+      fs.writeFileSync(path.join(guard, 'server.js'), `export default {
+  id: ${JSON.stringify(HOST_GUARD)},
+  async setup(ctx) {
+    const hook = await ctx.tool.hook('execute.before', async event => {
+      const response = await fetch(${JSON.stringify('http://127.0.0.1:' + rpcServer.address().port + '/guard')}, {
+        method: 'POST', signal: AbortSignal.timeout(5000),
+        headers: { authorization: ${JSON.stringify('Bearer ' + rpcSecret)}, 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionID: event.sessionID, tool: event.tool })
+      });
+      if (!response.ok) throw Error('Project UAI desktop guard unavailable');
+      if ((await response.json()).allowed === true) return;
+      await ctx.permission.assert({ sessionID: event.sessionID, agent: event.agent,
+        action: ${JSON.stringify(HOST_ACTION)}, resources: ['*'],
+        source: { type: 'tool', messageID: event.messageID, id: event.id } });
+      throw Error('Project UAI desktop tools cannot execute');
+    });
+    return () => hook.dispose();
+  }
+};\n`);
       const config = { update: 'disable', share: 'disabled', snapshots: false, lsp: false, formatter: false,
+        plugins: [guard],
         permissions: [{ action: '*', resource: '*', effect: 'ask' }], agents: { uai: { mode: 'primary',
           system: 'Continue the supplied Project UAI Roblox conversation. Only call its uai MCP tools. Never execute host tools.' } } };
       const isolated = { ...env, OPENCODE_SERVER_PASSWORD: password, OPENCODE_SERVER_USERNAME: 'opencode',
@@ -369,6 +412,7 @@ function createOpenCode({ env = process.env, binary, binaryArgs = [], startupMs 
             }
             const list = await api('/api/model');
             modelsCache = modelRows(list);
+            await verifyGuard();
             if (modelsCache.length && !exited) { state = 'ready'; return; }
             failure = 'OpenCode is installed but returned no supported free models. Update OpenCode and restart Cowork.';
           } catch { /* The native server and its built-in provider plugin start independently. */ }
@@ -408,6 +452,18 @@ function createOpenCode({ env = process.env, binary, binaryArgs = [], startupMs 
     return { object: 'list', data: modelsCache };
   }
 
+  async function verifyGuard(query = '', signal) {
+    const expires = Date.now() + HANDOFF_WAIT_MS;
+    do {
+      const plugins = await api('/api/plugin' + query, 'GET', undefined, signal);
+      const guard = plugins?.data?.find(plugin => plugin.id === HOST_GUARD);
+      if (guard?.state?.status === 'active') return;
+      if (guard?.state?.status === 'failed') break;
+      await pause(pollMs, signal);
+    } while (!closed && Date.now() < expires);
+    throw Error('OpenCode desktop tool guard did not load. Update OpenCode Desktop and restart Cowork.');
+  }
+
   async function request({ body, url, signal, onFrame = () => {} }) {
     await start();
     if (signal?.aborted || closed) throw Error('Stopped');
@@ -435,8 +491,10 @@ function createOpenCode({ env = process.env, binary, binaryArgs = [], startupMs 
           ...tools.map(tool => ({ action: 'uai_' + tool.name, resource: '*', effect: 'allow' }))] }, signal);
       session = created?.data?.id;
       if (typeof session !== 'string' || !/^[\w-]+$/.test(session)) throw Error('OpenCode returned an invalid session');
+      job.session = session;
+      await verifyGuard(locationQuery, signal);
       await api('/api/session/' + session + '/prompt', 'POST', prompt, signal);
-      let message, calls, textSize = 0, reasoningSize = 0;
+      let message, calls, handoffWaitingAt, textSize = 0, reasoningSize = 0;
       for (;;) {
         if (closed || signal?.aborted || state !== 'ready') throw Error(signal?.aborted ? 'Stopped' : 'OpenCode stopped during the request');
         if (job.failure) throw Error(job.failure);
@@ -463,6 +521,9 @@ function createOpenCode({ env = process.env, binary, binaryArgs = [], startupMs 
         if (message?.time?.streamed && nativeTools.length) {
           calls = toolHandoff(nativeTools, tools, job, permissions.data, message.id, session);
           if (calls) break;
+          if (handoffWaitingAt === undefined) handoffWaitingAt = Date.now();
+          if (Date.now() - handoffWaitingAt >= HANDOFF_WAIT_MS)
+            throw Error('OpenCode tool handoff did not become ready. The desktop guard prevented execution; the request was not repeated.');
         }
         if (nativeTools.some(part => ['error', 'completed'].includes(part.state?.status)))
           throw Error('OpenCode could not hand off the requested tool call. No desktop action was approved; the request was not repeated.');

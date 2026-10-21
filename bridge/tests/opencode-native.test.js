@@ -205,24 +205,86 @@ test('native undeclared uai names produce blocked receipts without impersonating
   assert.ok(!events().some(e => e.type === 'mcp-call' || e.type === 'permission-reply'));
 });
 
+test('native execute wrapper is gated before any confined code or HTTP effect', async t => {
+  const { backend, events } = native(t);
+  const reply = await backend.request({ body: JSON.stringify(input('EXECUTE_WRAPPER')), url });
+  const call = JSON.parse(reply.body).choices[0].message.tool_calls[0];
+  assert.equal(call.function.name, 'opencode_host_action');
+  assert.deepEqual(JSON.parse(call.function.arguments), { name: 'execute' });
+  assert.ok(events().some(event => event.type === 'guard-blocked' && event.tool === 'execute' && event.action === 'opencode_host_action'));
+  assert.ok(!events().some(event => event.type === 'host-effect' || event.type === 'guard-allowed'));
+  assert.doesNotMatch(reply.body, /host-effect\.invalid|fetch\(/);
+  assert.equal(events().filter(event => event.type === 'prompt').length, 1);
+});
+
+test('native handoff waits for delayed guard permissions and streamed input without exposing partial batches', async t => {
+  const { backend, events } = native(t), tools = [{ type: 'function', function: { name: 'lookup' } }];
+  for (const marker of ['HOST_ACTION DELAY_PERMISSION', 'HOST_STREAMING STREAM_TRANSITION DELAY_PERMISSION', 'MIXED_HOST_TOOL DELAY_PERMISSION']) {
+    const frames = [];
+    const reply = await backend.request({ body: JSON.stringify({ ...input(marker), tools }), url, onFrame: frame => {
+      if (frame.choices?.[0]?.delta?.tool_calls) {
+        const session = events().filter(event => event.type === 'session').at(-1).id;
+        assert.ok(events().some(event => event.type === 'interrupt' && event.id === session));
+        assert.equal(events().filter(event => event.type === 'guard-blocked' && event.id === session).length, marker.includes('MIXED') ? 2 : 1);
+      }
+      frames.push(frame);
+    } });
+    const calls = JSON.parse(reply.body).choices[0].message.tool_calls;
+    assert.deepEqual(calls.map(call => call.function.name), marker.includes('MIXED') ? ['lookup', 'opencode_host_action', 'lookup', 'opencode_host_action'] : ['opencode_host_action']);
+    assert.equal(frames.flatMap(frame => frame.choices?.[0]?.delta?.tool_calls || []).length, calls.length);
+  }
+  assert.ok(!events().some(event => event.type === 'host-effect' || event.type === 'permission-reply'));
+});
+
+test('native per-location guard readiness is verified before inference admission', async t => {
+  const { backend, events } = native(t, { UAI_OPENCODE_FIXTURE_PENDING_GUARD: '1' });
+  const reply = await backend.request({ body: JSON.stringify(input('Reply PONG')), url });
+  assert.equal(JSON.parse(reply.body).choices[0].message.content, 'PONG');
+  assert.equal(events().filter(event => event.type === 'guard-pending').length, 2);
+  const promptAt = events().findIndex(event => event.type === 'prompt');
+  assert.ok(events().slice(0, promptAt).some(event => event.type === 'guard-loaded' && event.location !== events().find(event => event.type === 'ready').directory));
+});
+
+test('native inactive request-location guard rejects before submitting any prompt', async t => {
+  const { backend, events } = native(t, { UAI_OPENCODE_FIXTURE_INACTIVE_GUARD: 'location' });
+  await assert.rejects(backend.request({ body: JSON.stringify(input('EXECUTE_WRAPPER')), url }), /guard.*load/i);
+  assert.ok(!events().some(event => event.type === 'prompt' || event.type === 'host-effect'));
+  assert.equal(events().filter(event => event.type === 'delete').length, 1);
+});
+
+test('native desktop gate grants only the current session exact declared tools', async t => {
+  const { backend, events } = native(t), tools = [{ type: 'function', function: { name: 'lookup' } }];
+  const [declared, undeclared] = await Promise.all([
+    backend.request({ body: JSON.stringify({ ...input('USE_TOOL'), tools }), url }),
+    backend.request({ body: JSON.stringify(input('UNDECLARED_LOOKUP')), url })
+  ]);
+  assert.equal(JSON.parse(declared.body).choices[0].message.tool_calls[0].function.name, 'lookup');
+  const refused = JSON.parse(undeclared.body).choices[0].message.tool_calls[0];
+  assert.equal(refused.function.name, 'opencode_host_action');
+  assert.deepEqual(JSON.parse(refused.function.arguments), { name: 'uai_lookup' });
+  const allowed = events().filter(event => event.type === 'guard-allowed'), blocked = events().filter(event => event.type === 'guard-blocked');
+  assert.equal(allowed.length, 1); assert.equal(blocked.length, 1); assert.notEqual(allowed[0].id, blocked[0].id);
+  assert.ok(!events().some(event => event.type === 'host-effect'));
+});
+
 test('native host handoff fails closed without matching blocked permission and successful interruption', async t => {
   const { backend, events } = native(t), frames = [];
   const rejectedRequests = ['HOST_ACTION HOST_COMPLETED', 'HOST_ACTION HOST_ERROR', 'HOST_ACTION WRONG_PERMISSION',
-    'HOST_ACTION WRONG_MESSAGE', 'HOST_ACTION WRONG_SESSION', 'HOST_ACTION WRONG_SOURCE', 'HOST_ACTION NO_PERMISSION',
-    'HOST_ACTION INTERRUPT_FAIL', 'HOST_ACTION FALSE_INTERRUPT'];
+    'HOST_ACTION WRONG_MESSAGE', 'HOST_ACTION WRONG_SESSION', 'HOST_ACTION WRONG_SOURCE', 'HOST_ACTION WRONG_ACTION', 'HOST_ACTION NO_PERMISSION',
+    'HOST_ACTION PROVIDER_EXECUTED', 'HOST_STREAMING STREAM_STALLED', 'HOST_ACTION INTERRUPT_FAIL', 'HOST_ACTION FALSE_INTERRUPT'];
   for (const text of rejectedRequests) {
     await assert.rejects(backend.request({ body: JSON.stringify(input(text)), url, onFrame: frame => frames.push(frame) }),
-      /hand off|not approved|could not verify|permission.*matched|local API returned HTTP 500|interrupt/i, text);
+      /hand off|not approved|handoff.*ready|permission.*matched|local API returned HTTP 500|interrupt/i, text);
   }
   assert.equal(events().filter(e => e.type === 'prompt').length, rejectedRequests.length);
   assert.equal(events().filter(e => e.type === 'delete').length, rejectedRequests.length);
   assert.ok(!frames.some(frame => frame.choices?.[0]?.delta?.tool_calls), 'failed interruption never exposes runnable handoff');
-  assert.ok(!events().some(e => e.type === 'permission-reply'));
+  assert.ok(!events().some(e => e.type === 'permission-reply' || e.type === 'host-effect'));
 });
 
 test('native Stop cancels unfinished host streams and blocked requests before any handoff', async t => {
   const { backend, events } = native(t); await backend.start();
-  for (const text of ['HOST_STREAMING', 'HOST_PENDING']) {
+  for (const text of ['HOST_STREAMING', 'HOST_PENDING', 'HOST_ACTION NO_PERMISSION', 'HOST_STREAMING STREAM_TRANSITION DELAY_PERMISSION']) {
     const controller = new AbortController(), frames = [], before = events().filter(e => e.type === 'prompt').length;
     const pending = backend.request({ body: JSON.stringify(input(text)), url, signal: controller.signal, onFrame: frame => frames.push(frame) });
     const rejected = assert.rejects(pending, /Stopped|aborted/i);
@@ -231,8 +293,8 @@ test('native Stop cancels unfinished host streams and blocked requests before an
     await sleep(60); controller.abort(); await rejected;
     assert.ok(!frames.some(frame => frame.choices?.[0]?.delta?.tool_calls));
   }
-  assert.equal(events().filter(e => e.type === 'prompt').length, 2);
-  assert.equal(events().filter(e => e.type === 'delete').length, 2);
+  assert.equal(events().filter(e => e.type === 'prompt').length, 4);
+  assert.equal(events().filter(e => e.type === 'delete').length, 4);
   assert.ok(!events().some(e => e.type === 'permission-reply'));
 });
 

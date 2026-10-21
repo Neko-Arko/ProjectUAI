@@ -1,1 +1,1 @@
-{"format":"project-uai-bridge-release","schema":1,"version":"3.6.1","protocol":2,"updateProtocol":1,"minNode":18,"package":{"name":"uai-bridge-package.json","bytes":1240202,"sha256":"ab296a420fdc63e2363e0786d8adab691adda0d3ab4bafd5c50af62624a91a40"}}
+{"format":"project-uai-bridge-release","schema":1,"version":"3.6.2","protocol":2,"updateProtocol":1,"minNode":18,"package":{"name":"uai-bridge-package.json","bytes":1245134,"sha256":"0f3b6e1e1d9232733d1d749a0a615dfe41d25c49d7c9e1a014bf081f36363b95"}}
