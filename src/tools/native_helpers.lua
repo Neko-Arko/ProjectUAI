@@ -32,7 +32,7 @@ return function(env)
 		snapshots[key] = entry; order[#order + 1] = key; retained = retained + entry.bytes; prune(); return snapshots[key] and key
 	end
 	function M.fail(why) return { ok = false, text = tostring(why), data = { status = "rejected" } } end
-	local readers = { coding = "workspace_result_read", instance = "instance_result_read", remotes = "remote_result_read", script = "script_result_read", net = "http_result_read" }
+	local readers = { coding = "workspace_result_read", instance = "instance_result_read", remotes = "remote_result_read", script = "script_result_read", net = "http_result_read", net_capture = "net_capture_result_read" }
 	function M.reader(group) return readers[group] end
 	function M.reference(data)
 		if type(data) ~= "table" then return nil end

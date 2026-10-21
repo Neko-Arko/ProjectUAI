@@ -192,6 +192,14 @@ camera, remotes (discover, fire, watch), on-screen interfaces, diagnostics, plac
 and account metadata, plus the agent's own task list, memory, searching and
 reading its earlier conversations, and subagent dispatch.
 
+**Network and payload capture.** `net_capture` observes a loader's executor and
+game HTTP, `HttpService` calls, `loadstring`/`load`/`require` chunks and queued
+code with fixed forwarding hooks. It records bounded request/response bodies,
+redacts credentials, links a response to the chunk it produced, flags code-like
+responses that never compile, and excludes UAI's own traffic. Stop restores the
+hooks; nothing is rewritten, replayed or executed by the capture. See
+[the capture guide](docs/NET_CAPTURE.md).
+
 **Code workspace — v1.7.0, September 24, 2026.** Open **Code** and
 choose Editor, Files, Explorer, Remotes, Output, History, Library, or Game changes.
 The user and agent share live Luau documents and revisions. Source highlighting,

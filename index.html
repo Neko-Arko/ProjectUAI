@@ -70,8 +70,8 @@
 
     <section class="statband" aria-label="Current release capabilities">
       <div class="statband-intro"><span class="eyebrow">ONE WORKSPACE.</span><p>A whole lot<br>of capability.</p></div>
-      <div class="stat"><b data-count="174"><!-- site:tool-count:start -->174<!-- site:tool-count:end --></b><span>Purpose-built tools</span></div>
-      <div class="stat"><b data-count="21"><!-- site:group-count:start -->21<!-- site:group-count:end --></b><span>Tool groups</span></div>
+      <div class="stat"><b data-count="177"><!-- site:tool-count:start -->177<!-- site:tool-count:end --></b><span>Purpose-built tools</span></div>
+      <div class="stat"><b data-count="22"><!-- site:group-count:start -->22<!-- site:group-count:end --></b><span>Tool groups</span></div>
       <div class="stat"><b>12<span>×</span></b><span>Files per batch read</span></div>
       <div class="stat"><b>20<span>×</span></b><span>Edits in one write</span></div>
     </section>
@@ -128,12 +128,12 @@ humanoid.WalkSpeed = <span class="tok-str">CONFIG.walkSpeed</span></code></pre><
       <div class="catalog-shell">
         <div class="catalog-toolbar" id="toolFilters" role="search" aria-label="Search the tool catalog" hidden>
           <div class="search-field"><label for="toolSearch">Find a tool</label><div class="search-input-wrap"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="5.5" stroke="currentColor"/><path d="m12 12 5 5" stroke="currentColor"/></svg><input type="search" id="toolSearch" placeholder="Files, raycast, Luau…" autocomplete="off" spellcheck="false" aria-controls="toolCatalog"><kbd aria-hidden="true">/</kbd></div></div>
-          <div class="category-field"><label for="toolCategory">Category</label><select id="toolCategory" aria-controls="toolCatalog"><option value="">All categories</option><!-- site:categories:start --><option value="instance">Instance tree (25)</option><option value="script">Code (6)</option><option value="fs">Files (10)</option><option value="agentself">Agent (14)</option><option value="character">Character (4)</option><option value="coding">Code workspace (24)</option><option value="perf">Diagnostics (3)</option><option value="net">HTTP (4)</option><option value="chat">In-game chat (8)</option><option value="iy">Infinite Yield (10)</option><option value="gui">Interface (8)</option><option value="meta">Metadata (4)</option><option value="players">Players (3)</option><option value="gravity">Project Gravity (13)</option><option value="remotes">Remotes (20)</option><option value="screen">Screen &amp; aiming (1)</option><option value="skills">Skills (5)</option><option value="templates">Templates (2)</option><option value="input">Virtual input (2)</option><option value="web">Web (2)</option><option value="world">World (6)</option><!-- site:categories:end --></select></div>
+          <div class="category-field"><label for="toolCategory">Category</label><select id="toolCategory" aria-controls="toolCatalog"><option value="">All categories</option><!-- site:categories:start --><option value="instance">Instance tree (25)</option><option value="script">Code (6)</option><option value="fs">Files (10)</option><option value="agentself">Agent (14)</option><option value="character">Character (4)</option><option value="coding">Code workspace (24)</option><option value="perf">Diagnostics (3)</option><option value="net">HTTP (4)</option><option value="chat">In-game chat (8)</option><option value="iy">Infinite Yield (10)</option><option value="gui">Interface (8)</option><option value="meta">Metadata (4)</option><option value="net_capture">Network capture (3)</option><option value="players">Players (3)</option><option value="gravity">Project Gravity (13)</option><option value="remotes">Remotes (20)</option><option value="screen">Screen &amp; aiming (1)</option><option value="skills">Skills (5)</option><option value="templates">Templates (2)</option><option value="input">Virtual input (2)</option><option value="web">Web (2)</option><option value="world">World (6)</option><!-- site:categories:end --></select></div>
           <button class="text-button clear-filters" type="button" id="clearFilters" disabled>Clear filters</button>
           <div class="risk-filters" id="riskFilters" role="group" aria-label="Filter tools by risk" hidden><button class="chip" type="button" id="riskAll" data-risk="" aria-pressed="true">All tools</button><button class="chip" type="button" data-risk="read" aria-pressed="false">Read</button><button class="chip" type="button" data-risk="write" aria-pressed="false">Write</button><button class="chip" type="button" data-risk="danger" aria-pressed="false">High impact</button></div>
           <div class="catalog-actions" id="catalogActions" hidden><button class="text-button" type="button" id="catalogExpandAll">Expand all</button><button class="text-button" type="button" id="catalogCollapseAll">Collapse all</button></div>
         </div>
-        <div class="catalog-meta"><p id="catalogStatus" role="status" aria-live="polite" aria-atomic="true"><!-- site:tool-count:start -->174<!-- site:tool-count:end --> tools across <!-- site:group-count:start -->21<!-- site:group-count:end --> groups</p><span>BUILD <!-- site:version:start -->3.6.5<!-- site:version:end --></span></div>
+        <div class="catalog-meta"><p id="catalogStatus" role="status" aria-live="polite" aria-atomic="true"><!-- site:tool-count:start -->177<!-- site:tool-count:end --> tools across <!-- site:group-count:start -->22<!-- site:group-count:end --> groups</p><span>BUILD <!-- site:version:start -->3.6.5<!-- site:version:end --></span></div>
         <noscript><p class="catalog-help">Open a category to browse its tools. Enable JavaScript to search and filter.</p></noscript>
         <div id="toolCatalog" class="tool-catalog" role="region" aria-label="Tool catalog" tabindex="0"><!-- site:catalog:start -->
           <details class="tool-group" data-group="instance" open>
@@ -673,6 +673,23 @@ humanoid.WalkSpeed = <span class="tok-str">CONFIG.walkSpeed</span></code></pre><
               <li class="tool-row" data-tool-name="user_lookup">
                 <div class="tool-row-heading"><code>user_lookup</code><span class="risk risk-read">Read</span></div>
                 <p>Look up a Roblox account by username or id.</p><span class="tool-needs">Requires http</span>
+              </li>
+            </ul>
+          </details>
+          <details class="tool-group" data-group="net_capture">
+            <summary><span class="tool-group-label">Network capture</span><span class="tool-group-count">3 tools</span><span class="disclosure" aria-hidden="true">+</span></summary>
+            <ul class="tool-list">
+              <li class="tool-row" data-tool-name="net_capture">
+                <div class="tool-row-heading"><code>net_capture</code><span class="risk risk-write">Write</span></div>
+                <p>Observe executor HTTP requests and executable chunks. Start before the target script runs, then use net_capture_read. Records method, URL (sensitive query values redacted), status, bounded request/response bodies, and loadstring/load/require source. UAI&#39;s own traffic is excluded. Stop restores hooks; a hook that cannot be restored is reported as retained and forwards without recording.</p><span class="tool-needs">Requires capture</span>
+              </li>
+              <li class="tool-row" data-tool-name="net_capture_read">
+                <div class="tool-row-heading"><code>net_capture_read</code><span class="risk risk-read">Read</span></div>
+                <p>Read captured network and payload records. list returns summaries with a continuation cursor; read pages one record&#39;s summary, URL, request, response, headers, chunk or module source; chain returns the HTTP -&gt; chunk -&gt; nested-request graph. Bodies and chunks are bounded; follow offsets. Payload bytes are never executed by this tool.</p>
+              </li>
+              <li class="tool-row" data-tool-name="net_capture_result_read">
+                <div class="tool-row-heading"><code>net_capture_result_read</code><span class="risk risk-read">Read</span></div>
+                <p>Read bounded retained detail from a large result in this tool group. Follow returned path arrays and offsets; expires after five minutes.</p>
               </li>
             </ul>
           </details>

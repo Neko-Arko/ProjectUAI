@@ -17,6 +17,13 @@
   8 MiB, preserving the exact receipt and original provider submission.
 - Bound expanded mobile reasoning before Markdown formatting and native layout.
   Label the excerpt and preserve full reasoning in model context and persistence.
+- Add read-only network and payload capture (`net_capture`). Fixed forwarding
+  hooks observe executor and game HTTP, `HttpService` methods, `loadstring`,
+  `load`, `require` and queued code without rewriting arguments or results.
+  Bounded records redact credentials, link responses to compiled chunks by hash
+  or thread, flag code-like responses that never compile, exclude UAI's own
+  requests and compiles, and restore hooks on Stop. See
+  [the capture guide](docs/NET_CAPTURE.md).
 - Include bridge 3.6.2's verified OpenCode execution permission gate. The reported
   Android SIGSEGV has no native backtrace; these fixes remove reproduced defects
   without claiming to identify or reproduce that device crash.

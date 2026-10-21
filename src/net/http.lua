@@ -9,6 +9,7 @@ return function(env)
 	local util = env.require("runtime/util")
 	local caps = env.require("runtime/caps")
 	local clock = env.require("runtime/clock")
+	local guard = env.require("runtime/capture_guard")
 	local log = env.require("runtime/log")
 	local ua = env.require("net/ua")
 	local signal = env.require("runtime/signal")
@@ -266,14 +267,14 @@ return function(env)
 				if timeout and timeout > 0 then options.Timeout = math.max(1, math.ceil(timeout)) end
 			end
 			if profile and profile.omitEmptyHeaders and next(headers) == nil then options.Headers = nil end
-			local ok, res = pcall(request, options)
+			local ok, res = pcall(guard.run, request, options)
 			if not ok then return nil, tostring(res), "transport" end
 			if type(res) ~= "table" then return nil, "empty executor response", "response" end
 			return normalise(res, profile and profile.name or "executor")
 		end
 
 		if caps.http == "none" then return nil, caps.reason("http"), "terminal" end
-		local ok, res = pcall(function() return env.hs:RequestAsync(options) end)
+		local ok, res = pcall(guard.run, function() return env.hs:RequestAsync(options) end)
 		if not ok then return nil, tostring(res), "transport" end
 		if type(res) ~= "table" then return nil, "empty HttpService response", "response" end
 		return normalise(res, "roblox")

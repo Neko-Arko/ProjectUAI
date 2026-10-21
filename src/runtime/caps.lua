@@ -8,6 +8,21 @@
 -- to the user instead of erroring.
 return function(env)
 	local M = {}
+	-- Capability inspection must survive a deliberately broken host. The capture
+	-- guard is optional here; without a loader there is no client traffic to mark.
+	local guard = {
+		enter = function() end, leave = function() end, active = function() return false end,
+		run = function(fn, ...) return fn(...) end,
+	}
+	if type(env.require) == "function" then
+		local ok, module = pcall(env.require, "runtime/capture_guard")
+		if ok and type(module) == "table" then guard = module end
+	end
+	local unpackValues = table.unpack or unpack
+
+	local function pack(...)
+		return { n = select("#", ...), ... }
+	end
 
 	local function callable(value)
 		return type(value) == "function" and value or nil
@@ -94,14 +109,41 @@ return function(env)
 		customasset = callable(getcustomasset),
 	}
 
+	-- Raw executor functions stay available to capture hooks. The client calls the
+	-- guarded wrappers, so its own compiles and requests never enter a capture
+	-- record even when a wrapper is installed on the raw function.
+	M.raw = { request = requestFn, loadstring = compiler, load = callable(load), require = callable(require), aliases = {} }
+	for _, candidate in ipairs(requestAliases) do
+		M.raw.aliases[#M.raw.aliases + 1] = { name = candidate.name, fn = candidate.fn }
+	end
+	local guardedFns = setmetatable({}, { __mode = "k" })
+	local function guarded(fn)
+		if type(fn) ~= "function" then return nil end
+		local cached = guardedFns[fn]
+		if cached then return cached end
+		local wrapper = function(...)
+			local args = pack(...)
+			guard.enter()
+			local returned = pack(pcall(fn, unpackValues(args, 1, args.n)))
+			guard.leave()
+			if not returned[1] then error(returned[2], 0) end
+			return unpackValues(returned, 2, returned.n)
+		end
+		guardedFns[fn] = wrapper
+		return wrapper
+	end
+	M.fn.request = guarded(requestFn)
+	M.fn.loadstring = guarded(compiler)
+
 	M.requestName = requestName
 
 	-- Discovery may compare distinct native aliases without re-reading globals or
 	-- changing the provider transport. Copies keep its captured inventory private.
+	-- Guarded wrappers mark the client's own traffic as owned by this runtime.
 	function M.requestAliases()
 		local out = {}
 		for _, candidate in ipairs(requestAliases) do
-			out[#out + 1] = { name = candidate.name, fn = candidate.fn }
+			out[#out + 1] = { name = candidate.name, fn = guarded(candidate.fn) }
 		end
 		return out
 	end
@@ -174,6 +216,7 @@ return function(env)
 		ws = M.ws,
 		clipboard = M.clipboard,
 		hooks = M.hooks,
+		capture = M.fn.hookfunction ~= nil,
 		["ua"] = M.uaSupported,
 	}
 
@@ -192,6 +235,7 @@ return function(env)
 		ws = "this host has no WebSocket support",
 		clipboard = "this host has no clipboard function",
 		hooks = "this host does not expose signal introspection (getconnections)",
+		capture = "this host does not expose hookfunction, so network and payload capture cannot install hooks",
 		ua = "this host cannot set a custom User-Agent",
 		gravity = "Project Gravity is not connected; run the updated Gravity loader and open its PROJECT UAI button",
 	}

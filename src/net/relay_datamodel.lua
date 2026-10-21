@@ -1,13 +1,14 @@
 -- Loopback-only transport. Credentials and inference stay in POST bodies.
 return function(env)
 	local util = env.require("runtime/util")
+	local guard = env.require("runtime/capture_guard")
 	local host = game
 	local M = {}
 	function M.available()
 		local ok, get, post = pcall(function() return host.HttpGet, host.HttpPost end)
 		return ok and type(get) == "function" and type(post) == "function"
 	end
-	function M.request(options)
+	local function request(options)
 		local base, port, path = tostring(options.Url or ""):match("^(http://127%.0%.0%.1:(%d+))(/api/.*)$")
 		if not base or tonumber(port) < 1 or tonumber(port) > 65535 then error("invalid companion transport URL", 0) end
 		local method, headers = options.Method, options.Headers or {}
@@ -33,6 +34,9 @@ return function(env)
 			error("malformed: companion transport envelope", 0)
 		end
 		return { StatusCode = reply.status, Body = reply.body, Headers = {} }
+	end
+	function M.request(options)
+		return guard.run(request, options)
 	end
 	return M
 end

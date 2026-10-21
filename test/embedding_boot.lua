@@ -88,6 +88,8 @@ end)
 
 case("host permission and question listeners work without the standard app", function()
 	local h = fixture(); local client = assert(boot(h, { ui = false, reuse = true }))
+	-- The host-listener contract is about delivery, not the default access mode.
+	client.permissions.setMode("ask")
 	local session = client.sessions.current()
 	local approvals, questions, writes = 0, 0, 0
 	local off = session.events:connect(function(event)

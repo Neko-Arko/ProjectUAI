@@ -20,11 +20,15 @@ return function(env)
 	local ENTRIES = {
 		{
 			version = "3.6.5",
-			revision = "2026-10-21-unified-mobile-desktop",
+			revision = "2026-10-21-network-capture",
 			date = "October 21, 2026",
 			title = "Reliable connections and a refreshed desktop",
-			highlights = "Matching client, bridge, Windows and Android releases with bounded mobile transport and a refreshed desktop launcher.",
+			highlights = "Matching client, bridge, Windows and Android releases with bounded mobile transport, a refreshed desktop launcher and read-only network capture.",
 			sections = {
+				{ category = "added", label = "Network capture", items = {
+					"Add read-only network and payload capture. Start net_capture, run a loader, then read bounded HTTP records or the HTTP-to-chunk chain. UAI's own requests and compiles are excluded, and Stop restores the hooks.",
+					"Records redact credentials, link responses to compiled chunks by hash or thread, and flag code-like responses that never compile. Nothing is rewritten, replayed or executed by the capture.",
+				} },
 				{ category = "improved", label = "Desktop", items = {
 					"A refreshed Cowork launcher brings clearer connection status, setup and update controls. Open the executable once to start; an existing window can be brought forward during startup.",
 					"Client, bridge, Windows app and Android companion now share version 3.6.5 in one release. Existing update flows retain their verified downloads and production identity.",

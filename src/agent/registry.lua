@@ -110,6 +110,7 @@ return function(env)
 		character = "Character",
 		world = "World",
 		remotes = "Remotes",
+		net_capture = "Network capture",
 		gui = "Interface",
 		perf = "Diagnostics",
 		meta = "Metadata",

@@ -16,6 +16,7 @@ local GROUPS = {
 	"character",
 	"world",
 	"remotes",
+	"net_capture",
 	"gui",
 	"perf",
 	"meta",
