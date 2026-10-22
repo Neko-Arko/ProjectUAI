@@ -1,6 +1,7 @@
 refer/
 .claude/
 .claude
+.workbuddy-ai/
 desktop/.cache/
 desktop/.build/
 desktop/release/

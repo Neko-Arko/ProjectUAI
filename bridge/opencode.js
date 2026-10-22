@@ -1,6 +1,7 @@
 'use strict';
 
 const RELEASE = require('./release');
+const { INSTRUCTIONS, DESCRIPTION_PREFIX } = require('./environment');
 
 // OpenCode owns the upstream connection. This adapter owns an isolated CLI
 // server and returns UAI tool calls to Roblox without executing host tools.
@@ -325,8 +326,8 @@ function createOpenCode({ env = process.env, binary, binaryArgs = [], startupMs 
           let input;
           try { input = JSON.parse(Buffer.concat(chunks).toString()); } catch { res.writeHead(400); res.end(); return; }
           const reply = result => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ jsonrpc: '2.0', id: input.id, result })); };
-          if (input.method === 'initialize') reply({ protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'Project UAI', version: RELEASE.version } });
-          else if (input.method === 'tools/list') reply({ tools: job.tools });
+          if (input.method === 'initialize') reply({ protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'Project UAI', version: RELEASE.version }, instructions: INSTRUCTIONS });
+          else if (input.method === 'tools/list') reply({ tools: job.tools.map(tool => ({ ...tool, description: DESCRIPTION_PREFIX + (tool.description || '') })) });
           else if (input.method === 'tools/call') {
             const name = input.params?.name, args = input.params?.arguments;
             const argumentBytes = Buffer.byteLength(JSON.stringify(args || {}));

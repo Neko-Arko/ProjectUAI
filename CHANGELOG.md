@@ -1,5 +1,24 @@
 # Changelog
 
+## Bridge 3.6.6 — October 22, 2026 — Runtime context for MCP harnesses
+
+- Tell external MCP harnesses what they are actually connected to. The
+  `initialize` instructions and every tool description now state that tools act on
+  one live Roblox client, that Roblox Studio is never involved, that reads observe
+  this client's replicated DataModel, and that writes stay local and remain subject
+  to the game server. A harness model previously received only its own system
+  prompt, so it could answer as if UAI were a Studio project.
+- Apply the same statement to the OpenCode tunnel, which sent no instructions at
+  all and passed tool descriptions through unchanged.
+- Refresh the conversation reading surface. Transcript, composer, tables and code
+  share one 720px measure; headings use a 28/22/18/15 ladder with balanced wrapping;
+  each answer is separated by a hairline and introduced by a monogram byline with a
+  model chip; the activity drawer is a quiet footnote row instead of a card; and
+  tables, code headers, inline code, links and the floating jump control were
+  restyled. No markup or class contract changed.
+- Publish the bridge package as `bridge-v3.6.6`. Existing installs receive it
+  automatically while idle. Client, desktop and Android downloads stay 3.6.5.
+
 ## 3.6.5 — October 21, 2026 — Reliable connections and a refreshed desktop
 
 - Release the client, bridge, Windows app and signed Android companion together

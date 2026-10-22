@@ -3,6 +3,7 @@
 // Public MCP server. Inference is deliberately absent: the connected game owns
 // tool schemas, permission decisions, execution and the final command receipt.
 const crypto = require('node:crypto');
+const { INSTRUCTIONS, DESCRIPTION_PREFIX } = require('./environment');
 const PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const MAX_SESSIONS = 32, MAX_CALLS = 64, MAX_SESSION_CALLS = 8;
 const MAX_HISTORY = 512, MAX_RESULT_BYTES = 4 * 1024 * 1024, MAX_CACHE_BYTES = 16 * 1024 * 1024;
@@ -35,7 +36,7 @@ function createMcp({ version, getState, connected, enqueue, receipt, cancelComma
       names.add(tool.name); return true;
     }).map(tool => ({
       name: tool.name,
-      description: String(tool.description || ''),
+      description: DESCRIPTION_PREFIX + String(tool.description || ''),
       inputSchema: object(tool.parameters) ? { ...tool.parameters, type: 'object',
         properties: object(tool.parameters.properties) ? tool.parameters.properties : {} } : { type: 'object', properties: {} },
       annotations: { readOnlyHint: tool.risk === 'read', destructiveHint: tool.risk !== 'read', openWorldHint: true },
@@ -247,7 +248,7 @@ function createMcp({ version, getState, connected, enqueue, receipt, cancelComma
       sessions.set(session.id, session);
       return json(res, 200, rpcResult(input.id, { protocolVersion: session.protocol, capabilities: { tools: { listChanged: true } },
         serverInfo: { name: 'Project UAI', version },
-        instructions: 'Tools execute in the connected Roblox client. Approve permission prompts in Project UAI. Each MCP connection has its own conversation; no model inference runs in this bridge. After an uncertain result, inspect Roblox before repeating an action.' }),
+        instructions: INSTRUCTIONS }),
       { 'Mcp-Session-Id': session.id });
     }
     if (!session) return json(res, 400, rpcError(input.id, -32600, 'Initialize first and include Mcp-Session-Id'));
