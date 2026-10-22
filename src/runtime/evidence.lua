@@ -26,7 +26,7 @@ return function(env)
 		evidence = true, evidence_clear = true, tool_search = true, support_bundle = true,
 		file_read = true, file_read_many = true, file_list = true, file_search = true, file_find = true,
 		code_read = true, code_search = true, code_tabs = true,
-		conversation_read = true, conversation_search = true,
+		conversation_read = true, conversation_search = true, context_archive = true,
 		memory_read = true, memory_write = true, todo_read = true,
 		skills_list = true, skills_read = true,
 		net_capture_read = true, remote_capture_read = true,

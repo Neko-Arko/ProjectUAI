@@ -15,8 +15,15 @@ return function(env)
 	local usage = env.require("agent/usage")
 
 	local M = {}
-	local SUMMARY_BYTES = 4096
+	local SUMMARY_BYTES = 12288
 	local SUMMARY_INPUT_BYTES = 48000
+	-- A handover replaces the work it folds, so removed messages are also kept as
+	-- bounded plain text. The agent can recover exact earlier wording with the
+	-- context_archive tool after the summary has taken over the live context.
+	local ARCHIVE_SEGMENT_BYTES = 64 * 1024
+	local ARCHIVE_TOTAL_BYTES = 512 * 1024
+	local ARCHIVE_MESSAGE_BYTES = 12 * 1024
+	local ARCHIVE_CALL_BYTES = 2 * 1024
 	-- Keep both ends, including verdicts/cursors and late user corrections. The
 	-- public truncate helper includes its own notice outside the requested size.
 	local function excerpt(value, limit)
@@ -53,6 +60,9 @@ return function(env)
 			summary = nil,
 			compactions = 0,
 			dropped = 0,
+			archive = {},
+			archiveSerial = 0,
+			archiveTrimmed = 0,
 			-- The tokens a request spends beyond the message estimate: the system
 			-- prompt and tool schemas ctx.tokens() does not see. Learned from what the
 			-- provider actually counted, so the budget check reflects the real prompt.
@@ -60,6 +70,61 @@ return function(env)
 			calibrated = false,
 		}
 		local calibration, promptEstimate, promptKey
+		local function messageText(message, contentLimit, callLimit)
+			local role = tostring(message.role or "message")
+			local label = role == "tool" and ("tool " .. tostring(message.name or "unknown")) or role
+			local text = excerpt(message.content, contentLimit)
+			if message.toolCalls then
+				local calls = {}
+				for _, call in ipairs(message.toolCalls) do
+					local fn = call["function"] or {}
+					local args = type(fn.arguments) == "table" and util.encode(fn.arguments) or tostring(fn.arguments or "{}")
+					calls[#calls + 1] = tostring(fn.name or "tool") .. " " .. excerpt(args, callLimit)
+				end
+				if #calls > 0 then text = text .. "\n[called: " .. table.concat(calls, "; ") .. "]" end
+			end
+			-- The whole entry shares one cap so a message with many tool calls cannot
+			-- make the summary input or an archive segment grow past its budget.
+			return excerpt(label .. ": " .. text, contentLimit)
+		end
+		local function archiveBytes()
+			local total = 0
+			for _, segment in ipairs(ctx.archive) do total = total + #segment.text end
+			return total
+		end
+		local function trimArchive()
+			local total = archiveBytes()
+			while #ctx.archive > 1 and total > ARCHIVE_TOTAL_BYTES do
+				local removed = table.remove(ctx.archive, 1)
+				if removed then
+					total = total - #removed.text
+					ctx.archiveTrimmed = ctx.archiveTrimmed + 1
+				end
+			end
+		end
+		local function archive(removed)
+			if #removed == 0 then return end
+			local entries, size, messages = {}, 0, 0
+			local function flush()
+				if #entries == 0 then return end
+				ctx.archiveSerial = ctx.archiveSerial + 1
+				ctx.archive[#ctx.archive + 1] = {
+					id = "c" .. tostring(ctx.archiveSerial),
+					at = clock.ms(),
+					messages = messages,
+					text = table.concat(entries, "\n\n"),
+				}
+				entries, size, messages = {}, 0, 0
+			end
+			for _, message in ipairs(removed) do
+				local entry = messageText(message, ARCHIVE_MESSAGE_BYTES, ARCHIVE_CALL_BYTES)
+				if size > 0 and size + #entry + 2 > ARCHIVE_SEGMENT_BYTES then flush() end
+				entries[#entries + 1] = entry
+				size, messages = size + #entry + 2, messages + 1
+			end
+			flush()
+			trimArchive()
+		end
 		local function providerKey(record)
 			if type(record) ~= "table" then return record end
 			return tostring(record.id or "") .. "|" .. tostring(record.baseUrl or "") .. "|" .. tostring(record.model or "")
@@ -200,6 +265,8 @@ return function(env)
 			for _, message in ipairs(ctx.messages) do
 				counts[message.role] = (counts[message.role] or 0) + 1
 			end
+			local archived = 0
+			for _, segment in ipairs(ctx.archive) do archived = archived + segment.messages end
 			return {
 				messages = #ctx.messages,
 				tokens = ctx.tokens(),
@@ -209,6 +276,9 @@ return function(env)
 				toolResults = counts.tool,
 				compactions = ctx.compactions,
 				dropped = ctx.dropped,
+				archived = archived,
+				archiveSegments = #ctx.archive,
+				archiveTrimmed = ctx.archiveTrimmed,
 			}
 		end
 
@@ -332,18 +402,7 @@ return function(env)
 			size = #table.concat(transcript, "\n")
 			local perMessage = math.max(120, math.min(2400, math.floor((inputLimit - size) / #removed) - 2))
 			for _, message in ipairs(removed) do
-				local label = message.role == "tool" and ("tool " .. tostring(message.name or "unknown")) or message.role
-				local text = tostring(message.content or "")
-				if message.toolCalls then
-					local calls = {}
-					for _, call in ipairs(message.toolCalls) do
-						local fn = call["function"] or {}
-						local args = type(fn.arguments) == "table" and util.encode(fn.arguments) or tostring(fn.arguments or "{}")
-						calls[#calls + 1] = tostring(fn.name or "tool") .. " " .. excerpt(args, 800)
-					end
-					text = text .. "\n[called: " .. table.concat(calls, "; ") .. "]"
-				end
-				local entry = label .. ": " .. excerpt(text, perMessage)
+				local entry = messageText(message, perMessage, 800)
 				transcript[#transcript + 1], entries[#entries + 1] = entry, entry
 			end
 			local source = excerpt(table.concat(transcript, "\n"), inputLimit)
@@ -365,6 +424,9 @@ return function(env)
 			end
 			if keptTokens + usage.estimateText(note) >= before then return nil, "summary would not reduce context" end
 			ctx.messages, ctx.summary = kept, note
+			-- Keep the folded work recoverable only after the replacement commits; a
+			-- cancelled or non-reducing pass must leave both sides untouched.
+			archive(removed)
 			ctx.dropped = ctx.dropped + #removed
 			ctx.compactions = ctx.compactions + 1
 			log.info("context", util.pluralise(#removed, "message") .. " compacted")
@@ -455,6 +517,15 @@ return function(env)
 			end
 			if ctx.summary then
 				out[#out + 1] = { role = "system", content = "Earlier in this conversation:\n" .. ctx.summary }
+				if #ctx.archive > 0 then
+					local archived = 0
+					for _, segment in ipairs(ctx.archive) do archived = archived + segment.messages end
+					local range = #ctx.archive == 1 and ctx.archive[1].id
+						or (ctx.archive[1].id .. " to " .. ctx.archive[#ctx.archive].id)
+					out[#out + 1] = { role = "system", content = string.format(
+						"Archived earlier detail: %s in %s (%s). Recover exact text with context_archive (list, search, read).",
+						util.pluralise(archived, "message"), util.pluralise(#ctx.archive, "segment"), range) }
+				end
 			end
 			for _, message in ipairs(ctx.messages) do out[#out + 1] = message end
 			return out
@@ -465,6 +536,9 @@ return function(env)
 			ctx.summary = nil
 			ctx.compactions = 0
 			ctx.dropped = 0
+			ctx.archive = {}
+			ctx.archiveSerial = 0
+			ctx.archiveTrimmed = 0
 			ctx.overhead = 0
 			ctx.calibrated = false
 			calibration, promptEstimate, promptKey = nil, nil, nil
@@ -490,6 +564,12 @@ return function(env)
 					at = message.at,
 				}
 			end
+			out.archive = {}
+			for _, segment in ipairs(ctx.archive) do
+				out.archive[#out.archive + 1] = {
+					id = segment.id, at = segment.at, messages = segment.messages, text = segment.text,
+				}
+			end
 			return out
 		end
 
@@ -500,6 +580,17 @@ return function(env)
 			for _, message in ipairs(data.messages or {}) do
 				if type(message) == "table" and message.role then ctx.push(message) end
 			end
+			for _, segment in ipairs(type(data.archive) == "table" and data.archive or {}) do
+				if type(segment) == "table" and type(segment.id) == "string" and type(segment.text) == "string" then
+					local number = tonumber(segment.id:match("^c(%d+)$"))
+					if number and #segment.text > 0 and #segment.text <= ARCHIVE_SEGMENT_BYTES then
+						ctx.archive[#ctx.archive + 1] = { id = "c" .. tostring(number), at = tonumber(segment.at) or 0,
+							messages = math.max(0, math.floor(tonumber(segment.messages) or 0)), text = segment.text }
+						ctx.archiveSerial = math.max(ctx.archiveSerial, number)
+					end
+				end
+			end
+			trimArchive()
 			return true
 		end
 

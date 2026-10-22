@@ -575,6 +575,11 @@ case("cat-jam traits and tool capping preserve OpenCode compatibility", function
 	record.model = "cat-jam-free"
 	check("cat-jam documents 128 max tools", traits.maxTools("cat-jam-free") == 128)
 	check("cat-jam context window is 262144", traits.contextWindow("cat-jam-free") == 262144)
+	-- A stale public CLI catalog used to advertise these free models at 1M while
+	-- OpenCode's server rejected anything above 200K. Compaction now starts from
+	-- the window the provider actually enforces.
+	check("DeepSeek V4.1 Flash Free keeps its 200K server window", traits.contextWindow("deepseek-v4.1-flash-free") == 200000)
+	check("GLM-5.3-Flash Free keeps its 200K server window", traits.contextWindow("glm-5.3-flash-free") == 200000)
 
 	local bigTools = {}
 	for i = 1, 174 do

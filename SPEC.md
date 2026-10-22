@@ -366,12 +366,18 @@ Project UAI Free access costs zero; personal HCNSEC rates are not assumed. Conte
 and reply limits use the same catalog, while protocol-specific request traits
 remain explicit. User-declared context overrides remain effective.
 
-Rolling compaction feeds the previous summary back to the summarizer with newly
-removed turns and complete older assistant/tool exchanges from long turns. It
-retains recent user requests and the latest two exchanges, bounds merged summaries
-to 4 KiB, reserves summary headroom, and replaces history only after checking for
-context reduction and cancellation. Summary input includes bounded tool arguments,
-paths, results and continuation offsets. Automatic failed/disabled summaries use
+Rolling compaction writes a structured handover: goal, current state, decisions,
+exact facts (paths/IDs/revisions/commands), completed work and checks, open
+threads and the next step, and what not to redo. It feeds the previous handover
+back to the summarizer with newly removed turns and complete older assistant/tool
+exchanges from long turns. It retains recent user requests and the latest two
+exchanges, bounds merged handovers to 12 KiB, reserves handover headroom, and
+replaces history only after checking for context reduction and cancellation.
+Removed messages are kept as a bounded per-conversation archive (512 KiB across
+64 KiB segments) and named by a short system line; `context_archive` lists,
+searches and byte-pages that archive so folded work stays recoverable without
+staying in the live window. Summary input includes bounded tool arguments, paths,
+results and continuation offsets. Automatic failed/disabled summaries use
 explicitly labelled bounded excerpts; manual compaction requires a successful
 summary and otherwise preserves the conversation and reports the reason. Summary
 calls are included in usage. Prepared requests bound their reply budget to the
@@ -405,7 +411,8 @@ Generation settings live in `runtime/config` and are persisted in `UAI/config.js
 | Setting | Default | Behavior |
 | --- | --- | --- |
 | `agent.maxTokens` | 128000 | Saved reply limit; model limits and learned per-model caps apply when constructing requests. |
-| `agent.contextTokens` | 1000000 | Context budget before compaction. Larger contexts spend more of an executor's request window on upload and prefill. |
+| `agent.contextTokens` | 1000000 | Hard context budget before compaction. Larger contexts spend more of an executor's request window on upload and prefill. |
+| `agent.contextFraction` | `0.8` | Share of a known model window at which compaction starts. The hard budget above still applies. |
 | `agent.effort` | `"low"` | Prefer shorter reasoning where supported. Saved choices and explicit request/provider overrides remain effective; `"off"` omits the effort field. |
 | `permissions.mode` | `"full"` | Allow everything for new configurations. Saved modes and explicit tool rules are preserved. |
 

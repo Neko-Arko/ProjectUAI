@@ -12,7 +12,7 @@ return function(env)
 		"todo_read", "todo_write", "memory_read", "memory_write",
 		"skills_list", "skills_read",
 		"dispatch_agent", "agent_status", "agent_followup",
-		"conversation_search", "conversation_read",
+		"conversation_search", "conversation_read", "context_archive",
 		"tool_search", "evidence", "evidence_clear", "support_bundle",
 	}
 

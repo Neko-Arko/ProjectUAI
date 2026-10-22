@@ -64,6 +64,25 @@ index keeps the newest 200 results / 16 MiB per conversation and removes the
 oldest record files. Removing a conversation removes its ledger. Evidence is
 local; it is excluded from the support bundle.
 
+## Compaction archive
+
+Compaction replaces older messages with a structured handover, but it does not
+discard them. The removed messages are kept as plain text inside the conversation
+file, in segments of at most 64 KiB and at most 512 KiB total. The handover
+system message is followed by a short line naming the segments, so the agent knows
+what exists without carrying their text in every request.
+
+`context_archive` reads only this conversation's archive:
+
+- `list` -- segment ids, message counts, sizes and a preview.
+- `search` -- literal matches with segment id and byte offset.
+- `read` -- a UTF-8 byte page of one segment, with `nextOffset`.
+
+Use it to recover exact earlier wording or a receipt that the handover summarised.
+It is read-only: it does not restore messages to the live context, re-run tools or
+change the conversation. The archive is saved and restored with the conversation
+and removed with it.
+
 ## Support bundle
 
 `support_bundle` writes a versioned `uai-support` JSON file under

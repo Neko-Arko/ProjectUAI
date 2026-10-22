@@ -255,25 +255,30 @@ return function(env)
 		return nil, firstError or "every provider failed"
 	end
 
-	-- Compaction uses whatever provider is healthy, with no tools and a tight
-	-- ceiling. Account for its cost separately without teaching the main context
+	-- Compaction uses whatever provider is healthy, with no tools and a bounded
+	-- handover. Account for its cost separately without teaching the main context
 	-- estimator that this small, tool-free prompt was the conversation request.
 	local function summariser(session, preferredRecord)
 		return function(transcript, maxBytes)
 			local epoch = session.toolEpoch
 			local record = preferredRecord or providers.active()
 			if not record then return nil end
-			local messages = {
-				{ role = "system", content = prompt.compaction() },
-				{ role = "user", content = transcript },
-			}
-			local maxTokens = math.min(512, math.max(16, math.floor((maxBytes or 2048) / 4)))
+			-- A handover is a working document, not a one-line recap. Let it use up
+			-- to 3,072 output tokens when the folded history leaves that much room.
+			local maxTokens = math.min(3072, math.max(64, math.floor((maxBytes or 2048) / 4)))
+			local function draft(tokens)
+				return {
+					{ role = "system", content = prompt.compaction(tokens) },
+					{ role = "user", content = transcript },
+				}
+			end
+			local messages = draft(maxTokens)
 			record = env.require("provider/free_route").select(record, { messages = messages, maxTokens = maxTokens })
 			local window = env.require("provider/traits").contextWindow(record.model, record)
 			if window then
 				local available = math.floor(window - usage.estimateMessages(messages) - 64)
 				if available < 16 then return nil end
-				maxTokens = math.min(maxTokens, available)
+				if available < maxTokens then maxTokens = available; messages = draft(maxTokens) end
 			end
 			if session.toolEpoch ~= epoch or session.aborted() or not env.require("provider/free_route").current(record) then return nil end
 			routeNotice(session, record)

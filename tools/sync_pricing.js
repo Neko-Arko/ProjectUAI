@@ -100,10 +100,16 @@ function normalize(raw, cliModels) {
 					|| !c.cache || c.cache.read !== 0 || c.cache.write !== 0)) throw Error('OpenCode snapshot contains a model without verified free rates');
 			const limit = model.limit || {};
 			if (!positive(limit.context) || !positive(limit.output)) throw Error('OpenCode model has no limits: ' + keyId);
+			// models.dev is what OpenCode itself checks requests against, so its
+			// server-enforced limits win over a possibly stale public CLI catalog.
+			// The CLI snapshot still supplies verified free rates and tool support.
+			const documented = providers.opencode[keyId] || {};
 			providers.opencode[keyId] = clean({ source: 'opencode-cli', price: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-				context: positive(limit.context), input: positive(limit.input), output: positive(limit.output),
+				context: documented.context || positive(limit.context),
+				input: documented.input || positive(limit.input),
+				output: documented.output || positive(limit.output),
 				tools: model.capabilities && model.capabilities.tools === true,
-				reasoning: providers.opencode[keyId] && providers.opencode[keyId].reasoning });
+				reasoning: documented.reasoning });
 		}
 	}
 	return providers;

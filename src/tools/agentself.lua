@@ -445,6 +445,78 @@ return function(env)
 			end,
 		},
 		{
+			-- Compaction replaces older messages with a handover, not with nothing.
+			-- The exact text stays in the conversation's archive so a later step can
+			-- recover a path, a receipt or a decision without redoing the work.
+			name = "context_archive",
+			risk = "read",
+			description = "Recover earlier messages that compaction removed from the live context. list shows archived segments; search finds literal text; read pages one segment by UTF-8 byte offset. Use this after a handover when you need exact earlier wording, paths, tool output or a decision that was folded away. It never changes the conversation or re-runs a tool.",
+			parameters = {
+				type = "object",
+				properties = {
+					action = { type = "string", enum = { "list", "search", "read" } },
+					query = { type = "string", description = "Literal text to find; required for search." },
+					segment_id = { type = "string", description = "Archive segment id from list or search, such as c2; required for read." },
+					offset = { type = "integer", minimum = 1, description = "UTF-8 byte offset for read; begin at 1 and follow nextOffset." },
+					limit = { type = "integer", minimum = 200, maximum = 6000, description = "Maximum bytes for read." },
+				},
+				required = { "action" },
+			},
+			run = function(args, ctx)
+				local session = ctx and ctx.session or nil
+				local archive = session and session.ctx and session.ctx.archive or {}
+				if #archive == 0 then
+					return H.fail("nothing has been archived yet; compaction has not removed older messages from this conversation")
+				end
+				if args.action == "list" then
+					local lines, rows = {}, {}
+					for index, segment in ipairs(archive) do
+						local preview = segment.text:match("^[^\n]*") or ""
+						lines[#lines + 1] = string.format("%d. %s -- %s, %.1f KiB -- %s", index, segment.id,
+							util.pluralise(segment.messages or 0, "message"), #segment.text / 1024, util.ellipsis(preview, 140))
+						rows[#rows + 1] = { id = segment.id, messages = segment.messages or 0, bytes = #segment.text, preview = preview }
+					end
+					return { text = string.format("%d archived segment%s (oldest first). Read one with context_archive action=read segment_id=...\n%s",
+						#archive, #archive == 1 and "" or "s", table.concat(lines, "\n")),
+						data = { segments = rows, trimmed = session.ctx.archiveTrimmed or 0 } }
+				elseif args.action == "search" then
+					local needle = util.trim(tostring(args.query or "")):lower()
+					if needle == "" then return H.fail("query is required for search") end
+					local limit = util.clamp(tonumber(args.limit) or 5, 1, 12)
+					local codeText = env.require("runtime/code_text")
+					local matches, lines = {}, {}
+					for _, segment in ipairs(archive) do
+						local from = 1
+						while #matches < limit do
+							local at = segment.text:lower():find(needle, from, true)
+							if not at then break end
+							local start = codeText.clamp(segment.text, math.max(at - 60, 1))
+							local snippet = util.ellipsis(segment.text:sub(start), 320)
+							matches[#matches + 1] = { segment = segment.id, offset = at, text = snippet }
+							lines[#lines + 1] = string.format("%s at byte %d: %s", segment.id, at, snippet)
+							from = at + math.max(1, #needle)
+						end
+					end
+					local text = #matches == 0 and ("No archived text matches '" .. tostring(args.query) .. "'.")
+						or string.format("%d archived match%s:\n%s", #matches, #matches == 1 and "" or "es", table.concat(lines, "\n"))
+					return { text = text, data = { matches = matches, count = #matches } }
+				elseif args.action == "read" then
+					local id = util.trim(tostring(args.segment_id or ""))
+					if id == "" then return H.fail("segment_id is required for read; list the archive first") end
+					for _, segment in ipairs(archive) do
+						if segment.id == id then
+							local result = H.readSlice("Archived context " .. segment.id, segment.text, args, 4000)
+							result.data = result.data or {}
+							result.data.segment = { id = segment.id, messages = segment.messages or 0, bytes = #segment.text }
+							return result
+						end
+					end
+					return H.fail("no archived segment '" .. id .. "'; list the archive for current ids")
+				end
+				return H.fail("unknown action")
+			end,
+		},
+		{
 			-- The conversation list is read by a person, and a title derived from the
 			-- opening message goes stale as soon as the thread moves on. The agent has
 			-- read the whole conversation, so it is the party that can name what the

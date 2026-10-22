@@ -899,15 +899,19 @@ can still teach a smaller ceiling. Large prompts can still spend the request
 window uploading and prefilling; `agent.contextTokens` remains 1,000,000 by
 default and can be lowered when short replies also time out.
 
-Automatic compaction summarises the oldest turns before a request would cross the
-budget, and the budget adapts to the model: when its context window is known,
-compaction starts at **Compact at** (`agent.contextFraction`, 80% by default) of
-that window, with `agent.contextTokens` as the hard ceiling. Pressure includes
-estimated messages, the rolling summary, and the system prompt/tool schemas from
-the prepared request. Provider usage calibrates that overhead against the history
-actually sent; changing providers, endpoints or models does not reuse another
-measurement. The context breakdown shares this calculation, labels estimates,
-and shows partial totals until the first request is prepared.
+Automatic compaction writes a full handover -- goal, current state, decisions,
+exact paths and IDs, completed checks, open threads and what not to redo -- before
+a request would cross the budget. The budget adapts to the model: when its context
+window is known, compaction starts at **Compact at** (`agent.contextFraction`,
+80% by default) of that window, with `agent.contextTokens` as the hard ceiling.
+The folded messages are kept in a bounded conversation archive, and a short system
+line names it; `context_archive` lists, searches and pages exact earlier wording
+when the handover is not enough. Pressure includes estimated messages, the rolling
+handover, and the system prompt/tool schemas from the prepared request. Provider
+usage calibrates that overhead against the history actually sent; changing
+providers, endpoints or models does not reuse another measurement. The context
+breakdown shares this calculation, labels estimates, and shows partial totals
+until the first request is prepared.
 **Compact now**, in the composer's message-options menu, folds older turns on
 demand; the **Summarise old turns** switch turns the paid summary off while the
 conversation is still trimmed to fit. The composer shows a live context-window

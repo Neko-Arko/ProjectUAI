@@ -133,6 +133,63 @@ scenario("forced compaction folds older turns and keeps the latest", function()
 	check("the newest turn was kept", ctx.messages[#ctx.messages].content == "answer 5")
 end)
 
+scenario("compaction leaves a recoverable archive and points the model at it", function()
+	local _, _, context = fixture()
+	local ctx = context.new()
+	for index = 1, 5 do
+		ctx.pushUser("question " .. index)
+		ctx.pushAssistant({ content = "answer " .. index })
+	end
+	local note = ctx.compact(function() return "Goal: finish the dock.\nOpen: paint it." end, { force = true, keepBlocks = 2 })
+	check("the handover replaced the old turns", note and ctx.summary == note)
+	check("folded work is archived", #ctx.archive == 1 and ctx.stats().archived > 0)
+	check("the archive keeps the exact old wording", has(ctx.archive[1].text, "question 1")
+		and has(ctx.archive[1].text, "answer 1"))
+	check("the archive does not duplicate the retained turns", not has(ctx.archive[1].text, "question 5"))
+	local wire = ctx.wire("system")
+	check("the wire points at the archive", has(wire[3].content, "context_archive") and has(wire[3].content, ctx.archive[1].id))
+	local restored = context.new()
+	restored.restore(ctx.serialise())
+	check("the archive survives a saved-conversation reload", #restored.archive == 1
+		and restored.archive[1].text == ctx.archive[1].text)
+end)
+
+scenario("context_archive reads the work compaction folded away", function()
+	local env, _, context = fixture()
+	local ctx = context.new()
+	for index = 1, 5 do
+		ctx.pushUser("question " .. index .. " about the dock")
+		ctx.pushAssistant({ content = "answer " .. index .. " at UAI/files/dock.lua" })
+	end
+	ctx.compact(function() return "Goal: finish the dock." end, { force = true, keepBlocks = 2 })
+	local tool
+	for _, candidate in ipairs(env.require("tools/agentself")) do
+		if candidate.name == "context_archive" then tool = candidate; break end
+	end
+	check("the tool is registered", tool ~= nil)
+	local function run(args) return tool.run(args, { session = { ctx = ctx } }) end
+	local list = run({ action = "list" })
+	check("list names the segment", has(list.text, "c1") and has(list.text, "6 messages"))
+	local found = run({ action = "search", query = "dock.lua" })
+	check("search finds the exact folded work", has(found.text, "dock.lua") and found.data.count > 0)
+	local read = run({ action = "read", segment_id = "c1", limit = 2000 })
+	check("read returns the archived wording", has(read.text, "question 1") and has(read.text, "answer 1"))
+	check("the page reports where it ended", read.data.eof == true)
+	local missing = run({ action = "read", segment_id = "c9" })
+	check("an unknown segment fails cleanly", missing.ok == false and has(missing.text, "c9"))
+end)
+
+scenario("cancelled compaction does not archive work that stayed live", function()
+	local _, _, context = fixture()
+	local ctx = context.new()
+	for index = 1, 5 do
+		ctx.pushUser("question " .. index)
+		ctx.pushAssistant({ content = "answer " .. index })
+	end
+	local note = ctx.compact(function() return "summary" end, { force = true, aborted = function() return true end })
+	check("the pass was cancelled", note == nil and #ctx.archive == 0)
+end)
+
 scenario("context refusals name the window rather than the requested tokens", function()
 	local env, config = fixture()
 	local openai = env.require("provider/openai")
@@ -275,7 +332,7 @@ scenario("summaries and offline excerpts stay bounded across repeated compaction
 				-- A misbehaving provider that ignores the output ceiling must not grow history.
 				return ("bloated summary "):rep(1000)
 			end or nil, { force = true })
-			check("replacement is bounded and actually smaller", note and #note <= 4096 and ctx.tokens() < before)
+			check("replacement is bounded and actually smaller", note and #note <= 12288 and ctx.tokens() < before)
 			check("fallback retains important previous facts", has(note, "Preserve the lighthouse"))
 		end
 	end
