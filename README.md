@@ -4,15 +4,15 @@ A universal AI agent that runs inside a Roblox client. It works in any game,
 with Chat Completions and Anthropic Messages endpoints, including compatible
 local servers and relays.
 
-**Project UAI 3.6.5 — October 21, 2026: unified client, bridge and app release.**
-The bridge includes the verified OpenCode execution guard and matching permission
-handling, so a blocked desktop action can return to the Roblox agent for
-continuation. The client bounds mobile native HTTP concurrency and expanded
-thinking presentation. The Android companion checks complete encoded replies
-before sending an oversized body to the executor. Relay **Always** requires a
-relay even while discovery is unavailable; **Auto** keeps direct fallback.
-The desktop launcher refreshes its connection dashboard and groups its settings.
-All four components and their downloads share version 3.6.5.
+**Project UAI 3.6.6 — October 23, 2026: a provider gallery and a clearer queue.**
+Adding a provider opens a searchable gallery with Recommended, Paid and Local
+tiers. Each card describes the route and what access costs, hybrid services are
+labelled by their free half, and choosing a card seeds the editor with its URL,
+protocol and auth style. The catalog grows to 66 presets, led by Project UAI Free,
+AgentRouter, OpenCode Zen, OpenRouter and OpenCode Go. Queued follow-ups open as
+**Up next** with numbered cards and per-message controls, and Settings opens from
+one sidebar row. The client is 3.6.6; the bridge remains `bridge-v3.6.6`, and the
+Windows and Android downloads remain 3.6.5 until their own builds.
 
 The apps retain verified automatic downloads and updates.
 The public page has a responsive white monochrome design with an interactive 3D
@@ -46,7 +46,8 @@ workspace. Go keeps its own catalog and routes; the optional free CLI backend
 does not intercept it. Subscription and workspace region refusals identify the
 setting to check. See [provider setup](docs/PROVIDER_COMPATIBILITY.md).
 
-Client, bridge, Windows desktop and Android companion are 3.6.5.
+The client is 3.6.6, the bridge is `bridge-v3.6.6`, and the Windows desktop and
+Android companion remain 3.6.5.
 UI LIB remains 1.3.0 and SDK 1.0.0.
 Model pricing and context/reply limits use a refreshed provider-specific catalog;
 included Project UAI Free access is counted at zero cost.
@@ -62,7 +63,8 @@ it. The model modal edits the same global effort setting, including for other
 models when **Options → Reasoning support** is enabled. The Thinking row estimates
 visible text only. A long retained trace is labelled
 **Excerpt**, not a 5,999-token model limit. See [provider behavior](docs/PROVIDER_COMPATIBILITY.md).
-See [3.6.5 verification](docs/TESTING_3.6.5.md),
+See [3.6.6 verification](docs/TESTING_3.6.6.md),
+[3.6.5 verification](docs/TESTING_3.6.5.md),
 [bridge 3.6.2 verification](docs/TESTING_3.6.2.md),
 [3.6.1 verification](docs/TESTING_3.6.1.md), [3.6.0 verification](docs/TESTING_3.6.0.md),
 [mobile research](docs/OPENCODE_MOBILE_RESEARCH.md) and
@@ -158,23 +160,24 @@ too, so a delegated job runs until it answers instead of coming back with "I rea
 this session's step limit before finishing".
 
 **Any provider.** A provider is a base URL, an auth style, a key and a model.
-Presets exist for the common hosts -- with AgentRouter, OpenCode Zen, and OpenRouter
-featured first, in that order, even with Project UAI Free configured -- and
-"Custom endpoint" takes anything that speaks `/v1/chat/completions` -- a relay, a self-hosted vLLM, Ollama on
-localhost. Model lists are never guessed: they come from `GET /v1/models` or from
-you typing one in.
+**Add a provider** opens a gallery of 66 presets with three tiers -- Recommended,
+Paid and Local -- and a search field that spans them. Recommended leads with
+Project UAI Free, AgentRouter, OpenCode Zen, OpenRouter and OpenCode Go; hybrid
+services are labelled by their free half rather than as paid, and "Custom endpoint"
+takes anything that speaks `/v1/chat/completions` -- a relay, a self-hosted vLLM,
+Ollama on localhost. Model lists are never guessed: they come from
+`GET /v1/models` or from you typing one in.
 
-**Project UAI Free** is ready when no provider is configured. Choose
-**Use Project UAI Free** in Providers to add it later; existing providers and
-personal keys stay as configured. AgentRouter can recover from explicit
+**Project UAI Free** is ready when no provider is configured. Add it later from the
+Recommended tier, or from the start card's Project UAI Free row; existing providers
+and personal keys stay as configured. AgentRouter can recover from explicit
 unauthorized-client errors using the
 [Project UAI proxy](docs/PROVIDER_COMPATIBILITY.md#automatic-unauthorized-client-recovery).
 The proxy receives the provider key and request and has a shared limit of 90,000
 requests per day; the resulting Base URL remains editable.
 
 AgentRouter uses the Anthropic Messages API and always sends its required Claude
-Code identity. Registration requires a GitHub account at least one year old; its
-recommended model is `deepseek-v4-flash`.
+Code identity. Registration requires a GitHub account at least one year old.
 
 **The Claude Code identity.** Providers that enable this compatibility identity carry
 `User-Agent: claude-cli/<version> (external, cli)`, `x-app: cli` and the
@@ -712,9 +715,10 @@ remain usable without JavaScript; only search and copy controls need it.
 ## First run
 
 Project UAI Free is ready on a fresh install. Open Chat and send a message, or
-add your own connection in Providers: choose a preset or base URL, enter its
-authentication details, and fetch or type an exact model ID. Shared free capacity
-and speed can vary; existing provider choices stay intact.
+add your own connection in Providers: choose a provider in the gallery or enter a
+base URL, then enter its authentication details and fetch or type an exact model
+ID. Shared free capacity and speed can vary; existing provider choices stay
+intact.
 
 The introduction opens once when the interface is visible and ready, waiting
 while a dialog, text field or request is active. Its six short pages cover Chat,

@@ -1,9 +1,10 @@
 # Project UAI — contract
 
-Current client, bridge, Windows app and Android companion release:
-**3.6.5 — October 21, 2026**.
+Current client release: **3.6.6 — October 23, 2026**. The bridge remains
+`bridge-v3.6.6`; the Windows app and Android companion remain 3.6.5 until their
+own builds.
 
-Bridge and Windows desktop 3.6.5 use verified automatic GitHub updates.
+Bridge 3.6.6 and Windows desktop 3.6.5 use verified automatic GitHub updates.
 Bridge worker replacement waits for idle work and retains its session token;
 desktop app updates stage for restart with a retained fallback. Desktop detects
 Node.js 18+ or downloads a verified LTS runtime per user instead of bundling Node.
