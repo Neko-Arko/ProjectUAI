@@ -1,9 +1,9 @@
 -- The settings dialog: a category list on the left, one pane on the right.
 --
 -- The same panes the Settings panel stacks, shown one at a time -- so this is a
--- different arrangement of the same settings rather than a second set. The one it is
--- modelled on opens from the profile menu and from Customize, and both of those land
--- here on a named category.
+-- different arrangement of the same settings rather than a second set. It opens from
+-- the profile menu, from the sidebar's Settings row and from the shortcut, and every
+-- entry point lands here on a named category.
 return function(env)
 	local theme = env.require("ui/theme")
 	local responsive = env.require("ui/responsive")

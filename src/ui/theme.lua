@@ -343,6 +343,11 @@ return function(env)
 		modalWide = 480,
 		modalMin = 260,
 		modalTall = 620,
+		-- The provider gallery is the first screen of the add flow: a wide card list
+		-- needs room for a name, a sentence and an access line without wrapping every
+		-- card onto three lines.
+		providerPicker = 640,
+		providerPickerTall = 640,
 		modalHistory = 580,
 		modalCode = 420,
 		formTextarea = 108,

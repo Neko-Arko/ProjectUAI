@@ -1,5 +1,39 @@
 # Changelog
 
+## 3.6.6 — October 23, 2026 — A provider gallery and a clearer queue
+
+- Rebuild the add-provider flow as a gallery. Add a provider opens three tiers --
+  Recommended, Paid and Local -- with a search field that spans them, a result
+  count, and one card per provider carrying a description, an access line and an
+  access label. The custom-endpoint card closes every tier. Choosing a card seeds
+  the editor with that preset; nothing is written until Save.
+- Grow the catalog to 66 presets: 16 recommended, 38 paid, 11 local and the custom
+  endpoint. Recommended now reads Project UAI Free (Included), AgentRouter (Free
+  tier), OpenCode Zen (Free models), OpenRouter (Free models), OpenCode Go (Free
+  CLI), then Kilo, OVHcloud, Gemini, Groq, Cerebras, Mistral, ModelScope, Z.ai,
+  NVIDIA NIM, Cloudflare Workers AI and Aion Labs.
+- Label access honestly. Hybrid services are recommended and named by their free
+  half, so OpenCode Zen, OpenRouter and OpenCode Go are never labelled Paid.
+  Highlighting is carried by the catalog, so the accent border stays on Project
+  UAI Free, AgentRouter and OpenCode Zen wherever they sit in the list.
+- Keep the catalog free of routes this client cannot serve. LLM7 is removed;
+  GitHub Models was retired on 30 July 2026; Perplexity's root-path API and
+  Databricks' invocations route would be misrouted by the base-URL normaliser and
+  remain reachable only through a custom endpoint. Kilo and OVHcloud no longer
+  send the Claude Code identity.
+- Rebuild the queued-messages surface as Up next: a state line with a dot,
+  numbered cards with the next message marked, edit, reorder and remove on a quiet
+  row, an empty state, and a live byte counter in the editor. The composer's queue
+  strip is tinted and shows the held state as a dot.
+- Open the settings modal from the sidebar's Settings row (formerly Customize) on
+  the General pane, and remove the duplicate Settings entry under More. Give the
+  profile menu's Tutorial row its icon.
+- Document the gallery in [SPEC.md](SPEC.md) and
+  [provider compatibility](docs/PROVIDER_COMPATIBILITY.md), and record the focused
+  verification in [3.6.6 testing](docs/TESTING_3.6.6.md).
+- Ship the client as 3.6.6. The bridge already ships as `bridge-v3.6.6`; the
+  Windows and Android downloads remain 3.6.5 until their own builds.
+
 ## Bridge 3.6.6 — October 22, 2026 — Runtime context for MCP harnesses
 
 - Tell external MCP harnesses what they are actually connected to. The

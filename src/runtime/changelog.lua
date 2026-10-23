@@ -19,6 +19,34 @@ return function(env)
 	local CATEGORY_ORDER = { "added", "improved", "fixed" }
 	local ENTRIES = {
 		{
+			version = "3.6.6",
+			revision = "2026-10-23-provider-gallery",
+			date = "October 23, 2026",
+			title = "A provider gallery and a clearer queue",
+			highlights = "Adding a provider becomes a searchable gallery of free, paid and hybrid routes, the message queue becomes a readable Up next list, and Settings opens from one place.",
+			sections = {
+				{ category = "added", label = "Provider gallery", items = {
+					"Add a provider opens a gallery with Recommended, Paid and Local tiers and a search field that spans them. Each card says what the provider is, what access costs and how to start; the custom endpoint is the last card in every tier.",
+					"The catalog grows to 66 presets. Recommended begins with Project UAI Free, AgentRouter, OpenCode Zen, OpenRouter and OpenCode Go, followed by the free-tier and no-key routes.",
+				} },
+				{ category = "improved", label = "Provider labels", items = {
+					"Hybrid services are recommended and labelled by their free half: Free models for OpenCode Zen and OpenRouter, Free CLI for OpenCode Go. Included marks the distributed community key, Free tier and No key describe the other free routes, and no hybrid is labelled Paid.",
+					"Choosing a card seeds the editor, which repeats the tier and description. The Preset row reopens the gallery without discarding a typed name, key or model, and a dismissed draft resumes on the next Add.",
+					"The accent border follows highlighted providers in the catalog, so it stays on Project UAI Free, AgentRouter and OpenCode Zen rather than on whichever card happens to be first.",
+					"The gallery has more room: wider card gaps, a taller dialog and bottom padding so the last card clears the edge.",
+				} },
+				{ category = "improved", label = "Queue and settings", items = {
+					"Queued messages open as Up next: a state line, numbered cards with the next message marked, and edit, reorder and remove controls on a quiet row. An empty queue explains itself, and the edit dialog counts bytes as they are typed.",
+					"The composer's queue strip is tinted and carries the held state as a dot instead of only in words.",
+					"The sidebar's Customize row is now Settings and opens the settings modal on the General pane; the duplicate Settings entry under More is removed. The profile menu's Tutorial row has its icon.",
+				} },
+				{ category = "fixed", label = "Catalog", items = {
+					"Remove LLM7. GitHub Models stays out because it was retired on 30 July 2026, and Perplexity and Databricks are not offered because this client's base-URL normaliser would send them to a path their APIs do not serve.",
+					"Kilo and OVHcloud no longer send the Claude Code identity: a public no-key gateway is not a Claude endpoint and never asked to be treated as one.",
+				} },
+			},
+		},
+		{
 			version = "3.6.5",
 			revision = "2026-10-21-tool-context",
 			date = "October 21, 2026",

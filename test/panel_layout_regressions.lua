@@ -103,6 +103,7 @@ local providers = { changed = signal.new("providers"),
 	get = function(id) for _, record in ipairs(records) do if record.id == id then return record end end end,
 	count = function() return #records end, cooling = function() return false end,
 	keysOf = function() return {} end,
+	opencodeKeyOptional = function() return false end,
 	requiresClaude = function() return false end,
 	needsExecutor = function() return false end,
 	endpoint = function(record, suffix) return record.baseUrl .. suffix end,
@@ -113,6 +114,7 @@ providers.proxyProvider = function() return nil end
 cache["provider/registry"] = providers
 cache["provider/catalog"] = { presets = {}, get = function() return nil end }
 cache["provider/models"] = { list = function(record) return record.models end,
+	isFree = function() return false end,
 	discover = function() h.sandbox.task.wait(0.3); return { "fetched" }, "Fetched" end }
 cache["provider/chat"] = { STYLES = { { value = "openai", label = "Chat" } },
 	styleOf = function() return "openai" end, endpointOf = function(record) return record.baseUrl .. "/chat/completions" end }

@@ -583,14 +583,26 @@ return function(env)
 		})
 		stopButton.instance.Visible = false
 		-- P.button creates its label from the initial text; queue updates reuse it.
+		--
+		-- The strip is tinted rather than ghosted because it is the one row above the
+		-- prompt that is not part of the draft: it belongs to the running turn. The dot
+		-- at the end carries the held state, which used to be a word in the label and
+		-- disappeared the moment the count changed.
 		local pendingButton = P.button(surface, {
 			name = "PendingMessages", text = "Queued messages", variant = "ghost", size = "sm", fill = true,
+			fillColor = theme.color.accentSurface, radius = theme.radius.md, align = "Left", padX = theme.space.sm,
 			onClick = function()
 				local session = sessions.threads[draftId]
 				if session then env.require("ui/chat/queue").open(session) end
 			end,
 		})
 		pendingButton.instance.Visible = false
+		local pendingContent = pendingButton.instance:FindFirstChild("Content")
+		P.spacer(pendingContent, { grow = true, layoutOrder = 3 })
+		local pendingDot = P.statusDot(pendingContent, {
+			diameter = theme.size.dot, color = theme.color.accent, layoutOrder = 4,
+		})
+		pendingDot.Name = "QueueState"
 		local pendingPreview = P.text(surface, { name = "PendingPreview", text = "", role = "caption",
 			color = theme.color.textSecondary, truncate = true, visible = false, size = UDim2.new(1, 0, 0, theme.size.chip) })
 
@@ -917,7 +929,8 @@ return function(env)
 			local pending = session and session.queueSnapshot()
 			local count = pending and pending.count or 0
 			pendingButton.instance.Visible = count > 0
-			pendingButton.setText(tostring(count) .. (pending and pending.held and " waiting · Review or resume" or " queued · Review"))
+			pendingButton.setText(tostring(count) .. (pending and pending.held and " waiting \194\183 Review or resume" or " queued \194\183 Review"))
+			pendingDot.BackgroundColor3 = pending and pending.held and theme.color.warn or theme.color.accent
 			local first = pending and pending.items and pending.items[1]
 			pendingPreview.Text = first and ((first.state == "preparing" and "Preparing: " or "Up next: ")
 				.. util.ellipsis((first.text or "Attached input"):gsub("%s+", " "), 220)) or ""

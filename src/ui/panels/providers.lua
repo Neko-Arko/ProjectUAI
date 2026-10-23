@@ -32,6 +32,7 @@ return function(env)
 	local chat = env.require("provider/chat")
 	local traits = env.require("provider/traits")
 	local communityKey = env.require("provider/community_key")
+	local icons = env.require("ui/icons")
 
 	local M = {}
 
@@ -142,6 +143,434 @@ return function(env)
 		return false
 	end
 
+	-- Provider gallery ---------------------------------------------------------
+	--
+	-- Adding a provider used to start with a form and a preset dropdown, which asked
+	-- someone to know a vendor's name and URL before it showed them a single vendor.
+	-- The gallery starts from what a person actually has -- a budget -- and puts the
+	-- free routes first, paid ones behind a tab, local servers behind another. Search
+	-- spans all three, because a name is the one thing someone arriving here usually
+	-- does know.
+	--
+	-- It is a dialog rather than a modal so that the tabs, the search field and the
+	-- result count stay put while the list scrolls: a gallery whose only filter scrolls
+	-- out of reach on the second screenful is a list with extra steps.
+
+	local function highlighted(text, needle)
+		local value = tostring(text or "")
+		if not needle or needle == "" then return value, false end
+		local at = value:find(needle, 1, true)
+		if not at then return value, false end
+		local function escape(part)
+			return (part:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"))
+		end
+		return escape(value:sub(1, at - 1))
+			.. string.format('<b><font color="#%s">%s</font></b>', theme.color.accent:ToHex(), escape(needle))
+			.. escape(value:sub(at + #needle)), true
+	end
+
+	local function countText(count, tier, searching)
+		if searching then
+			return count == 1 and "1 match in all providers" or (tostring(count) .. " matches in all providers")
+		end
+		if tier == "free" then
+			return count == 1 and "1 free route" or (tostring(count) .. " free routes")
+		elseif tier == "local" then
+			return count == 1 and "1 local server" or (tostring(count) .. " local servers")
+		end
+		return count == 1 and "1 paid provider" or (tostring(count) .. " paid providers")
+	end
+
+	-- `opts.onPick` receives the chosen preset and the gallery closes into whatever
+	-- opened it. `opts.onSaved` is the add flow: the gallery closes and the editor
+	-- opens, seeded from the preset, so a name and a key are typed in one place.
+	function M.picker(opts)
+		opts = opts or {}
+		local dialog = overlay.dialog({
+			name = "ProviderPicker",
+			width = theme.size.providerPicker,
+			height = theme.size.providerPickerTall,
+		})
+		if not dialog then return end
+
+		-- The gallery also opens from inside the editor, where a modal is already on
+		-- screen. Both surfaces share the modal layer, so the picker lifts itself and
+		-- its dismissal regions one step above the editor instead of leaving the
+		-- editor's card to draw over the dimmed backdrop.
+		local lift = theme.z.modal + 6
+		dialog.scrim.ZIndex = lift
+		for _, child in ipairs(dialog.scrim:GetChildren()) do
+			if child:IsA("GuiObject") then child.ZIndex = lift + 1 end
+		end
+
+		local closed, chosen, pendingSearch = false, false, nil
+		local tier = opts.tier
+		local known = false
+		for _, entry in ipairs(catalog.tiers) do
+			if entry.id == tier then known = true end
+		end
+		if not known then tier = "free" end
+		local query = ""
+
+		local root = P.column(dialog.card, {
+			name = "PickerRoot",
+			size = UDim2.fromScale(1, 1),
+			gap = theme.space.md,
+			padding = { x = theme.space.lg, top = theme.space.lg, bottom = theme.space.md },
+		})
+
+		local head = P.column(root, {
+			name = "PickerHead",
+			size = UDim2.new(1, 0, 0, 0),
+			auto = "Y",
+			gap = theme.space.hair,
+			layoutOrder = 1,
+			-- The dialog's close button floats over this corner; the title stops
+			-- short of it rather than running underneath.
+			padding = { right = dialog.closeInset },
+		})
+		P.text(head, {
+			name = "PickerOverline",
+			text = "INFERENCE PROVIDERS",
+			role = "overline",
+			color = theme.color.accent,
+			size = UDim2.new(1, 0, 0, theme.text.overline.height),
+			layoutOrder = 1,
+		})
+		P.text(head, {
+			name = "PickerTitle",
+			text = "Add a provider",
+			role = "title",
+			color = theme.color.text,
+			wrap = true,
+			auto = "Y",
+			layoutOrder = 2,
+		})
+		P.text(head, {
+			name = "PickerDescription",
+			text = "Pick a route to fill in its URL, protocol and auth style. Every field stays editable, and nothing is saved until you say so.",
+			role = "small",
+			color = theme.color.textSecondary,
+			wrap = true,
+			auto = "Y",
+			layoutOrder = 3,
+		})
+
+		local tabsRow = P.row(root, {
+			name = "PickerTabs",
+			size = UDim2.new(1, 0, 0, 0),
+			auto = "Y",
+			gap = theme.space.sm,
+			layoutOrder = 2,
+		})
+		local countLabel
+		local search
+		local gallery
+		local render
+		local resetSearch
+		local silent = false
+
+		C.segmented(tabsRow, {
+			name = "ProviderTier",
+			options = (function()
+				local out = {}
+				for _, entry in ipairs(catalog.tiers) do
+					out[#out + 1] = { value = entry.id, label = entry.label }
+				end
+				return out
+			end)(),
+			value = tier,
+			layoutOrder = 1,
+			onChange = function(value)
+				tier = value
+				resetSearch()
+			end,
+		})
+
+		search = P.field(root, {
+			name = "ProviderSearch",
+			placeholder = "Search providers or models",
+			-- Room for the glyph at the left and the clear control at the right; both
+			-- are drawn into the field's own shell, so the text has to start past them.
+			padX = theme.size.icon + theme.space.md + theme.space.xs,
+			layoutOrder = 3,
+			onChange = function(text)
+				query = tostring(text or "")
+				-- A programmatic reset (tab switch, clear control) already renders; the
+				-- change event it fires must not schedule a second pass that rebuilds the
+				-- same cards and resets the scroll twice.
+				if silent then return end
+				if pendingSearch then pcall(task.cancel, pendingSearch); pendingSearch = nil end
+				-- One render per keystroke would rebuild every card while someone is
+				-- still typing. A short delay coalesces a word into one pass.
+				pendingSearch = clock.delay(0.12, function()
+					pendingSearch = nil
+					render()
+				end)
+			end,
+			onSubmit = function()
+				if pendingSearch then pcall(task.cancel, pendingSearch); pendingSearch = nil end
+				render()
+			end,
+		})
+		local searchIcon = P.frame(search.shell, {
+			name = "SearchGlyph",
+			size = UDim2.fromOffset(theme.size.icon, theme.size.icon),
+			anchor = Vector2.new(0, 0.5),
+			position = UDim2.new(0, theme.space.sm, 0.5, 0),
+		})
+		icons.draw("search", searchIcon, theme.size.icon, theme.color.textTertiary)
+		local clearSize = math.max(theme.size.controlSmall, responsive.minTarget())
+		local searchPadding = search.instance:FindFirstChildOfClass("UIPadding")
+		if searchPadding then searchPadding.PaddingRight = UDim.new(0, clearSize + theme.space.xs) end
+		local clearSearch = P.iconButton(search.shell, {
+			name = "ClearProviderSearch",
+			icon = "close",
+			diameter = clearSize,
+			anchor = Vector2.new(1, 0.5),
+			position = UDim2.new(1, -theme.space.xxs, 0.5, 0),
+			visible = false,
+			onClick = function()
+				resetSearch()
+				search.focus()
+			end,
+		})
+
+		resetSearch = function()
+			if pendingSearch then pcall(task.cancel, pendingSearch); pendingSearch = nil end
+			query = ""
+			if search then
+				silent = true
+				search.set("")
+				silent = false
+			end
+			render()
+		end
+
+		local galleryHolder = P.frame(root, {
+			name = "ProviderGalleryHolder",
+			size = UDim2.new(1, 0, 0, 0),
+			flex = "Fill",
+			layoutOrder = 4,
+		})
+		gallery = P.scroll(galleryHolder, {
+			name = "ProviderGallery",
+			size = UDim2.fromScale(1, 1),
+			gap = theme.space.md,
+			-- Room at the bottom so the last card can clear the fade and the footer.
+			-- Without it the list ended mid-card against the edge, which reads as a
+			-- clipped layout rather than as "there is more above".
+			padding = { right = theme.space.xs, bottom = theme.space.xl },
+			fade = true,
+			fadeColor = theme.color.surface,
+		})
+
+		local footer = P.row(root, {
+			name = "PickerFooter",
+			size = UDim2.new(1, 0, 0, 0),
+			auto = "Y",
+			gap = theme.space.sm,
+			layoutOrder = 5,
+		})
+		-- The result count lives here rather than beside the tabs: a segmented control
+		-- is sized by its labels and capped, so a sibling that wants the rest of the row
+		-- competes with it for width on a phone. The footer is pinned, always visible
+		-- and already the place for a status line.
+		countLabel = P.text(footer, {
+			name = "ProviderCount",
+			text = "",
+			role = "caption",
+			color = theme.color.textTertiary,
+			truncate = true,
+			size = UDim2.new(0, 0, 0, theme.text.caption.height),
+			flex = "Fill",
+			layoutOrder = 1,
+		})
+		P.button(footer, {
+			name = "PickerClose",
+			text = "Close",
+			variant = "ghost",
+			size = "sm",
+			layoutOrder = 2,
+			onClick = function() dialog.close() end,
+		})
+
+		local function choose(preset)
+			if chosen or closed or not preset then return end
+			chosen = true
+			if pendingSearch then pcall(task.cancel, pendingSearch); pendingSearch = nil end
+			dialog.close()
+			if opts.onPick then
+				opts.onPick(preset)
+				return
+			end
+			M.editor(registry.blank(preset.id), opts.onSaved)
+		end
+
+		local function buildCard(parent, preset, index)
+			-- Highlighted routes are named in the catalog, not chosen by position: the
+			-- recommended tier leads with included access, AgentRouter and OpenCode Zen,
+			-- and moving a card must not move the accent with it.
+			local lead = preset.highlight == true
+			local card = P.rowButton(parent, {
+				name = "Choice_" .. tostring(preset.id),
+				auto = "Y",
+				vertical = true,
+				gap = theme.space.xs,
+				padding = { x = theme.space.md, y = theme.space.sm + theme.space.hair },
+				radius = theme.radius.lg,
+				bg = theme.color.surfaceRaised,
+				bgHover = theme.color.surfaceOverlay,
+				stroke = true,
+				-- The first free route is the one this screen exists to recommend, so it
+				-- is the only card with an accent edge. Everything else is neutral and
+				-- the tier badge carries the rest of the meaning.
+				strokeColor = lead and theme.color.accentBorder or theme.color.borderSubtle,
+				strokeWidth = 1,
+				layoutOrder = index,
+				onClick = function() choose(preset) end,
+			})
+			local cardHead = P.row(card.row, {
+				name = "ChoiceHead",
+				size = UDim2.new(1, 0, 0, 0),
+				auto = "Y",
+				gap = theme.space.sm,
+				layoutOrder = 1,
+			})
+			local textColumn = P.column(cardHead, {
+				name = "ChoiceText",
+				size = UDim2.new(0, 0, 0, 0),
+				auto = "Y",
+				flex = "Fill",
+				gap = theme.space.hair,
+				layoutOrder = 1,
+			})
+			P.text(textColumn, {
+				name = "ChoiceName",
+				text = tostring(preset.label),
+				role = "bodyStrong",
+				color = theme.color.text,
+				wrap = true,
+				auto = "Y",
+				layoutOrder = 1,
+			})
+			local description, rich = highlighted(preset.description, preset.noteHighlight)
+			P.text(textColumn, {
+				name = "ChoiceDescription",
+				text = description,
+				rich = rich,
+				role = "small",
+				color = theme.color.textSecondary,
+				wrap = true,
+				auto = "Y",
+				layoutOrder = 2,
+			})
+			local badgeText, tone = catalog.badge(preset)
+			local _, badgeLabel = P.badge(cardHead, { text = badgeText, tone = tone, layoutOrder = 2 })
+			badgeLabel.Name = "ChoiceBadge"
+
+			local meta = P.row(card.row, {
+				name = "ChoiceMeta",
+				size = UDim2.new(1, 0, 0, 0),
+				auto = "Y",
+				gap = theme.space.xs,
+				layoutOrder = 2,
+			})
+			P.text(meta, {
+				name = "ChoiceCost",
+				text = tostring(preset.cost or ""),
+				role = "caption",
+				color = theme.color.textTertiary,
+				truncate = true,
+				size = UDim2.new(0, 0, 0, theme.text.caption.height),
+				flex = "Fill",
+				layoutOrder = 1,
+			})
+			local chevron = P.frame(meta, {
+				name = "ChoiceOpen",
+				size = UDim2.fromOffset(theme.size.icon, theme.size.icon),
+				layoutOrder = 2,
+			})
+			icons.draw("chevron", chevron, theme.size.icon, theme.color.textTertiary)
+			return card
+		end
+
+		local function emptyGallery(message)
+			local column = P.column(gallery.instance, {
+				name = "NoProviderMatch",
+				size = UDim2.new(1, 0, 0, 0),
+				auto = "Y",
+				gap = theme.space.sm,
+				padding = { x = theme.space.md, y = theme.space.xl },
+				layoutOrder = 1,
+			})
+			P.text(column, {
+				name = "NoProviderMatchTitle",
+				text = message,
+				role = "bodyStrong",
+				color = theme.color.text,
+				wrap = true,
+				auto = "Y",
+			})
+			P.text(column, {
+				text = "Try a company, a model family, or a tier such as free or local.",
+				role = "small",
+				color = theme.color.textTertiary,
+				wrap = true,
+				auto = "Y",
+			})
+			P.button(column, {
+				name = "ClearProviderSearchEmpty",
+				text = "Clear search",
+				variant = "secondary",
+				size = "sm",
+				onClick = function() resetSearch() end,
+			})
+		end
+
+		render = function()
+			if closed or dialog.closed then return end
+			local searching = query ~= ""
+			local list
+			if searching then
+				list = catalog.search(query) or {}
+			else
+				list = catalog.byTier(tier)
+			end
+			clearSearch.instance.Visible = searching
+			countLabel.Text = countText(#list, tier, searching)
+			gallery.clear()
+			if #list == 0 then
+				local caption = "No provider matches that search."
+				if not searching then
+					for _, entry in ipairs(catalog.tiers) do
+						if entry.id == tier then caption = entry.empty end
+					end
+				end
+				emptyGallery(caption)
+				return
+			end
+			for index, preset in ipairs(list) do
+				buildCard(gallery.instance, preset, index)
+			end
+			-- The escape hatch belongs to every tier. It is also the one card that has
+			-- to survive a search for "custom", which is why it is only appended when
+			-- the query is empty: a search result set is whatever matched.
+			if not searching then
+				local custom = catalog.get("custom")
+				if custom then buildCard(gallery.instance, custom, #list + 1) end
+			end
+			gallery.instance.CanvasPosition = Vector2.new(0, 0)
+		end
+
+		dialog.scrim.Destroying:Connect(function()
+			closed = true
+			if pendingSearch then pcall(task.cancel, pendingSearch); pendingSearch = nil end
+		end)
+
+		render()
+	end
+
 	-- The connection modal: preset, name, URL, protocol, auth, key and model.
 	-- Everything else a record carries -- its models, its behaviour switches, its extra
 	-- headers -- is edited in the detail pane, which is a surface that does not have to
@@ -178,6 +607,32 @@ return function(env)
 			gap = theme.space.md,
 			layoutOrder = 1,
 		})
+
+		-- What this vendor is, in the same words the gallery used to describe it. The
+		-- editor is where a key gets pasted, and pasting one into a screen that no
+		-- longer says which service it belongs to is how a key ends up on the wrong
+		-- endpoint.
+		local introHolder, introBadge, introBadgeLabel, introText
+		if adding then
+			introHolder = P.column(form, {
+				name = "PresetIntro",
+				size = UDim2.new(1, 0, 0, 0),
+				auto = "Y",
+				gap = theme.space.xs,
+				layoutOrder = 1,
+			})
+			local badgeText, tone = catalog.badge(catalog.get(editing.preset) or {})
+			introBadge, introBadgeLabel = P.badge(introHolder, { text = badgeText, tone = tone, layoutOrder = 1 })
+			introText = P.text(introHolder, {
+				name = "PresetDescription",
+				text = "",
+				role = "small",
+				color = theme.color.textSecondary,
+				wrap = true,
+				auto = "Y",
+				layoutOrder = 2,
+			})
+		end
 
 		local problemLabel
 		local presetButton, urlField, keyRow, nameField
@@ -259,6 +714,19 @@ return function(env)
 		-- does not acquire a whole form-row gap apiece. Preserve its order on refresh.
 		local function refreshDocs()
 			refreshConnectionInfo()
+			if introHolder then
+				local current = catalog.get(editing.preset)
+				if current then
+					local badgeText, tone = catalog.badge(current)
+					introBadgeLabel.Text = badgeText
+					introBadgeLabel.TextColor3 = theme.toneColor(tone)
+					introBadge.BackgroundColor3 = theme.toneSurface(tone)
+					introText.Text = tostring(current.description or "")
+					introHolder.Visible = true
+				else
+					introHolder.Visible = false
+				end
+			end
 			if docsRow then docsRow:Destroy() docsRow = nil end
 			if docsNoteRow then docsNoteRow:Destroy() docsNoteRow = nil end
 			if presetNoteRow then presetNoteRow:Destroy() presetNoteRow = nil end
@@ -365,29 +833,24 @@ return function(env)
 			showProblems()
 		end
 
-		row("Preset", "Pick a vendor to fill in the URL, the auth style and the key hint. Everything "
-			.. "you have already typed -- the name, a pasted key -- is kept.", function(column)
+		row("Preset", "Change the vendor here without losing anything typed. The gallery fills "
+			.. "in the URL, the protocol, the auth style and the key hint.", function(column)
 			presetButton = P.button(column, {
 				name = "Preset",
 				text = (catalog.get(editing.preset) or {}).label or "Custom endpoint",
 				variant = "secondary",
 				fill = true,
 				align = "Left",
-				onClick = function(handle)
-					local options = {}
-					for _, preset in ipairs(catalog.presets) do
-						options[#options + 1] = {
-							label = preset.label,
-							value = preset.id,
-							detail = (preset.baseUrl ~= "" and preset.baseUrl) or "any URL you supply",
-							selected = preset.id == editing.preset,
-						}
-					end
-					overlay.menu({
-						target = handle.instance,
-						width = theme.size.menuWide,
-						options = options,
-						onSelect = applyPreset,
+				trailing = "chevron",
+				trailingColor = theme.color.textTertiary,
+				onClick = function()
+					-- The same gallery the add flow uses. A menu of every preset was
+					-- workable at nine vendors and is unusable at seventy: it cannot be
+					-- searched, it cannot say what a vendor costs, and it scrolls in a
+					-- 320-pixel column.
+					M.picker({
+						tier = catalog.tierOf(catalog.get(editing.preset)),
+						onPick = function(preset) applyPreset(preset.id) end,
 					})
 				end,
 			})
@@ -864,150 +1327,110 @@ return function(env)
 		if adding then problemLabel.Visible = false end
 	end
 
-	-- The entry point for adding: the editor, directly. The preset row inside it
-	-- is where the vendor is chosen -- picking one there seeds the name, URL, auth
-	-- style and key hint without losing anything already typed -- so a separate
-	-- picker in front of the editor was a second modal for the same decision, and
-	-- the one a person had to dismiss before they could see a single field.
+	-- The entry point for adding: the gallery, then the editor.
+	--
+	-- A retained draft resumes directly. Someone who dismissed the editor mid-setup is
+	-- not starting over, and showing them the gallery first would make them choose the
+	-- vendor twice for the same unfinished provider.
 	function M.add(onSaved)
-		-- Explicit preset entry points still open their requested seed.
-		M.editor(addDraft or registry.blank("custom"), onSaved)
+		if addDraft then
+			local draft = addDraft
+			addDraft = nil
+			M.editor(draft, onSaved)
+			return
+		end
+		M.picker({ onSaved = onSaved })
 	end
 
-	-- The featured provider cards.
+	-- The empty panel's start card.
 	--
-	-- Recommended places to start, shown with no setup beyond included free access:
-	-- the name, the sign-up address (selectable and copyable -- a client GUI cannot
-	-- open a browser, so the address has to be readable text, not a hidden
-	-- destination), and one button that opens the editor seeded from the preset.
-	-- The link keeps its referral parameter exactly as the catalog carries it.
-	-- Featured order is independent of the preset picker and saved provider order.
-	function M.featuredCard(parent, onSetup, nextOrder)
-		local built = nil
+	-- One card rather than a stack of five. The gallery is where the full list lives
+	-- now, so this surface only has to answer "what do I do first": browse, go custom,
+	-- or take one of the first recommendations. Each quick pick opens the editor already
+	-- seeded, and included free access still needs one press.
+	function M.startCard(parent, onSetup, nextOrder)
+		local card = P.card(parent, {
+			name = "StartCard",
+			gap = theme.space.md,
+			padding = theme.space.lg,
+			layoutOrder = type(nextOrder) == "function" and nextOrder() or 1,
+			strokeColor = theme.color.accentBorder,
+		})
 
-		local function build(featured)
-			local card = P.card(parent, {
-				name = "Featured",
-				gap = theme.space.sm,
-				padding = theme.space.md,
-				layoutOrder = type(nextOrder) == "function" and nextOrder() or 1,
-				-- The accent border is the one thing that says "start here" on a panel
-				-- that is otherwise all neutral surfaces; P.card has already drawn a
-				-- border, so this recolours it rather than adding a second stroke.
-				strokeColor = theme.color.accentBorder,
-			})
+		local head = P.column(card, {
+			name = "StartHead",
+			size = UDim2.new(1, 0, 0, 0),
+			auto = "Y",
+			gap = theme.space.hair,
+			layoutOrder = 1,
+		})
+		P.text(head, {
+			name = "StartOverline",
+			text = "START HERE",
+			role = "overline",
+			color = theme.color.accent,
+			size = UDim2.new(1, 0, 0, theme.text.overline.height),
+			layoutOrder = 1,
+		})
+		P.text(head, {
+			name = "StartTitle",
+			text = "Add a provider",
+			role = "display",
+			color = theme.color.text,
+			wrap = true,
+			auto = "Y",
+			layoutOrder = 2,
+		})
+		P.text(head, {
+			name = "StartDescription",
+			text = "Free routes need no card. Paid routes need a key or credit. Local servers run on your machine. Pick any of them and every field stays editable.",
+			role = "small",
+			color = theme.color.textSecondary,
+			wrap = true,
+			auto = "Y",
+			layoutOrder = 3,
+		})
 
-			local head = P.row(card, {
-				name = "FeaturedHead",
-				size = UDim2.new(1, 0, 0, 0),
-				auto = "Y",
-				gap = theme.space.xs,
-				layoutOrder = 1,
-			})
-			local headText = P.column(head, {
-				name = "HeadText",
-				size = UDim2.new(0, 0, 0, 0),
-				auto = "Y",
-				flex = "Fill",
-				gap = 0,
-				layoutOrder = 1,
-			})
-			P.text(headText, {
-				name = "FeaturedTitle",
-				text = featured.free and "Free for everyone" or "Recommended",
-				role = "overline",
-				color = theme.color.accent,
-				size = UDim2.new(1, 0, 0, theme.text.overline.height),
-				layoutOrder = 1,
-			})
-			P.text(headText, {
-				name = "FeaturedName",
-				text = tostring(featured.label),
-				truncate = true,
-				role = "title",
-				color = theme.color.text,
-				size = UDim2.new(1, 0, 0, theme.text.title.height),
-				layoutOrder = 2,
-			})
+		local actions = P.row(card, {
+			name = "StartActions",
+			size = UDim2.new(1, 0, 0, 0),
+			auto = "Y",
+			wrap = true,
+			gap = theme.space.sm,
+			layoutOrder = 2,
+		})
+		P.button(actions, {
+			name = "StartBrowse",
+			text = "Browse providers",
+			variant = "primary",
+			size = "sm",
+			layoutOrder = 1,
+			onClick = function() M.picker({ onSaved = onSetup }) end,
+		})
+		P.button(actions, {
+			name = "StartCustom",
+			text = "Custom endpoint",
+			variant = "secondary",
+			size = "sm",
+			layoutOrder = 2,
+			onClick = function() M.editor(registry.blank("custom"), onSetup) end,
+		})
 
-			if featured.note then
-				local text = tostring(featured.note)
-				local at = featured.noteHighlight and text:find(featured.noteHighlight, 1, true)
-				if at then
-					local function escape(value)
-						return (value:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"))
-					end
-					text = escape(text:sub(1, at - 1))
-						.. string.format('<b><font color="#%s">%s</font></b>',
-							theme.color.accent:ToHex(), escape(featured.noteHighlight))
-						.. escape(text:sub(at + #featured.noteHighlight))
-				end
-				local note = P.text(card, {
-					name = "FeaturedNote",
-					text = text,
-					rich = at ~= nil,
-					role = "small",
-					color = theme.color.textSecondary,
-					wrap = true,
-					auto = "Y",
-					layoutOrder = 2,
-				})
-				note.Size = UDim2.new(1, 0, 0, 0)
-			end
-
-			-- The sign-up address. Copyable with one press, and visible in full so it
-			-- can be selected by hand or read onto another device.
-			if featured.docs then
-				local linkRow = P.row(card, {
-					name = "FeaturedLink",
-					size = UDim2.new(1, 0, 0, 0),
-					auto = "Y",
-					gap = theme.space.xs,
-					layoutOrder = 3,
-				})
-				local linkText = P.text(linkRow, {
-					name = "FeaturedUrl",
-					text = tostring(featured.docs),
-					role = "small",
-					color = theme.color.accent,
-					wrap = true,
-					auto = "Y",
-					size = UDim2.new(0, 0, 0, 0),
-					flex = "Fill",
-					layoutOrder = 1,
-				})
-				if caps.clipboard then
-					P.iconButton(linkRow, {
-						name = "CopyFeaturedLink",
-						icon = "copy",
-						diameter = theme.size.controlSmall,
-						layoutOrder = 2,
-						onClick = function()
-							local ok = pcall(caps.fn.clipboard, tostring(featured.docs))
-							overlay.toast(ok and "Link copied" or "Could not reach the clipboard",
-								ok and "good" or "warn", 2)
-						end,
-					})
-				end
-			end
-
-			local actions = P.row(card, {
-				name = "FeaturedActions",
-				size = UDim2.new(1, 0, 0, 0),
-				auto = "Y",
-				gap = theme.space.sm,
-				layoutOrder = 4,
-			})
-			P.button(actions, {
-				name = "FeaturedSetup",
-				text = (featured.free and "Use " or "Set up ") .. tostring(featured.label),
-				variant = "primary",
-				size = "sm",
-				fill = true,
-				layoutOrder = 1,
+		local picks = P.column(card, {
+			name = "StartPicks",
+			size = UDim2.new(1, 0, 0, 0),
+			auto = "Y",
+			gap = theme.space.hair,
+			layoutOrder = 3,
+		})
+		for index, preset in ipairs(catalog.featured()) do
+			local row = P.rowButton(picks, {
+				name = "Start_" .. tostring(preset.id),
+				height = theme.size.controlLarge,
+				padding = { x = theme.space.sm },
+				radius = theme.radius.md,
+				layoutOrder = index,
 				onClick = function()
-					local preset = catalog.get(featured.id)
-					if not preset then return end
 					if preset.free then
 						local record = env.require("provider/free").use()
 						if onSetup then onSetup(record.id) end
@@ -1016,24 +1439,12 @@ return function(env)
 					M.editor(registry.blank(preset.id), onSetup)
 				end,
 			})
-
-			return card
+			row.label(preset.label, 1, theme.color.text, "small")
+			local badgeText, tone = catalog.badge(preset)
+			P.badge(row.row, { text = badgeText, tone = tone, layoutOrder = 2 })
+			row.icon("chevron", 3, theme.color.textTertiary, theme.size.icon)
 		end
-
-		local featured = {}
-		for _, preset in ipairs(catalog.presets) do
-			if preset.featured then featured[#featured + 1] = preset end
-		end
-		table.sort(featured, function(a, b)
-			local aOrder, bOrder = a.featuredOrder or math.huge, b.featuredOrder or math.huge
-			if aOrder ~= bOrder then return aOrder < bOrder end
-			return a.id < b.id
-		end)
-		for _, preset in ipairs(featured) do
-			local card = build(preset)
-			if not built then built = card end
-		end
-		return built
+		return card
 	end
 
 	-- List and detail ---------------------------------------------------------
@@ -1317,28 +1728,26 @@ return function(env)
 			healthError = nil
 			panel.__order = 0
 			local record = selected and registry.get(selected) or nil
-			-- Included free access must not hide the recommended providers.
+			-- Included free access must not hide the way to anything else.
 			local list = registry.list()
-			if #list == 0 or (#list == 1 and communityKey.isApplied(list[1])) then
-				M.featuredCard(detail.instance, function(id)
-					panel.select(id)
-				end, order)
-			end
 			if not record then
-				C.emptyState(detail.instance, {
-					title = registry.count() == 0 and "No provider configured"
-						or "Pick a provider from the list",
-					description = registry.count() == 0
-						and "Add an endpoint to start. Anything that speaks /v1/chat/completions works: "
-							.. "a hosted API, a relay, or a local server reachable from this host."
-						or "Its endpoint, key, model and health are all edited here.",
-					action = registry.count() == 0 and "Add a provider" or nil,
-					onAction = function()
-						M.add(function(id) panel.select(id) end)
-					end,
-					layoutOrder = order(),
-				})
+				if #list == 0 then
+					-- Nothing configured: the start card is the empty state. Two surfaces
+					-- saying "add a provider" one above the other is one too many.
+					M.startCard(detail.instance, function(id) panel.select(id) end, order)
+				else
+					C.emptyState(detail.instance, {
+						title = "Pick a provider from the list",
+						description = "Its endpoint, key, model and health are all edited here.",
+						layoutOrder = order(),
+					})
+				end
 				return
+			end
+			-- A panel holding nothing but the included free route is still a first run:
+			-- keep the way to a paid or local provider visible above its detail.
+			if #list == 1 and communityKey.isApplied(list[1]) then
+				M.startCard(detail.instance, function(id) panel.select(id) end, order)
 			end
 
 			local active = registry.active()
@@ -1369,14 +1778,30 @@ return function(env)
 				auto = "Y",
 			})
 			title.Size = UDim2.new(1, 0, 0, 0)
-			local subtitle = P.text(titleColumn, {
+			-- Which tier this record belongs to, before the address. A panel with a
+			-- free route and three paid ones reads as a list of equal things otherwise,
+			-- and the one question someone has about a provider is what it costs.
+			local subtitleRow = P.row(titleColumn, {
+				name = "ProviderMeta",
+				size = UDim2.new(1, 0, 0, 0),
+				auto = "Y",
+				gap = theme.space.xs,
+			})
+			local presetForRecord = catalog.get(record.preset)
+			if presetForRecord then
+				local badgeText, tone = catalog.badge(presetForRecord)
+				P.badge(subtitleRow, { text = badgeText, tone = tone, layoutOrder = 1 })
+			end
+			local subtitle = P.text(subtitleRow, {
+				name = "ProviderEndpoint",
 				text = record.baseUrl,
 				role = "caption",
 				color = theme.color.textTertiary,
-				wrap = true,
-				auto = "Y",
+				truncate = true,
+				size = UDim2.new(0, 0, 0, theme.text.caption.height),
+				flex = "Fill",
+				layoutOrder = 2,
 			})
-			subtitle.Size = UDim2.new(1, 0, 0, 0)
 
 			-- Status ------------------------------------------------------------
 			local status = R.section(detail.instance, {

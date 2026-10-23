@@ -1,0 +1,198 @@
+-- Provider gallery: tiers, search, descriptions and the seeded editor.
+-- Every request is synthetic; no key or endpoint is contacted.
+package.path = "test/?.lua;test/mock/?.lua;" .. package.path
+local F = require("coding_fixture")
+local suite = F.suite("Provider gallery")
+local case, check = suite.case, suite.check
+
+local function click(f, name, root)
+	local control = assert(f.h.byName(name, root), "missing control: " .. name)
+	f.h.click(control)
+	return control
+end
+
+local function search(f, text)
+	local field = assert(f.h.byName("ProviderSearch"), "missing search field")
+	local box = assert(field:FindFirstChildOfClass("TextBox"), "missing search box")
+	f.h.type(box, text)
+	f.h.sched.advance(0.3)
+end
+
+local function cards(f)
+	local gallery = assert(f.h.byName("ProviderGallery"), "missing gallery")
+	local out = {}
+	for _, child in ipairs(gallery:GetChildren()) do
+		if child:IsA("TextButton") and child.Name:sub(1, 7) == "Choice_" then out[#out + 1] = child.Name:sub(8) end
+	end
+	table.sort(out, function(a, b)
+		local ao = f.h.byName("Choice_" .. a).LayoutOrder
+		local bo = f.h.byName("Choice_" .. b).LayoutOrder
+		return ao < bo
+	end)
+	return out
+end
+
+local function open(f)
+	f.env.require("ui/panels/providers").add(function(id) f.saved = id end)
+	f.h.settle(0.3)
+end
+
+case("the recommended tier leads with included access, AgentRouter and the hybrids", function()
+	local f = F.ui(1000, 850)
+	open(f)
+	local order = cards(f)
+	check("Project UAI Free is the first card", order[1] == "hcnsec")
+	check("AgentRouter follows", order[2] == "agentrouter")
+	check("OpenCode Zen is recommended, not paid-only", order[3] == "zen")
+	check("OpenRouter follows", order[4] == "openrouter")
+	check("OpenCode Go follows", order[5] == "opencode-go")
+	check("LLM7 is gone", f.h.byName("Choice_llm7") == nil)
+	check("the custom endpoint is the last card", order[#order] == "custom")
+	check("the free tier is selected", f.h.byName("Segment_free").Parent == f.h.byName("ProviderTier"))
+	check("the count names the tier", f.h.byName("ProviderCount").Text == "16 free routes")
+	check("included access is labelled", f.h.byName("ChoiceBadge", f.h.byName("Choice_hcnsec")).Text == "Included")
+	check("a hybrid says what is free", f.h.byName("ChoiceBadge", f.h.byName("Choice_zen")).Text == "Free models")
+	check("the Go route names its free half", f.h.byName("ChoiceBadge", f.h.byName("Choice_opencode-go")).Text == "Free CLI")
+	check("no-key routes say so", f.h.byName("ChoiceBadge", f.h.byName("Choice_kilo")).Text == "No key")
+	check("the first card is described", f.h.byName("ChoiceDescription", f.h.byName("Choice_agentrouter")).Text
+		:find("Anthropic Messages gateway", 1, true) ~= nil)
+	check("the description no longer recommends a model",
+		f.h.byName("ChoiceDescription", f.h.byName("Choice_agentrouter")).Text:find("Recommended model", 1, true) == nil)
+	local catalog = f.env.require("provider/catalog")
+	check("and neither does the stored note", catalog.get("agentrouter").note:find("Recommended model", 1, true) == nil)
+	check("the signup restriction is still highlighted", catalog.get("agentrouter").noteHighlight
+		== "a GitHub account at least 1 year old")
+	check("the card carries the access line", f.h.byName("ChoiceCost", f.h.byName("Choice_agentrouter")).Text
+		:find("Free quota", 1, true) ~= nil)
+	check("no request was made", f.h.http.requestCount == 0)
+	f.healthy(); f.close()
+end)
+
+case("paid and local tiers list their own providers", function()
+	local f = F.ui(1000, 850)
+	open(f)
+	click(f, "Segment_paid", f.h.byName("ProviderTier"))
+	f.h.settle(0.2)
+	local paid = cards(f)
+	check("OpenAI leads the paid tier", paid[1], "openai")
+	check("the paid count is stated", f.h.byName("ProviderCount").Text:find("paid providers", 1, true) ~= nil)
+	check("a paid provider is present", f.h.byName("Choice_deepseek") ~= nil)
+	check("a hybrid is not left in the paid tier", f.h.byName("Choice_openrouter") == nil
+		and f.h.byName("Choice_zen") == nil and f.h.byName("Choice_opencode-go") == nil)
+	check("paid routes are labelled paid", f.h.byName("ChoiceBadge", f.h.byName("Choice_openai")).Text == "Paid")
+	click(f, "Segment_local", f.h.byName("ProviderTier"))
+	f.h.settle(0.2)
+	local localCards = cards(f)
+	check("Ollama leads the local tier", localCards[1] == "ollama")
+	check("the local count is stated", f.h.byName("ProviderCount").Text == "11 local servers")
+	check("a local server is present", f.h.byName("Choice_lmstudio") ~= nil)
+	check("custom remains reachable in every tier", localCards[#localCards], "custom")
+	check("switching tiers makes no request", f.h.http.requestCount == 0)
+	f.healthy(); f.close()
+end)
+
+case("search spans every tier and clears back to the selected one", function()
+	local f = F.ui(1000, 850)
+	open(f)
+	search(f, "claude")
+	local results = cards(f)
+	check("AgentRouter matches by tag", f.h.byName("Choice_agentrouter") ~= nil)
+	check("Anthropic matches by name", f.h.byName("Choice_anthropic-messages") ~= nil)
+	check("a local server without the tag is absent", f.h.byName("Choice_ollama") == nil)
+	check("the count says it searched everything", f.h.byName("ProviderCount").Text:find("matches in all providers", 1, true) ~= nil)
+	check("custom is not appended to a search", results[#results] ~= "custom")
+	search(f, "qwen")
+	check("a model family finds its hosts", f.h.byName("Choice_dashscope") ~= nil)
+	check("and its open-model hosts", f.h.byName("Choice_cerebras") ~= nil)
+	search(f, "zzzz-nothing")
+	check("an unmatched search says so", f.h.byName("NoProviderMatchTitle") ~= nil)
+	click(f, "ClearProviderSearchEmpty")
+	f.h.settle(0.2)
+	check("clearing restores the tier", f.h.byName("Choice_agentrouter") ~= nil
+		and f.h.byName("ProviderCount").Text == "16 free routes")
+	search(f, "openai")
+	check("a name search puts the vendor first", cards(f)[1] == "openai")
+	click(f, "ClearProviderSearch")
+	f.h.settle(0.2)
+	check("the inline clear empties the field", f.h.byName("ProviderSearch"):FindFirstChildOfClass("TextBox").Text == "")
+	check("searching never contacts an endpoint", f.h.http.requestCount == 0)
+	f.healthy(); f.close()
+end)
+
+case("choosing a card opens the editor already seeded", function()
+	local f = F.ui(1000, 850)
+	open(f)
+	click(f, "Choice_agentrouter")
+	f.h.settle(0.3)
+	check("the gallery closed", f.h.byName("ProviderPicker") == nil)
+	check("the preset is named", f.h.textOf(f.h.byName("Preset")) == "AgentRouter")
+	check("the URL is filled", f.h.byName("BaseUrl"):FindFirstChildOfClass("TextBox").Text == "https://agentrouter.org")
+	check("the protocol follows the preset", f.h.byName("Protocol") ~= nil)
+	check("the editor repeats what the card said", f.h.byName("PresetDescription").Text
+		:find("Anthropic Messages gateway", 1, true) ~= nil)
+	check("the tier badge is shown", f.h.byName("PresetIntro") ~= nil)
+	check("nothing was saved by choosing", f.env.require("provider/registry").count() == 0)
+	check("choosing performs no inference", f.h.http.requestCount == 0)
+	f.healthy(); f.close()
+end)
+
+case("the custom card opens an empty endpoint form", function()
+	local f = F.ui(1000, 850)
+	open(f)
+	click(f, "Choice_custom")
+	f.h.settle(0.3)
+	check("the preset is custom", f.h.textOf(f.h.byName("Preset")) == "Custom endpoint")
+	check("the URL starts empty", f.h.byName("BaseUrl"):FindFirstChildOfClass("TextBox").Text == "")
+	check("no model is chosen for it", f.h.textOf(f.h.byName("ActiveModel")) == "Choose a model")
+	f.healthy(); f.close()
+end)
+
+case("the editor can reopen the gallery without losing what was typed", function()
+	local f = F.ui(1000, 850)
+	open(f)
+	click(f, "Choice_custom")
+	f.h.settle(0.3)
+	local name = f.h.byName("ProviderName"):FindFirstChildOfClass("TextBox")
+	f.h.type(name, "Kept name")
+	click(f, "Preset")
+	f.h.settle(0.3)
+	check("the gallery opens above the editor", f.h.byName("ProviderPicker") ~= nil)
+	click(f, "Segment_local", f.h.byName("ProviderTier"))
+	f.h.settle(0.2)
+	click(f, "Choice_ollama")
+	f.h.settle(0.3)
+	check("the chosen preset is applied in place", f.h.textOf(f.h.byName("Preset")) == "Ollama (local)")
+	check("the typed name survives", f.h.byName("ProviderName"):FindFirstChildOfClass("TextBox").Text == "Kept name")
+	check("the local URL is filled", f.h.byName("BaseUrl"):FindFirstChildOfClass("TextBox").Text == "http://127.0.0.1:11434/v1")
+	check("still unsaved", f.env.require("provider/registry").count() == 0)
+	f.healthy(); f.close()
+end)
+
+case("every preset has what the gallery promises to show", function()
+	local f = F.new()
+	local catalog = f.env.require("provider/catalog")
+	local tiers = { free = true, paid = true, ["local"] = true, custom = true }
+	local seen = {}
+	for _, preset in ipairs(catalog.presets) do
+		check("unique id " .. tostring(preset.id), seen[preset.id] == nil)
+		seen[preset.id] = true
+		check("tier for " .. preset.id, tiers[preset.tier] == true)
+		check("description for " .. preset.id, type(preset.description) == "string" and #preset.description > 40)
+		check("access line for " .. preset.id, type(preset.cost) == "string" and #preset.cost > 0)
+		check("docs for " .. preset.id, preset.id == "custom"
+			or (type(preset.docs) == "string" and preset.docs:sub(1, 4) == "http"))
+	end
+	check("the free tier leads with included access", catalog.byTier("free")[1].id == "hcnsec")
+	check("AgentRouter follows it", catalog.byTier("free")[2].id == "agentrouter")
+	check("the hybrids are recommended", catalog.byTier("free")[3].id == "zen")
+	check("search is empty without a query", catalog.search("") == nil)
+	check("search finds by company", catalog.search("moonshot")[1].id == "moonshot")
+	check("search is case insensitive", catalog.search("AGENTROUTER")[1].id == "agentrouter")
+	check("search needs every word", catalog.search("free claude")[1].id == "agentrouter")
+	check("search misses cleanly", #catalog.search("no-such-provider") == 0)
+	check("quick picks keep their order", catalog.featured()[1].id == "hcnsec"
+		and catalog.featured()[2].id == "agentrouter" and catalog.featured()[3].id == "zen")
+	f.healthy(); f.close()
+end)
+
+suite.finish()

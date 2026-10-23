@@ -250,6 +250,20 @@ Base URLs are normalised once: a trailing slash is dropped, a missing `/v1` is
 added unless the URL already names a path, and a URL that already ends in
 `/chat/completions` is used verbatim.
 
+Adding a provider opens a gallery before the editor. It has three tiers — free
+routes, paid routes and local servers — plus a search field that spans them and a
+custom-endpoint card in every tier. A preset carries a description and an access
+line so the cost of a route is visible before a key exists, and still carries no
+model list. Choosing a card seeds the editor with that preset; nothing is written
+until Save, and a dismissed editor draft resumes on the next Add instead of
+reopening the gallery. Switching vendors from inside the editor reopens the same
+gallery and keeps everything already typed. Each card carries an access label
+rather than a bare tier: Included for the distributed community key, Free tier or
+No key for free routes, and the free half by name for hybrid services (OpenCode
+Zen's CLI models, OpenRouter's free ids, OpenCode Go's CLI catalog). A hybrid is
+never labelled Paid, and no label claims a whole service is free when only part
+of it is.
+
 `registry.requiresClaude(record)` recognizes `agentrouter.org` and its subdomains,
 including manually entered endpoints. `identityFor` returns `claude` there even
 when `record.claudeUa` is false. Inference and model-discovery requests mark this

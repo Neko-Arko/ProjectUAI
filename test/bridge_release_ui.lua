@@ -51,7 +51,7 @@ for _, mobile in ipairs({ false, true }) do
 				check("mobile sidebar uses compact readable type: " .. node.Name, node.TextSize >= 9 and node.TextSize <= 11)
 			end
 		end
-		for _, name in ipairs({ "NewChat", "Segment_cowork", "Segment_chat", "Segment_code", "Customize", "ConversationFolders", "ProfileIdentity" }) do
+		for _, name in ipairs({ "NewChat", "Segment_cowork", "Segment_chat", "Segment_code", "Settings", "ConversationFolders", "ProfileIdentity" }) do
 			local control = assert(h.byName(name, sidebar), name)
 			for _, node in ipairs(control:GetDescendants()) do
 				if node:IsA("TextLabel") then check(name .. " uses compact mobile text", node.TextSize == 9) end

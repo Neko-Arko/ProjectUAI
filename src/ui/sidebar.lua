@@ -31,7 +31,6 @@ return function(env)
 		{ id = "providers", label = "Providers", icon = "sliders" },
 		{ id = "tools", label = "Tools", icon = "worktree" },
 		{ id = "logs", label = "Logs & traces", icon = "document" },
-		{ id = "settings", label = "Settings", icon = "gear" },
 	}
 
 	function M.new(parent, host)
@@ -184,17 +183,21 @@ return function(env)
 			layoutOrder = 4,
 		})
 
-		local customize = P.rowButton(actions, {
-			name = "Customize",
+		-- Settings is the modal, not the stacked panel: the panel is a page you have to
+		-- navigate back from, and the same categories are already arranged for a dialog
+		-- with a category list. The old label here was "Customize", which named one
+		-- section of the same surface.
+		local settings = P.rowButton(actions, {
+			name = "Settings",
 			bg = nil,
 			padding = { x = ROW_INSET },
 			layoutOrder = 1,
 			onClick = function()
-				host.showSettingsDialog("claude_code")
+				host.showSettingsDialog("general")
 			end,
 		})
-		customize.icon("sliders", 1, theme.color.textSecondary, ROW_ICON)
-		customize.label("Customize", 2, theme.color.textSecondary, ROW_ROLE)
+		settings.icon("gear", 1, theme.color.textSecondary, ROW_ICON)
+		settings.label("Settings", 2, theme.color.textSecondary, ROW_ROLE)
 
 		local expanded = config.get("ui.sidebarExpanded", false) == true
 		local more = P.rowButton(actions, {

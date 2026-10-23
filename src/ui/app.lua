@@ -1333,7 +1333,7 @@ return function(env)
 				{ label = env.require("ui/changelog").menuLabel(), value = "changelog", icon = "spark" },
 				{ label = "ProjectUAI", value = "project", icon = "brand" },
 				{ label = "About this build", value = "about", icon = "book" },
-				{ label = "Tutorial", value = "tutorial" },
+				{ label = "Tutorial", value = "tutorial", icon = "book" },
 				{ label = "Join Discord", value = "discord", icon = "globe" },
 				{ label = "Donate", value = "donate", icon = "spark" },
 				{ divider = true },

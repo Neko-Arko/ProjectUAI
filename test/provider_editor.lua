@@ -20,10 +20,25 @@ local function closeMenu(f)
 	if f.h.byName("MenuLayer") then f.h.press("Escape") end
 end
 
+-- The preset control opens the provider gallery now, so a preset is chosen by
+-- clicking its card in the tier it belongs to. Custom is appended to every tier.
 local function preset(f, id)
 	closeMenu(f)
 	click(f, "Preset")
-	click(f, "Option_" .. id)
+	local target = assert(f.env.require("provider/catalog").get(id), "missing preset " .. id)
+	if target.tier == "paid" or target.tier == "local" then
+		click(f, "Segment_" .. target.tier, f.h.byName("ProviderTier"))
+		f.h.settle(0.2)
+	end
+	click(f, "Choice_" .. id)
+	f.h.settle(0.2)
+end
+
+-- Adding starts at the gallery; most cases want the custom endpoint.
+local function chooseCustom(f)
+	f.h.settle(0.2)
+	click(f, "Choice_custom")
+	f.h.settle(0.2)
 end
 
 local function key(f, value)
@@ -73,6 +88,7 @@ for _, setting in ipairs({
 		local providers = f.env.require("ui/panels/providers")
 		local registry = f.env.require("provider/registry")
 		providers.add()
+		chooseCustom(f)
 		click(f, "Segment_" .. setting.value, f.h.byName(setting.control))
 		if setting.field == "api" then
 			f.h.press("Escape")
@@ -105,12 +121,14 @@ case("Start over discards a retained key and connection without saving", functio
 	check("Add resumes the dismissed connection", f.h.byName("BaseUrl"):FindFirstChildOfClass("TextBox").Text == f.original.baseUrl
 		and f.h.byName("KeyState").Text:find("-key", 1, true) ~= nil)
 	click(f, "StartOverProvider")
+	chooseCustom(f)
 	check("Start over opens one empty connection", #f.h.allByName("SaveProvider") == 1
 		and f.h.byName("BaseUrl"):FindFirstChildOfClass("TextBox").Text == "")
 	check("the old key and model are removed", f.h.byName("KeyState").Text == "not set"
 		and f.h.textOf(f.h.byName("ActiveModel")) == "Choose a model")
 	f.h.press("Escape")
 	providers.add()
+	chooseCustom(f)
 	check("closing the empty form cannot restore the discarded draft", f.h.byName("BaseUrl"):FindFirstChildOfClass("TextBox").Text == ""
 		and f.h.byName("KeyState").Text == "not set")
 	check("discarding leaves the source record intact", f.original.apiKey == "fixture-key" and f.original.model == "manual-model")
@@ -129,6 +147,7 @@ case("saving a resumed draft leaves the next Add empty", function()
 	check("the retained connection is saved once", f.saved and registry.count() == 1
 		and f.saved.apiKey == "fixture-key" and f.saved.model == "manual-model")
 	providers.add()
+	chooseCustom(f)
 	check("the next Add starts without the saved key or URL", f.h.byName("KeyState").Text == "not set"
 		and f.h.byName("BaseUrl"):FindFirstChildOfClass("TextBox").Text == "")
 	check("the next Add has no previous model", f.h.textOf(f.h.byName("ActiveModel")) == "Choose a model")

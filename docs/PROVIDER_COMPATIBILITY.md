@@ -175,37 +175,46 @@ Protocol references reviewed on 2026-10-17:
 
 ## Preset routing matrix
 
-These are the catalog routes exercised by the offline preset matrix. Except for
-the classic Azure deployment API, the configured model id is sent in the request
-body or Gemini model path.
-`/models` is discovered under the same base; if a service does not expose it or
-the key cannot list models, manual ids remain usable.
+Every catalog preset has a row in the offline matrix in
+`test/provider_compatibility.lua`: its base URL, protocol, auth header and both
+request shapes are exercised without a live model. The table below lists only the
+routes whose shape is not plain Chat Completions at the catalog base URL. Every
+other preset uses Chat Completions, sends the configured model id in the request
+body, and discovers models under the same base. `/models` is not required: when a
+service does not expose it or the key cannot list models, manual ids remain usable.
 
 | Preset | Base path / host | Protocol | Default auth |
 | --- | --- | --- | --- |
 | Project UAI Free (HCNSEC) | `api.hcnsec.cn/v1` | Chat Completions | Bearer |
 | AgentRouter | `agentrouter.org/v1` | Messages | x-api-key |
-| OpenAI | `api.openai.com/v1` | Chat Completions | Bearer |
-| OpenRouter | `openrouter.ai/api/v1` | Chat Completions | Bearer |
+| Anthropic Messages | `api.anthropic.com/v1` | Messages | x-api-key |
+| Google Gemini | `generativelanguage.googleapis.com/v1beta` | Native generateContent / streamGenerateContent | x-goog-api-key |
+| Azure AI Foundry | `<resource>.openai.azure.com/openai/v1` | Chat Completions | api-key |
+| Azure OpenAI (deployment path) | `<resource>.openai.azure.com/openai/deployments/<deployment>` | Chat Completions plus `api-version` | api-key |
 | OpenCode Zen | `opencode.ai/zen/v1` | Chat Completions; dedicated Responses lane when required | Bearer |
 | OpenCode Go | `opencode.ai/inference/go/v1` | Model-specific Chat, Responses, Messages or Gemini | Bearer |
-| Azure AI Foundry | `<resource>.openai.azure.com/openai/v1` | Chat Completions | api-key |
-| Anthropic Messages | `api.anthropic.com/v1` | Messages | x-api-key |
-| Anthropic OpenAI compatibility | `api.anthropic.com/v1` | Chat Completions | x-api-key |
-| Google Gemini | `generativelanguage.googleapis.com/v1beta` | Native generateContent / streamGenerateContent | x-goog-api-key |
-| Groq | `api.groq.com/openai/v1` | Chat Completions | Bearer |
-| DeepSeek | `api.deepseek.com/v1` | Chat Completions | Bearer |
-| Together AI | `api.together.xyz/v1` | Chat Completions | Bearer |
-| Mistral | `api.mistral.ai/v1` | Chat Completions | Bearer |
-| xAI | `api.x.ai/v1` | Chat Completions | Bearer |
-| Fireworks | `api.fireworks.ai/inference/v1` | Chat Completions | Bearer |
-| Cerebras | `api.cerebras.ai/v1` | Chat Completions | Bearer |
-| Azure OpenAI deployment | `<resource>.openai.azure.com/openai/deployments/<deployment>` | Chat Completions, model from URL | api-key; `api-version` query |
-| Ollama / LM Studio / vLLM / llama.cpp / SGLang | Local URLs above | Chat Completions | None |
-| Custom endpoint | User-entered | User-selected | Bearer initially; configurable |
 
-Relays can impose account, model or official-client restrictions that an adapter
-does not remove. Discovery is not authorization to use every listed model.
+The remaining presets cover OpenAI, OpenRouter, DeepSeek, Groq, Cerebras, Mistral,
+Together, Fireworks, DeepInfra, Hyperbolic, Nebius, Novita, SambaNova, Moonshot,
+DashScope, SiliconFlow, Volcano Ark, Hunyuan, Qianfan, StepFun, Yi, Baichuan,
+Spark, Upstage, Reka, AI21, Cohere's compatibility layer, the Hugging Face
+router, Ollama Cloud, Baseten, Kluster, Chutes, Featherless, NanoGPT, Requesty,
+Scaleway, RunPod, Kilo, LLM7, OVHcloud, ModelScope, Z.ai, NVIDIA NIM, GitHub
+Models, Cloudflare Workers AI and Aion Labs. GitHub Models is absent because the
+service was retired on 30 July 2026; the local servers are listed separately above. Each is Chat
+Completions at the base URL the gallery shows. A vendor whose documented API this
+client's base-URL normaliser would misroute is not offered as a preset; it remains
+reachable through Custom endpoint with its exact path.
+
+The gallery groups presets into free, paid and local tiers and describes each one
+before a key exists. The tier is access, not capability: a free route and a paid
+one use the same adapters, and a successful model list never proves that an
+account, subscription or tool-calling model is available. A hybrid service — one
+with both a free and a paid half — is recommended and labelled with the free half
+rather than called paid: OpenCode Zen names its free desktop-CLI models,
+OpenRouter names its free model ids, and OpenCode Go separates its subscription
+from the free CLI catalog. Project UAI Free is labelled Included because its key
+is distributed with the client.
 
 ## Connection and response behavior
 

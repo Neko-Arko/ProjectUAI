@@ -5777,16 +5777,15 @@ scenario("AgentRouter is featured and its required identity survives every switc
 	harness.settle(0.5)
 	truthy("the provider detail explains the identity requirement", harness.byName("ClaudeUaRequired") ~= nil)
 	falsy("the provider does not offer an identity toggle", harness.byName("ClaudeUa"))
-	local featured = handle.env.require("ui/primitives").column(handle.app.screen, {})
-	handle.env.require("ui/panels/providers").featuredCard(featured, function() end)
-	local highlighted = false
-	for _, note in ipairs(harness.allByName("FeaturedNote", featured)) do
-		if note.Text:find("a GitHub account at least 1 year old", 1, true) then
-			highlighted = note.RichText and note.Text:find("<b><font", 1, true) ~= nil
-		end
-	end
-	truthy("the signup restriction is highlighted", highlighted)
-	featured:Destroy()
+	handle.env.require("ui/panels/providers").picker()
+	harness.settle(1)
+	local description = harness.byName("ChoiceDescription", harness.byName("Choice_agentrouter"))
+	truthy("the signup restriction is highlighted",
+		description ~= nil and description.RichText
+			and description.Text:find("a GitHub account at least 1 year old", 1, true) ~= nil
+			and description.Text:find("<b><font", 1, true) ~= nil)
+	harness.press("Escape")
+	harness.settle(1)
 	local socketHeaders
 	handle.env.require("runtime/caps").ws = true
 	record.api, record.stream, record.wsUrl = "openai", true, "wss://agentrouter.org/stream"
@@ -6082,10 +6081,10 @@ scenario("a preset-named provider starts with the preset's name", function()
 	check("only the custom preset says custom", custom.label, "Custom endpoint")
 end)
 
--- Adding a provider is one modal, not two. The preset is chosen inside the editor
--- -- the Preset row there seeds the name, URL and auth style without discarding
--- anything already typed -- so there is no picker in front of the form.
-scenario("adding a provider opens the editor directly", function()
+-- Adding a provider starts at the gallery. The card chosen there seeds the editor's
+-- name, URL and auth style, and the Preset row inside the editor reopens the same
+-- gallery without discarding anything already typed.
+scenario("adding a provider starts at the gallery and seeds the editor", function()
 	local harness, handle = bootWith({ provider = false })
 	handle.app.show("providers")
 	harness.settle(1)
@@ -6095,29 +6094,29 @@ scenario("adding a provider opens the editor directly", function()
 	harness.click(add)
 	harness.settle(1)
 
-	-- The editor, not a preset menu: the form is up and there is no menu layer.
-	truthy("the editor form is open", harness.byName("Form") ~= nil, harness.dump())
-	falsy("no preset menu was interposed", harness.byName("MenuLayer") ~= nil)
-	truthy("with a preset row inside it", harness.byName("Preset") ~= nil)
-	contains("starting on the custom preset",
-		harness.textOf(harness.byName("Preset")), "Custom endpoint")
+	-- The gallery, not a bare form. It is where the vendor decision lives now, and it
+	-- says what each route costs before a key exists.
+	truthy("the gallery is open", harness.byName("ProviderPicker") ~= nil, harness.dump())
+	falsy("no editor was interposed", harness.byName("Form") ~= nil)
+	truthy("with a search field", harness.byName("ProviderSearch") ~= nil)
+	truthy("and the free tier first", harness.byName("Choice_agentrouter") ~= nil)
+	check("browsing saved nothing", handle.providers.count(), 0)
 
-	-- Picking a preset from that row fills the fields in place -- the flow the
-	-- pre-picker used to own, without the extra modal.
-	harness.click(harness.byName("Preset"))
+	harness.click(harness.byName("Segment_paid", harness.byName("ProviderTier")))
+	harness.settle(0.5)
+	harness.click(harness.byName("Choice_openai"))
 	harness.settle(1)
-	truthy("the preset menu opens from the row", harness.byName("MenuLayer") ~= nil)
-	harness.click(harness.byName("Option_openai"))
-	harness.settle(1)
-	contains("the button now names the preset",
-		harness.textOf(harness.byName("Preset")), "OpenAI")
+
+	truthy("the editor form is open", harness.byName("Form") ~= nil, harness.dump())
+	falsy("the gallery closed behind it", harness.byName("ProviderPicker") ~= nil)
+	truthy("with a preset row inside it", harness.byName("Preset") ~= nil)
+	contains("naming the chosen preset", harness.textOf(harness.byName("Preset")), "OpenAI")
 	local url = harness.byName("BaseUrl", harness.byName("Form"))
 	local box = url and url:FindFirstChildOfClass("TextBox")
 	check("and the url was filled in", box and box.Text, "https://api.openai.com/v1")
 
-	-- The name follows when it was never hand-edited, and every row derived from
-	-- the preset repaints: a form where half the rows still describe the previous
-	-- vendor reads as broken rather than as partially updated.
+	-- Every row derived from the preset repaints: a form where half the rows still
+	-- describe the previous vendor reads as broken rather than as partially updated.
 	local nameRow = harness.byName("ProviderName", harness.byName("Form"))
 	local nameBox = nameRow and nameRow:FindFirstChildOfClass("TextBox")
 	check("the name field follows the preset", nameBox and nameBox.Text, "OpenAI")
@@ -6126,11 +6125,11 @@ scenario("adding a provider opens the editor directly", function()
 	local keyLink = harness.byName("KeyLinkUrl", harness.byName("Form"))
 	check("the docs link follows", keyLink and keyLink.Text, "https://platform.openai.com/api-keys")
 
-	-- Switching to a preset with a different auth style moves the segmented control
-	-- too: Anthropic authenticates with x-api-key, not bearer.
+	-- Switching presets inside the editor reopens the same gallery.
 	harness.click(harness.byName("Preset"))
 	harness.settle(1)
-	harness.click(harness.byName("Option_anthropic-messages"))
+	truthy("the gallery reopens from the row", harness.byName("ProviderPicker") ~= nil)
+	harness.click(harness.byName("Choice_anthropic-messages"))
 	harness.settle(1)
 	check("the name followed the switch", nameBox and nameBox.Text, "Anthropic (Messages API)")
 	local linkAfter = harness.byName("KeyLinkUrl", harness.byName("Form"))
@@ -6153,6 +6152,8 @@ scenario("a dismissed add keeps its draft", function()
 	handle.app.show("providers")
 	harness.settle(1)
 	harness.click(harness.byName("AddProvider"))
+	harness.settle(1)
+	harness.click(harness.byName("Choice_custom"))
 	harness.settle(1)
 
 	local form = harness.byName("Form")
@@ -6192,11 +6193,13 @@ scenario("a menu over the editor dismisses without it", function()
 	harness.settle(1)
 	harness.click(harness.byName("AddProvider"))
 	harness.settle(1)
-	harness.click(harness.byName("Preset"))
+	harness.click(harness.byName("Choice_custom"))
+	harness.settle(1)
+	harness.click(harness.byName("ActiveModel"))
 	harness.settle(1)
 
 	local layer = harness.byName("MenuLayer")
-	truthy("the preset menu is open", layer ~= nil)
+	truthy("the model menu is open", layer ~= nil)
 	local menuDismiss = layer and harness.byName("Dismiss", layer)
 	local card = harness.byName("Modal")
 	truthy("both dismiss buttons exist", menuDismiss ~= nil and card ~= nil)
@@ -6219,52 +6222,51 @@ scenario("a first-run client is pointed at the featured provider", function()
 	handle.app.show("providers")
 	harness.settle(1)
 
-	local cards = harness.allByName("Featured")
-	table.sort(cards, function(a, b) return a.LayoutOrder < b.LayoutOrder end)
-	check("all featured providers remain available", #cards, 5)
-	for index, label in ipairs({ "AgentRouter", "OpenCode Zen", "OpenRouter", "Project UAI Free", "OpenCode Go" }) do
-		local name = cards[index] and harness.byName("FeaturedName", cards[index])
-		check("featured position " .. index, name and name.Text, label)
-	end
+	-- The panel keeps the way to everything else visible above the included route.
+	truthy("the start card is shown", harness.byName("StartCard") ~= nil)
+	truthy("included access leads the quick picks", harness.byName("Start_hcnsec") ~= nil)
+	truthy("AgentRouter is a quick pick", harness.byName("Start_agentrouter") ~= nil)
 	check("viewing recommendations keeps Free active", handle.providers.active(), active)
 	check("viewing recommendations adds no providers", handle.providers.count(), 1)
 
-	-- The first recommendation retains its exact, copyable registration address.
-	local url = harness.byName("FeaturedUrl")
-	check("with the AgentRouter registration link", url and url.Text, "https://agentrouter.org/register?aff=4pqF")
-	truthy("and a copy control beside it", harness.byName("CopyFeaturedLink") ~= nil)
-	truthy("and a setup button", harness.byName("FeaturedSetup") ~= nil)
-	harness.click(harness.byName("FeaturedSetup", cards[1]))
+	-- The gallery leads with AgentRouter, keeps its exact registration address, and
+	-- no longer recommends a model in its description.
+	harness.click(harness.byName("StartBrowse"))
 	harness.settle(1)
-	contains("the first setup action opens AgentRouter", harness.textOf(harness.byName("Preset")), "AgentRouter")
+	local catalog = handle.env.require("provider/catalog")
+	local preset = catalog.get("agentrouter")
+	check("included access leads the free tier", catalog.byTier("free")[1].id, "hcnsec")
+	check("AgentRouter follows it", catalog.byTier("free")[2].id, "agentrouter")
+	check("with its registration address", preset.docs, "https://agentrouter.org/register?aff=4pqF")
+	truthy("the gallery describes it", harness.byName("ChoiceDescription", harness.byName("Choice_agentrouter")) ~= nil)
+	check("the gallery does not recommend a model", preset.note:find("Recommended model", 1, true), nil)
+	harness.click(harness.byName("Choice_agentrouter"))
+	harness.settle(1)
+	contains("the card opens AgentRouter setup", harness.textOf(harness.byName("Preset")), "AgentRouter")
 	check("opening setup preserves the active provider", handle.providers.active(), active)
 	harness.press("Escape")
 	harness.settle(1)
 
-	-- The preset behind it resolves and carries its own docs address, which the
-	-- editor renders the same way.
-	local catalog = handle.env.require("provider/catalog")
-	local preset = catalog.get("hcnsec")
-	check("the preset exists", preset ~= nil and true or false, true)
-	check("pointing at the api host", preset.baseUrl, "https://api.hcnsec.cn/v1")
-	check("with the community as its docs", preset.docs, "https://discord.gg/9xYyyYuKap")
-	check("and marked featured", preset.featured, true)
+	-- The free preset keeps its own endpoint and community docs.
+	local free = catalog.get("hcnsec")
+	check("the free preset points at the api host", free.baseUrl, "https://api.hcnsec.cn/v1")
+	check("with the community as its docs", free.docs, "https://discord.gg/9xYyyYuKap")
+	check("and marked featured", free.featured, true)
 
-	-- OpenCode Zen retains its existing endpoint and access guidance.
+	-- OpenCode Zen keeps its guidance and is recommended as a hybrid.
 	local zen = catalog.get("zen")
-	check("OpenCode Zen is featured too", zen and zen.featured, true)
+	check("OpenCode Zen is recommended", zen.tier, "free")
+	check("and labelled by what is free", catalog.badge(zen), "Free models")
 	check("pointing at the Zen relay", zen.baseUrl, "https://opencode.ai/zen/v1")
 	contains("OpenCode explains direct desktop support", zen.note, "without a bridge")
 	contains("OpenCode highlights its mobile relay requirement", zen.noteHighlight, "UAI Relay app")
+
 	handle.providers.remove(active.id)
 	harness.settle(1)
-	local freeCard
-	for _, card in ipairs(harness.allByName("Featured")) do
-		if harness.byName("FeaturedName", card).Text == "Project UAI Free" then freeCard = card end
-	end
-	harness.click(harness.byName("FeaturedSetup", freeCard))
+	truthy("removing free access leaves the start card", harness.byName("StartCard") ~= nil)
+	harness.click(harness.byName("Start_hcnsec"))
+	harness.settle(1)
 	check("one action restores free access", handle.providers.active().label, "Project UAI Free")
-	check("restoring Free keeps recommendations visible", #harness.allByName("Featured"), 5)
 
 	local custom = handle.providers.blank("custom")
 	custom.label, custom.baseUrl = "My provider", "https://harness.test/v1"
@@ -6273,7 +6275,7 @@ scenario("a first-run client is pointed at the featured provider", function()
 	harness.click(harness.byName("Provider_" .. custom.id))
 	harness.settle(1)
 	check("configured providers retain direct access to their details", harness.byName("ProviderTitle").Text, "My provider")
-	check("recommendations do not precede a personal setup", #harness.allByName("Featured"), 0)
+	falsy("recommendations do not precede a personal setup", harness.byName("StartCard"))
 
 	check("no thread errors", #harness.errors(), 0,
 		harness.errors()[1] and harness.errors()[1].traceback or nil)
