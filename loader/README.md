@@ -53,6 +53,30 @@ loadstring(readfile("UAI/uai-loader.lua"))()
 loadstring(readfile("UAI/uai-zh.lua"))()
 ```
 
+## 手机上能不能用
+
+分执行器看，关键在它有没有文件 API：
+
+| 平台 | 本地方案 | 说明 |
+| --- | --- | --- |
+| Android（Delta、Arceus X、Fluxus、Codex 等） | ✅ 可以 | 大多数提供 `readfile`/`writefile`；`isfile`、`makefolder` 有的没有，加载器已按「缺了就降级」处理 |
+| Android 无文件 API 的版本 | ⚠️ 半可用 | 同一局里靠内存缓存（`getgenv()`）避免重复下载，重开执行器仍需重新下 |
+| iOS | ❌ 基本不行 | 执行器普遍不给文件读写，只能用镜像在线加载，或把包存进执行器的「脚本库」 |
+
+手机端要点：
+
+- 第一次仍需联网下载约 3.6 MB；之后走本地文件，完全离线。
+- 执行器的 `readfile` 路径通常指向它自己的私有目录，先试 `UAI/uai-zh.lua`，写不进去会自动退到根目录 `uai-zh.lua`。
+- 想知道文件到底写哪了，可以在执行器里跑 `print(readfile("uai-zh.lua") ~= nil)`，或翻执行器的文件管理页。
+- 如果你把包放到了手机下载目录，用绝对路径指定就行（下面的写法已实测断网可加载）：
+
+```lua
+getgenv().UAI_CACHE_PATH = "/sdcard/Download/uai-zh.lua"
+loadstring(readfile("UAI/uai-loader.lua"))()
+```
+
+- 手机上跑长任务时，Android 端的模型请求会被执行器的超时截断，按项目文档启用 **UAI Relay** 伴生应用即可（与本加载器无关，属运行时能力）。
+
 这条路完全不依赖运行时网络，最稳；缺点是更新要手动重下一次。
 
 ## 方式四：自己托管（长期最可控）
