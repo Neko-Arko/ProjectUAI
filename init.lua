@@ -204,6 +204,14 @@ end
 
 env.loadedModules = loaded
 
+-- Template lookup for the few visible strings whose values are computed at build
+-- time (a count, a query, a name). Everything static goes through the render
+-- funnel instead; this exists so a sentence can put the number where Chinese
+-- needs it rather than where English did.
+function env.t(text, vars)
+	return env.require("runtime/i18n").t(text, vars)
+end
+
 local function start()
 	local mountAtBoot = env.context.ui ~= false
 	-- The boot indicator first, before a single other module loads.

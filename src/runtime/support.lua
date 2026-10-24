@@ -17,14 +17,11 @@ return function(env)
 		local lower = text:lower()
 		local problem = M.opencodeProblem(text)
 		if problem == "region" and not lower:find("review this privacy choice", 1, true) then
-			text = text .. " -- In the OpenCode workspace that owns this key, this model requires Privacy regions set to Global. "
-				.. "Review this privacy choice in OpenCode before changing it."
+			text = text .. " -- In the OpenCode workspace that owns this key, this model requires Privacy regions set to Global. Review this privacy choice in OpenCode before changing it."
 		elseif problem == "subscription" and not lower:find("check the key's workspace", 1, true) then
-			text = text .. " -- Check the key's workspace and its Go subscription in OpenCode. "
-				.. "If it is already active, report this refusal to OpenCode support. A public model list does not confirm subscription access."
+			text = text .. " -- Check the key's workspace and its Go subscription in OpenCode. If it is already active, report this refusal to OpenCode support. A public model list does not confirm subscription access."
 		elseif problem == "retired" and not lower:find("a 410 does not validate", 1, true) then
-			text = text .. " -- Select OpenCode Go for a Go subscription or OpenCode Zen for Zen access. "
-				.. "A 410 does not validate your key or subscription."
+			text = text .. " -- Select OpenCode Go for a Go subscription or OpenCode Zen for Zen access. A 410 does not validate your key or subscription."
 		elseif not problem and not lower:find("requires the uai relay app", 1, true) and (lower:find("freetiererror", 1, true)
 			or lower:find("can only be used from within opencode", 1, true)) then
 			text = text .. " -- " .. M.opencode()
@@ -34,9 +31,7 @@ return function(env)
 	end
 
 	function M.opencode()
-		return "If the direct desktop workaround is refused, use the installed OpenCode CLI with Project UAI Desktop Bridge. "
-			.. "Mobile OpenCode requires the UAI Relay app from Discord; install and start the app, then connect it in UAI. "
-			.. "The OpenCode proxy is retired. Project UAI Free remains an alternative."
+		return "If the direct desktop workaround is refused, use the installed OpenCode CLI with Project UAI Desktop Bridge. Mobile OpenCode requires the UAI Relay app from Discord; install and start the app, then connect it in UAI. The OpenCode proxy is retired. Project UAI Free remains an alternative."
 	end
 
 	return M

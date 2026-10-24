@@ -180,7 +180,7 @@ return function(env)
 					end
 
 					local description = P.text(card, {
-						text = tostring(tool.description),
+						text = env.t(tostring(tool.description)),
 						role = "caption",
 						color = theme.color.textSecondary,
 						wrap = true,

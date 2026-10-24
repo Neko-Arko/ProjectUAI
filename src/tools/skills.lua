@@ -18,10 +18,7 @@ return function(env)
 			name = "skills_list",
 			risk = "read",
 			needs = { "fs" },
-			description = "List the installed markdown skills (playbooks) with their one-line "
-				.. "descriptions and whether each is enabled. A bounded enabled index appears in the "
-				.. "environment; use this for omitted entries or to refresh the inventory, including "
-				.. "switched-off ones. Filter by name/filename/description with query to find relevant guidance. Follow continuation offsets to see every entry.",
+			description = "List the installed markdown skills (playbooks) with their one-line descriptions and whether each is enabled. A bounded enabled index appears in the environment; use this for omitted entries or to refresh the inventory, including switched-off ones. Filter by name/filename/description with query to find relevant guidance. Follow continuation offsets to see every entry.",
 			parameters = { type = "object", properties = {
 				offset = { type = "integer", description = "1-based byte offset from a previous page. Default 1.", minimum = 1 },
 				limit = { type = "integer", description = "Maximum bytes in this inventory page.", minimum = 200, maximum = 64000 },
@@ -30,8 +27,7 @@ return function(env)
 			run = function(args)
 				local list = skills.list()
 				if #list == 0 then
-					return "No skills installed. Skills are .md files under skills/ -- drop one "
-						.. "in by hand, or install one with skills_install."
+					return "No skills installed. Skills are .md files under skills/ -- drop one in by hand, or install one with skills_install."
 				end
 				local lines = {}
 				local query = tostring(args.query or ""):lower()
@@ -51,9 +47,7 @@ return function(env)
 			name = "skills_read",
 			risk = "read",
 			needs = { "fs" },
-			description = "Read an enabled skill requested by the user or relevant to the task before applying it. "
-				.. "Follow continuation offsets for the complete body; inventory descriptions are not bodies. "
-				.. "Reuse unchanged bodies still in context; skip unrelated skills.",
+			description = "Read an enabled skill requested by the user or relevant to the task before applying it. Follow continuation offsets for the complete body; inventory descriptions are not bodies. Reuse unchanged bodies still in context; skip unrelated skills.",
 			parameters = {
 				type = "object",
 				properties = {
@@ -73,10 +67,7 @@ return function(env)
 			name = "skills_write",
 			risk = "write",
 			needs = { "fs" },
-			description = "Save a skill: a named playbook with a one-line description and a markdown "
-				.. "body. Overwrites an existing skill of the same name. Use it when the user asks "
-				.. "to keep a working approach -- 'save that as a skill' -- or when you worked "
-				.. "something out that a later session will need again.",
+			description = "Save a skill: a named playbook with a one-line description and a markdown body. Overwrites an existing skill of the same name. Use it when the user asks to keep a working approach -- 'save that as a skill' -- or when you worked something out that a later session will need again.",
 			parameters = {
 				type = "object",
 				properties = {
@@ -100,9 +91,7 @@ return function(env)
 			name = "skills_install",
 			risk = "write",
 			needs = { "http", "fs" },
-			description = "Install a skill from GitHub: give owner/repo (e.g. 'DietrichGebert/ponytail'), "
-				.. "a github.com URL, or a raw.githubusercontent.com URL. The .md is fetched, given "
-				.. "proper frontmatter if it lacks it, and saved into skills/.",
+			description = "Install a skill from GitHub: give owner/repo (e.g. 'DietrichGebert/ponytail'), a github.com URL, or a raw.githubusercontent.com URL. The .md is fetched, given proper frontmatter if it lacks it, and saved into skills/.",
 			parameters = {
 				type = "object",
 				properties = {
@@ -117,8 +106,7 @@ return function(env)
 				local ok, result = skills.fromGitHub(args.repo, path)
 				if not ok then return H.fail(result) end
 				return "Installed skill " .. result
-					.. ". Read it with skills_read before following it -- it is a "
-					.. "stranger's instructions until you have seen what they say."
+					.. ". Read it with skills_read before following it -- it is a stranger's instructions until you have seen what they say."
 			end,
 		},
 		{

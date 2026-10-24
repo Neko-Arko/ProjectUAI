@@ -92,9 +92,7 @@ return function(env)
 				.. ((record.status == "running" or record.status == "queued") and "" or " (report not collected)")
 		end
 		if #pending > 24 then lines[#lines + 1] = tostring(#pending - 24) .. " more; list them with agent_status." end
-		lines[#lines + 1] = "Continue your independent work and check subagents periodically with agent_status. "
-			.. "Use a bounded wait of 1-30 seconds only when no independent work remains. Read each finished report by exact ID "
-			.. "through its final page and incorporate it before the final answer. This is an internal coordination update, not a new user request."
+		lines[#lines + 1] = "Continue your independent work and check subagents periodically with agent_status. Use a bounded wait of 1-30 seconds only when no independent work remains. Read each finished report by exact ID through its final page and incorporate it before the final answer. This is an internal coordination update, not a new user request."
 		return table.concat(lines, "\n")
 	end
 
@@ -158,8 +156,7 @@ return function(env)
 						available = math.floor(window - session.ctx.pressure(record))
 					end
 					if available < 1 then
-						firstError = firstError or "The prepared prompt exceeds this model's context window even after compaction. "
-							.. "Use a larger-context model or reduce the enabled tools/standing instructions."
+						firstError = firstError or "The prepared prompt exceeds this model's context window even after compaction. Use a larger-context model or reduce the enabled tools/standing instructions."
 						break
 					end
 					maxTokens = tonumber(maxTokens) or 4096
@@ -532,8 +529,7 @@ return function(env)
 							results[index] = {
 								id = call.id, name = (call["function"] or {}).name or "tool",
 								ok = false, error = "truncated arguments", ms = 0,
-								text = "The provider cut off this tool batch at its token limit. No calls in this batch ran. "
-									.. "Send smaller complete calls; split large scripts into sequential file_write/file_append calls or targeted file_edit edits.",
+								text = "The provider cut off this tool batch at its token limit. No calls in this batch ran. Send smaller complete calls; split large scripts into sequential file_write/file_append calls or targeted file_edit edits.",
 							}
 							session.emit("tool:error", results[index])
 						end

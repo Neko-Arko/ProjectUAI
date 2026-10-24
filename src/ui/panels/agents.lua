@@ -82,9 +82,7 @@ return function(env)
 
 		P.sectionHeader(scroll.instance, {
 			title = "Subagents",
-			description = "The agent hands self-contained work to a subagent with dispatch_agent: "
-				.. "its own context, a subset of the tools, and a written report at the end. "
-				.. "Open an agent to watch its current step, tool progress, latest messages and report.",
+			description = "The agent hands self-contained work to a subagent with dispatch_agent: its own context, a subset of the tools, and a written report at the end. Open an agent to watch its current step, tool progress, latest messages and report.",
 			layoutOrder = 1,
 		})
 
@@ -407,14 +405,11 @@ return function(env)
 			if lastCapacity ~= capacity then capacityBar.set(capacity); lastCapacity = capacity end
 			if subagent.unlimited() then
 				capacityHint.Text = string.format(
-					"Subagents run without a step limit or clock while the main agent continues working. "
-					.. "Admitted work over the ceiling waits for a slot; a subagent "
-					.. "may dispatch its own up to %s deep. Stop is the bound that still applies.",
+					"Subagents run without a step limit or clock while the main agent continues working. Admitted work over the ceiling waits for a slot; a subagent may dispatch its own up to %s deep. Stop is the bound that still applies.",
 					util.pluralise(tonumber(config.get("agent.subagentDepth", 2)) or 2, "level"))
 			else
 				capacityHint.Text = string.format(
-					"Each one may work for %s and take up to %s. Anything over the ceiling waits for a slot; "
-					.. "a subagent may dispatch its own up to %s deep.",
+					"Each one may work for %s and take up to %s. Anything over the ceiling waits for a slot; a subagent may dispatch its own up to %s deep.",
 					util.formatDuration(subagent.budgetSeconds() * 1000),
 					util.pluralise(tonumber(config.get("agent.subagentTurns", 14)) or 14, "step"),
 					util.pluralise(tonumber(config.get("agent.subagentDepth", 2)) or 2, "level"))
@@ -432,9 +427,7 @@ return function(env)
 			if #records == 0 and not emptyState then
 				emptyState = C.emptyState(list, {
 					title = "No subagents yet",
-					description = "When the agent delegates -- a wide search, a sweep of the instance "
-						.. "tree, anything repetitive -- the dispatch shows up here while it works "
-						.. "and stays afterwards with its report.",
+					description = "When the agent delegates -- a wide search, a sweep of the instance tree, anything repetitive -- the dispatch shows up here while it works and stays afterwards with its report.",
 					layoutOrder = 1,
 				})
 			elseif #records > 0 and emptyState then
@@ -513,8 +506,7 @@ return function(env)
 				},
 				{
 					key = "Follow-ups",
-					value = "the agent can send a finished subagent another message with agent_followup; "
-						.. "the newest few keep their context for it",
+					value = "the agent can send a finished subagent another message with agent_followup; the newest few keep their context for it",
 				},
 			}
 			for index, row in ipairs(rows) do
@@ -542,9 +534,7 @@ return function(env)
 		})
 		P.text(presets, {
 			name = "PresetsHint",
-			text = "The model picks one of these per dispatch. 'read' is the default and cannot "
-				.. "change anything; a delegated write is hard to attribute afterwards, which is "
-				.. "why it has to be asked for.",
+			text = "The model picks one of these per dispatch. 'read' is the default and cannot change anything; a delegated write is hard to attribute afterwards, which is why it has to be asked for.",
 			role = "caption",
 			color = theme.color.textTertiary,
 			wrap = true,

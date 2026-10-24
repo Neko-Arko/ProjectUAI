@@ -64,15 +64,13 @@ return function(env)
 	function M.donate()
 		local modal = overlay.modal({
 			title = "Support Project Ptolemy",
-			description = "You may now support Project Ptolemy by donating via Robux or Ko-fi. "
-				.. "This is completely optional -- any donation would be appreciated.",
+			description = "You may now support Project Ptolemy by donating via Robux or Ko-fi. This is completely optional -- any donation would be appreciated.",
 			width = theme.size.modal,
 		})
 		if not modal then return end
 		local note = P.text(modal.content, {
 			name = "DonationNote",
-			text = "Robux donations go to the Project Ptolemy donation place; supporters are thanked in our Discord. "
-				.. "Ko-fi copies its link, which you can open in a browser.",
+			text = "Robux donations go to the Project Ptolemy donation place; supporters are thanked in our Discord. Ko-fi copies its link, which you can open in a browser.",
 			role = "small",
 			color = theme.color.textSecondary,
 			wrap = true,
@@ -104,8 +102,7 @@ return function(env)
 				modal.close()
 				overlay.confirm({
 					title = "Open the donation place?",
-					description = "Roblox will move you to the Project Ptolemy donation place. "
-						.. "Your conversations and settings are saved before you leave.",
+					description = "Roblox will move you to the Project Ptolemy donation place. Your conversations and settings are saved before you leave.",
 					confirmText = "Teleport",
 					onConfirm = function() M.teleportToDonationPlace() end,
 				})
@@ -200,6 +197,9 @@ return function(env)
 			["ui.showToolDetail"] = true,
 			["ui.showToolCode"] = true,
 			["ui.showActivity"] = true,
+			-- Language is read at build time like every other string, so the switch has
+			-- to rebuild or it would only apply to surfaces opened afterwards.
+			["ui.locale"] = true,
 		}
 		local rebuildForView, cancelViewRebuild = clock.debounce(function()
 			M.rebuild("view setting")
@@ -1284,8 +1284,7 @@ return function(env)
 				elseif value == "unload" then
 					overlay.confirm({
 						title = "Unload UAI?",
-						description = "Stops the current turn, drains every timer and input handler, "
-							.. "saves your settings and removes the interface. Run the loader again to come back.",
+						description = "Stops the current turn, drains every timer and input handler, saves your settings and removes the interface. Run the loader again to come back.",
 						confirmText = "Unload",
 						danger = true,
 						onConfirm = function()
@@ -1359,8 +1358,7 @@ return function(env)
 				elseif value == "unload" then
 					overlay.confirm({
 						title = "Unload UAI?",
-						description = "Stops the current turn, drains every timer and input handler, "
-							.. "saves your settings and removes the interface. Run the loader again to come back.",
+						description = "Stops the current turn, drains every timer and input handler, saves your settings and removes the interface. Run the loader again to come back.",
 						confirmText = "Unload",
 						danger = true,
 						onConfirm = function()
@@ -1389,8 +1387,7 @@ return function(env)
 		local registry = env.require("agent/registry")
 		local modal = overlay.modal({
 			title = "UAI " .. tostring(env.info and env.info.version or ""),
-			description = "An agent running inside a Roblox client, identifying itself on the wire "
-				.. "as the Claude Code CLI.",
+			description = "An agent running inside a Roblox client, identifying itself on the wire as the Claude Code CLI.",
 			width = theme.size.modalWide,
 		})
 		if not modal then return nil end
@@ -1459,8 +1456,8 @@ return function(env)
 	function M.showSearch()
 		local modal = overlay.modal({
 			title = "Search conversations",
-			description = "Matches a title, a message or a reply. " ..
-				util.pluralise(#sessions.list(), "conversation") .. " on this client.",
+			description = env.t("Matches a title, a message or a reply. %{count} on this client.",
+				{ count = #sessions.list() }),
 			width = theme.size.dialog,
 		})
 		if not modal then return nil end
@@ -1494,7 +1491,7 @@ return function(env)
 			if #matches == 0 then
 				local none = P.text(results, {
 					name = "SearchEmpty",
-					text = "Nothing matched " .. clean .. ".",
+					text = env.t("Nothing matched %{query}.", { query = clean }),
 					role = "caption",
 					color = theme.color.textTertiary,
 					wrap = true,
@@ -1541,7 +1538,7 @@ return function(env)
 			if #matches > 12 then
 				local more = P.text(results, {
 					name = "SearchMore",
-					text = string.format("%d more not shown.", #matches - 12),
+					text = env.t("%{count} more not shown.", { count = #matches - 12 }),
 					role = "caption",
 					color = theme.color.textTertiary,
 					auto = "Y",

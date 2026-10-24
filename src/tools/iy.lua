@@ -26,9 +26,7 @@ return function(env)
 		{
 			name = "iy_status",
 			risk = "read",
-			description = "Report Infinite Yield: the Settings mode, whether it is loaded, how it was "
-				.. "obtained (already running, or loaded by this client), the command count and prefix. "
-				.. "This inspection does not load IY; command tools ensure availability themselves.",
+			description = "Report Infinite Yield: the Settings mode, whether it is loaded, how it was obtained (already running, or loaded by this client), the command count and prefix. This inspection does not load IY; command tools ensure availability themselves.",
 			parameters = { type = "object", properties = util.emptyObject(), required = {} },
 			run = function()
 				return H.keyValues(iy.status())
@@ -38,10 +36,7 @@ return function(env)
 			name = "iy_cmd",
 			risk = "write",
 			timeout = 120,
-			description = "Run an Infinite Yield command by its command string, exactly as typed into "
-				.. "IY's own bar: 'speed 100', 'noclip', 'tp PlayerName', 'esp players'. Supports IY's "
-				.. "repeat prefixes ('5^speed 100', 'inf^0.5^esp'). When the "
-				.. "setting is on but IY is not loaded, this call loads it.",
+			description = "Run an Infinite Yield command by its command string, exactly as typed into IY's own bar: 'speed 100', 'noclip', 'tp PlayerName', 'esp players'. Supports IY's repeat prefixes ('5^speed 100', 'inf^0.5^esp'). When the setting is on but IY is not loaded, this call loads it.",
 			parameters = {
 				type = "object",
 				properties = {
@@ -69,9 +64,7 @@ return function(env)
 			name = "iy_cmds",
 			risk = "read",
 			timeout = 120,
-			description = "List Infinite Yield commands, optionally filtered by a keyword or limited to "
-				.. "one plugin's commands. Shows names, aliases, plugin origin, and argument signatures "
-				.. "and descriptions when IY exposes them. Use it before iy_cmd to check syntax.",
+			description = "List Infinite Yield commands, optionally filtered by a keyword or limited to one plugin's commands. Shows names, aliases, plugin origin, and argument signatures and descriptions when IY exposes them. Use it before iy_cmd to check syntax.",
 			parameters = {
 				type = "object",
 				properties = {
@@ -167,11 +160,7 @@ return function(env)
 			name = "iy_players",
 			risk = "read",
 			timeout = 120,
-			description = "Resolve an IY selector to concrete names in the live server (read-only). Keywords: "
-				.. "all, others, me, random, #<n>, %<team>, allies, enemies, team, nonteam, friends, nonfriends, guests, "
-				.. "bacons, age<n>, nearest, farthest, group<id>, alive, dead, rad<n>, cursor, npcs. "
-				.. "Supports + include/- exclude, comma-separated lists, and @name for username-only prefix matching. "
-				.. "Uses the running IY's selector behavior; resolve targets before iy_cmd.",
+			description = "Resolve an IY selector to concrete names in the live server (read-only). Keywords: all, others, me, random, #<n>, %<team>, allies, enemies, team, nonteam, friends, nonfriends, guests, bacons, age<n>, nearest, farthest, group<id>, alive, dead, rad<n>, cursor, npcs. Supports + include/- exclude, comma-separated lists, and @name for username-only prefix matching. Uses the running IY's selector behavior; resolve targets before iy_cmd.",
 			parameters = { type = "object", properties = {
 				selector = { type = "string", minLength = 1, maxLength = 1000, description = "IY selector, e.g. all, others, rad50, PlayerName." },
 				limit = { type = "integer", minimum = 1, maximum = 200, description = "Maximum names shown; default 50." },
@@ -195,11 +184,7 @@ return function(env)
 			name = "iy_control",
 			risk = "write",
 			timeout = 120,
-			description = "Inspect and configure Infinite Yield's saved events, keybinds, aliases, waypoints and settings. "
-				.. "Inspect first for current 1-based binding indexes, event fields and defaults. Supports OnExecute, OnSpawn, OnDied, "
-				.. "OnDamage, OnKilled, OnJoin, OnLeave and OnChatted. Event commands can use $1/$2 arguments; native IY ignores "
-				.. "commands containing 'plugin'. Edits refresh IY's editor and request its normal save. Waypoints default to the current place. "
-				.. "Use iy_cmd to execute commands, iy_plugin_write for plugins/custom events. stop_loops sends breakloops.",
+			description = "Inspect and configure Infinite Yield's saved events, keybinds, aliases, waypoints and settings. Inspect first for current 1-based binding indexes, event fields and defaults. Supports OnExecute, OnSpawn, OnDied, OnDamage, OnKilled, OnJoin, OnLeave and OnChatted. Event commands can use $1/$2 arguments; native IY ignores commands containing 'plugin'. Edits refresh IY's editor and request its normal save. Waypoints default to the current place. Use iy_cmd to execute commands, iy_plugin_write for plugins/custom events. stop_loops sends breakloops.",
 			parameters = {
 				type = "object",
 				properties = {
@@ -249,8 +234,7 @@ return function(env)
 		{
 			name = "iy_plugin_read",
 			risk = "read",
-			description = "Read an authored .iy plugin from the executor workspace, or omit plugin to get a multi-command "
-				.. "template. Follow nextOffset for long sources. Use this before updating a plugin with iy_plugin_write.",
+			description = "Read an authored .iy plugin from the executor workspace, or omit plugin to get a multi-command template. Follow nextOffset for long sources. Use this before updating a plugin with iy_plugin_write.",
 			parameters = { type = "object", properties = {
 				plugin = { type = "string", description = "Plain plugin filename, with or without .iy. Omit for the template." },
 				offset = { type = "integer", minimum = 1 },
@@ -268,13 +252,7 @@ return function(env)
 			risk = "danger",
 			needs = { "fs", "exec" },
 			timeout = 120,
-			description = "Create or update a custom Infinite Yield .iy plugin. Get the template with iy_plugin_read. "
-				.. "Source may declare shared locals/globals above local Plugin, and must return a table with PluginName, "
-				.. "PluginDescription and Commands. Each command has ListName, Description, Aliases and Function(args, speaker). "
-				.. "Prefer a saved path for long source. Checks syntax before saving. By default executes setup once, validates the returned table and loads/reloads it "
-				.. "through IY, returning actual registered command names. load=false only saves syntax-checked source. "
-				.. "Set overwrite=true to replace an existing file. Reloading replaces commands; plugin-owned event connections "
-				.. "or loops need cleanup in the plugin's own setup/unload command.",
+			description = "Create or update a custom Infinite Yield .iy plugin. Get the template with iy_plugin_read. Source may declare shared locals/globals above local Plugin, and must return a table with PluginName, PluginDescription and Commands. Each command has ListName, Description, Aliases and Function(args, speaker). Prefer a saved path for long source. Checks syntax before saving. By default executes setup once, validates the returned table and loads/reloads it through IY, returning actual registered command names. load=false only saves syntax-checked source. Set overwrite=true to replace an existing file. Reloading replaces commands; plugin-owned event connections or loops need cleanup in the plugin's own setup/unload command.",
 			parameters = { type = "object", properties = {
 				plugin = { type = "string", minLength = 1, maxLength = 83, description = "Plain filename, e.g. myplugin.iy. Paths and IY_FE.iy are refused." },
 				source = { type = "string", minLength = 1, maxLength = 256000, description = "Complete Luau plugin source, including return Plugin; multiple commands and top-level globals are supported." },
@@ -299,10 +277,7 @@ return function(env)
 			name = "iy_plugin_search",
 			risk = "read",
 			needs = { "http" },
-			description = "Search the Infinite Yield community plugin store (iyplugins.pages.dev, "
-				.. "several hundred plugins) by name, author or filename. Returns matches with "
-				.. "their authors. Use it when the user asks for a feature core IY does not have, "
-				.. "then install with iy_plugin_install.",
+			description = "Search the Infinite Yield community plugin store (iyplugins.pages.dev, several hundred plugins) by name, author or filename. Returns matches with their authors. Use it when the user asks for a feature core IY does not have, then install with iy_plugin_install.",
 			parameters = {
 				type = "object",
 				properties = {
@@ -333,10 +308,7 @@ return function(env)
 			name = "iy_plugin_install",
 			risk = "write",
 			timeout = 120,
-			description = "Install a plugin from the Infinite Yield store: downloads its .iy file, "
-				.. "saves it to the workspace and registers it with the running Infinite Yield, "
-				.. "whose commands then work through iy_cmd. Accepts the plugin name ('dexrecontinued'), "
-				.. "a filename ('dexrecontinued.iy') or the store id.",
+			description = "Install a plugin from the Infinite Yield store: downloads its .iy file, saves it to the workspace and registers it with the running Infinite Yield, whose commands then work through iy_cmd. Accepts the plugin name ('dexrecontinued'), a filename ('dexrecontinued.iy') or the store id.",
 			parameters = {
 				type = "object",
 				properties = {
@@ -353,8 +325,7 @@ return function(env)
 		{
 			name = "iy_plugin_uninstall",
 			risk = "write",
-			description = "Remove a plugin: unregisters its commands from Infinite Yield and deletes "
-				.. "its .iy file. Accepts the name with or without the .iy ending.",
+			description = "Remove a plugin: unregisters its commands from Infinite Yield and deletes its .iy file. Accepts the name with or without the .iy ending.",
 			parameters = {
 				type = "object",
 				properties = {

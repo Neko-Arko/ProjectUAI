@@ -657,16 +657,17 @@ return function(env)
 				follow()
 			elseif event.kind == "model:route" then
 				local into, order = target()
-				message.notice(into, { tone = "info", text = event.text or ("Automatic free routing selected "
-					.. tostring(event.model) .. ". Turn it off in Settings → Agent → Automatic free routing.") }, order)
+				message.notice(into, { tone = "info", text = event.text or env.t(
+					"Automatic free routing selected %{model}. Turn it off in Settings → Agent → Automatic free routing.",
+					{ model = tostring(event.model) }) }, order)
 				follow()
 			elseif event.kind == "compact" then
 				local into, order = target()
 				local before, after = tonumber(event.before), tonumber(event.after)
 				local text = "Older turns were summarised to stay inside the context budget."
 				if before and after and before > after then
-					text = string.format("Compacted context: about %s to %s tokens.",
-						util.formatNumber(before), util.formatNumber(after))
+					text = env.t("Compacted context: about %{before} to %{after} tokens.",
+						{ before = util.formatNumber(before), after = util.formatNumber(after) })
 				end
 				message.notice(into, { tone = "info", text = text }, order)
 				follow()
@@ -701,7 +702,7 @@ return function(env)
 				if not view.issue then
 					view.issue = P.text(scroll.instance, { name = "TranscriptIssue", role = "caption", wrap = true,
 						auto = "Y", color = theme.color.warn, layoutOrder = -1,
-						text = "A row could not be displayed. Use Message options > Refresh conversation to redraw it." })
+						text = env.t("A row could not be displayed. Use Message options > Refresh conversation to redraw it.") })
 				end
 				if event.text and (event.kind == "user" or event.kind == "assistant:text") then
 					track({ root = P.text(scroll.instance, { name = "RecoveredText", text = event.text, role = "body",

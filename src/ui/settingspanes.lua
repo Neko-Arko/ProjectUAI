@@ -104,6 +104,20 @@ return function(env)
 		local appearance = build.section("Appearance",
 			"Layout follows the viewport by default. Pin it if you would rather it did not.")
 
+		-- Language sits first: it changes every other row on this page, and a reader
+		-- who cannot read the interface should not have to find it at the bottom.
+		local i18n = env.require("runtime/i18n")
+		local localeOptions = {}
+		for _, entry in ipairs(i18n.locales()) do
+			localeOptions[#localeOptions + 1] = { value = entry.id, label = entry.label }
+		end
+		P.text(appearance, { text = "Language", role = "small" })
+		C.segmented(appearance, {
+			options = localeOptions,
+			value = i18n.locale(),
+			onChange = function(value) i18n.set(value) end,
+		})
+
 		P.text(appearance, { text = "Accent", role = "small" })
 		C.segmented(appearance, {
 			options = accentOptions(),
@@ -141,8 +155,7 @@ return function(env)
 		})
 		R.toggle(appearance, {
 			label = "Show the code a tool was given",
-			hint = "Draws the Luau, the file body or the property map a tool call carries under its "
-				.. "row, outside the fold. Off, it is still there behind the row's own caret.",
+			hint = "Draws the Luau, the file body or the property map a tool call carries under its row, outside the fold. Off, it is still there behind the row's own caret.",
 			path = "ui.showToolCode",
 		})
 		R.toggle(appearance, {
@@ -230,8 +243,7 @@ return function(env)
 		local build = builder(container)
 
 		local where = build.section("Where your data goes",
-			"This client has no telemetry and no home to call. The only outbound requests it "
-			.. "makes are the ones listed here, and every one of them is somewhere you added.")
+			"This client has no telemetry and no home to call. The only outbound requests it makes are the ones listed here, and every one of them is somewhere you added.")
 
 		local list = {}
 		for _, record in ipairs(providers.list()) do
@@ -257,9 +269,7 @@ return function(env)
 		end
 
 		local secrets = build.section("Keys and logs",
-			"An API key is stored in the settings file so a request can be signed with it. "
-			.. "Request logs and diagnostic exports reduce API keys to their last four characters. "
-			.. "Full configuration export keeps all credentials so you can transfer settings; keep that copy private.")
+			"An API key is stored in the settings file so a request can be signed with it. Request logs and diagnostic exports reduce API keys to their last four characters. Full configuration export keeps all credentials so you can transfer settings; keep that copy private.")
 		R.toggle(secrets, {
 			label = "Mirror the log to the console",
 			hint = "Also print every entry with print/warn, which a developer console can read.",
@@ -328,8 +338,7 @@ return function(env)
 				onClick = function()
 					overlay.confirm({
 						title = "Reset the activity history?",
-						description = "Every day, model and token count this client has recorded is discarded. "
-							.. "The conversations themselves are kept.",
+						description = "Every day, model and token count this client has recorded is discarded. The conversations themselves are kept.",
 						confirmText = "Reset",
 						danger = true,
 						onConfirm = function()
@@ -392,9 +401,7 @@ return function(env)
 		R.facts(totals, facts, { name = "Totals" })
 		if not window.tokensFrom then
 			R.paragraph(totals,
-				"No request has been recorded yet, so there are no token counts. Messages and "
-				.. "conversations from before counting began were read back out of the transcripts "
-				.. "already on disk; tokens could not be, because nothing recorded them.")
+				"No request has been recorded yet, so there are no token counts. Messages and conversations from before counting began were read back out of the transcripts already on disk; tokens could not be, because nothing recorded them.")
 		end
 
 		if #window.models > 0 then
@@ -402,9 +409,9 @@ return function(env)
 			for index, row in ipairs(window.models) do
 				C.keyValue(models, {
 					key = row.id,
-					value = string.format("%s tokens  %s  %d%%",
-						util.formatCompact(row.tokens), util.pluralise(row.requests, "request"),
-						math.floor((row.share or 0) * 100 + 0.5)),
+					value = env.t("%{tokens} tokens  %{requests} requests  %{percent}%", {
+						tokens = util.formatCompact(row.tokens), requests = row.requests,
+						percent = math.floor((row.share or 0) * 100 + 0.5) }),
 					layoutOrder = index,
 				})
 			end
@@ -540,8 +547,7 @@ return function(env)
 		local build = builder(container)
 
 		local appearance = build.section("Code appearance",
-			"How a fenced code block is drawn, in the transcript and everywhere else. "
-			.. "Press one to use it.")
+			"How a fenced code block is drawn, in the transcript and everywhere else. Press one to use it.")
 		local row = P.row(appearance, {
 			name = "CodeThemes",
 			size = UDim2.new(1, 0, 0, 0),
@@ -560,9 +566,7 @@ return function(env)
 		R.segmented(appearance, {
 			name = "CodeFont",
 			label = "Code font",
-			hint = "The monospace family for code and diagnostics. Roblox renders from a fixed "
-				.. "set of families, so this offers the ones that exist rather than a box to type "
-				.. "a font name into that could not be loaded.",
+			hint = "The monospace family for code and diagnostics. Roblox renders from a fixed set of families, so this offers the ones that exist rather than a box to type a font name into that could not be loaded.",
 			path = "ui.codeFont",
 			options = fontOptions,
 		})
@@ -576,9 +580,7 @@ return function(env)
 		R.select(interface, {
 			name = "InterfaceFont",
 			label = "Interface font",
-			hint = "Menus, the sidebar and the transcript. Only the families this client can "
-				.. "actually load are listed -- the list is probed against the engine rather than "
-				.. "declared, so it is shorter on an older client than a longer one.",
+			hint = "Menus, the sidebar and the transcript. Only the families this client can actually load are listed -- the list is probed against the engine rather than declared, so it is shorter on an older client than a longer one.",
 			path = "ui.interfaceFont",
 			options = interfaceOptions,
 		})
@@ -587,10 +589,10 @@ return function(env)
 		-- without it every "medium" role falls back to whichever legacy member pairs that
 		-- family with a heavier weight. Saying so is cheaper than someone wondering why
 		-- their headings look the same as their body text.
-		R.paragraph(interface, string.format("Now: %s, %s.",
-			theme.interfaceFontName,
-			theme.hasFontFace and "with the regular/medium/semibold weight axis"
-				or "weights from the legacy font set on this client"))
+		R.paragraph(interface, env.t("Now: %{font}, %{weights}.", {
+			font = theme.interfaceFontName,
+			weights = env.t(theme.hasFontFace and "with the regular/medium/semibold weight axis"
+				or "weights from the legacy font set on this client") }))
 
 		-- Text size is the same setting as the scale slider under General, expressed the
 		-- way the reference client expresses it. One value, two controls: the segmented
@@ -633,9 +635,7 @@ return function(env)
 	local function paneCowork(container)
 		local build = builder(container)
 		build.section("Cowork",
-			"A browser on this machine can join the conversation that is open here. Both sides "
-			.. "dial out to a small local process, because a Roblox client cannot accept a "
-			.. "connection.")
+			"A browser on this machine can join the conversation that is open here. Both sides dial out to a small local process, because a Roblox client cannot accept a connection.")
 		env.require("ui/panels/cowork").rows(container, { layoutOrder = build.order() })
 		build.order()
 	end
@@ -791,9 +791,7 @@ return function(env)
 		})
 
 		local out = build.section("Diagnostic export",
-			"Writes a copy of your settings and the activity history into the client's own "
-			.. "folder. API keys are reduced to their last four characters and the bridge token "
-			.. "is dropped. Custom fields may still contain credentials, so review before sharing.")
+			"Writes a copy of your settings and the activity history into the client's own folder. API keys are reduced to their last four characters and the bridge token is dropped. Custom fields may still contain credentials, so review before sharing.")
 		local outPath = EXPORT_DIR .. "/uai-export.json"
 		local result = P.text(out, {
 			name = "ExportResult",
@@ -844,8 +842,7 @@ return function(env)
 			-- Being explicit about this: an import that silently replaced a working key
 			-- with "...abcd" from an export would break the client in a way that looks
 			-- like the provider rejecting you.
-			.. "keys and the bridge token are never imported, because an export does not "
-			.. "contain them.")
+			.. "keys and the bridge token are never imported, because an export does not contain them.")
 		local importResult = P.text(inbound, {
 			name = "ImportResult",
 			text = "",
@@ -942,8 +939,7 @@ return function(env)
 		})
 
 		local host = build.section("This host",
-			"What the client found when it started. None of it is configurable; all of it "
-			.. "decides what works.")
+			"What the client found when it started. None of it is configurable; all of it decides what works.")
 		local facts = {
 			{ key = "Client", value = tostring(env.info and env.info.version or "") },
 			{ key = "Transport", value = caps.http .. (caps.requestName and (" (" .. caps.requestName .. ")") or "") },
@@ -974,10 +970,9 @@ return function(env)
 		})
 		counts.Size = UDim2.new(1, 0, 0, 0)
 		local function describeCounts()
-			counts.Text = string.format("%s in the request history\n%s in the log\n%s registered for cleanup",
-				util.pluralise(#http.history, "entry"),
-				util.pluralise(#log.entries, "line"),
-				util.pluralise(env.require("runtime/dispose").count(), "handle"))
+			counts.Text = env.t("%{entries} in the request history\n%{lines} in the log\n%{handles} registered for cleanup", {
+				entries = #http.history, lines = #log.entries,
+				handles = env.require("runtime/dispose").count() })
 		end
 		describeCounts()
 		R.actions(logs, {
@@ -1049,8 +1044,7 @@ return function(env)
 		})
 
 		local identity = build.section("Client identity",
-			"Requests are sent as the Claude Code CLI. Gateways that gate on it accept them; "
-			.. "others ignore the extra headers.")
+			"Requests are sent as the Claude Code CLI. Gateways that gate on it accept them; others ignore the extra headers.")
 		R.toggle(identity, {
 			label = "Send the Claude Code identity",
 			hint = "Applies to every inference request.",
@@ -1090,8 +1084,7 @@ return function(env)
 		identityText.Destroying:Connect(function() pcall(unsubscribe) end)
 		if not caps.uaSupported then
 			R.paragraph(identity,
-				"This host has no executor HTTP function, so Roblox sends its own User-Agent and "
-				.. "drops ours. Everything else still works.", { color = theme.color.warn })
+				"This host has no executor HTTP function, so Roblox sends its own User-Agent and drops ours. Everything else still works.", { color = theme.color.warn })
 		end
 
 		local danger = build.section("Reset",
@@ -1228,8 +1221,7 @@ return function(env)
 			"Maximum bytes kept from one tool result. A tool's own page limit can be smaller. Roughly four bytes per token for English text; code and Unicode vary.",
 			"agent.resultCap", RESULT_STOPS)
 		R.choice(agent, "Effort",
-			"Low is the faster default; raise it for difficult tasks. Existing saved choices are kept. "
-			.. "Sent as the provider's effort level where supported; raw provider parameters can override it. Provider default omits the effort field and may still think extensively. The Thinking row shows visible text, not a 5,999-token limit.",
+			"Low is the faster default; raise it for difficult tasks. Existing saved choices are kept. Sent as the provider's effort level where supported; raw provider parameters can override it. Provider default omits the effort field and may still think extensively. The Thinking row shows visible text, not a 5,999-token limit.",
 			"agent.effort",
 			{ "low", "medium", "high", "xhigh", "max", "off" },
 			{ "Low", "Medium", "High", "Very high", "Max", "Provider default" },
@@ -1262,9 +1254,7 @@ return function(env)
 		R.field(agent, {
 			name = "ReplyLanguage",
 			label = "Reply language",
-			hint = "Added to the system prompt as one line: answer in this language, leaving code "
-				.. "and identifiers alone. Empty means whatever the conversation is already in, "
-				.. "which is what a model does by default.",
+			hint = "Added to the system prompt as one line: answer in this language, leaving code and identifiers alone. Empty means whatever the conversation is already in, which is what a model does by default.",
 			path = "agent.replyLanguage",
 			placeholder = "Japanese",
 		})
@@ -1273,17 +1263,13 @@ return function(env)
 		-- the built-in half is fixed on purpose, and the copy action below is how it is
 		-- inspected -- read-only, on the record, diffable between versions.
 		local custom = build.section("Custom instructions",
-			"Added to the system prompt every turn, after the built-in rules, so they win "
-			.. "when the two disagree. The rest of the prompt is not editable: it is this "
-			.. "client's own behaviour, and what is yours is kept separate from it so you "
-			.. "can always tell which is which.")
+			"Added to the system prompt every turn, after the built-in rules, so they win when the two disagree. The rest of the prompt is not editable: it is this client's own behaviour, and what is yours is kept separate from it so you can always tell which is which.")
 		R.textarea(custom, {
 			name = "CustomInstructions",
 			path = "agent.customInstructions",
 			height = theme.size.formTextarea,
 			placeholder = "e.g. Reply short. I build obby games. My alt account is DaveAlt99 -- ignore it when counting players.",
-			hint = "Written when the box loses focus. Applies from the next turn, including "
-				.. "subagents, which inherit it with the rest of the brief.",
+			hint = "Written when the box loses focus. Applies from the next turn, including subagents, which inherit it with the rest of the brief.",
 		})
 		R.actions(custom, { {
 			name = "CopySystemPrompt",
@@ -1396,9 +1382,7 @@ return function(env)
 		-- written by the agent, or installed from GitHub. The toggle is the one
 		-- bit of state kept, and it is stored per filename.
 		local skillsCard = build.section("Playbooks",
-			"Agents read enabled skills when relevant or explicitly requested, and reuse "
-			.. "unchanged bodies still in context. Drop a .md playbook into skills/, or ask "
-			.. "the agent to install one from GitHub. Turn off a skill to exclude it.")
+			"Agents read enabled skills when relevant or explicitly requested, and reuse unchanged bodies still in context. Drop a .md playbook into skills/, or ask the agent to install one from GitHub. Turn off a skill to exclude it.")
 		local skillsEngine = env.require("runtime/skills")
 
 		local skillsList = P.column(skillsCard, {
@@ -1456,8 +1440,7 @@ return function(env)
 		skillsList.Destroying:Connect(function() pcall(unsubscribeSkills) end)
 
 		local memory = build.section("Memory",
-			"Facts the agent has chosen to keep between sessions. It writes these itself, with "
-			.. "the memory tool; this is where they can be read and removed.")
+			"Facts the agent has chosen to keep between sessions. It writes these itself, with the memory tool; this is where they can be read and removed.")
 		R.toggle(memory, {
 			label = "Enabled",
 			hint = "When off, nothing new is stored and nothing is injected.",
@@ -1519,8 +1502,7 @@ return function(env)
 		} })
 
 		local host = build.section("Host instructions",
-			"A script that embeds this client can add its own instructions and hooks. This is "
-			.. "what the current host provided.")
+			"A script that embeds this client can add its own instructions and hooks. This is what the current host provided.")
 		local hostPrompt = env.context and env.context.prompt
 		local hooks = env.require("agent/hooks")
 		local hookCounts = {}
@@ -1574,8 +1556,7 @@ return function(env)
 		} })
 
 		local bridgeCard = build.section("Web bridge",
-			"The one connector that is not a model: a browser on this machine sharing the "
-			.. "conversation.")
+			"The one connector that is not a model: a browser on this machine sharing the conversation.")
 		local status = bridgeModule.status()
 		R.facts(bridgeCard, {
 			{ key = "State", value = status.running and (status.online and "connected" or "polling") or "off",
@@ -1607,8 +1588,7 @@ return function(env)
 	local function paneInfiniteYield(container)
 		local build = builder(container)
 		local card = build.section("Infinite Yield",
-			"Run Infinite Yield inside this client and give the agent every one of its "
-			.. "commands through the iy tools.")
+			"Run Infinite Yield inside this client and give the agent every one of its commands through the iy tools.")
 
 		local iy = env.require("runtime/iy")
 		local facts = P.column(card, {
@@ -1649,17 +1629,12 @@ return function(env)
 		})
 
 		R.paragraph(card,
-			"Hidden loads Infinite Yield with its interface parked, so the agent has "
-			.. "every command and you keep the screen. With GUI loads it untouched. "
-			.. "Either way the agent reaches everything through the same dispatcher, and "
-			.. "iy_cmd calls still pass the permission prompt. If Infinite Yield is "
-			.. "already running when a command is sent, that copy is used as-is.",
+			"Hidden loads Infinite Yield with its interface parked, so the agent has every command and you keep the screen. With GUI loads it untouched. Either way the agent reaches everything through the same dispatcher, and iy_cmd calls still pass the permission prompt. If Infinite Yield is already running when a command is sent, that copy is used as-is.",
 			{ layoutOrder = 4 })
 
 		if not caps.exec then
 			R.paragraph(card,
-				"This host cannot compile code, so an internal load is unavailable here. "
-				.. "An Infinite Yield you start yourself still works.",
+				"This host cannot compile code, so an internal load is unavailable here. An Infinite Yield you start yourself still works.",
 				{ color = theme.color.warn })
 		end
 	end
@@ -1669,9 +1644,7 @@ return function(env)
 	local function panePlugins(container)
 		local build = builder(container)
 		local card = build.section("Tool groups",
-			"A family of tools can be withheld from the model entirely. That is a different "
-			.. "thing from denying a call: a tool that is not offered is one the model will not "
-			.. "spend a turn discovering it cannot use.")
+			"A family of tools can be withheld from the model entirely. That is a different thing from denying a call: a tool that is not offered is one the model will not spend a turn discovering it cannot use.")
 
 		for _, group in ipairs(registry.groups()) do
 			local row = P.row(card, {

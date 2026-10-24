@@ -125,15 +125,12 @@ return function(env)
 	-- A small lexical pass for code readability. Source is always escaped, including
 	-- unknown languages and large listings. Copying still uses the original string.
 	local KEYWORDS = {}
-	for word in ("and break do else elseif end false for function if in local nil not or repeat return then true until while "
-		.. "export type typeof continue const let var async await class extends import from new null undefined "
-		.. "try catch finally throw switch case default def elif except pass with as is None True False"):gmatch("%S+") do
+	for word in ("and break do else elseif end false for function if in local nil not or repeat return then true until while export type typeof continue const let var async await class extends import from new null undefined try catch finally throw switch case default def elif except pass with as is None True False"):gmatch("%S+") do
 		KEYWORDS[word] = true
 	end
 
 	local LUA_KEYWORDS = {}
-	for word in ("and break do else elseif end false for function if in local nil not or repeat return then true until while "
-		.. "export type typeof continue"):gmatch("%S+") do
+	for word in ("and break do else elseif end false for function if in local nil not or repeat return then true until while export type typeof continue"):gmatch("%S+") do
 		LUA_KEYWORDS[word] = true
 	end
 

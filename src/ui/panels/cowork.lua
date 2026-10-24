@@ -36,10 +36,8 @@ return function(env)
 		P.sectionHeader(scroll.instance, {
 			title = "Cowork",
 			description = mobile
-				and ("Start UAI Relay on this phone and the script pairs with it automatically, so long replies survive the "
-					.. "executor's request limit. Messages, tools, and permissions stay connected to this Roblox session.")
-				or ("Open UAI Bridge on this computer and click Start Cowork. The desktop app connects automatically. "
-					.. "Messages, tools, and permissions stay connected to this Roblox session."),
+				and ("Start UAI Relay on this phone and the script pairs with it automatically, so long replies survive the executor's request limit. Messages, tools, and permissions stay connected to this Roblox session.")
+				or ("Open UAI Bridge on this computer and click Start Cowork. The desktop app connects automatically. Messages, tools, and permissions stay connected to this Roblox session."),
 			layoutOrder = 1,
 		})
 
@@ -67,8 +65,7 @@ return function(env)
 		local relayCard = P.card(container, { name = "RelayCompanion", layoutOrder = nextOrder(), gap = theme.space.sm })
 		P.text(relayCard, { text = "Mobile relay (companion app)", role = "label", layoutOrder = 1 })
 		P.text(relayCard, {
-			text = "Start UAI Relay on this phone. The script hands long provider requests to it, so the executor's request limit "
-				.. "cannot cut them off. Pairing is automatic; no token copying.",
+			text = "Start UAI Relay on this phone. The script hands long provider requests to it, so the executor's request limit cannot cut them off. Pairing is automatic; no token copying.",
 			role = "caption", wrap = true, auto = "Y", layoutOrder = 2 })
 		local relayRow = P.row(relayCard, { size = UDim2.new(1, 0, 0, 0), auto = "Y", gap = theme.space.sm, layoutOrder = 3 })
 		local relayDot = P.statusDot(relayRow, { diameter = theme.size.dot, color = theme.color.textTertiary, layoutOrder = 1 })

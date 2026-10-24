@@ -17,6 +17,9 @@ return function(env)
 		version = 1,
 		ui = {
 			density = "comfortable",
+			-- Interface language. "zh" ships a full Simplified Chinese pack, "en" is
+			-- the authored source and needs no table; anything else falls back to zh.
+			locale = "zh",
 			accent = "claude",
 			layout = "auto",
 			panel = "chat",

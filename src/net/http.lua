@@ -558,8 +558,7 @@ return function(env)
 				-- from inside the executor ("Argument 1 missing or nil") and say nothing
 				-- a reader can act on, where the wait and its cause do.
 				if why and not res then
-					return nil, "deadline: " .. why .. " -- the transport gave up while the request was still " ..
-						"running. A smaller context budget or reply ceiling fits inside it."
+					return nil, "deadline: " .. why .. " -- the transport gave up while the request was still running. A smaller context budget or reply ceiling fits inside it."
 				end
 				return res, err
 			end

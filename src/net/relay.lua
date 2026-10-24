@@ -12,8 +12,7 @@ return function(env)
 
 	local function noRelay()
 		return { status = 599, body = util.encode({ error = { message =
-			"This request needs a local relay. Start the Project UAI Companion app on this device, "
-			.. "or enable the web bridge in Cowork settings." } }), headers = {}, via = "web", terminal = true }, nil
+			"This request needs a local relay. Start the Project UAI Companion app on this device, or enable the web bridge in Cowork settings." } }), headers = {}, via = "web", terminal = true }, nil
 	end
 
 	local function unusableResponse(problem)

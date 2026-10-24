@@ -220,9 +220,10 @@ return function(env)
 		M.hint.TextColor3 = theme.color.textTertiary
 		M.hint.Visible = true
 		M.hint.Text = record
-			and (responsive.isMobile() and string.format("%s  ·  Tap Send to send", tostring(record.label))
-				or string.format("%s  ·  Enter to send  ·  Esc to close", tostring(record.label)))
-			or "No provider configured yet -- open the window and add one."
+			and (responsive.isMobile()
+				and env.t("%{provider}  ·  Tap Send to send", { provider = tostring(record.label) })
+				or env.t("%{provider}  ·  Enter to send  ·  Esc to close", { provider = tostring(record.label) }))
+			or env.t("No provider configured yet -- open the window and add one.")
 	end
 
 	function M.show()

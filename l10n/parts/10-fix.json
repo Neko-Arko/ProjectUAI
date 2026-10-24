@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "entries": {
+    "You may now support Project Ptolemy by donating via Robux or Ko-fi. This is completely optional -- any donation would be appreciated.": "你现在可以通过 Robux 或 Ko-fi 支持 Project Ptolemy。完全自愿——任何捐赠都非常感谢。",
+    "Robux donations go to the Project Ptolemy donation place; supporters are thanked in our Discord. Ko-fi copies its link, which you can open in a browser.": "Robux 捐赠会进入 Project Ptolemy 捐赠场景；支持者会在我们的 Discord 中被致谢。Ko-fi 会复制链接，你可以用浏览器打开。",
+    "Roblox will move you to the Project Ptolemy donation place. Your conversations and settings are saved before you leave.": "Roblox 会把你传送到 Project Ptolemy 捐赠场景。离开前会保存你的对话和设置。",
+    "An agent running inside a Roblox client, identifying itself on the wire as the Claude Code CLI.": "一个运行在 Roblox 客户端内的代理，在网络请求中自称 Claude Code CLI。",
+    "Every release this client has shipped, newest first.": "此客户端发布过的每个版本，最新在前。",
+    "Follow-ups run in this order after the current response or tool batch. Your draft stays in the composer, and the active turn is never interrupted.": "追问会按此顺序在当前回复或工具批次之后执行。草稿仍留在输入框，当前回合不会被打断。",
+    "All ": "全部 ",
+    "Undoable ": "可撤销 ",
+    "Undone ": "已撤销 ",
+    "Versions ": "版本 ",
+    "Proposals ": "提案 ",
+    "This version matches the current source.": "此版本与当前源码一致。",
+    "An open-source AI agent for Roblox. Explore your game, build scripts, and work with your own models and tools.": "面向 Roblox 的开源 AI 代理。探索你的游戏、编写脚本，并使用你自己的模型与工具。",
+    "Enjoying ProjectUAI?": "喜欢 Project UAI 吗？",
+    "Star us on GitHub": "在 GitHub 上给个 Star",
+    "Copy link": "复制链接",
+    "Retry workspace autosave": "重试工作区自动保存",
+    "Delete script…": "删除脚本…",
+    "Workspace storage": "工作区存储",
+    "This removes the library draft and its history. Workspace files stay on disk.": "这会移除库中的草稿及其历史，工作区文件仍保留在磁盘上。",
+    "Line number": "行号",
+    "Ln ": "行 "
+  }
+}

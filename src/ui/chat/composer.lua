@@ -346,7 +346,7 @@ return function(env)
 				}
 			end
 			if #options > 0 then options[#options + 1] = { divider = true } end
-			options[#options + 1] = { label = "A path in " .. fsx.root, value = "path", icon = "folder", tone = "info" }
+			options[#options + 1] = { label = env.t("A path in %{root}", { root = fsx.root }), value = "path", icon = "folder", tone = "info" }
 
 			overlay.menu({
 				target = target,
@@ -379,7 +379,7 @@ return function(env)
 					elseif value == "path" then
 						overlay.prompt({
 							title = "Attach a file",
-							description = "A file inside " .. fsx.root .. "/files or pastes/. Long files are attached by reference.",
+							description = env.t("A file inside %{root}/files or pastes/. Long files are attached by reference.", { root = fsx.root }),
 							placeholder = "notes/plan.txt",
 							confirmText = "Attach",
 							onConfirm = function(path)
@@ -556,7 +556,7 @@ return function(env)
 					renderAttachments()
 					saveDraft()
 					syncSend()
-					overlay.toast("Attached " .. entry.name .. " · " .. tostring(entry.bytes) .. " bytes", "good", 3)
+					overlay.toast(env.t("Attached %{name} · %{bytes} bytes", { name = entry.name, bytes = tostring(entry.bytes) }), "good", 3)
 				end,
 				onSubmit = function()
 					if not mobile and not composer.expanded then submit() end
@@ -674,7 +674,7 @@ return function(env)
 					local win = math.max(convo.ctx.limitFor(rec and rec.model, rec), 1)
 					local pct = math.floor(util.clamp(convo.ctx.pressure(rec) / win, 0, 1) * 100 + 0.5)
 					options[#options + 1] = { label = "Compact now",
-						detail = string.format("Context about %d%% full -- summarise older turns", pct),
+						detail = env.t("Context about %{percent}% full -- summarise older turns", { percent = pct }),
 						value = "compact", icon = "sliders" }
 				end
 				options[#options + 1] = { divider = true }
@@ -815,7 +815,7 @@ return function(env)
 		function composer.syncContext()
 			if not alive() then return end
 			local shortModes = { ask = "Ask first", auto = "Auto", full = "Allow everything" }
-			permissionLabel.Text = shortModes[permissions.mode()] or permissions.MODE_LABELS[permissions.mode()] or permissions.mode()
+			permissionLabel.Text = env.t(shortModes[permissions.mode()] or permissions.MODE_LABELS[permissions.mode()] or permissions.mode())
 			permissionLabel.TextColor3 = permissions.mode() == "full"
 				and theme.color.warn or theme.color.textSecondary
 

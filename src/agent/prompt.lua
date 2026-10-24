@@ -228,8 +228,7 @@ Background chat:
 			end
 			if #declarations > 0 then
 				parts[#parts + 1] = "OpenCode compatibility: " .. table.concat(declarations, ", ")
-					.. " are required provider declarations with no local implementation. Do not call them. "
-					.. "Use the other offered tools and their declared arguments for actual work."
+					.. " are required provider declarations with no local implementation. Do not call them. Use the other offered tools and their declared arguments for actual work."
 			end
 		end
 		include(offered(names, "skills_read"), SKILLS)
@@ -320,9 +319,7 @@ Background chat:
 	function M.subagent(task, opts)
 		opts = opts or {}
 		local parts, names = rules(opts, true)
-		parts[#parts + 1] = "Delegated worker: report to the parent agent. You cannot ask the user questions. "
-			.. "Work within the assigned scope; preserve other workers' changes. Report exact targets, findings, changes, checks, owned resources and uncertain effects. "
-			.. "Follow-ups continue this work using retained evidence. The latest parent request defines the current task."
+		parts[#parts + 1] = "Delegated worker: report to the parent agent. You cannot ask the user questions. Work within the assigned scope; preserve other workers' changes. Report exact targets, findings, changes, checks, owned resources and uncertain effects. Follow-ups continue this work using retained evidence. The latest parent request defines the current task."
 		parts[#parts + 1] = opts.unlimited and "No turn/time budget; tool deadlines and Stop still apply."
 			or "Work within the assigned turn/time budget; report unfinished work accurately."
 		appendContext(parts, opts, names)

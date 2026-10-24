@@ -10,6 +10,16 @@ return function(env)
 	local util = env.require("runtime/util")
 	local theme = env.require("ui/theme")
 	local responsive = env.require("ui/responsive")
+	-- Every label, button caption and field placeholder in the client is built here,
+	-- so this is the one place a string becomes visible. Translating at the funnel
+	-- keeps the dictionary out of a thousand call sites; props.raw opts a value out
+	-- when the caller is showing data (a file name, a model id) rather than copy.
+	local i18n = env.require("runtime/i18n")
+
+	local function copy(text, props)
+		if props and props.raw then return text end
+		return i18n.t(text)
+	end
 
 	local P = {}
 
@@ -234,7 +244,7 @@ return function(env)
 		props = props or {}
 		local role = theme.textRole(props.role or "body")
 		local size = props.textSize or role.size
-		local value = tostring(text or "")
+		local value = tostring(copy(text) or "")
 		local width = props.width and math.max(1, props.width) or math.huge
 		local ok, bounds = pcall(function()
 			return env.services.TextService:GetTextSize(value, size, props.font or role.font,
@@ -257,7 +267,7 @@ return function(env)
 		local role = theme.textRole(props.role or "body")
 		local label = Instance.new("TextLabel", parent)
 		base(label, props)
-		label.Text = tostring(props.text or "")
+		label.Text = tostring(copy(props.text, props) or "")
 		label.TextColor3 = props.color or theme.color.text
 		applyFont(label, role, props)
 		label.TextSize = props.textSize or role.size
@@ -476,6 +486,7 @@ return function(env)
 			-- Shrink still lets bounded buttons truncate when the pair cannot fit.
 			label = P.text(content, {
 				text = props.text,
+				raw = props.raw,
 				role = props.role or (props.size == "sm" and "small" or variant.font),
 				color = variant.text,
 				align = props.align or "Center",
@@ -805,7 +816,7 @@ return function(env)
 		box.BorderSizePixel = 0
 		box.Size = UDim2.new(1, 0, 1, 0)
 		box.Text = tostring(props.text or "")
-		box.PlaceholderText = tostring(props.placeholder or "")
+		box.PlaceholderText = tostring(copy(props.placeholder, props) or "")
 		box.PlaceholderColor3 = theme.color.textTertiary
 		box.TextColor3 = theme.color.text
 		box.Font = role.font

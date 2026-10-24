@@ -23,8 +23,7 @@ return function(env)
 	end
 	local function backgroundReceipt(record)
 		reportReads[record] = nil
-		return { text = string.format("Subagent %s started in the background (%s). Continue your own independent work. "
-			.. "Use agent_status with id=\"%s\" to check progress and collect its report before your final answer.",
+		return { text = string.format("Subagent %s started in the background (%s). Continue your own independent work. Use agent_status with id=\"%s\" to check progress and collect its report before your final answer.",
 			record.id, record.status, record.id),
 			data = { id = record.id, status = record.status, background = true, run = record.runs or 0 } }
 	end

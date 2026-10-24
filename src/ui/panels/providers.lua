@@ -833,8 +833,7 @@ return function(env)
 			showProblems()
 		end
 
-		row("Preset", "Change the vendor here without losing anything typed. The gallery fills "
-			.. "in the URL, the protocol, the auth style and the key hint.", function(column)
+		row("Preset", "Change the vendor here without losing anything typed. The gallery fills in the URL, the protocol, the auth style and the key hint.", function(column)
 			presetButton = P.button(column, {
 				name = "Preset",
 				text = (catalog.get(editing.preset) or {}).label or "Custom endpoint",
@@ -943,8 +942,7 @@ return function(env)
 		--
 		-- A masked field would need a new primitive; a prompt needs none, and it has the
 		-- better property that the secret is on screen only while it is being typed.
-		row("API key", "Saved on this device. Sent to this provider and any configured gateway or relay; "
-			.. "key values are masked in the request log.", function(column)
+		row("API key", "Saved on this device. Sent to this provider and any configured gateway or relay; key values are masked in the request log.", function(column)
 			keyColumn = column
 			local line = P.row(column, { size = UDim2.new(1, 0, 0, 0), auto = "Y", gap = theme.space.sm })
 			local shown, tone = maskedKey(editing)
@@ -968,8 +966,7 @@ return function(env)
 					overlay.prompt({
 						title = "API key",
 						description = "Paste the key for " .. tostring(editing.label)
-							.. ". It replaces whatever is stored now. Paste several keys, "
-							.. "one per line, to rotate automatically on rate limits.",
+							.. ". It replaces whatever is stored now. Paste several keys, one per line, to rotate automatically on rate limits.",
 						placeholder = (catalog.get(editing.preset) or {}).keyHint or "sk-...",
 						confirmText = "Save key",
 						multiline = true,
@@ -1059,8 +1056,7 @@ return function(env)
 			return out
 		end
 
-		local DEFAULT_MODEL_NOTE = "The endpoint is the only authority on this, so nothing here "
-			.. "guesses one. Fetch the list, or type the id exactly as the provider expects it."
+		local DEFAULT_MODEL_NOTE = "The endpoint is the only authority on this, so nothing here guesses one. Fetch the list, or type the id exactly as the provider expects it."
 
 		local function setModelNote(text, bad)
 			if not modelNote then return end
@@ -1119,8 +1115,7 @@ return function(env)
 		local function typeModel()
 			overlay.prompt({
 				title = "Model id",
-				description = "Type it exactly as the provider expects it. It is saved with this "
-					.. "provider and selected.",
+				description = "Type it exactly as the provider expects it. It is saved with this provider and selected.",
 				placeholder = "model id",
 				confirmText = "Use it",
 				onConfirm = function(text)
@@ -1703,8 +1698,7 @@ return function(env)
 					elseif value == "add" then
 						overlay.prompt({
 							title = "Add a model to " .. record.label,
-							description = "Type the id exactly as the provider expects it. "
-								.. "It is saved to this provider and selected.",
+							description = "Type the id exactly as the provider expects it. It is saved to this provider and selected.",
 							placeholder = "model id",
 							confirmText = "Add",
 							onConfirm = function(text)
@@ -1807,8 +1801,7 @@ return function(env)
 			local status = R.section(detail.instance, {
 				name = "Status",
 				title = "Status",
-				description = "What this client will actually send, and how the endpoint has "
-					.. "been answering.",
+				description = "What this client will actually send, and how the endpoint has been answering.",
 				layoutOrder = order(),
 			})
 			statusBox = R.facts(status, factsFor(record), { name = "StatusFacts", layoutOrder = 1 })
@@ -1960,16 +1953,13 @@ return function(env)
 			local behaviour = R.section(detail.instance, {
 				name = "Behaviour",
 				title = "Behaviour",
-				description = "Per-provider switches. Each one can only narrow what the matching "
-					.. "global setting allows: turning one off always takes effect, turning it on "
-					.. "needs the global on as well.",
+				description = "Per-provider switches. Each one can only narrow what the matching global setting allows: turning one off always takes effect, turning it on needs the global on as well.",
 				layoutOrder = order(),
 			})
 			R.toggle(behaviour, {
 				name = "Enabled",
 				label = "Enabled",
-				hint = "A disabled provider is skipped by the fallback chain. Disabling the active "
-					.. "one leaves it flagged active while requests go elsewhere.",
+				hint = "A disabled provider is skipped by the fallback chain. Disabling the active one leaves it flagged active while requests go elsewhere.",
 				value = record.enabled ~= false,
 				layoutOrder = 1,
 				onChange = function(value)
@@ -1980,8 +1970,7 @@ return function(env)
 			R.toggle(behaviour, {
 				name = "Stream",
 				label = "Ask for a stream",
-				hint = "Streamed replies carry reasoning text and token counts. Turning this off "
-					.. "always takes effect; turning it on only does while Settings has streaming on.",
+				hint = "Streamed replies carry reasoning text and token counts. Turning this off always takes effect; turning it on only does while Settings has streaming on.",
 				value = record.stream ~= false,
 				layoutOrder = 2,
 				onChange = function(value)
@@ -1997,9 +1986,7 @@ return function(env)
 				R.toggle(behaviour, {
 					name = "ClaudeUa",
 					label = "Send the Claude Code identity",
-					hint = "The claude-cli User-Agent and its client headers. Turning this off suppresses "
-						.. "the whole set for this endpoint whatever the global switch says, which is the "
-						.. "one lever this client has when a CDN in front of an API refuses the request.",
+					hint = "The claude-cli User-Agent and its client headers. Turning this off suppresses the whole set for this endpoint whatever the global switch says, which is the one lever this client has when a CDN in front of an API refuses the request.",
 					value = record.claudeUa ~= false,
 					layoutOrder = 3,
 					onChange = function(value)
@@ -2013,15 +2000,13 @@ return function(env)
 			local advanced = R.section(detail.instance, {
 				name = "Advanced",
 				title = "Transport",
-				description = "Optional gateway streaming and extra headers, body fields and query parameters. "
-					.. "HTTP works without a socket; the provider and host still set request limits.",
+				description = "Optional gateway streaming and extra headers, body fields and query parameters. HTTP works without a socket; the provider and host still set request limits.",
 				layoutOrder = order(),
 			})
 			R.field(advanced, {
 				name = "SocketUrl",
 				label = "Gateway socket URL",
-				hint = "Optional, for Chat completions only. Requires a gateway implementing UAI's envelope protocol. "
-					.. "Ordinary local servers and OpenAI Responses/Realtime sockets use different protocols. The gateway receives your provider headers.",
+				hint = "Optional, for Chat completions only. Requires a gateway implementing UAI's envelope protocol. Ordinary local servers and OpenAI Responses/Realtime sockets use different protocols. The gateway receives your provider headers.",
 				value = record.wsUrl or "",
 				placeholder = "wss://your-uai-gateway.example/stream",
 				layoutOrder = 1,
@@ -2062,9 +2047,7 @@ return function(env)
 					name = "Order",
 					title = "Fallback order",
 					description = string.format(
-						"Position %d of %d. When the active provider fails, the chain walks this list "
-						.. "in order. registry.reorder has existed since the beginning with no control "
-						.. "attached to it.", position, #list),
+						"Position %d of %d. When the active provider fails, the chain walks this list in order. registry.reorder has existed since the beginning with no control attached to it.", position, #list),
 					layoutOrder = order(),
 				})
 				local moves = {}
@@ -2091,8 +2074,7 @@ return function(env)
 			local danger = R.section(detail.instance, {
 				name = "Remove",
 				title = "Remove",
-				description = "The endpoint and its key are deleted from this device. This cannot "
-					.. "be undone.",
+				description = "The endpoint and its key are deleted from this device. This cannot be undone.",
 				layoutOrder = order(),
 			})
 			R.actions(danger, {

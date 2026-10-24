@@ -361,8 +361,8 @@ return function(env)
 			end
 			if foldRow then
 				foldRow.setText(expanded
-					and "Show less"
-					or string.format("Show all %s", util.pluralise(#lines, "line")))
+					and env.t("Show less")
+					or env.t("Show all %{count} lines", { count = #lines }))
 			end
 		end
 
@@ -372,7 +372,7 @@ return function(env)
 				-- Given its text up front, because P.button only builds a label when it
 				-- has one to put in it -- an empty string leaves setText with nothing to
 				-- write to.
-				text = string.format("Show all %s", util.pluralise(#lines, "line")),
+				text = env.t("Show all %{count} lines", { count = #lines }),
 				variant = "code",
 				size = "sm",
 				fill = true,
@@ -709,7 +709,7 @@ return function(env)
 		if #tostring(text) > 1200 then
 			P.button(body, {
 				name = "ExpandMessage",
-				text = state.expanded and "Show less" or "Show full message",
+				text = env.t(state.expanded and "Show less" or "Show full message"),
 				variant = "ghost",
 				size = "sm",
 				align = "Left",
@@ -719,7 +719,7 @@ return function(env)
 				onClick = function(button)
 					state.expanded = not state.expanded
 					label.Text = state.expanded and tostring(text) or util.truncate(tostring(text), 1200)
-					button.setText(state.expanded and "Show less" or "Show full message")
+					button.setText(env.t(state.expanded and "Show less" or "Show full message"))
 				end,
 			})
 		end
@@ -830,9 +830,9 @@ return function(env)
 			-- Older transcripts predate explicit truncation metadata.
 			local excerpt = truncated or (mobileThought() and #text > MOBILE_THOUGHT_BYTES)
 				or text:find("%.%.%. %[%d+ characters omitted") ~= nil
-			if excerpt then return "Excerpt" end
+			if excerpt then return env.t("Excerpt") end
 			local tokens = usage.estimateText(text)
-			return "~" .. util.formatNumber(tokens) .. (tokens == 1 and " token shown" or " tokens shown")
+			return env.t("~%{count} tokens shown", { count = util.formatNumber(tokens) })
 		end
 		local holder = wrapper(parent, { name = "Reasoning", layoutOrder = order })
 		local card = P.column(holder, {

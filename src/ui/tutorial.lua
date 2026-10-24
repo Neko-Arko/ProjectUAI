@@ -27,8 +27,7 @@ return function(env)
 		{
 			icon = "brand",
 			title = "Welcome to Project UAI",
-			body = "Ask questions, explore this place, or build a script. UAI connects "
-				.. "a model to tools inside Roblox.",
+			body = "Ask questions, explore this place, or build a script. UAI connects a model to tools inside Roblox.",
 			items = {
 				"Project UAI Free is ready to use. Shared capacity and speed can vary.",
 				"Try: Explain what is in this place before making any changes.",
@@ -49,8 +48,7 @@ return function(env)
 		{
 			icon = "sliders",
 			title = "Connect a model",
-			body = "Keep the included free access, or connect your own provider for "
-				.. "a different model or more capacity.",
+			body = "Keep the included free access, or connect your own provider for a different model or more capacity.",
 			items = {
 				"In Providers, choose a preset or enter the base URL and authentication details.",
 				"Fetch the model list from that provider, or enter its exact model ID, then Save.",
@@ -61,8 +59,7 @@ return function(env)
 		{
 			icon = "check",
 			title = "Decide what runs",
-			body = "New installs start in Allow everything. Use the chip under the "
-				.. "composer to choose how tools get permission.",
+			body = "New installs start in Allow everything. Use the chip under the composer to choose how tools get permission.",
 			items = {
 				"Ask first lets you review changes and code before they run.",
 				"Read only limits tools to reads, unless you have saved an explicit tool rule.",
@@ -81,8 +78,7 @@ return function(env)
 		{
 			icon = "spark",
 			title = "Support the project",
-			body = "UAI is free to use. Optional donations help keep the project and "
-				.. "shared free access running. Thank you for using it.",
+			body = "UAI is free to use. Optional donations help keep the project and shared free access running. Thank you for using it.",
 			items = {
 				"Ko-fi copies a browser link; Robux goes to the donation place.",
 			},

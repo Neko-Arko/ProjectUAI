@@ -84,8 +84,7 @@ return function(env)
 					for name in pairs(docs.sections) do names[#names + 1] = name end
 					table.sort(names)
 					return "Project UAI UI LIB v" .. docs.version .. "\nLoader: " .. docs.url
-						.. "\nGuide: " .. docs.repository .. "/blob/main/docs/UI_LIBRARY.md"
-						.. "\nSections: " .. table.concat(names, ", ")
+						.. "\nGuide: " .. docs.repository .. "/blob/main/docs/UI_LIBRARY.md\nSections: " .. table.concat(names, ", ")
 						.. "\nRead quickstart, controls and lifecycle before authoring. Continue every paginated section to its end."
 				end
 				local body = docs.sections[section]

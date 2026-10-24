@@ -115,8 +115,7 @@ return function(env)
 			name = "file_write",
 			risk = "write",
 			needs = { "fs" },
-			description = "Create a workspace file or replace most of its content (up to 2 MiB per call). Parent folders are created. "
-				.. "For existing files, prefer file_edit or file_edit_many for targeted changes. Build large new scripts in small sections with sequential file_write then file_append calls.",
+			description = "Create a workspace file or replace most of its content (up to 2 MiB per call). Parent folders are created. For existing files, prefer file_edit or file_edit_many for targeted changes. Build large new scripts in small sections with sequential file_write then file_append calls.",
 			parameters = {
 				type = "object",
 				properties = {

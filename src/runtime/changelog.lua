@@ -942,25 +942,17 @@ return function(env)
 			version = "1.1.0",
 			date = "September 2026",
 			title = "Infinite Yield, key pools and skills",
-			highlights = "Infinite Yield as an internal command engine with a hidden mode, "
-				.. "multi-key rotation for providers, the community plugin store, and "
-				.. "markdown skills the agent reads on demand.",
+			highlights = "Infinite Yield as an internal command engine with a hidden mode, multi-key rotation for providers, the community plugin store, and markdown skills the agent reads on demand.",
 			sections = {
 				{
 					category = "added",
 					items = {
-						"Infinite Yield engine: the agent runs any IY command (fly, noclip, esp, tp, "
-						.. "600+ more) through iy_cmd, with the command list searchable via iy_cmds.",
-						"Hidden mode: IY loads with its interface parked -- every command and loop "
-						.. "alive, nothing on screen. With GUI mode loads it untouched.",
+						"Infinite Yield engine: the agent runs any IY command (fly, noclip, esp, tp, 600+ more) through iy_cmd, with the command list searchable via iy_cmds.",
+						"Hidden mode: IY loads with its interface parked -- every command and loop alive, nothing on screen. With GUI mode loads it untouched.",
 						"CaptureService guard: screenshots no longer pop a hidden IY back on screen.",
-						"Multi-key pools: paste several API keys, one per line, and a rate-limited "
-						.. "key is benched and the next one tried with no delay -- 429s stop costing turns.",
-						"Community plugin store: the agent searches iyplugins.pages.dev (560+ "
-						.. "plugins), installs and loads one on request -- 'install dexrecontinued'.",
-						"Markdown skills: .md playbooks under skills/ with Claude Code frontmatter. "
-						.. "The prompt carries names and descriptions only; the body is fetched by a "
-						.. "tool call when a task matches.",
+						"Multi-key pools: paste several API keys, one per line, and a rate-limited key is benched and the next one tried with no delay -- 429s stop costing turns.",
+						"Community plugin store: the agent searches iyplugins.pages.dev (560+ plugins), installs and loads one on request -- 'install dexrecontinued'.",
+						"Markdown skills: .md playbooks under skills/ with Claude Code frontmatter. The prompt carries names and descriptions only; the body is fetched by a tool call when a task matches.",
 						"Skills from GitHub: owner/repo or a URL installs a playbook into skills/.",
 						"Changelog: What's New, from the app menu and About.",
 					},
@@ -968,25 +960,19 @@ return function(env)
 				{
 					category = "improved",
 					items = {
-						"Lazy IY loading: nothing is fetched at boot; the first iy_cmd call brings "
-						.. "the engine up.",
-						"System prompt awareness: the model is told each turn whether IY is loaded "
-						.. "and how, and which skills exist.",
-						"Ambient detection: an IY the user started themselves is latched onto and "
-						.. "left alone -- its GUI, its settings.",
+						"Lazy IY loading: nothing is fetched at boot; the first iy_cmd call brings the engine up.",
+						"System prompt awareness: the model is told each turn whether IY is loaded and how, and which skills exist.",
+						"Ambient detection: an IY the user started themselves is latched onto and left alone -- its GUI, its settings.",
 						"The settings toggle for IY applies to a loaded engine immediately.",
-						"Key pool state is per-session, not persisted -- a stale index cannot "
-						.. "start a rotation from the wrong key.",
+						"Key pool state is per-session, not persisted -- a stale index cannot start a rotation from the wrong key.",
 					},
 				},
 				{
 					category = "fixed",
 					items = {
 						"Ambient fallbacks for prefix and PARENT on executors without setfenv.",
-						"File workspace split: agent files under files/, pastes under pastes/, "
-						.. "with a first-run migration that shows its progress.",
-						"Paste overflow: a long pasted message lands in a file and is referenced, "
-						.. "not dropped.",
+						"File workspace split: agent files under files/, pastes under pastes/, with a first-run migration that shows its progress.",
+						"Paste overflow: a long pasted message lands in a file and is referenced, not dropped.",
 					},
 				},
 			},
@@ -1000,20 +986,16 @@ return function(env)
 				{
 					category = "added",
 					items = {
-						"ask_user: the agent can ask the person a question and wait, with a "
-						.. "panel behind it that answers the running turn.",
-						"Custom instructions: standing instructions appended to the system prompt "
-						.. "after the built-in rules, so they win on conflict. Subagents inherit them.",
+						"ask_user: the agent can ask the person a question and wait, with a panel behind it that answers the running turn.",
+						"Custom instructions: standing instructions appended to the system prompt after the built-in rules, so they win on conflict. Subagents inherit them.",
 						"Copy system prompt: the assembled prompt, as the next request will carry it.",
 					},
 				},
 				{
 					category = "improved",
 					items = {
-						"Prompt hardening: quoting rules, anti-fabrication wording, and a style "
-						.. "contract that prizes short answers.",
-						"Ask sweeps: a question left unanswered is collected rather than parked "
-						.. "forever.",
+						"Prompt hardening: quoting rules, anti-fabrication wording, and a style contract that prizes short answers.",
+						"Ask sweeps: a question left unanswered is collected rather than parked forever.",
 					},
 				},
 				{
@@ -1033,20 +1015,15 @@ return function(env)
 				{
 					category = "added",
 					items = {
-						"Request timeout setting, defaulting to a day -- the one deadline nothing "
-						.. "else can rescue, high enough for a reasoning model that thinks before "
-						.. "its first byte.",
-						"Smaller-ask retry: a request that dies at the executor's 60s transport "
-						.. "wall is retried once with less thinking and half the reply ceiling, "
-						.. "so the model finishes inside the wall instead of at it.",
+						"Request timeout setting, defaulting to a day -- the one deadline nothing else can rescue, high enough for a reasoning model that thinks before its first byte.",
+						"Smaller-ask retry: a request that dies at the executor's 60s transport wall is retried once with less thinking and half the reply ceiling, so the model finishes inside the wall instead of at it.",
 					},
 				},
 				{
 					category = "improved",
 					items = {
 						"Adding an inference provider links out to where each vendor issues keys.",
-						"Notifications when minimized: a finished or failed turn toasts even with "
-						.. "the window closed, alongside the launcher badge.",
+						"Notifications when minimized: a finished or failed turn toasts even with the window closed, alongside the launcher badge.",
 						"OpenRouter attribution headers on the requests that go there.",
 					},
 				},
@@ -1077,8 +1054,7 @@ return function(env)
 					category = "improved",
 					items = {
 						"Bridge UI revamp and popup placement fixes; the login gate restored.",
-						"Bridge token regenerated on every server start, so a stale one in config "
-						.. "grants nothing.",
+						"Bridge token regenerated on every server start, so a stale one in config grants nothing.",
 					},
 				},
 			},
@@ -1115,10 +1091,8 @@ return function(env)
 				{
 					category = "added",
 					items = {
-						"Unlimited subagents: a delegated job can run with no step limit, "
-						.. "bounded still by Stop and its own timeouts.",
-						"Subagent follow-ups: a dispatched agent keeps what it found and answers "
-						.. "another question in the same conversation.",
+						"Unlimited subagents: a delegated job can run with no step limit, bounded still by Stop and its own timeouts.",
+						"Subagent follow-ups: a dispatched agent keeps what it found and answers another question in the same conversation.",
 						"Model picker in the header.",
 					},
 				},
@@ -1164,8 +1138,7 @@ return function(env)
 					category = "added",
 					items = {
 						"MIT license.",
-						"Working unload: every timer, input handler and thread is drained, config "
-						.. "saved, interface removed. No half-loaded clients left behind.",
+						"Working unload: every timer, input handler and thread is drained, config saved, interface removed. No half-loaded clients left behind.",
 						"Gemini as a provider.",
 					},
 				},
@@ -1178,8 +1151,7 @@ return function(env)
 				{
 					category = "fixed",
 					items = {
-						"Deadline retry: a request that timed out is no longer re-sent to the "
-						.. "same wall -- the sequence ends and says why.",
+						"Deadline retry: a request that timed out is no longer re-sent to the same wall -- the sequence ends and says why.",
 					},
 				},
 			},
@@ -1193,16 +1165,14 @@ return function(env)
 				{
 					category = "added",
 					items = {
-						"Anthropic Messages API: a record picks its wire protocol; tool calls are "
-						.. "normalised between the two shapes automatically.",
+						"Anthropic Messages API: a record picks its wire protocol; tool calls are normalised between the two shapes automatically.",
 						"Quick chat: a key opens a small composer without the full window.",
 					},
 				},
 				{
 					category = "improved",
 					items = {
-						"Retry on transient failures with a backoff curve; the type was "
-						.. "modernised and the dropdown unburied.",
+						"Retry on transient failures with a backoff curve; the type was modernised and the dropdown unburied.",
 					},
 				},
 				{
@@ -1225,8 +1195,7 @@ return function(env)
 					items = {
 						"A running turn is visible: tool rows stream in as they execute.",
 						"The rebuild thrash that remounted the transcript on every update.",
-						"Tool schemas: parameters validate before dispatch, so a malformed call "
-						.. "is repaired or reported rather than raising.",
+						"Tool schemas: parameters validate before dispatch, so a malformed call is repaired or reported rather than raising.",
 						"Collapsed labels and the header rule that ate the title bar.",
 					},
 				},
@@ -1241,19 +1210,13 @@ return function(env)
 				{
 					category = "added",
 					items = {
-						"The agent loop: a turn that plans, calls tools and reports, with token "
-						.. "budgets and compaction.",
-						"Subagents: fresh-context dispatch, parallel execution, and reports "
-						.. "collected by the parent.",
-						"The permission engine: read, write and danger risks, per-tool rules, "
-						.. "and an interactive prompt that can be remembered.",
-						"Native tool groups: instance tree, properties, remotes, virtual input, "
-						.. "screen and aiming, world, chat, memory, files, HTTP and web search.",
-						"Providers: OpenAI-compatible chat completions, with presets for a dozen "
-						.. "endpoints and manual configuration for any other.",
+						"The agent loop: a turn that plans, calls tools and reports, with token budgets and compaction.",
+						"Subagents: fresh-context dispatch, parallel execution, and reports collected by the parent.",
+						"The permission engine: read, write and danger risks, per-tool rules, and an interactive prompt that can be remembered.",
+						"Native tool groups: instance tree, properties, remotes, virtual input, screen and aiming, world, chat, memory, files, HTTP and web search.",
+						"Providers: OpenAI-compatible chat completions, with presets for a dozen endpoints and manual configuration for any other.",
 						"Sessions: saved, resumable, searchable, grouped by place.",
-						"The bridge: a local Node.js server relaying the conversation to a "
-						.. "browser companion, with SSE and a token handshake.",
+						"The bridge: a local Node.js server relaying the conversation to a browser companion, with SSE and a token handshake.",
 						"The loader: one loadstring, one file, no dependencies.",
 					},
 				},

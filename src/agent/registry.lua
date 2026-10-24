@@ -304,8 +304,7 @@ return function(env)
 		local suggestions = COMPATIBILITY_TOOLS[name] or (hostAction and HOST_TOOL_SUGGESTIONS[name]) or {}
 		for _, candidate in ipairs(suggestions) do add(candidate) end
 		for _, definition in ipairs(definitions) do add(definition["function"].name) end
-		local message = hostAction and string.format("OpenCode desktop tool '%s' was blocked before execution. "
-			.. "Continue with the available Roblox tools using their declared arguments.", name)
+		local message = hostAction and string.format("OpenCode desktop tool '%s' was blocked before execution. Continue with the available Roblox tools using their declared arguments.", name)
 			or string.format("No local tool named '%s'. This call did not run.", name)
 		if not hostAction and COMPATIBILITY_TOOLS[name] then
 			message = message .. " OpenCode may advertise this name only for provider compatibility."

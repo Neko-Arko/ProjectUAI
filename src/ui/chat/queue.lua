@@ -63,7 +63,7 @@ return function(env)
 		local clear = P.button(modal.footer, { name = "ClearQueue", text = "Clear queued", variant = "ghost", size = "sm", layoutOrder = 2,
 			onClick = function()
 				local ids = {}; for _, item in ipairs(session.queueSnapshot().items) do ids[#ids + 1] = item.id end
-				overlay.confirm({ title = "Clear queued messages?", description = "Remove these " .. tostring(#ids) .. " follow-ups. The active response keeps running.",
+				overlay.confirm({ title = "Clear queued messages?", description = env.t("Remove these %{count} follow-ups. The active response keeps running.", { count = #ids }),
 					confirmText = "Clear queued", danger = true, onConfirm = function()
 						local ok, why = session.clearQueued(ids)
 						if not ok then overlay.toast(tostring(why), "warn", 3) end

@@ -356,10 +356,7 @@ return function(env)
 		local edge = edgeBlock(res)
 		if edge then
 			return string.format(
-				"stopped before it reached the API (%d) by %s. It answered with an HTML page "
-				.. "rather than JSON, so the key, the model and the account are not implicated -- "
-				.. "the request itself was refused. Turning off the Claude Code identity for this "
-				.. "provider is the one thing this client can change about how it looks.",
+				"stopped before it reached the API (%d) by %s. It answered with an HTML page rather than JSON, so the key, the model and the account are not implicated -- the request itself was refused. Turning off the Claude Code identity for this provider is the one thing this client can change about how it looks.",
 				status, edge)
 		end
 		local decoded = res and util.decode(res.body) or nil
