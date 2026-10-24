@@ -20,8 +20,10 @@ $env:DOTNET_NOLOGO = '1'
 # Node is detected/downloaded at runtime. OpenCode is detected from an existing
 # installation. Neither executable is added to this payload.
 New-Item -ItemType Directory -Path (Join-Path $payload 'bridge'),(Join-Path $payload 'client'),(Join-Path $payload 'licenses') -Force | Out-Null
-foreach ($file in @('server.js','inference.js','opencode.js','support.js','mcp.js','mcp-stdio.js','picture-store.js','launcher.js','release.js','updater.js','supervisor.js')) {
-    Copy-Item -LiteralPath (Join-Path $repoRoot "bridge/$file") -Destination (Join-Path $payload "bridge/$file")
+# Every top-level bridge module ships; a forgotten new module would crash the
+# bridge at its first require. EmbeddedPayload still enforces the required core.
+foreach ($file in @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'bridge') -Filter '*.js' -File | Sort-Object Name)) {
+    Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $payload "bridge/$($file.Name)")
 }
 Copy-Item -LiteralPath (Join-Path $repoRoot 'bridge/web') -Destination (Join-Path $payload 'bridge/web') -Recurse
 Copy-Item -LiteralPath (Join-Path $repoRoot 'dist/uai.lua') -Destination (Join-Path $payload 'client/uai.lua')

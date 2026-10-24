@@ -66,6 +66,7 @@ const TOKEN = /^[a-f0-9]{64}$/.test(process.env.UAI_BRIDGE_SESSION_TOKEN || '')
   ? process.env.UAI_BRIDGE_SESSION_TOKEN : crypto.randomBytes(32).toString('hex');
 delete process.env.UAI_BRIDGE_SESSION_TOKEN;
 let updateState = { state: 'current', currentVersion: RELEASE.version };
+const pendingBridgeChecks = new Map();
 let draining = false, activeRequests = 0;
 
 // How long an inbox poll is held before answering empty. Comfortably under the
@@ -797,6 +798,21 @@ const server = http.createServer(async (req, res) => {
           deliverableBytes: inference.limits.deliverableMax,
         },
       });
+    } else if (route === '/api/desktop/update-check' && post) {
+      if (typeof process.send !== 'function' || !process.connected) { sendText(res, 503, 'bridge updates are managed by the running supervisor'); return; }
+      const body = JSON.parse(await readBody(req, 256));
+      if (body !== null && (typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length)) { sendText(res, 400, 'expected empty body'); return; }
+      const fail = error => Object.assign(Error(error), { status: 503 });
+      const requestId = crypto.randomUUID();
+      const reply = new Promise((resolve, reject) => {
+        const timer = setTimeout(() => { pendingBridgeChecks.delete(requestId); reject(fail('bridge update check timed out')); }, 45000);
+        pendingBridgeChecks.set(requestId, update => { clearTimeout(timer); update ? resolve(update) : reject(fail('bridge update check returned no result')); });
+      });
+      try { process.send({ type: 'check-update', requestId }, () => {}); }
+      catch { pendingBridgeChecks.delete(requestId); throw fail('bridge update check timed out'); }
+      updateState = { ...await reply, currentVersion: RELEASE.version };
+      broadcast({ kind: 'bridge:update', update: updateState });
+      sendJson(res, 200, { ok: true, update: updateState });
     } else if (route === '/api/opencode/models' && req.method === 'GET') {
       sendJson(res, 200, await opencode.models());
     } else if (route === '/api/inference' && post) {
@@ -1023,6 +1039,12 @@ process.on('message', message => {
     // status before activation completes. Its own release is authoritative.
     updateState = { ...message.update, currentVersion: RELEASE.version };
     broadcast({ kind: 'bridge:update', update: updateState });
+  } else if (message?.type === 'check-result' && typeof message.requestId === 'string') {
+    const settle = pendingBridgeChecks.get(message.requestId);
+    if (settle) {
+      pendingBridgeChecks.delete(message.requestId);
+      settle(message.update && typeof message.update === 'object' && !Array.isArray(message.update) ? message.update : null);
+    }
   } else if (message?.type === 'prepare-update') {
     const idle = !stopping && !updateBusy();
     if (idle) draining = true;

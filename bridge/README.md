@@ -127,19 +127,24 @@ hashes. It activates updates only when inference, commands, agents and retained
 receipts/pictures are idle. Pairing tokens survive automatic worker restarts.
 Failed downloads or startup keep a working version. Git checkouts and executor
 download packages are never overwritten; updates live in a per-install user cache.
+The desktop app can also trigger one immediate supervised check through the
+authenticated `POST /api/desktop/update-check`; the supervisor answers with its
+update state before any restart it causes. The cache keeps the active version
+and recent entries, and prunes stale predecessors and quarantine folders.
 
 Publish `dist/bridge-release.json` and `dist/uai-bridge-package.json` on the same
-official `v3.6.5` GitHub release together with the matching client, desktop and
-Android assets. Generate them with
+official `v3.6.7` GitHub release together with the matching desktop assets; the
+client and Android companion continue from their own current releases. Generate
+the bundles with
 `node tools/build_bridge.js` after reviewing final bridge/web inputs, inspect
 the outputs, then run `node tools/build_bridge.js --check` and focused tests.
 Later releases must bump `bridge/release.js` and use the matching release tag.
 The release builder embeds OpenCode, MCP and support helpers into the original
-permitted root filenames so installed 3.1 updaters can verify and activate 3.6.5. Checkout,
+permitted root filenames so installed 3.1 updaters can verify and activate 3.6.7. Checkout,
 executor downloads and desktop payloads retain the separate source modules.
 
-The unified 3.6.5 release supplies the matching bridge, web, client and app
-versions. Existing compatible installs receive bridge and web updates while idle.
+The 3.6.7 release supplies the matching bridge, web and Windows app versions;
+the Roblox client remains 3.6.6. Existing compatible installs receive bridge and web updates while idle.
 Refresh an open browser page to load changed web assets. The desktop's **Copy
 client script** uses its embedded client; update the desktop app to refresh that
 copy. See [3.6.5 verification](../docs/TESTING_3.6.5.md) and the earlier

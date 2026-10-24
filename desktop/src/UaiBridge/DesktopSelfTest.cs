@@ -42,6 +42,11 @@ internal static class DesktopSelfTest
             var helperLaunch = DesktopUpdater.LaunchInfo(launchFixture, "--apply-update", "request with spaces.json");
             Check("Updated and fallback windows launch normally while the helper stays hidden", replacement.WindowStyle == System.Diagnostics.ProcessWindowStyle.Normal && fallbackLaunch.WindowStyle == System.Diagnostics.ProcessWindowStyle.Normal && helperLaunch.WindowStyle == System.Diagnostics.ProcessWindowStyle.Hidden);
             Check("Update launch preserves paths and arguments with spaces without a shell", !replacement.UseShellExecute && replacement.FileName == launchFixture && replacement.ArgumentList[2] == "receipt with spaces.json");
+            using var readyReceipt = JsonDocument.Parse("{\"pid\":37,\"processStart\":12345}");
+            using var invalidReceipt = JsonDocument.Parse("{\"pid\":\"37\",\"processStart\":12345}");
+            Check("Restart receipt identifies the exact process rather than a reused PID", DesktopUpdater.ReadinessMatches(readyReceipt.RootElement, 37, 12345) &&
+                !DesktopUpdater.ReadinessMatches(readyReceipt.RootElement, 37, 12346) && !DesktopUpdater.ReadinessMatches(readyReceipt.RootElement, 38, 12345) &&
+                !DesktopUpdater.ReadinessMatches(invalidReceipt.RootElement, 37, 12345));
             Check("Stable versions reject previews, leading zeroes, and overflow", UpdateFiles.StableVersion("24.1.0", out _) &&
                 !UpdateFiles.StableVersion("24.1.0-rc.1", out _) && !UpdateFiles.StableVersion("024.1.0", out _) && !UpdateFiles.StableVersion("99999999999999.1.0", out _));
             Check("Missing Node returns a setup state without running another candidate", await NodeRuntime.FindAsync(default, [], Path.Combine(root, "empty-node")) is null);
@@ -97,15 +102,39 @@ internal static class DesktopSelfTest
             bool accepted = await updater.CompleteRestartAsync(key, _ => Task.FromResult(true), () => rollbacks++);
             Check("Ready app activates atomically and consumes its pending marker", accepted && File.Exists(Path.Combine(cache, "active.json")) && !File.Exists(Path.Combine(cache, "pending.json")) && rollbacks == 1);
             string activeBefore = File.ReadAllText(Path.Combine(cache, "active.json"));
+            string staleVersion = Path.Combine(cache, "versions", "9.9.9-" + new string('b', 64));
+            Directory.CreateDirectory(staleVersion); Directory.SetLastWriteTimeUtc(staleVersion, DateTime.UtcNow.AddHours(-2));
+            string staleQuarantine = Path.Combine(cache, ".invalid-stale");
+            Directory.CreateDirectory(staleQuarantine); Directory.SetLastWriteTimeUtc(staleQuarantine, DateTime.UtcNow.AddHours(-2));
+            string freshVersion = Path.Combine(cache, "versions", "9.9.9-" + new string('c', 64));
+            Directory.CreateDirectory(freshVersion);
+            updater.PruneStaleVersions();
+            Check("Stale unreferenced updates are pruned while fresh entries survive",
+                !Directory.Exists(staleVersion) && !Directory.Exists(staleQuarantine) && Directory.Exists(freshVersion) &&
+                File.ReadAllText(Path.Combine(cache, "active.json")) == activeBefore && Directory.Exists(Path.GetDirectoryName(staged.Entry)!));
             byte[] later = Encoding.UTF8.GetBytes("MZ next synthetic release");
             string next = updater.Stage(Manifest(laterVersion, later), later);
             bool rollback = await updater.CompleteRestartAsync(next, _ => throw new IOException("simulated launch failure"), () => rollbacks++);
             Check("A failed newer app keeps the previous active release", !rollback && rollbacks == 2 && File.ReadAllText(Path.Combine(cache, "active.json")) == activeBefore);
             bool tamperedDuringLaunch = await updater.CompleteRestartAsync(next, candidate => { File.WriteAllText(candidate.Entry, "changed after start"); return Task.FromResult(true); }, () => rollbacks++);
             Check("Hash changes during readiness cannot activate", !tamperedDuringLaunch && rollbacks == 3 && File.ReadAllText(Path.Combine(cache, "active.json")) == activeBefore);
+            bool missingCandidate = await updater.CompleteRestartAsync(laterVersion + "-" + new string('f', 64), _ => { launches++; return Task.FromResult(true); }, () => rollbacks++);
+            Check("A missing candidate reopens fallback without attempting a launch", !missingCandidate && rollbacks == 4 && launches == 1 && File.ReadAllText(Path.Combine(cache, "active.json")) == activeBefore);
+            string repairedNext = updater.Stage(Manifest(laterVersion, later), later);
+            File.WriteAllText(Path.Combine(cache, "pending.json"), "{broken}");
+            bool committedWithBrokenCleanup = await updater.CompleteRestartAsync(repairedNext, _ => Task.FromResult(true), () => rollbacks++);
+            Check("Pending cleanup cannot roll back an already committed ready app", committedWithBrokenCleanup && rollbacks == 4 &&
+                File.ReadAllText(Path.Combine(cache, "active.json")).Contains(repairedNext, StringComparison.Ordinal));
 
             using var releaseList = JsonDocument.Parse(JsonSerializer.SerializeToUtf8Bytes(new[] { Release(updateVersion), Release("9.0.0", true), Release("4.0.0", false, true) }));
             Check("Selection accepts only stable official executable assets", DesktopUpdater.SelectRelease(releaseList.RootElement, DesktopUpdater.CurrentVersion)?.Version == updateVersion);
+            object malformed = new { draft = false, prerelease = false, tag_name = 123, assets = new object[] { null!, 42, new { name = true } } };
+            using var mixedReleases = JsonDocument.Parse(JsonSerializer.SerializeToUtf8Bytes(new object[] { null!, 42, malformed, Release(updateVersion), Release(laterVersion) }));
+            Check("Malformed release entries do not conceal the newest valid update", DesktopUpdater.SelectRelease(mixedReleases.RootElement, DesktopUpdater.CurrentVersion)?.Version == laterVersion);
+            using var desktopTagRelease = JsonDocument.Parse(JsonSerializer.SerializeToUtf8Bytes(new[] { Release(laterVersion, desktopTag: true) }));
+            Check("Dedicated desktop release tags remain compatible", DesktopUpdater.SelectRelease(desktopTagRelease.RootElement, DesktopUpdater.CurrentVersion)?.Version == laterVersion);
+            using var duplicateAssets = JsonDocument.Parse(JsonSerializer.SerializeToUtf8Bytes(new[] { Release(updateVersion, duplicateAssets: true) }));
+            Check("Duplicate executable assets cannot select an ambiguous download", DesktopUpdater.SelectRelease(duplicateAssets.RootElement, DesktopUpdater.CurrentVersion) is null);
             int downloads = 0;
             byte[] releases = JsonSerializer.SerializeToUtf8Bytes(new[] { Release(updateVersion) });
             var downloaded = new DesktopUpdater(original, (uri, limit, node, token) =>
@@ -117,6 +146,69 @@ internal static class DesktopSelfTest
             Check("Offline release check downloads and stages without launching", downloads == 3 && downloaded.ReadyToRestart && downloaded.AvailableVersion == updateVersion);
             var reopened = new DesktopUpdater(original, cacheDirectory: Path.Combine(root, "downloaded"));
             Check("Pending update survives a fresh app instance", reopened.ReadyToRestart && reopened.AvailableVersion == updateVersion);
+            string downloadedCache = Path.Combine(root, "downloaded");
+            File.Delete(Path.Combine(downloadedCache, "pending.json"));
+            int cachedDownloads = 0;
+            var cachedUpdater = new DesktopUpdater(original, (uri, limit, node, token) =>
+            {
+                cachedDownloads++;
+                return Task.FromResult(uri.Host == "api.github.com" ? releases : uri.AbsolutePath.EndsWith("desktop-release.json", StringComparison.Ordinal)
+                    ? manifest : throw new IOException("A verified executable should not download again."));
+            }, downloadedCache);
+            await cachedUpdater.CheckAsync();
+            Check("Interrupted checks reuse an intact cached executable", cachedDownloads == 2 && cachedUpdater.ReadyToRestart);
+            File.Delete(Path.Combine(downloadedCache, "pending.json"));
+            UpdateFiles.AtomicJson(Path.Combine(downloadedCache, "failed.json"), new { key });
+            cachedDownloads = 0;
+            var retryUpdater = new DesktopUpdater(original, (uri, limit, node, token) =>
+            {
+                cachedDownloads++;
+                return Task.FromResult(uri.Host == "api.github.com" ? releases : manifest);
+            }, downloadedCache);
+            await retryUpdater.CheckAsync();
+            Check("Automatic checks avoid downloading or retrying a rejected executable", cachedDownloads == 2 && !retryUpdater.ReadyToRestart && retryUpdater.State == "Unavailable");
+            await retryUpdater.CheckAsync(retryFailed: true);
+            Check("An explicit check can retry a rejected release without losing cached integrity", cachedDownloads == 4 && retryUpdater.ReadyToRestart &&
+                !File.Exists(Path.Combine(downloadedCache, "failed.json")) && File.Exists(Path.Combine(downloadedCache, "pending.json")));
+
+            using var canceled = new CancellationTokenSource();
+            int canceledDownloads = 0;
+            var canceledUpdater = new DesktopUpdater(original, (uri, limit, node, token) =>
+            {
+                canceledDownloads++;
+                canceled.Cancel();
+                return Task.FromResult(releases);
+            }, Path.Combine(root, "canceled"));
+            bool observedCancellation = false;
+            try { await canceledUpdater.CheckAsync(canceled.Token); } catch (OperationCanceledException) { observedCancellation = true; }
+            Check("Cancellation during a check stops staging and is not an unavailable update", observedCancellation && canceledDownloads == 1 &&
+                canceledUpdater.State == "Current" && !canceledUpdater.ReadyToRestart && !File.Exists(Path.Combine(root, "canceled", "pending.json")));
+            try { await canceledUpdater.CheckAsync(canceled.Token); } catch (OperationCanceledException) { }
+            Check("A pre-canceled update check performs no further download", canceledDownloads == 1);
+
+            int failureDownloads = 0;
+            var networkRecovery = new DesktopUpdater(original, (uri, limit, node, token) =>
+            {
+                failureDownloads++;
+                return failureDownloads == 1 ? Task.FromException<byte[]>(new HttpRequestException("offline")) : Task.FromResult(Encoding.UTF8.GetBytes("[]"));
+            }, Path.Combine(root, "network-recovery"));
+            await networkRecovery.CheckAsync();
+            Check("Network failure leaves the app usable without a pending update", networkRecovery.State == "Unavailable" && !networkRecovery.ReadyToRestart);
+            await networkRecovery.CheckAsync();
+            Check("A failed network check releases its gate for the next attempt", failureDownloads == 2 && networkRecovery.State == "Current");
+
+            var blockedFetch = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+            int concurrentDownloads = 0;
+            var concurrentUpdater = new DesktopUpdater(original, (uri, limit, node, token) =>
+            {
+                Interlocked.Increment(ref concurrentDownloads);
+                return blockedFetch.Task;
+            }, Path.Combine(root, "concurrent"));
+            Task firstCheck = concurrentUpdater.CheckAsync();
+            await concurrentUpdater.CheckAsync();
+            blockedFetch.SetResult(Encoding.UTF8.GetBytes("[]"));
+            await firstCheck;
+            Check("Concurrent checks share one download and leave a settled state", concurrentDownloads == 1 && concurrentUpdater.State == "Current");
             Check("Installation cache identity ignores trailing separator and casing", DesktopUpdater.CacheFor(original) == DesktopUpdater.CacheFor(original.ToUpperInvariant() + Path.DirectorySeparatorChar));
             await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new { ok = true, checks }, new JsonSerializerOptions { WriteIndented = true }));
             return 0;
@@ -137,10 +229,12 @@ internal static class DesktopSelfTest
         format = "project-uai-desktop-release", schema = 1, version, platform = "win-x64", protocol = 1,
         package = new { name = filename ?? $"UAI-Bridge-{version}-win-x64.exe", bytes = bytes.Length, sha256 = UpdateFiles.Hash(bytes) } });
 
-    private static object Release(string version, bool prerelease = false, bool untrusted = false)
+    private static object Release(string version, bool prerelease = false, bool untrusted = false, bool desktopTag = false, bool duplicateAssets = false)
     {
-        string[] names = ["desktop-release.json", $"UAI-Bridge-{version}-win-x64.exe"];
-        return new { draft = false, prerelease, tag_name = "v" + version, assets = names.Select(name => new {
-            name, browser_download_url = $"https://github.com/{(untrusted ? "Other/Repo" : "Project-Ptolemy/ProjectUAI")}/releases/download/v{version}/{name}" }).ToArray() };
+        string tag = (desktopTag ? "desktop-v" : "v") + version;
+        string[] names = duplicateAssets ? ["desktop-release.json", $"UAI-Bridge-{version}-win-x64.exe", $"UAI-Bridge-{version}-win-x64.exe"]
+            : ["desktop-release.json", $"UAI-Bridge-{version}-win-x64.exe"];
+        return new { draft = false, prerelease, tag_name = tag, assets = names.Select(name => new {
+            name, browser_download_url = $"https://github.com/{(untrusted ? "Other/Repo" : "Project-Ptolemy/ProjectUAI")}/releases/download/{tag}/{name}" }).ToArray() };
     }
 }

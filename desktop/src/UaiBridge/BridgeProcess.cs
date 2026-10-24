@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -12,6 +13,9 @@ internal sealed class BridgeProcess : IAsyncDisposable
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly HttpClient http = new(new HttpClientHandler { UseProxy = false, AllowAutoRedirect = false })
         { Timeout = TimeSpan.FromSeconds(3) };
+    // Update checks download a full verified package before answering.
+    private readonly HttpClient slowHttp = new(new HttpClientHandler { UseProxy = false, AllowAutoRedirect = false })
+        { Timeout = TimeSpan.FromSeconds(60) };
     private Process? child;
     private ChildJob? job;
     private volatile bool stopping;
@@ -47,9 +51,9 @@ internal sealed class BridgeProcess : IAsyncDisposable
         Changed?.Invoke();
     }
 
-    public async Task StartAsync(BridgeLaunchOptions? options = null)
+    public async Task StartAsync(BridgeLaunchOptions? options = null, CancellationToken cancellationToken = default)
     {
-        await gate.WaitAsync();
+        await gate.WaitAsync(cancellationToken);
         try
         {
             if (child is { HasExited: false }) return;
@@ -57,8 +61,8 @@ internal sealed class BridgeProcess : IAsyncDisposable
             job?.Dispose(); job = null;
             token = null;
             SetState("Starting", "Starting your local Cowork bridge...");
-            string root = await Task.Run(EmbeddedPayload.Prepare);
-            var runtime = await NodeRuntime.FindAsync();
+            string root = await Task.Run(EmbeddedPayload.Prepare, cancellationToken);
+            var runtime = await NodeRuntime.FindAsync(cancellationToken);
             if (runtime is null) throw new IOException("Node.js is needed to run the bridge. Choose Download Node.js below, or install it from nodejs.org and check again.");
             string node = runtime.Path;
             string server = Path.Combine(root, "bridge", "server.js");
@@ -99,10 +103,16 @@ internal sealed class BridgeProcess : IAsyncDisposable
             // A cached worker gets one bounded startup attempt before the
             // supervisor restores the packaged worker. This is startup only;
             // inference itself has no overall bridge request deadline.
-            string secret = await ready.Task.WaitAsync(TimeSpan.FromSeconds(40));
+            string secret = await ready.Task.WaitAsync(TimeSpan.FromSeconds(40), cancellationToken);
             if (process.HasExited) throw new IOException("The bridge exited during startup. Try again.");
             token = secret;
             SetState("Waiting for Roblox", "Load the updated UAI script in Roblox. It will connect automatically.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await StopCoreAsync();
+            SetState("Stopped", "Ready when you are.");
+            throw;
         }
         catch (Exception error)
         {
@@ -174,13 +184,7 @@ internal sealed class BridgeProcess : IAsyncDisposable
             }
             if (capabilities.ValueKind == JsonValueKind.Object && capabilities.TryGetProperty("mcp", out var mcp))
                 McpEnabled = !mcp.TryGetProperty("enabled", out var enabled) || enabled.GetBoolean();
-            if (doc.RootElement.TryGetProperty("update", out var update))
-            {
-                UpdateState = update.TryGetProperty("state", out var s) ? s.GetString() ?? "current" : "current";
-                BridgeVersion = update.TryGetProperty("currentVersion", out var v) ? v.GetString() ?? BridgeVersion : BridgeVersion;
-                AvailableVersion = update.TryGetProperty("availableVersion", out var a) ? a.GetString() : null;
-                UpdateError = update.TryGetProperty("error", out var e) ? e.GetString() : null;
-            }
+            if (doc.RootElement.TryGetProperty("update", out var update)) ApplyUpdate(update);
             SetState(connected ? "Connected to Roblox" : "Waiting for Roblox", connected
                 ? "Your conversation is ready in Cowork. Keep Roblox and this app running."
                 : "Load the updated UAI script in Roblox. It will connect automatically.");
@@ -190,6 +194,34 @@ internal sealed class BridgeProcess : IAsyncDisposable
             if (secret == token && !stopping)
                 SetState("Reconnecting", "The bridge is not responding. If this continues, stop it and start it again.");
         }
+    }
+
+    private void ApplyUpdate(JsonElement update)
+    {
+        UpdateState = update.TryGetProperty("state", out var s) ? s.GetString() ?? "current" : "current";
+        BridgeVersion = update.TryGetProperty("currentVersion", out var v) ? v.GetString() ?? BridgeVersion : BridgeVersion;
+        AvailableVersion = update.TryGetProperty("availableVersion", out var a) ? a.GetString() : null;
+        UpdateError = update.TryGetProperty("error", out var e) ? e.GetString() : null;
+    }
+
+    // The bridge supervisor owns bridge and web updates; this asks it to look now.
+    public async Task CheckUpdatesAsync()
+    {
+        string? secret = token;
+        if (secret is null || stopping) throw new IOException("Start the bridge before checking for its updates.");
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, Origin + "/api/desktop/update-check")
+                { Content = new StringContent("{}", Encoding.UTF8, "application/json") };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret);
+            using var response = await slowHttp.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            ApplyUpdate(doc.RootElement.GetProperty("update"));
+            Changed?.Invoke();
+        }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException or InvalidOperationException)
+        { throw new IOException("The bridge update check did not complete. It will retry automatically."); }
     }
 
     public async Task StopAsync()
@@ -240,6 +272,7 @@ internal sealed class BridgeProcess : IAsyncDisposable
     {
         await StopAsync();
         http.Dispose();
+        slowHttp.Dispose();
         gate.Dispose();
     }
 }

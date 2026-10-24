@@ -78,6 +78,10 @@ class Supervisor extends EventEmitter {
           settle(null, message); this.emit('worker-ready', { pid: child.pid, ...message });
         }
         if (message?.type === 'update-idle' && worker.idleReply && message.requestId === worker.idleRequestId) worker.idleReply(message.idle === true);
+        if (message?.type === 'check-update' && typeof message.requestId === 'string') {
+          const reply = () => this.send({ type: 'check-result', requestId: message.requestId, update: this.status });
+          this.checkNow().then(reply, reply);
+        }
       });
     });
     return worker;
@@ -96,6 +100,7 @@ class Supervisor extends EventEmitter {
     this.transition = true;
     const cached = this.enabled ? this.updater.active(this.base.version) : null;
     this.current = cached || this.base;
+    if (this.enabled) this.updater.prune(cached ? [cached.key] : []);
     this.setStatus('current');
     let worker = this.spawn(this.current);
     try { await worker.ready; }
@@ -116,19 +121,34 @@ class Supervisor extends EventEmitter {
     try { await this.checkUpdates(); }
     finally { if (!this.stopped) this.checkTimer = setTimeout(() => this.scheduleCheck(), this.intervalMs); }
   }
-  async checkUpdates() {
-    if (this.stopped || this.checking || this.transition || this.staged) return;
+  // A desktop-initiated check answers with the outcome of the check itself, not
+  // the restart: applying a staged release replaces the worker whose HTTP reply
+  // is still in flight, so application is re-negotiated once that worker is idle.
+  async checkNow() {
+    if (this.stopped || !this.enabled || this.checking || this.transition || this.staged) return this.status;
+    clearTimeout(this.checkTimer);
+    try { await this.checkUpdates({ apply: false }); }
+    finally {
+      if (!this.stopped) this.checkTimer = setTimeout(() => this.scheduleCheck(), this.intervalMs);
+      if (this.staged) this.idleTimer = setTimeout(() => this.applyStaged(), this.idleRetryMs);
+    }
+    return this.status;
+  }
+  async checkUpdates({ apply = true } = {}) {
+    if (this.stopped || this.checking || this.transition || this.staged) return this.status;
     this.checking = true; this.setStatus('checking');
+    let staged = false;
     try {
       const release = await this.updater.check(this.current.version, this.controller.signal);
-      if (this.stopped) return;
-      if (!release || this.failedKeys.has(release.key) || compare(release.version, this.current.version) <= 0) { this.setStatus('current'); return; }
-      this.staged = release; this.setStatus('staged');
-      await this.applyStaged();
+      if (this.stopped) return this.status;
+      if (!release || this.failedKeys.has(release.key) || compare(release.version, this.current.version) <= 0) this.setStatus('current');
+      else { this.staged = release; staged = true; this.setStatus('staged'); }
     } catch {
       // Never relay provider/URL/error payloads from a network response into UI.
       if (!this.stopped) this.setStatus('error', 'Could not verify the bridge update. The current version keeps running; another check will follow.');
     } finally { this.checking = false; }
+    if (staged && apply && !this.stopped) await this.applyStaged();
+    return this.status;
   }
   requestIdle(worker) {
     if (!worker?.child.connected || worker.child.exitCode !== null || worker.child.signalCode !== null) return Promise.resolve(false);
@@ -165,6 +185,7 @@ class Supervisor extends EventEmitter {
       // The active pointer only moves after the new server owns the port and
       // reports the expected protocol, version and session token.
       this.updater.activate(candidate);
+      this.updater.prune([candidate.key]);
       this.current = candidate; this.staged = null; this.setStatus('updated');
       return true;
     } catch {

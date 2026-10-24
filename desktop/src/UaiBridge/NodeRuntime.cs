@@ -190,7 +190,7 @@ internal static class UpdateFiles
             if (uri.Scheme != "https" || !uri.IsDefaultPort || uri.UserInfo.Length != 0 || uri.Fragment.Length != 0 || !hosts.Contains(uri.Host))
                 throw new IOException("Untrusted update download address.");
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-            request.Headers.UserAgent.ParseAdd("ProjectUAI-Desktop/3.1.0");
+            request.Headers.UserAgent.ParseAdd("ProjectUAI-Desktop/" + DesktopUpdater.CurrentVersion);
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
             if ((int)response.StatusCode is 301 or 302 or 303 or 307 or 308)
             {

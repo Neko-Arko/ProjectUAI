@@ -2,13 +2,13 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
-    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>UAI Bridge</AssemblyName>
     <Product>UAI Bridge</Product>
     <Description>One-click Cowork launcher for Project UAI</Description>
-    <Version>3.6.5</Version>
+    <Version>3.6.7</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup Condition="'$(BridgePayload)' != ''">

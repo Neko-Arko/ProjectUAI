@@ -46,11 +46,11 @@ internal static class EmbeddedPayload
                 var item = files[name]; total += item.Bytes;
                 if (item.Bytes < 0 || item.Bytes > Limit || total > Limit) throw new IOException("Embedded bridge files are too large.");
             }
-            foreach (string name in new[] { "bridge/server.js", "bridge/inference.js", "bridge/opencode.js", "bridge/support.js", "bridge/mcp.js", "bridge/mcp-stdio.js", "bridge/picture-store.js", "bridge/launcher.js", "bridge/release.js", "bridge/updater.js", "bridge/supervisor.js", "bridge/web/index.html", "client/uai.lua" })
+            foreach (string name in new[] { "bridge/server.js", "bridge/environment.js", "bridge/inference.js", "bridge/opencode.js", "bridge/support.js", "bridge/mcp.js", "bridge/mcp-stdio.js", "bridge/picture-store.js", "bridge/launcher.js", "bridge/release.js", "bridge/updater.js", "bridge/supervisor.js", "bridge/web/index.html", "client/uai.lua" })
                 if (!files.ContainsKey(name)) throw new IOException("The embedded package is incomplete.");
             if (Directory.Exists(root))
             {
-                try { Verify(root, files); return root; }
+                try { Verify(root, files); Prune(cache, root); return root; }
                 catch (IOException)
                 {
                     // Preserve a changed cache for diagnosis and create a verified copy.
@@ -86,11 +86,33 @@ internal static class EmbeddedPayload
                     }
                 }
                 if (seen.Count != files.Count) throw new IOException("The embedded bridge archive is incomplete.");
-                Verify(stage, files); Directory.Move(stage, root); return root;
+                Verify(stage, files); Directory.Move(stage, root);
+                Prune(cache, root); return root;
             }
             finally { UpdateFiles.RemoveOwnedDirectory(cache, stage); }
         }
     }
+    // Each build extracts to its own hash-named folder; predecessors otherwise
+    // accumulate forever. Recently written folders may belong to another
+    // installed build that is still running, so only older ones are removed.
+    private static void Prune(string cache, string keep)
+    {
+        try
+        {
+            foreach (string directory in Directory.EnumerateDirectories(cache))
+            {
+                try
+                {
+                    if (string.Equals(directory, keep, StringComparison.OrdinalIgnoreCase) ||
+                        Directory.GetLastWriteTimeUtc(directory) >= DateTime.UtcNow.AddHours(-1)) continue;
+                    UpdateFiles.RemoveOwnedDirectory(cache, directory);
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+    }
+
     private static bool ValidPath(string name) => name.Length is > 0 and < 180 && !name.Contains('\\') &&
         name.Split('/').All(part => part.Length > 0 && part != "." && part != ".." && part.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 && !part.EndsWith('.') && !part.EndsWith(' ')
             && !Regex.IsMatch(part, @"\A(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|\z)", RegexOptions.IgnoreCase)) &&

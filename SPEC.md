@@ -1,10 +1,10 @@
 # Project UAI — contract
 
-Current client release: **3.6.6 — October 23, 2026**. The bridge remains
-`bridge-v3.6.6`; the Windows app and Android companion remain 3.6.5 until their
-own builds.
+Current client release: **3.6.6 — October 23, 2026**. The bridge and the Windows
+app are **3.6.7 — October 24, 2026**; the Android companion remains 3.6.5 until
+its own build.
 
-Bridge 3.6.6 and Windows desktop 3.6.5 use verified automatic GitHub updates.
+Bridge 3.6.7 and Windows desktop 3.6.7 use verified automatic GitHub updates.
 Bridge worker replacement waits for idle work and retains its session token;
 desktop app updates stage for restart with a retained fallback. Desktop detects
 Node.js 18+ or downloads a verified LTS runtime per user instead of bundling Node.
@@ -1541,6 +1541,13 @@ executable's `--mcp-stdio` entry owns an adapter process without opening another
 window; it discovers an already-running desktop bridge. Checkout users can run
 `node bridge/server.js --mcp-stdio`. Connection examples live in the browser's
 Settings modal and [bridge/MCP.md](bridge/MCP.md).
+
+The Updates page triggers a bridge and web UI check on demand through the
+authenticated `POST /api/desktop/update-check`; the supervisor answers with its
+update state after the check and applies a staged release once the worker is
+idle, so the reply is never severed by the restart it causes. Extracted-payload,
+desktop-update and bridge-update caches keep referenced and recent entries and
+prune stale predecessors on use.
 
 `UAI_MCP_DISABLED=1` disables public MCP admission, returning HTTP 503 at both
 aliases and `enabled=false` in its authenticated capability/configuration.
