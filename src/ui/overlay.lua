@@ -523,7 +523,8 @@ return function(env)
 		card.GroupTransparency = 1
 		P.stroke(card, theme.color.border)
 
-		local closeDiameter = math.max(theme.size.control, responsive.minTarget())
+		local closeDiameter = math.max(theme.size.control, responsive.minTarget(), props.minTarget or 0)
+		local closeButton
 		local headerContentHeight = math.max(closeDiameter,
 			theme.text.title.height + (props.description and (theme.space.hair + theme.text.small.height) or 0))
 		local footerContentHeight = math.max(theme.size.control, responsive.minTarget())
@@ -605,6 +606,11 @@ return function(env)
 		end
 		local function relayout()
 			if handle.closed then return end
+			if props.minTarget then
+				closeDiameter = math.max(theme.size.control, responsive.minTarget(), props.minTarget)
+				if closeButton then closeButton.instance.Size = UDim2.fromOffset(closeDiameter, closeDiameter) end
+				titleScroll.Size = UDim2.new(1, -(props.dismissable ~= false and (closeDiameter + theme.space.sm) or 0), 1, 0)
+			end
 			local isSheet = responsive.mode == "sheet"
 			local bounds = responsive.usableRect(M.layer, isSheet and theme.space.md or theme.space.lg)
 			setLayout(card, "AnchorPoint", isSheet and Vector2.new(0.5, 1) or Vector2.new(0.5, 0.5))
@@ -622,10 +628,10 @@ return function(env)
 
 		if props.dismissable ~= false then
 			unbindDismiss = bindOutsideDismiss(handle, theme.z.modal)
-			local closeButton = P.iconButton(header, {
+			closeButton = P.iconButton(header, {
 				name = "Close",
 				icon = "close",
-				diameter = theme.size.control,
+				diameter = closeDiameter,
 				onClick = handle.close,
 				layoutOrder = 2,
 			})
@@ -1134,8 +1140,8 @@ return function(env)
 	-- Anchored menu ----------------------------------------------------------
 
 	-- Opens below the target, or above it when there is not enough room. Options are
-	-- { label, value, detail, selected, tone, free }. A custom header supplies both its
-	-- height and render callback so the reserved space matches its contents.
+	-- { label, value, detail, selected, tone, free }. Search is opt-in; actions with
+	-- searchable=false remain visible. A custom header supplies its own height.
 	function M.menu(props)
 		props = props or {}
 		if not ensure() then return nil end
@@ -1173,6 +1179,8 @@ return function(env)
 		local content = theme.text.small.height
 		if hasDetail then content = content + theme.text.caption.height end
 		local rowHeight = math.max(props.rowHeight or theme.size.row, responsive.minTarget(), content + theme.space.xs)
+		local searchHeight = props.searchable and math.max(theme.size.control, responsive.minTarget()) or 0
+		local searchInset = props.searchable and (searchHeight + theme.space.xs * 2) or 0
 
 		-- Measured rather than counted: a divider is one pixel and a header is its own
 		-- height, and treating both as a full row made the profile menu tall enough to
@@ -1189,7 +1197,7 @@ return function(env)
 			end
 		end
 		if #(props.options or {}) > 0 then bodyHeight = bodyHeight - theme.space.hair end
-		bodyHeight = math.min(bodyHeight, props.maxHeight or theme.size.menuMax)
+		bodyHeight = math.min(bodyHeight + searchInset, props.maxHeight or theme.size.menuMax)
 		local preferredWidth, preferredHeight = math.ceil(width), bodyHeight
 
 		local card = P.frame(scrim, {
@@ -1249,7 +1257,7 @@ return function(env)
 			local yPosition = upward and (y - theme.space.xxs - h) or belowY
 			-- If neither side can show even one option, overlap the anchor within the
 			-- safe rectangle. A one-pixel anchored list cannot be read or scrolled.
-			if h < math.min(preferredHeight, rowHeight + theme.space.xs * 2) then
+			if h < math.min(preferredHeight, rowHeight + theme.space.xs * 2 + searchInset) then
 				h = math.min(preferredHeight, bounds.height)
 				yPosition = y + (target.AbsoluteSize.Y - h) / 2
 			end
@@ -1279,12 +1287,14 @@ return function(env)
 
 		local list = P.scroll(card, {
 			name = "Options",
-			size = UDim2.fromScale(1, 1),
+			size = UDim2.new(1, 0, 1, -searchInset),
+			position = UDim2.fromOffset(0, searchInset),
 			gap = theme.space.hair,
 			padding = theme.space.xs,
 			zIndex = theme.z.dropdown + 2,
 		})
 
+		local searchableRows = {}
 		for index, option in ipairs(props.options or {}) do
 			if option.divider then
 				local div = P.divider(list.instance, {
@@ -1292,6 +1302,7 @@ return function(env)
 					layoutOrder = index,
 				})
 				div.Size = UDim2.new(1, 0, 0, 1)
+				searchableRows[#searchableRows + 1] = { instance = div, option = option }
 			elseif option.isHeader and option.render then
 				local head = P.frame(list.instance, {
 					name = "MenuHeader",
@@ -1343,6 +1354,7 @@ return function(env)
 				button.Size = UDim2.new(1, 0, 0, rowHeight)
 				button.LayoutOrder = index
 				button.Selectable = true
+				searchableRows[#searchableRows + 1] = { instance = button, option = option }
 				P.corner(button, theme.radius.md)
 				local focusStroke = P.stroke(button, option.free and P.freeModelOutline(theme.color.surfaceOverlay) or theme.color.accentBorder, option.free and 1 or nil)
 				focusStroke.Transparency = option.free and 0 or 1
@@ -1464,6 +1476,29 @@ return function(env)
 					if props.onSelect then pcall(props.onSelect, option.value ~= nil and option.value or option.label, option) end
 				end)
 			end
+		end
+
+		if props.searchable then
+			local empty = P.text(list.instance, { name = "NoMenuMatches", text = props.emptyText or "No matches. Try another search.",
+				role = "small", color = theme.color.textTertiary, wrap = true, auto = "Y", visible = false, layoutOrder = 0,
+				padding = { x = theme.space.sm, y = theme.space.xs } })
+			local searchHolder = P.frame(card, { name = "MenuSearchHolder", size = UDim2.new(1, 0, 0, searchInset), padding = theme.space.xs })
+			local function filter(text)
+				if handle.closed then return end
+				local matches, count = env.require("runtime/search").compile(text), 0
+				for _, entry in ipairs(searchableRows) do
+					local option = entry.option
+					local visible = option.searchable == false or matches(option.label or option.value, option.detail) ~= nil
+					if option.divider then visible = util.trim(text) == ""
+					elseif visible and option.searchable ~= false then count = count + 1 end
+					entry.instance.Visible = visible
+				end
+				empty.Visible = count == 0
+				list.instance.CanvasPosition = Vector2.new(0, 0)
+			end
+			handle.search = P.field(searchHolder, { name = "MenuSearch", placeholder = props.searchPlaceholder or "Search...",
+				height = searchHeight, onChange = filter })
+			filter("")
 		end
 
 		M.open[#M.open + 1] = handle

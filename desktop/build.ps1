@@ -17,8 +17,8 @@ $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 $env:DOTNET_NOLOGO = '1'
 
 # Bridge and client files are embedded in the executable, not shipped beside it.
-# Node is detected/downloaded at runtime. OpenCode is detected from an existing
-# installation. Neither executable is added to this payload.
+# Node is detected/downloaded at runtime. OpenCode and Cline are detected from
+# existing installations. None of those executables are added to this payload.
 New-Item -ItemType Directory -Path (Join-Path $payload 'bridge'),(Join-Path $payload 'client'),(Join-Path $payload 'licenses') -Force | Out-Null
 # Every top-level bridge module ships; a forgotten new module would crash the
 # bridge at its first require. EmbeddedPayload still enforces the required core.
@@ -29,6 +29,7 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'bridge/web') -Destination (Join-Pat
 Copy-Item -LiteralPath (Join-Path $repoRoot 'dist/uai.lua') -Destination (Join-Path $payload 'client/uai.lua')
 Copy-Item -LiteralPath (Join-Path $desktopRoot 'START-HERE.txt') -Destination $payload
 Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination (Join-Path $payload 'licenses/Project-UAI-LICENSE.txt')
+Copy-Item -LiteralPath (Join-Path $repoRoot 'licenses/kilo') -Destination (Join-Path $payload 'licenses/kilo') -Recurse
 $dotnetRoot = Split-Path $dotnetCommand -Parent
 foreach ($name in @('LICENSE.txt','ThirdPartyNotices.txt')) {
     if (!(Test-Path -LiteralPath (Join-Path $dotnetRoot $name))) { throw "Missing .NET redistribution notice: $name" }
@@ -37,7 +38,7 @@ foreach ($name in @('LICENSE.txt','ThirdPartyNotices.txt')) {
 $files = @(Get-ChildItem -LiteralPath $payload -File -Recurse | Sort-Object FullName | ForEach-Object {
     [ordered]@{ path = $_.FullName.Substring($payload.Length + 1).Replace('\','/'); bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
 })
-$inventory = [ordered]@{ product = 'UAI Bridge'; version = $version; platform = 'win-x64'; node = 'detected-or-downloaded'; opencode = 'external-installation-only'; files = $files }
+$inventory = [ordered]@{ product = 'UAI Bridge'; version = $version; platform = 'win-x64'; node = 'detected-or-downloaded'; opencode = 'external-installation-only'; cline = 'external-installation-only'; files = $files }
 [IO.File]::WriteAllText((Join-Path $payload 'manifest.json'), ($inventory | ConvertTo-Json -Depth 5), $utf8)
 Add-Type -AssemblyName System.IO.Compression
 $payloadArchive = Join-Path $stage 'payload.zip'
@@ -72,5 +73,5 @@ $manifest = [ordered]@{ format = 'project-uai-desktop-release'; schema = 1; vers
     package = [ordered]@{ name = [IO.Path]::GetFileName($asset); bytes = (Get-Item -LiteralPath $asset).Length; sha256 = $digest } }
 [IO.File]::WriteAllText((Join-Path $release 'desktop-release.json'), ($manifest | ConvertTo-Json -Depth 5), $utf8)
 Write-Output "Built standalone $asset"
-Write-Output "Embedded $($files.Count) bridge/client/license files; Node.js and OpenCode CLI are not bundled."
+Write-Output "Embedded $($files.Count) bridge/client/license files; Node.js, OpenCode and Cline CLIs are not bundled."
 Write-Output "Inspect $payload and desktop-release.json before running desktop/verify.ps1."

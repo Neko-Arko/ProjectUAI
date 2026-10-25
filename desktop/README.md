@@ -6,22 +6,30 @@ The desktop project uses the existing server in `--desktop` mode on
 **127.0.0.1:28791**.
 Manual terminal startup keeps port 8790 and its existing token workflow.
 
-Download and open [UAI-Bridge-3.6.7-win-x64.exe](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.6.7/UAI-Bridge-3.6.7-win-x64.exe), then click
+Download and open [UAI-Bridge-3.7.0-win-x64.exe](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.7.0/UAI-Bridge-3.7.0-win-x64.exe), then click
 **Start Cowork** on **Workspace**. It detects Node.js 18+ on your computer. If
 none is available, choose **Get Node.js** or **Manual setup** in the Workspace
 runtime card, then **Check again**.
 
-Desktop 3.6.7 uses native WPF with a redesigned, responsive interface, its own
+Desktop 3.7.0 uses native WPF with a redesigned, responsive interface, its own
 title bar with custom window controls, keyboard navigation, and accessible controls. The sidebar
 becomes horizontal navigation on smaller windows, and page content scrolls so
-actions remain reachable. Four pages organize the app:
+actions remain reachable. Five pages organize the app:
 
 | Page | What you can do |
 | --- | --- |
 | Workspace | Start or stop the bridge, open Cowork, copy the client script, and install or recheck Node.js. |
-| Connections | Enable OpenCode or MCP and inspect their status and setup instructions. |
+| Connections | Enable MCP and connect external coding agents to the workspace. |
 | Updates | Check for desktop updates, see download and staging status, restart to apply an update, and inspect bridge update status. |
 | Settings | Choose browser, launch, and automatic app update preferences. |
+| Tunnels | Enable Cline, OpenCode and Kilo routes, inspect readiness, and follow setup instructions. |
+
+Tunnels checks whether OpenCode and Cline are **Installed** or **Not found** as
+soon as the app opens, before Cowork starts. Use **Refresh installed apps** after
+installing or removing a CLI. This checks local files with the same detectors
+the bridge uses; it does not launch either CLI or read their account settings.
+Installation is separate from the connection's enabled, sign-in and ready state.
+If Node.js is missing, the app shows **Not checked** with Workspace setup guidance.
 
 Chat remains in the existing Cowork browser workspace; the desktop window
 does not embed chat. A second launch brings the existing window forward,
@@ -41,7 +49,7 @@ the app or detected on your computer. Roblox and the UAI script must remain runn
 ## Optional OpenCode native workaround
 
 Install [OpenCode Desktop](https://opencode.ai) separately, then restart the bridge.
-The OpenCode card on **Connections** reports when its free models are ready. The
+The OpenCode card on **Tunnels** reports when its free models are ready. The
 bridge detects the installed native CLI, starts its authenticated loopback server privately, and
 routes models in its public catalog through the native connection. OpenCode is
 **not bundled, downloaded or copied into the desktop distribution**. The app uses
@@ -72,20 +80,42 @@ OpenCode process, then exits; the app never hides in the notification area.
 Repeated launches restore the existing window. Occupied ports produce an error;
 the app never chooses an undiscoverable random port or kills another application.
 
+## Cline free models
+
+Install the official [Cline CLI](https://docs.cline.bot/cline-cli/overview), then
+open **Tunnels > Cline tunnel**. Cline is enabled by default. Run the following
+command in PowerShell, or use **Copy sign-in command** in the desktop app:
+
+```powershell
+cline auth cline
+```
+
+Restart the bridge after signing in. The card shows **Sign in needed** until the
+profile is authenticated, and **Ready** only after the bridge validates the
+current official free-model catalog. Each request must retain that exact model
+in the native CLI. Cline is installed separately and is not bundled or
+automatically downloaded. Its provider allowances still apply. Native Cline
+owns authentication; UAI does not copy its tokens into provider settings.
+The bridge prefers a dedicated UAI profile if one already exists; otherwise it
+uses your standard Cline sign-in. See the [Cline guide](../docs/CLINE_TUNNEL.md)
+for that optional profile setup.
+
 ## Desktop preferences
 
-The app saves five controls for this installation and retains them across
+The app saves seven controls for this installation and retains them across
 verified app updates:
 
 | Control | Page | Default | Behavior |
 | --- | --- | --- | --- |
-| OpenCode tunnel | Connections | On | Uses the installed CLI for native free models. Turn off to avoid starting OpenCode. |
+| OpenCode tunnel | Tunnels | On | Uses the installed CLI for native free models. Turn off to avoid starting OpenCode. |
+| Cline tunnel | Tunnels | On | Uses the installed CLI and your Cline sign-in for current free models; prefers the dedicated UAI profile when present. |
+| Kilo tunnel | Tunnels | On | Starts quota recovery after an explicit anonymous Kilo free-model refusal. |
 | MCP access | Connections | On | Allows external coding agents to connect to UAI's MCP endpoint. Turning it off rejects MCP sessions. |
 | Open browser on start | Settings | On | Opens Cowork after successful bridge startup. **Open Cowork** always opens it manually. |
 | Start bridge on launch | Settings | Off | Starts the bridge after Node.js detection; does not register Windows startup. |
 | Automatic app updates | Settings | On | Checks and downloads desktop updates automatically. **Check for updates** on Updates remains available when off. |
 
-Stop the bridge before changing OpenCode or MCP. The next start receives the
+Stop the bridge before changing any tunnel or MCP. The next start receives the
 saved settings; existing tool calls are never silently interrupted by a switch.
 The OpenCode card shows readiness, the detected CLI version, or a setup problem.
 MCP access controls external agents; OpenCode's private tool relay remains
@@ -130,8 +160,14 @@ active work and retained receipts/pictures are idle. An automatic worker restart
 keeps the same pairing token. The browser reconnects to the updated bridge.
 Refresh an open browser page to load changed web assets. **Copy client script**
 on **Workspace** copies the client embedded in the desktop executable. Desktop
-3.6.7 changes the Windows app; it continues to use the existing bridge, browser,
-and client interfaces.
+3.7.0 aligns the embedded bridge, browser and client with the companion release.
+
+**Tunnels > Kilo tunnel** enables anonymous Kilo quota recovery by default.
+After an explicit quota refusal, the bridge starts a private Tor helper and
+makes a bounded retry through another connection. The first use downloads a
+verified 22 MB archive. Each exit still has an allowance; shared exits may
+already be limited. Stop Cowork to change the switch. See
+[Kilo setup and evidence](../docs/KILO_TUNNEL.md).
 
 When automatic app updates are enabled, the desktop app separately checks stable
 releases in `Project-Ptolemy/ProjectUAI` on startup and every 15 minutes. It
@@ -156,7 +192,7 @@ across desktop updates. A candidate that failed to start is not retried by
 automatic checks; choose **Check for updates** manually to retry that candidate.
 Failed network or integrity checks leave the current app usable.
 
-Desktop 1.0 has no updater, so its users need one manual download of 3.6.7 first.
+Desktop 1.0 has no updater, so its users need one manual download of 3.7.0 first.
 For each future release, publish `desktop-release.json`,
 `UAI-Bridge-<version>-win-x64.exe`, and its adjacent `.sha256` on the same official
 `v<version>` or `desktop-v<version>` GitHub release. The manifest includes the
@@ -179,7 +215,7 @@ than resending it to a new process.
 ## Build and verification
 
 Install the .NET 10 SDK for Windows and Node.js 18+ for verification. The package
-build does not download Node or OpenCode. There are no NuGet library dependencies.
+build does not download Node, OpenCode or Cline. There are no NuGet library dependencies.
 `desktop/make-icon.ps1` draws the executable's native connection glyph, the
 sidebar brand mark is typeset text, and the window draws its own title bar —
 drag to move, with custom minimize, maximize and close buttons — while resizing,
@@ -212,8 +248,10 @@ and restart with a new token. It checks persisted preferences, launch switches,
 native minimize/restore, window-close shutdown, responsive page layout, and updater
 validation and handoff fixtures. It also renders native WPF content previews in
 `desktop/.build/verification/`: `launcher.png`, `launcher-connections.png`,
-`launcher-updates.png`, `launcher-settings.png`, `launcher-compact.png`,
-`launcher-narrow.png`, and `launcher-narrow-bottom.png`. Inspect each preview.
+`launcher-updates.png`, `launcher-settings.png`, `launcher-tunnels.png`,
+`launcher-tunnels-bottom.png`, `launcher-compact.png`, `launcher-narrow.png`,
+`launcher-narrow-bottom.png`, `launcher-narrow-tunnels.png`, and
+`launcher-narrow-tunnels-bottom.png`. Inspect each preview.
 The previews capture WPF content; native title-bar behavior is checked separately.
 These offline checks do not claim a live executor/Roblox connection.
 Manually review each fix before rebuilding or retesting.

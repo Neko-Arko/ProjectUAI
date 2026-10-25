@@ -26,7 +26,12 @@ data class Capabilities(
     val deltas: Boolean = false,
     val inference: InferenceCapability = InferenceCapability(),
     val executorPost: ExecutorPostCapability = ExecutorPostCapability(),
+    val kilo: KiloCapability = KiloCapability(),
 )
+
+@Serializable
+data class KiloCapability(val schema: Int = 1, val enabled: Boolean = false, val available: Boolean = false,
+    val state: String = "disabled", val message: String = "Kilo tunnel is off.")
 
 @Serializable
 data class ExecutorPostCapability(val schema: Int = 1)

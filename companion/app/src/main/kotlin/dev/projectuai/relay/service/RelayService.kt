@@ -122,11 +122,14 @@ class RelayService : Service() {
             }
             if (server != null) return
             val instance = UUID.randomUUID().toString()
-            val createdEngine = JobEngine(instance, scope, client, onChanged = { updateActivity() })
+            val kilo = if (settings.kiloEnabled) dev.projectuai.relay.engine.KiloRoute(
+                dev.projectuai.relay.engine.AndroidKiloConnection(this, client)) else null
+            val createdEngine = JobEngine(instance, scope, client, onChanged = { updateActivity() }, kilo = kilo)
             val createdServer = RelayServer(settings.port, instance, settings, createdEngine, log,
                 onPaired = { token, place -> _token.value = token; _place.value = place },
                 onClientContact = { at -> _lastClientAt.value = at })
             engine = createdEngine
+            _kilo.value = createdEngine.kiloCapability()
             server = createdServer
             _activity.value = ActivitySnapshot()
             _lastClientAt.value = 0
@@ -137,6 +140,7 @@ class RelayService : Service() {
                     delay(5_000)
                     if (engine !== createdEngine) break
                     createdEngine.sweep()
+                    _kilo.value = createdEngine.kiloCapability()
                 }
             }
             _token.value = settings.token
@@ -165,6 +169,7 @@ class RelayService : Service() {
         cancelWatchdog(this)
         releaseWakeLock()
         _state.value = RelayState.Stopped
+        _kilo.value = dev.projectuai.relay.protocol.KiloCapability()
         _lastClientAt.value = 0
     }
 
@@ -265,6 +270,8 @@ class RelayService : Service() {
         val lastClientAt: StateFlow<Long> = _lastClientAt.asStateFlow()
         private val _activity = MutableStateFlow(ActivitySnapshot())
         val activity: StateFlow<ActivitySnapshot> = _activity.asStateFlow()
+        private val _kilo = MutableStateFlow(dev.projectuai.relay.protocol.KiloCapability())
+        val kilo = _kilo.asStateFlow()
         private val installLock = Any()
         private var installPending = false
         private var liveService: RelayService? = null

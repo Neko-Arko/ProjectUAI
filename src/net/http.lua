@@ -15,6 +15,7 @@ return function(env)
 	local signal = env.require("runtime/signal")
 	local urls = env.require("net/url")
 	local headerMap = env.require("net/headers")
+	local tunnelRoute = env.require("net/tunnel_route")
 
 	local HISTORY_LIMIT = 60
 	local MAX_BODY, MAX_WORKERS, MAX_RELAY_WORKERS = 8 * 1024 * 1024, 8, 16
@@ -95,27 +96,14 @@ return function(env)
 	end
 
 	-- A gateway that answers 200 and then puts the failure in the body. Detected
-	-- structurally -- a decodable object carrying an `error`, or an SSE frame whose
-	-- type is "error" -- and never by substring, because a reply that happens to
-	-- discuss rate limits must not be mistaken for one.
+	-- structurally, as a whole decodable error object. Streamed errors belong to
+	-- the protocol adapter: an accepted stream may already contain partial output
+	-- or tool calls and must not replay merely because a later frame names quota.
 	local function errorPayload(body)
 		if type(body) ~= "string" or body == "" then return nil end
-		local function check(text)
-			local decoded = util.decode(text)
-			if type(decoded) ~= "table" then return nil end
-			if decoded.type == "error" then return decoded end
-			if decoded.error ~= nil then return decoded end
-			return nil
-		end
-		local direct = check(body)
-		if direct then return direct end
-		for line in body:gmatch("[^\r\n]+") do
-			local data = line:match("^data:%s*(.+)$")
-			if data and data ~= "[DONE]" then
-				local hit = check(data)
-				if hit then return hit end
-			end
-		end
+		local decoded = util.decode(body)
+		if type(decoded) ~= "table" then return nil end
+		if decoded.type == "error" or decoded.error ~= nil then return decoded end
 		return nil
 	end
 
@@ -286,6 +274,21 @@ return function(env)
 	function M.request(spec)
 		local url = tostring(spec.url or "")
 		if url == "" then return nil, "no url", nil, "terminal" end
+		if tunnelRoute.reserved(url) then
+			local problem = tunnelRoute.problem(url, spec.method, spec.headers)
+			local bridge = env.require("net/bridge")
+			local status = bridge.clineStatus()
+			local endpoint = env.require("net/transport").endpoint("cowork")
+			if not problem and (not bridge.online or not endpoint or not status.enabled or not status.available) then
+				problem = status.message or "Start UAI Bridge, enable Cline in Tunnels and sign in before using this provider."
+			end
+			if problem then
+				return { status = 599, ok = false, body = util.encode({ error = { message = problem } }),
+					headers = { ["x-should-retry"] = "false" }, via = "web", terminal = true }, nil, 0, "terminal"
+			end
+			spec = util.copy(spec)
+			spec.relay, spec.relayEndpoint = true, endpoint
+		end
 		-- Local discovery can select an executor function and option shape explicitly.
 		-- Keep it local to this call; a delayed worker must use the same selection.
 		local profile = spec.executorProfile
@@ -470,6 +473,9 @@ return function(env)
 	-- its way through a backoff on a key that rotation can replace at once.
 	function M.shouldRetry(res, err, info)
 		if (res and res.terminal) or terminal(err) then return false end
+		if res and tostring(M.header(res, "x-should-retry")):lower() == "false" then
+			return false, "provider requested no retry"
+		end
 		local elapsed = tonumber(info and info.elapsed) or 0
 		local status = res and res.status or 0
 		local body = tostring(res and res.body or "")

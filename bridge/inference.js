@@ -22,7 +22,7 @@ const PREVIEW_FRAME_BYTES = 8 * 1024;
 function createInference({ publish = () => {}, maxBytes = 16 * 1024 * 1024,
   deliverableMax = DELIVERABLE_MAX, retentionMs = 300000, maxJobs = 10000,
   maxActive = 16, maxTotalBytes = 64 * 1024 * 1024, legacy = false,
-  prepareBody = body => body, maxRequestBytes = 32 * 1024 * 1024, maxActiveRequestBytes = 64 * 1024 * 1024, opencode } = {}) {
+  prepareBody = body => body, maxRequestBytes = 32 * 1024 * 1024, maxActiveRequestBytes = 64 * 1024 * 1024, opencode, kilo, cline } = {}) {
   const jobs = new Map();
   // A previously seen ID must never become resubmittable, even after its job is
   // evicted for capacity. The horizon remembers evicted IDs so a late resubmit
@@ -238,6 +238,12 @@ function createInference({ publish = () => {}, maxBytes = 16 * 1024 * 1024,
     if (typeof input.body !== 'string' || Buffer.byteLength(input.body) > maxBytes) throw new Error('Invalid inference body');
     const url = new URL(input.url);
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Use an HTTP(S) provider URL');
+    // This reserved address is an internal route, never an outbound HTTP host.
+    const clineRoute = url.hostname.replace(/\.$/, '') === 'uai-tunnel.invalid';
+    if (clineRoute && (url.hostname !== 'uai-tunnel.invalid' || url.protocol !== 'https:' || url.port || url.search || url.hash ||
+        url.pathname !== '/cline/v1/chat/completions' || !cline)) {
+      throw new Error('This bridge does not support the requested Cline tunnel route. Update UAI Bridge.');
+    }
     const headers = {};
     for (const [name, value] of Object.entries(input.headers || {})) {
       // Older clients attached the executor's deadline as SDK metadata. It
@@ -246,6 +252,9 @@ function createInference({ publish = () => {}, maxBytes = 16 * 1024 * 1024,
       http.validateHeaderName(name);
       http.validateHeaderValue(name, String(value));
       headers[name] = String(value);
+    }
+    if (clineRoute && Object.keys(headers).some(name => /authorization|api[-_]?key|token|cookie|organization/i.test(name))) {
+      throw new Error('Cline uses its signed-in local profile. Set this provider authentication to None.');
     }
     headers['accept-encoding'] = 'identity';
     headers['content-length'] = Buffer.byteLength(input.body);
@@ -277,23 +286,24 @@ function createInference({ publish = () => {}, maxBytes = 16 * 1024 * 1024,
       startedAt: Date.now(), seq: 0, frameCount: 0, ring: [], ringBytes: 0, ringDropped: false,
       firstFrameAt: null, sawText: false, model, requestBytes };
     jobs.set(job.id, job);
-    if (opencode?.capability().available && opencode.accepts(url.href, providerBody)) {
+    const native = clineRoute ? cline : opencode?.capability().available && opencode.accepts(url.href, providerBody) ? opencode : null;
+    if (native) {
       const controller = new AbortController();
       job.request = { destroy: () => controller.abort() };
       activeRequestBytes += requestBytes;
       if (job.sessionId) publish({ kind: 'inference:start', id: job.id, sessionId: job.sessionId, model: job.model, startedAt: job.startedAt });
-      opencode.request({ body: providerBody, url: url.href, signal: controller.signal,
+      native.request({ body: providerBody, url: url.href, signal: controller.signal,
         onFrame: frame => { if (job.state === 'running') { job.streaming = true; onFrame(job, frame); } } }).then(result => {
         if (job.state !== 'running') return;
         job.status = result.status; job.headers = result.headers;
         const bytes = Buffer.byteLength(result.body);
         if (bytes > effectiveMax || retainedBytes + bytes > maxTotalBytes ||
           Buffer.byteLength(JSON.stringify({ ...view(job), state: 'completed', body: result.body })) > deliverableMax) {
-          finish(job, 'failed', 'OpenCode response exceeds the deliverable limit; it will not be resubmitted'); return;
+          finish(job, 'failed', 'CLI response exceeds the deliverable limit; it will not be resubmitted'); return;
         }
         job.body = result.body; job.bodyBytes = bytes; retainedBytes += bytes;
         finish(job, 'completed');
-      }, error => { if (job.state === 'running') finish(job, 'failed', String(error?.message || 'OpenCode request failed')); });
+      }, error => { if (job.state === 'running') finish(job, 'failed', String(error?.message || 'CLI request failed')); });
       return view(job);
     }
     const decoder = new StringDecoder('utf8');
@@ -369,11 +379,11 @@ function createInference({ publish = () => {}, maxBytes = 16 * 1024 * 1024,
       buffer += text;
       drainLines();
     };
-    const transport = url.protocol === 'https:' ? https : http;
+    const transport = kilo?.accepts(url, headers, providerBody) ? kilo : url.protocol === 'https:' ? https : http;
     const request = transport.request(url, { method: 'POST', headers }, response => {
       job.status = response.statusCode;
       job.headers = {};
-      for (const name of ['content-type', 'retry-after', 'x-request-id', 'server']) {
+      for (const name of ['content-type', 'retry-after', 'x-should-retry', 'x-request-id', 'server']) {
         if (response.headers[name]) job.headers[name] = response.headers[name];
       }
       // HTTP error bodies go back to Roblox unchanged, even when a provider

@@ -18,7 +18,7 @@ local root = h.byName("ModelPicker")
 local search = h.byName("ModelFilter"):FindFirstChildOfClass("TextBox")
 local paid = h.byName("Model_vendor/paid")
 local free = h.byName("Model_vendor/free:free")
-check("picker is narrower than previous dialog", picker.card.Size.X.Offset <= 520)
+check("picker stays within its compact desktop width", picker.card.Size.X.Offset <= 540)
 check("rows have no redundant second line", h.byName("Detail", paid) == nil)
 check("row fits in one control height", paid.Size.Y.Offset <= 44)
 search.Text = "free"

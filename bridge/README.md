@@ -3,7 +3,7 @@
 Use UAI in your browser while Roblox runs your tools and keeps the conversation.
 Run both on the same computer. The [Windows desktop app](../desktop/README.md)
 detects installed Node.js and offers a verified download if needed. Open the
-single [UAI-Bridge-3.6.5-win-x64.exe](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.6.5/UAI-Bridge-3.6.5-win-x64.exe)
+single [UAI-Bridge-3.7.0-win-x64.exe](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.7.0/UAI-Bridge-3.7.0-win-x64.exe)
 download, complete Node setup, click **Start
 Cowork**, and load the updated UAI script. The browser opens and Roblox connects
 automatically on dedicated port **28791**. No terminal or token copying is needed.
@@ -14,6 +14,18 @@ npm dependencies. It retains port 8790 and manual pairing.
 Join the [Project UAI Discord](https://discord.gg/9xYyyYuKap) for help, provider
 availability updates and new free options. Project UAI Free is the default for
 users without a provider; thank you for continuing to use and support Project UAI.
+
+## Free model tunnels
+
+Open **Tunnels** in the Windows app or Cowork to inspect OpenCode, Kilo and
+Cline. The Windows switches apply on the next bridge start. Cline requires a
+separately installed CLI and a signed-in Cline profile;
+choose **Cline (Bridge)** in Providers and fetch its current free models.
+The Windows app checks CLI installation before Cowork starts and provides
+**Refresh installed apps** independently of connection and sign-in checks.
+Kilo starts its private connection only after a completed anonymous quota refusal.
+See [Cline setup](../docs/CLINE_TUNNEL.md) and [Kilo setup](../docs/KILO_TUNNEL.md).
+Quotas and free promotions remain controlled by each service.
 
 ## OpenCode on desktop
 
@@ -300,6 +312,17 @@ upload cancellation, receipt races, full drafts, themes, drawer focus, token
 recovery, CSP, reduced motion, and 320–1440px layouts. The UI audit suite also checks
 short screens with full drafts, long task lists and model names, live question and
 selection updates, dialog errors, keyboard focus, contrast, and forced colors.
+The model picker also follows provider additions, renames and removals while
+open, and preserves its rows, focus and scroll position on unrelated workspace
+updates. Malformed and duplicate model IDs are ignored. The lifecycle fixture
+checks these behaviors with an 800-model catalog.
+
+Tunnels opens a loading dialog immediately when fetching free models. Closing
+that dialog cancels its browser request, and a late response cannot reopen it
+over a different page. Failed reads offer **Try again** inside the same dialog.
+Connection usage shows **Unknown** when no request has a known cost. Mixed
+usage labels the known estimate and states how many unpriced requests it
+excludes; a confirmed zero-cost model remains distinct from missing pricing.
 Inspect the saved screenshots as well as checking geometry. These fixtures do not
 replace a live executor check. See the [UI audit](UI_AUDIT.md) for the findings.
 The [3.6.5 verification record](../docs/TESTING_3.6.5.md) records the current

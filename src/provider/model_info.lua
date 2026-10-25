@@ -36,6 +36,16 @@ return function(env)
 		if raw ~= "" then
 			local parsed = urls.parse(urls.normaliseBase(raw))
 			if not parsed then return nil end
+			if parsed.scheme == "https" and (parsed.host == "api.kilo.ai" or parsed.host == "ai-gateway.kilo.ai") then
+				local authority = parsed.authority:lower()
+				if authority ~= parsed.host and authority ~= parsed.host .. ":443" then return nil end
+				local path = parsed.path:gsub("/+$", "")
+				for _, route in ipairs({ "/api/gateway", "/api/gateway/v1", "/api/v1" }) do
+					if path == route or path == route .. "/chat/completions" or path == route .. "/responses" or path == route .. "/messages" then return "kilo" end
+				end
+				return nil
+			end
+			if env.require("net/tunnel_route").isClineBase(raw) then return "cline" end
 			if parsed.host == "opencode.ai" then
 				local path = parsed.path:lower():gsub("/+$", "")
 				for _, route in ipairs({ "/inference/go/v1", "/zen/go/v1" }) do

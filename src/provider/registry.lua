@@ -187,11 +187,23 @@ return function(env)
 			return "choose Chat completions, Anthropic messages or Google Gemini; this API protocol is not implemented"
 		end
 		local parsed = urls.parse(M.normaliseBaseUrl(record.baseUrl))
+		local tunnel = env.require("net/tunnel_route")
+		if tunnel.reserved(M.normaliseBaseUrl(record.baseUrl)) then
+			if not M.isCline(record) or record.api ~= nil and record.api ~= "openai" then
+				return "Cline requires the desktop bridge's Chat completions preset."
+			end
+			if util.trim(record.wsUrl) ~= "" or record.query ~= nil and (type(record.query) ~= "table" or next(record.query) ~= nil) then
+				return "Cline uses the desktop bridge; custom sockets and query parameters are not supported."
+			end
+			if util.trim(record.apiKey) ~= "" or tunnel.hasCredentials(record.headers) then
+				return "Cline uses its desktop sign-in. Remove provider keys and credential headers from this route."
+			end
+		end
 		local path = parsed and parsed.path:gsub("/+$", "") or ""
 		if path:match("/api/chat$") or path:match("/api/generate$") then
 			return "Ollama's native /api routes use a different protocol; use its OpenAI-compatible base URL, usually http://127.0.0.1:11434/v1"
 		end
-		if (path:match("/responses$") and not M.isOpencodeGo(record))
+		if (path:match("/responses$") and not M.isOpencodeGo(record) and not M.isAgentRouter(record))
 			or (path:match(":generateContent$") or path:match(":streamGenerateContent$") or path:match("/generateContent$"))
 				and record.api ~= "gemini" and M.opencodeGoProtocol(record) ~= "gemini" then
 			return "this route uses a different API; select the matching Chat completions, Anthropic messages or Google Gemini protocol"
@@ -242,6 +254,14 @@ return function(env)
 		return parsed ~= nil and parsed.host == "opencode.ai"
 	end
 
+	function M.isCline(record)
+		return env.require("net/tunnel_route").isClineBase(M.normaliseBaseUrl(record and record.baseUrl or ""))
+	end
+
+	function M.isAgentRouter(record)
+		return env.require("provider/agentrouter").matches(record)
+	end
+
 	local function officialOpencodeRoute(record)
 		local parsed, path = providerRoute(record)
 		if not parsed or parsed.scheme ~= "https" or parsed.host ~= "opencode.ai" then return nil end
@@ -274,7 +294,7 @@ return function(env)
 
 	-- Host based so manually entered gateways keep the same required identity.
 	function M.requiresClaude(record)
-		if M.proxyProvider(record) == "agentrouter" then return true end
+		if M.isAgentRouter(record) or M.proxyProvider(record) == "agentrouter" then return true end
 		local base = util.trim(tostring(record and record.baseUrl or "")):lower()
 		local authority = base:match("^https?://([^/%?#]+)")
 		if not authority or authority:find("@", 1, true) then return false end
@@ -285,7 +305,7 @@ return function(env)
 	function M.identityFor(record)
 		-- A manually entered Zen endpoint gets the same compatibility identity as
 		-- the preset without competing Claude/Stainless headers.
-		if M.isOpencode(record) then return "none" end
+		if M.isOpencode(record) or M.isCline(record) then return "none" end
 		if M.requiresClaude(record) then return "claude" end
 		return (record.claudeUa ~= false) and "claude" or "none"
 	end

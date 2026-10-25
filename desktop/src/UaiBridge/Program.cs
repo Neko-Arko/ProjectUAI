@@ -30,6 +30,7 @@ internal static class Program
         {
             Environment.SetEnvironmentVariable("UAI_BRIDGE_TEST_NO_UPDATES", "1");
             Environment.SetEnvironmentVariable("UAI_OPENCODE_DISABLED", "1");
+            Environment.SetEnvironmentVariable("UAI_CLINE_DISABLED", "1");
         }
         if (args.Length == 2 && args[0] == "--self-test")
             return DesktopSelfTest.RunAsync(args[1]).GetAwaiter().GetResult();

@@ -212,7 +212,7 @@ return function(env)
 	-- model shown a tool will use it, and a turn spent learning that writefile does
 	-- not exist here is a wasted turn. Discovery and dispatch share one permission
 	-- decision, including explicit rules overriding the base mode.
-	function M.definitions(opts)
+	function M.available(opts)
 		opts = opts or {}
 		M.load()
 		local profile
@@ -239,16 +239,24 @@ return function(env)
 			if opts.exclude and opts.exclude[name] then allow = false end
 			if opts.groups and not opts.groups[tool.group] and not toolbox then allow = false end
 			if allow then
-				out[#out + 1] = {
-					type = "function",
-					["function"] = {
-						name = tool.name,
-						description = tool.description,
-						parameters = normaliseSchema(tool.parameters),
-					},
-				}
+				out[#out + 1] = tool
 			end
 		end
+		return out
+	end
+
+	-- Materialize only requested schemas. Discovery can use available() without
+	-- cloning every nested declaration merely to read names and descriptions.
+	function M.definition(tool)
+		return { type = "function", ["function"] = {
+			name = tool.name, description = tool.description,
+			parameters = normaliseSchema(tool.parameters),
+		} }
+	end
+
+	function M.definitions(opts)
+		local out = {}
+		for _, tool in ipairs(M.available(opts)) do out[#out + 1] = M.definition(tool) end
 		return out
 	end
 

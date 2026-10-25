@@ -18,7 +18,7 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Window.Resources>
-    <Grid>
+    <Grid Background="{DynamicResource CanvasBrush}">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" />
@@ -116,6 +116,8 @@
                             Command="{Binding NavigateCommand}" CommandParameter="2" AutomationProperties.Name="Updates" />
                     <Button x:Name="SettingsNavigation" Content="Settings" Style="{StaticResource SettingsNav}"
                             Command="{Binding NavigateCommand}" CommandParameter="3" AutomationProperties.Name="Settings" />
+                    <Button x:Name="TunnelsNavigation" Content="Tunnels" Style="{StaticResource TunnelsNav}"
+                            Command="{Binding NavigateCommand}" CommandParameter="4" AutomationProperties.Name="Tunnels" />
                 </StackPanel>
                 <StackPanel Grid.Row="3">
                     <Border Height="1" Background="#3D483C" Margin="9,0,9,17" />
@@ -151,18 +153,21 @@
                     </Style>
                 </Border.Style>
                 <UniformGrid Rows="1">
-                    <Button Content="Workspace" Style="{StaticResource WorkspaceNav}" Padding="12,10" Margin="3,0"
+                    <Button Content="Workspace" Style="{StaticResource WorkspaceNav}" FontSize="12" Padding="8,10" Margin="2,0"
                             HorizontalContentAlignment="Center" Command="{Binding NavigateCommand}" CommandParameter="0"
                             AutomationProperties.Name="Workspace" />
-                    <Button Content="Connections" Style="{StaticResource ConnectionsNav}" Padding="12,10" Margin="3,0"
+                    <Button Content="Connections" Style="{StaticResource ConnectionsNav}" FontSize="12" Padding="8,10" Margin="2,0"
                             HorizontalContentAlignment="Center" Command="{Binding NavigateCommand}" CommandParameter="1"
                             AutomationProperties.Name="Connections" />
-                    <Button Content="Updates" Style="{StaticResource UpdatesNav}" Padding="12,10" Margin="3,0"
+                    <Button Content="Updates" Style="{StaticResource UpdatesNav}" FontSize="12" Padding="8,10" Margin="2,0"
                             HorizontalContentAlignment="Center" Command="{Binding NavigateCommand}" CommandParameter="2"
                             AutomationProperties.Name="Updates" />
-                    <Button Content="Settings" Style="{StaticResource SettingsNav}" Padding="12,10" Margin="3,0"
+                    <Button Content="Settings" Style="{StaticResource SettingsNav}" FontSize="12" Padding="8,10" Margin="2,0"
                             HorizontalContentAlignment="Center" Command="{Binding NavigateCommand}" CommandParameter="3"
                             AutomationProperties.Name="Settings" />
+                    <Button Content="Tunnels" Style="{StaticResource TunnelsNav}" FontSize="12" Padding="8,10" Margin="2,0"
+                            HorizontalContentAlignment="Center" Command="{Binding NavigateCommand}" CommandParameter="4"
+                            AutomationProperties.Name="Tunnels" />
                 </UniformGrid>
             </Border>
 
@@ -326,28 +331,6 @@
                                 <Grid Margin="0,0,0,13">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                     <StackPanel Margin="0,0,22,0">
-                                        <TextBlock Text="OpenCode tunnel" Style="{StaticResource CardTitle}" />
-                                        <TextBlock Text="Give OpenCode a direct connection to this workspace." Style="{StaticResource BodyText}" />
-                                    </StackPanel>
-                                    <CheckBox x:Name="OpenCodeToggle" Grid.Column="1" Style="{StaticResource Switch}"
-                                              IsChecked="{Binding OpenCodeEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                              IsEnabled="{Binding CanConfigureConnections}" AutomationProperties.Name="Enable OpenCode tunnel" />
-                                </Grid>
-                                <Border Background="{StaticResource SoftGreenBrush}" CornerRadius="7" Padding="12,9" Margin="0,4,0,14">
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding OpenCodeStatus}" Foreground="{StaticResource ForestBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
-                                        <TextBlock Text="{Binding OpenCodeDetail}" Style="{StaticResource BodyText}" />
-                                    </StackPanel>
-                                </Border>
-                                <Button Content="Install OpenCode" Style="{StaticResource ActionButton}" Command="{Binding OpenCodeWebsiteCommand}"
-                                        HorizontalAlignment="Left" AutomationProperties.Name="Open OpenCode installation website" />
-                            </StackPanel>
-                        </Border>
-                        <Border Style="{StaticResource Card}">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,13">
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                    <StackPanel Margin="0,0,22,0">
                                         <TextBlock Text="MCP access" Style="{StaticResource CardTitle}" />
                                         <TextBlock Text="Connect a compatible coding agent through MCP." Style="{StaticResource BodyText}" />
                                     </StackPanel>
@@ -366,6 +349,96 @@
                             </StackPanel>
                         </Border>
                         <TextBlock Text="{Binding SettingsNote}" Style="{StaticResource BodyText}" Margin="2,2,2,0" AutomationProperties.Name="Connection settings note" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="TunnelsPage">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedPage}" Value="4">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <TextBlock Text="MORE WAYS TO CONNECT" Style="{StaticResource Eyebrow}" />
+                        <TextBlock Text="Tunnels." Style="{StaticResource PageTitle}" />
+                        <TextBlock Text="Choose how free models reach UAI. Availability follows each provider's allowance." Style="{StaticResource PageDescription}" />
+                        <TextBlock Text="{Binding InstallationDetail}" Style="{StaticResource BodyText}" Margin="2,0,2,12" />
+                        <Button x:Name="RefreshInstallationsButton" Content="{Binding RefreshInstallationsLabel}"
+                                Command="{Binding RefreshInstallationsCommand}" Style="{StaticResource ActionButton}"
+                                HorizontalAlignment="Left" Margin="0,0,0,20" AutomationProperties.Name="Refresh installed apps" />
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,13">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,22,0">
+                                        <TextBlock Text="Cline tunnel" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="Use Cline's free models through its installed CLI." Style="{StaticResource BodyText}" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="ClineToggle" Grid.Column="1" Style="{StaticResource Switch}"
+                                              IsChecked="{Binding ClineEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding CanConfigureConnections}" AutomationProperties.Name="Enable Cline tunnel" />
+                                </Grid>
+                                <Border Background="{StaticResource SoftGreenBrush}" CornerRadius="7" Padding="12,9" Margin="0,4,0,14">
+                                    <StackPanel>
+                                        <TextBlock x:Name="ClineInstallationStatus" Text="{Binding ClineInstallation}" Foreground="{StaticResource ForestBrush}" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,5" />
+                                        <TextBlock Text="{Binding ClineStatus, StringFormat='Connection: {0}'}" Foreground="{StaticResource ForestBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                        <TextBlock Text="{Binding ClineDetail}" Style="{StaticResource BodyText}" />
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock Text="Install Cline CLI, then run this command in PowerShell to sign in. Restart the bridge after signing in." Style="{StaticResource BodyText}" />
+                                <TextBlock Text="{Binding ClineSignInText}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" Margin="0,12,0,16" />
+                                <WrapPanel>
+                                    <Button x:Name="ClineSetupButton" Content="Cline setup" Style="{StaticResource ActionButton}" Command="{Binding ClineWebsiteCommand}"
+                                            Margin="0,0,12,6" AutomationProperties.Name="Open Cline setup guide" />
+                                    <Button x:Name="ClineSignInButton" Content="Copy sign-in command" Style="{StaticResource ActionButton}" Command="{Binding CopyClineSignInCommand}"
+                                            Margin="0,0,0,6" AutomationProperties.Name="Copy Cline sign-in command" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,13">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,22,0">
+                                        <TextBlock Text="OpenCode tunnel" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="Give OpenCode a direct connection to this workspace." Style="{StaticResource BodyText}" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="OpenCodeToggle" Grid.Column="1" Style="{StaticResource Switch}"
+                                              IsChecked="{Binding OpenCodeEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding CanConfigureConnections}" AutomationProperties.Name="Enable OpenCode tunnel" />
+                                </Grid>
+                                <Border Background="{StaticResource SoftGreenBrush}" CornerRadius="7" Padding="12,9" Margin="0,4,0,14">
+                                    <StackPanel>
+                                        <TextBlock x:Name="OpenCodeInstallationStatus" Text="{Binding OpenCodeInstallation}" Foreground="{StaticResource ForestBrush}" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,5" />
+                                        <TextBlock Text="{Binding OpenCodeStatus, StringFormat='Connection: {0}'}" Foreground="{StaticResource ForestBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                        <TextBlock Text="{Binding OpenCodeDetail}" Style="{StaticResource BodyText}" />
+                                    </StackPanel>
+                                </Border>
+                                <Button Content="Install OpenCode" Style="{StaticResource ActionButton}" Command="{Binding OpenCodeWebsiteCommand}"
+                                        HorizontalAlignment="Left" AutomationProperties.Name="Open OpenCode installation website" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,13">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,22,0">
+                                        <TextBlock Text="Kilo tunnel" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="Keep Kilo free requests moving after an address limit." Style="{StaticResource BodyText}" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="KiloToggle" Grid.Column="1" Style="{StaticResource Switch}"
+                                              IsChecked="{Binding KiloEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding CanConfigureConnections}" AutomationProperties.Name="Enable Kilo tunnel" />
+                                </Grid>
+                                <TextBlock Text="{Binding KiloStatus}" Foreground="{StaticResource ForestBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                <TextBlock Text="{Binding KiloDetail}" Style="{StaticResource BodyText}" />
+                                <TextBlock Text="The first quota recovery downloads a verified 22 MB helper. Provider keys and Windows proxy settings stay unchanged." Style="{StaticResource BodyText}" Margin="0,8,0,0" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="{Binding SettingsNote}" Style="{StaticResource BodyText}" Margin="2,2,2,0" AutomationProperties.Name="Tunnel settings note" />
                     </StackPanel>
 
                     <StackPanel x:Name="UpdatesPage">

@@ -19,6 +19,7 @@ return function(env)
 	}
 
 	function M.styleOf(record)
+		if env.require("provider/agentrouter").protocol(record) == "responses" then return "openai" end
 		local protocol = env.require("provider/registry").opencodeGoProtocol(record)
 		if protocol then return protocol == "gemini" and "gemini" or protocol == "anthropic" and "anthropic" or "openai" end
 		if record and record.api == "gemini" then return "gemini" end

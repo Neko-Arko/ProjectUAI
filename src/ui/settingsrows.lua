@@ -375,6 +375,8 @@ return function(env)
 					width = math.max(props.menuWidth or theme.size.menuWide,
 						math.floor(handle.instance.AbsoluteSize.X)),
 					options = menuOptions,
+					searchable = props.searchable,
+					searchPlaceholder = props.searchPlaceholder,
 					onSelect = function(value)
 						current = value
 						control.text.Text = labelFor(value)

@@ -1,6 +1,12 @@
 # UAI Relay (Android companion)
 
-Version **3.6.5** (Android version code 6).
+Version **3.7.0** (Android version code 7).
+
+**Settings > Kilo tunnel** enables automatic anonymous Kilo quota recovery.
+Native Tor starts only after an explicit quota refusal, with one circuit retry
+if the first exit is limited. Stop the relay to change the switch. Cowork in
+Roblox and the companion show its status. Shared exits retain their own quotas;
+this does not guarantee unlimited access. See [setup and evidence](../docs/KILO_TUNNEL.md).
 
 A foreground service that holds the upstream provider connection while the
 Project UAI client submits and polls through short loopback calls. The client
@@ -24,7 +30,10 @@ serving, no agent state, no commands. Just the relay contract in
 
 ## Build
 
-JDK 17 and the Android SDK are required (Android Studio bundles both).
+JDK 17 and Android SDK platform **37.1** are required. The checked-in Gradle
+wrapper verifies Gradle 9.6.0 by SHA-256; Android Gradle plugin 9.4.1 supplies
+Kotlin 2.2.10. Tor Android 0.4.9.14 requires the newer compile API. The app still
+supports Android 8+ (`minSdk 26`) and retains `targetSdk 36`.
 
 ```powershell
 # From companion/

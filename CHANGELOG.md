@@ -1,5 +1,55 @@
 # Changelog
 
+## 3.7.0 - October 25, 2026 - Models, tunnels and faster workflows
+
+- Align the Roblox client, bridge/web UI, Windows desktop and Android companion
+  at 3.7.0; Android advances to version code 7 with its existing production signer.
+- Use native Responses for AgentRouter GPT models, with the selected reasoning
+  effort, stateless requests and optional tool fields preserved. Verify an actual
+  UAI tool batch and result replay with `gpt-6.1-sol`. See [AgentRouter](docs/AGENTROUTER.md).
+- Add Vercel AI Gateway, Friendli, Venice, Nscale, Arcee, AI/ML API and Perplexity
+  Orchestrator presets with documented access labels and [setup guides](docs/providers/README.md).
+  Filter explicitly incompatible catalog entries and add searchable model menus.
+- Add a Tunnels page to the Windows bridge and Cowork for OpenCode, Kilo and
+  Cline. Cline uses the separately installed, signed-in CLI and its live free
+  model catalog. The new Cline (Bridge) provider requires the local bridge;
+  Roblox keeps tool execution, approvals and Stop. See [setup](docs/CLINE_TUNNEL.md).
+- Detect installed OpenCode and Cline apps before Cowork starts. Keep installation,
+  enablement and connection readiness separate, with an independent refresh.
+- Refresh the Roblox model picker with searchable saved providers, clearer model
+  details and connection health, and larger controls on touch devices. Cancel
+  stale catalog refreshes when closing the picker or switching providers.
+- Keep the Remotes Following action readable on narrow screens with larger text;
+  the toolbar scrolls instead of compressing the action label.
+- Refresh prices and context/reply limits from five catalog sources on October 25:
+  1,760 entries across 15 providers, including 401 Kilo entries and five exact
+  Cline free promotions. Preserve unknown prices and provider-specific rates.
+- Add multiword Tools and Logs searches, ranked tool discovery and useful schema
+  page sizes. Avoid building hidden parameter controls and cloning every schema
+  during discovery. Bound retained logs after redaction.
+- Reject invalid token counters, retain cache-write totals and persist unknown-cost
+  request counts in usage history. Show incomplete cost coverage on Home.
+- Keep Cowork catalogs current after provider changes while preserving focus and
+  scroll. Cancel closed catalog dialogs and discard late results; unrelated state
+  snapshots no longer rebuild large model lists.
+- Recover completed anonymous Kilo quota refusals through a private Tor tunnel,
+  enabled by default and started only when needed. Limit circuit retry to one,
+  suppress repeated terminal refusals for 60 seconds, preserve deadlines and
+  cancellation, and exclude signed-in requests and other providers.
+- Add switches and live connection status in the apps, Cowork web UI and Roblox.
+  Honor upstream `x-should-retry: false` instead of repeating terminal refusals.
+- Ship the Windows helper by pinned, verified download and native Tor in the
+  Android APK. Retain old bridge updater compatibility by embedding new modules
+  in its existing release package filenames.
+- Correct stale Kilo quota claims and document the observed IP-scoped recovery,
+  account limits, shared-exit limitations and [setup](docs/KILO_TUNNEL.md).
+  Recovery does not guarantee unlimited requests.
+- Include the 3.6.7 WPF desktop, reliable bridge payload packaging, manual update
+  checks and cache cleanup. See [verification](docs/TESTING_3.7.0.md).
+- Fix tunnel shutdown races, retained-request memory accounting and stale
+  browser connection status after disconnect or bridge replacement. Update the
+  Android build toolchain for the current Tor library's compile API requirement.
+
 ## 3.6.6 — October 23, 2026 — A provider gallery and a clearer queue
 
 - Rebuild the add-provider flow as a gallery. Add a provider opens three tiers --

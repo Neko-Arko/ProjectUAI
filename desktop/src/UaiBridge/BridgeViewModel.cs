@@ -20,9 +20,10 @@ internal sealed class BridgeViewModel : INotifyPropertyChanged, IDisposable
     private readonly List<DesktopCommand> commands = [];
     private DesktopPreferences preferences;
     private NodeInstallation? runtime;
+    private TunnelInstallations tunnelInstallations = TunnelInstallations.Unknown("Checking installed apps.");
     private Task? initialization;
     private DateTime nextUpdateCheck = DateTime.MinValue;
-    private bool busy, installing, detecting, checkingUpdates, refreshing, checkingBridge, exiting, disposed, compact;
+    private bool busy, installing, detecting, checkingInstallations, checkingUpdates, refreshing, checkingBridge, exiting, disposed, compact;
     private int selectedPage;
     private string nodeState = "Checking Node.js", nodeDetail = "Looking for a compatible runtime on your computer.", notice = "";
 
@@ -35,16 +36,19 @@ internal sealed class BridgeViewModel : INotifyPropertyChanged, IDisposable
         StopCommand = Async(StopAsync, () => CanStop);
         InstallNodeCommand = Async(InstallNodeAsync, () => CanInstall);
         RecheckNodeCommand = Async(FindNodeAsync, () => CanRecheck);
+        RefreshInstallationsCommand = Async(RefreshTunnelInstallationsAsync, () => CanRefreshInstallations);
         UpdateCommand = Async(() => IsUpdateReady ? requestClose(true) : CheckUpdatesAsync(true), () => CanUpdate);
         CheckBridgeCommand = Async(CheckBridgeUpdatesAsync, () => CanCheckBridge);
         CopyClientCommand = Async(CopyClientAsync, () => !IsExiting);
         McpSetupCommand = Command(_ => OpenExternal(bridge.BrowserUrl + "&panel=mcp"), () => IsRunning && bridge.McpEnabled && !IsExiting);
         OpenCodeWebsiteCommand = Command(_ => OpenExternal("https://opencode.ai"));
+        ClineWebsiteCommand = Command(_ => OpenExternal("https://docs.cline.bot/cline-cli/overview"));
+        CopyClineSignInCommand = Async(() => { Clipboard.SetText(ClineSignInText); SetNotice("Cline sign-in command copied. Run it in PowerShell, then restart the bridge."); return Task.CompletedTask; }, () => !IsExiting);
         NodeWebsiteCommand = Command(_ => OpenExternal(NodeRuntime.DownloadPage));
         HelpCommand = Command(_ => OpenExternal(BridgeProcess.Discord));
         ProjectCommand = Command(_ => OpenExternal("https://github.com/Project-Ptolemy/ProjectUAI"));
         DismissNoticeCommand = Command(_ => SetNotice(""));
-        NavigateCommand = Command(value => { if (int.TryParse(value?.ToString(), out int page) && page is >= 0 and <= 3) SelectedPage = page; });
+        NavigateCommand = Command(value => { if (int.TryParse(value?.ToString(), out int page) && page is >= 0 and <= 4) SelectedPage = page; });
         timer = new DispatcherTimer(TimeSpan.FromMilliseconds(1500), DispatcherPriority.Background, OnTick, dispatcher);
         timer.Stop();
         bridge.Changed += OnChanged; updater.Changed += OnChanged;
@@ -52,7 +56,7 @@ internal sealed class BridgeViewModel : INotifyPropertyChanged, IDisposable
 
     public event PropertyChangedEventHandler? PropertyChanged;
     public string Version => DesktopUpdater.CurrentVersion;
-    public int SelectedPage { get => selectedPage; set { if (value is < 0 or > 3 || selectedPage == value) return; selectedPage = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedPage))); Refresh(); } }
+    public int SelectedPage { get => selectedPage; set { if (value is < 0 or > 4 || selectedPage == value) return; selectedPage = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedPage))); Refresh(); } }
     public bool IsCompact { get => compact; set { if (compact == value) return; compact = value; Refresh(); } }
     public bool IsRunning => bridge.BrowserUrl is not null;
     public bool IsConnected => bridge.State == "Connected to Roblox";
@@ -93,11 +97,25 @@ internal sealed class BridgeViewModel : INotifyPropertyChanged, IDisposable
     public string OpenCodeDetail => !OpenCodeEnabled && !IsRunning ? "Enable to use your installed OpenCode CLI." : bridge.OpenCodeDetail;
     public string OpenCodeStatus => !OpenCodeEnabled ? "Off" : !IsRunning ? "On next start" : bridge.OpenCodeState switch
         { "ready" => "Ready", "starting" => "Starting", "missing" => "Setup needed", "failed" => "Needs attention", "disabled" => "Off", _ => "Waiting" };
+    public string ClineStatus => !ClineEnabled ? "Off" : !IsRunning ? "On next start" : bridge.ClineState switch
+        { "ready" => "Ready", "auth-required" => "Sign in needed", "starting" => "Starting", "missing" => "Install Cline", "failed" => "Needs attention", "disabled" => "Off", _ => "Waiting" };
+    public string ClineDetail => !IsRunning ? "Uses your UAI Cline profile when present, otherwise your existing Cline sign-in." : bridge.ClineDetail;
+    public string ClineSignInText => "cline auth cline";
+    public string OpenCodeInstallation => InstallationLabel(tunnelInstallations.OpenCode);
+    public string ClineInstallation => InstallationLabel(tunnelInstallations.Cline);
+    public string InstallationDetail => checkingInstallations ? "Looking for installed OpenCode and Cline apps." : tunnelInstallations.Detail;
+    public string RefreshInstallationsLabel => checkingInstallations ? "Checking installed apps..." : "Refresh installed apps";
+    public bool CanRefreshInstallations => !checkingInstallations && !detecting && !installing && !exiting;
+    private string InstallationLabel(bool? installed) => checkingInstallations ? "Checking installation" : installed switch
+        { true => "Installed", false => "Not found", _ => "Not checked" };
     public string McpStatus => (IsRunning ? bridge.McpEnabled : McpEnabled) ? IsRunning ? "Enabled" : "On next start" : "Off";
+    public string KiloStatus => !KiloEnabled ? "Off" : !IsRunning ? "On next start" : bridge.KiloState switch
+        { "standby" => "Ready when needed", "ready" => "Ready", "limited" => "Quota reached", "rotating" => "Changing connection", "starting" => "Connecting", "downloading" => "Downloading helper", "failed" => "Needs attention", _ => "Waiting" };
+    public string KiloDetail => !IsRunning ? "Uses a private Tor connection for anonymous Kilo free requests after a quota response. Each outbound address still has an hourly allowance." : bridge.KiloDetail;
     public string McpDetail => (IsRunning ? bridge.McpEnabled : McpEnabled)
         ? "Connect a coding agent to UAI tools in Roblox. Game permissions stay in your control."
         : "External agents cannot connect through MCP.";
-    public string SettingsNote => IsRunning ? "Stop the bridge to change coding connections." : "Coding connections apply when you next start the bridge.";
+    public string SettingsNote => IsRunning ? "Stop the bridge to change connections or tunnels." : "Connections and tunnels apply when you next start the bridge.";
     public bool CanStart => !IsBusy && !installing && !detecting && (runtime is not null || IsRunning);
     public bool CanStop => IsRunning && !IsBusy;
     public bool CanInstall => !installing && !detecting && !IsBusy && runtime is null;
@@ -107,6 +125,8 @@ internal sealed class BridgeViewModel : INotifyPropertyChanged, IDisposable
     public bool CanConfigureSettings => !IsExiting;
     public bool OpenCodeEnabled { get => preferences.OpenCodeEnabled; set { if (CanConfigureConnections) Save(preferences with { OpenCodeEnabled = value }); } }
     public bool McpEnabled { get => preferences.McpEnabled; set { if (CanConfigureConnections) Save(preferences with { McpEnabled = value }); } }
+    public bool KiloEnabled { get => preferences.KiloEnabled; set { if (CanConfigureConnections) Save(preferences with { KiloEnabled = value }); } }
+    public bool ClineEnabled { get => preferences.ClineEnabled; set { if (CanConfigureConnections) Save(preferences with { ClineEnabled = value }); } }
     public bool OpenBrowserOnStart { get => preferences.OpenBrowser; set { if (CanConfigureSettings) Save(preferences with { OpenBrowser = value }); } }
     public bool AutomaticAppUpdates { get => preferences.AutomaticAppUpdates; set { if (CanConfigureSettings) Save(preferences with { AutomaticAppUpdates = value }); } }
     public bool StartOnLaunch { get => preferences.StartOnLaunch; set { if (CanConfigureSettings) Save(preferences with { StartOnLaunch = value }); } }
@@ -114,11 +134,14 @@ internal sealed class BridgeViewModel : INotifyPropertyChanged, IDisposable
     public ICommand StopCommand { get; }
     public ICommand InstallNodeCommand { get; }
     public ICommand RecheckNodeCommand { get; }
+    public ICommand RefreshInstallationsCommand { get; }
     public ICommand UpdateCommand { get; }
     public ICommand CheckBridgeCommand { get; }
     public ICommand CopyClientCommand { get; }
     public ICommand McpSetupCommand { get; }
     public ICommand OpenCodeWebsiteCommand { get; }
+    public ICommand ClineWebsiteCommand { get; }
+    public ICommand CopyClineSignInCommand { get; }
     public ICommand NodeWebsiteCommand { get; }
     public ICommand HelpCommand { get; }
     public ICommand ProjectCommand { get; }
@@ -199,6 +222,20 @@ internal sealed class BridgeViewModel : INotifyPropertyChanged, IDisposable
         catch (OperationCanceledException) { }
         catch (Exception) { nodeState = "Could not check Node.js"; nodeDetail = "Check again, or install Node.js from its official website."; }
         finally { detecting = false; Refresh(); }
+        if (!exiting && !disposed) await RefreshTunnelInstallationsAsync();
+    }
+    internal async Task RefreshTunnelInstallationsAsync()
+    {
+        if (!CanRefreshInstallations) return;
+        checkingInstallations = true; Refresh();
+        try
+        {
+            var found = await TunnelInstallations.FindAsync(runtime, lifetime.Token);
+            if (!exiting && !disposed) tunnelInstallations = found;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception) { tunnelInstallations = TunnelInstallations.Unknown("Could not check installed apps. Refresh to try again."); }
+        finally { checkingInstallations = false; Refresh(); }
     }
     private async Task InstallNodeAsync()
     {
@@ -212,6 +249,7 @@ internal sealed class BridgeViewModel : INotifyPropertyChanged, IDisposable
         catch (OperationCanceledException) { }
         catch (Exception error) { nodeState = "Download did not finish"; nodeDetail = error.Message; }
         finally { installing = false; Refresh(); }
+        if (!exiting && !disposed) await RefreshTunnelInstallationsAsync();
     }
     internal async Task CheckUpdatesAsync(bool manual = false)
     {

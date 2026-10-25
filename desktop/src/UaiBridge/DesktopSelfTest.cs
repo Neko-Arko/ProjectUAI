@@ -4,7 +4,8 @@ using System.Text.Json;
 namespace ProjectUai.Bridge;
 
 // Synthetic offline checks. No installer, release download, app replacement, or
-// bridge startup runs here. Only --version probe children use a real process.
+// bridge startup runs here. Runtime probes and read-only installation discovery
+// use real child processes; installed coding CLIs are never started.
 internal static class DesktopSelfTest
 {
     public static async Task<int> RunAsync(string output)
@@ -24,7 +25,7 @@ internal static class DesktopSelfTest
         {
             string preferencesPath = Path.Combine(root, "preferences.json");
             Check("Missing preferences preserve enabled integrations and manual startup", DesktopPreferences.Load(preferencesPath) == new DesktopPreferences());
-            var savedPreferences = new DesktopPreferences(false, false, false, false, true); savedPreferences.Save(preferencesPath);
+            var savedPreferences = new DesktopPreferences(false, false, false, false, true, KiloEnabled: true, ClineEnabled: false); savedPreferences.Save(preferencesPath);
             Check("All desktop switches survive a new preferences load", DesktopPreferences.Load(preferencesPath) == savedPreferences);
             File.WriteAllText(preferencesPath, "{\"OpenCodeEnabled\":false}");
             Check("Partial older preferences keep defaults for newly added controls", DesktopPreferences.Load(preferencesPath) == new DesktopPreferences(OpenCodeEnabled: false));
@@ -33,9 +34,66 @@ internal static class DesktopSelfTest
             var launch = new System.Diagnostics.ProcessStartInfo();
             launch.Environment["UAI_OPENCODE_BINARY"] = "C:\\Installed App\\opencode-cli.exe";
             savedPreferences.BridgeOptions.Apply(launch);
+            Check("Kilo tunnel preference is passed only to the bridge process", launch.Environment["UAI_KILO_TUNNEL"] == "1");
             Check("Disabled integration switches are passed to the child process", launch.Environment["UAI_OPENCODE_DISABLED"] == "1" && launch.Environment["UAI_MCP_DISABLED"] == "1");
+            Check("Cline opt-out overrides an inherited enable", launch.Environment["UAI_CLINE_DISABLED"] == "1");
             new DesktopPreferences().BridgeOptions.Apply(launch);
+            Check("Kilo recovery is enabled by default", launch.Environment["UAI_KILO_TUNNEL"] == "1");
+            Check("Cline is enabled by default and clears stale opt-out", launch.Environment["UAI_CLINE_DISABLED"] == "0");
+            new DesktopPreferences(KiloEnabled: false).BridgeOptions.Apply(launch);
+            Check("Kilo recovery can be disabled independently", launch.Environment["UAI_KILO_TUNNEL"] == "0");
             Check("Re-enabled integrations override stale disables and retain binary override", launch.Environment["UAI_OPENCODE_DISABLED"] == "0" && launch.Environment["UAI_MCP_DISABLED"] == "0" && launch.Environment["UAI_OPENCODE_BINARY"] == "C:\\Installed App\\opencode-cli.exe");
+            await using (var statusBridge = new BridgeProcess())
+            {
+                using var ready = JsonDocument.Parse("""{"schema":1,"enabled":true,"available":true,"state":"ready","message":"Ready","version":"2.17.0"}""");
+                statusBridge.ApplyClineCapability(ready.RootElement);
+                Check("Cline readiness requires a supported capability", statusBridge.ClineState == "ready" && statusBridge.ClineVersion == "2.17.0");
+                foreach (string invalid in new[] { "{}", "null", """{"schema":2,"state":"ready"}""", """{"schema":1,"state":"ready","available":false,"enabled":true}""", """{"schema":1,"state":"ready","available":true,"enabled":false}""" })
+                {
+                    using var value = JsonDocument.Parse(invalid);
+                    statusBridge.ApplyClineCapability(value.RootElement);
+                    Check("Cline clears stale ready state for unsupported or unavailable capability " + invalid, statusBridge.ClineState == "unavailable" && statusBridge.ClineVersion is null);
+                }
+                using var signedOut = JsonDocument.Parse("""{"schema":1,"enabled":true,"available":false,"state":"auth-required","message":"Sign in to Cline"}""");
+                statusBridge.ApplyClineCapability(signedOut.RootElement);
+                Check("Signed-out Cline has an actionable status without claiming readiness", statusBridge.ClineState == "auth-required" && statusBridge.ClineDetail == "Sign in to Cline");
+            }
+            var detectionNode = await NodeRuntime.FindAsync() ?? throw new IOException("Node.js is required for installation discovery checks.");
+            var noNode = await TunnelInstallations.FindAsync(null, default);
+            Check("Missing Node reports unknown installation rather than claiming apps are absent", noNode.OpenCode is null && noNode.Cline is null);
+            string apps = Path.Combine(root, "Installed apps"); Directory.CreateDirectory(apps);
+            var discoveryEnvironment = new Dictionary<string, string>
+            {
+                ["PATH"] = apps, ["USERPROFILE"] = apps, ["LOCALAPPDATA"] = apps, ["APPDATA"] = apps,
+                ["ProgramFiles"] = apps, ["ProgramFiles(x86)"] = apps,
+                ["SystemRoot"] = Environment.GetEnvironmentVariable("SystemRoot") ?? "C:\\Windows",
+                ["UAI_OPENCODE_DISABLED"] = "1", ["UAI_CLINE_DISABLED"] = "1",
+                ["NODE_OPTIONS"] = "--uai-invalid-preload-must-be-removed"
+            };
+            var absentApps = await TunnelInstallations.FindAsync(detectionNode, default, discoveryEnvironment);
+            Check("Empty fixture installation paths report both CLIs missing", absentApps.OpenCode == false && absentApps.Cline == false);
+            string openCodeFixture = Path.Combine(apps, "opencode-cli.exe"), clineFixture = Path.Combine(apps, "cline.exe");
+            File.WriteAllBytes(openCodeFixture, [0x4d, 0x5a, 0, 0]);
+            File.WriteAllBytes(clineFixture, [0x4d, 0x5a, 0, 0]);
+            var installedApps = await TunnelInstallations.FindAsync(detectionNode, default, discoveryEnvironment);
+            Check("Disabled CLIs are found before bridge startup without executing fixture binaries", installedApps.OpenCode == true && installedApps.Cline == true);
+            File.Delete(openCodeFixture); File.Delete(clineFixture);
+            var removedApps = await TunnelInstallations.FindAsync(detectionNode, default, discoveryEnvironment);
+            Check("Refreshing discovery clears installations that were removed", removedApps.OpenCode == false && removedApps.Cline == false);
+            string overrideDirectory = Path.Combine(root, "Explicit tool locations"); Directory.CreateDirectory(overrideDirectory);
+            string overrideOpenCode = Path.Combine(overrideDirectory, "custom-open.exe"), overrideCline = Path.Combine(overrideDirectory, "custom-cline.exe");
+            File.WriteAllBytes(overrideOpenCode, [0x4d, 0x5a, 0, 0]); File.WriteAllBytes(overrideCline, [0x4d, 0x5a, 0, 0]);
+            discoveryEnvironment["UAI_OPENCODE_BINARY"] = overrideOpenCode;
+            discoveryEnvironment["UAI_CLINE_BINARY"] = overrideCline;
+            var overriddenApps = await TunnelInstallations.FindAsync(detectionNode, default, discoveryEnvironment);
+            Check("Explicit native binary locations are shared with bridge detection", overriddenApps.OpenCode == true && overriddenApps.Cline == true);
+            using (var cancelledDiscovery = new CancellationTokenSource())
+            {
+                cancelledDiscovery.Cancel(); bool discoveryStopped = false;
+                try { await TunnelInstallations.FindAsync(detectionNode, cancelledDiscovery.Token, discoveryEnvironment); }
+                catch (OperationCanceledException) { discoveryStopped = true; }
+                Check("Cancelled discovery does not start a probe", discoveryStopped);
+            }
             string launchFixture = Path.Combine(root, "App with spaces", "Cowork.exe");
             var replacement = DesktopUpdater.LaunchInfo(launchFixture, "--skip-update", "--update-receipt", "receipt with spaces.json");
             var fallbackLaunch = DesktopUpdater.LaunchInfo(launchFixture, "--skip-update");

@@ -27,6 +27,13 @@ local MATRIX = {
 	{ "agentrouter", "https://agentrouter.org/v1", "anthropic", "x-api-key" },
 	{ "hcnsec", "https://api.hcnsec.cn/v1", "openai", "bearer" },
 	{ "kilo", "https://api.kilo.ai/api/gateway", "openai", "none" },
+	{ "vercel", "https://ai-gateway.vercel.sh/v1", "openai", "bearer" },
+	{ "perplexity", "https://api.perplexity.ai/orchestrator/v1", "openai", "bearer" },
+	{ "friendli", "https://api.friendli.ai/serverless/v1", "openai", "bearer" },
+	{ "venice", "https://api.venice.ai/api/v1", "openai", "bearer" },
+	{ "nscale", "https://inference.api.nscale.com/v1", "openai", "bearer" },
+	{ "arcee", "https://api.arcee.ai/api/v1", "openai", "bearer" },
+	{ "aimlapi", "https://api.aimlapi.com/v1", "openai", "bearer" },
 	{ "ovh", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1", "openai", "none" },
 	{ "google", "https://generativelanguage.googleapis.com/v1beta", "gemini", "x-goog-api-key" },
 	{ "groq", "https://api.groq.com/openai/v1", "openai", "bearer" },
@@ -95,9 +102,15 @@ local MATRIX = {
 case("the protocol matrix covers every advertised preset", function()
 	local f = F.new(); local wanted = {}
 	for _, row in ipairs(MATRIX) do wanted[row[1]] = true end
+	-- Cline is deliberately not a direct HTTP adapter. Its transport, identity,
+	-- discovery and cancellation coverage lives in test/cline.lua.
+	wanted.cline = true
 	local presets = f.env.require("provider/catalog").presets
-	check("matrix/catalog count agrees", #presets == #MATRIX)
+	check("matrix/catalog count agrees", #presets == #MATRIX + 1)
 	for _, preset in ipairs(presets) do check("coverage for " .. preset.id, wanted[preset.id] == true) end
+	local cline = f.env.require("provider/registry").blank("cline")
+	check("Cline keeps its independent virtual route and no-auth contract", cline.baseUrl == "https://uai-tunnel.invalid/cline/v1"
+		and cline.api == "openai" and cline.authStyle == "none" and cline.claudeUa == false)
 	f.healthy(); f.close()
 end)
 
@@ -616,7 +629,7 @@ case("cat-jam traits and tool capping preserve OpenCode compatibility", function
 	local record = recordFor(f, "zen")
 	record.model = "cat-jam-free"
 	check("cat-jam documents 128 max tools", traits.maxTools("cat-jam-free") == 128)
-	check("cat-jam context window is 262144", traits.contextWindow("cat-jam-free") == 262144)
+	check("cat-jam uses its refreshed catalog context window", traits.contextWindow("cat-jam-free") == 1048576)
 	-- A stale public CLI catalog used to advertise these free models at 1M while
 	-- OpenCode's server rejected anything above 200K. Compaction now starts from
 	-- the window the provider actually enforces.

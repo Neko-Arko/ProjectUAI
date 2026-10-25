@@ -32,9 +32,10 @@ class RequestRulesTest {
     @Test
     fun `drops hop-by-hop response headers`() {
         val filtered = RequestRules.filterResponseHeaders(
-            mapOf("content-type" to "application/json", "Connection" to "close", "Transfer-Encoding" to "chunked", "x-request-id" to "1"),
+            mapOf("content-type" to "application/json", "Connection" to "close", "Transfer-Encoding" to "chunked", "x-request-id" to "1", "x-should-retry" to "false"),
         )
-        assertEquals(setOf("content-type", "x-request-id"), filtered.keys)
+        assertEquals(setOf("content-type", "x-request-id", "x-should-retry"), filtered.keys)
+        assertEquals("false", filtered["x-should-retry"])
     }
 
     @Test

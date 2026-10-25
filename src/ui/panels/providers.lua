@@ -33,6 +33,7 @@ return function(env)
 	local traits = env.require("provider/traits")
 	local communityKey = env.require("provider/community_key")
 	local icons = env.require("ui/icons")
+	local urls = env.require("net/url")
 
 	local M = {}
 
@@ -60,6 +61,8 @@ return function(env)
 	-- were kept, and the export path reduced it to exactly that.
 	local function maskedKey(record)
 		local raw = tostring(record.apiKey or "")
+		if registry.isCline(record) then return "Sign in to Cline in the desktop app", nil end
+		if record.authStyle == "none" then return "No API key required", nil end
 		if util.trim(raw) == "" and registry.opencodeKeyOptional(record) then return "Provided by connected OpenCode CLI", nil end
 		if util.trim(raw) == "" then return "not set", "warn" end
 		local pool = registry.keysOf(record)
@@ -70,6 +73,16 @@ return function(env)
 		local key = pool[1] or ""
 		if #key <= 4 then return "set", nil end
 		return string.rep("\226\128\162", 4) .. " " .. key:sub(-4), nil
+	end
+
+	local function modelSource(record)
+		if registry.isCline(record) then return "Cline's free catalog through the desktop bridge" end
+		if registry.isOpencodeZen(record) and env.require("net/bridge").opencodeStatus().available then return "OpenCode CLI through the desktop bridge" end
+		return urls.display(registry.endpoint(record, "/models"))
+	end
+
+	local function fetchLabel(record)
+		return registry.isCline(record) and "Refresh Cline models" or "Fetch models"
 	end
 
 	-- Everything the registry knows about a record and the panel never said.
@@ -90,9 +103,10 @@ return function(env)
 		local route = env.require("net/transport").target()
 		if route == "cowork" then transport = "Web relay"
 		elseif route == "companion" then transport = "Relay (companion)" end
+		if registry.isCline(record) then transport = "Cline CLI through the desktop bridge / text only" end
 		local out = {
-			{ key = "Endpoint", value = chat.endpointOf(record) },
-			{ key = "Model list", value = registry.endpoint(record, "/models") },
+			{ key = "Endpoint", value = registry.isCline(record) and "Cline through Project UAI Bridge" or urls.display(chat.endpointOf(record)) },
+			{ key = "Model list", value = modelSource(record) },
 			{ key = "Protocol", value = labelOf(chat.STYLES, chat.styleOf(record)) },
 			{ key = "Auth", value = labelOf(AUTH_OPTIONS, record.authStyle or "bearer")
 				.. "  \194\183  " .. key, tone = keyTone },
@@ -1100,7 +1114,7 @@ return function(env)
 			local revision = modelRevision
 			invalidateTest()
 			handle.setEnabled(false)
-			setModelNote("Asking " .. registry.endpoint(target, "/models") .. "...", false)
+			setModelNote("Loading " .. modelSource(target) .. "...", false)
 			task.spawn(function()
 				local found, note = models.discover(target, { force = true,
 					aborted = function() return modal.closed or revision ~= modelRevision end })
@@ -1143,7 +1157,7 @@ return function(env)
 				local bits = {}
 				if models.isFree(editing, id) then bits[#bits + 1] = "Free" end
 				if badge then bits[#bits + 1] = badge end
-				if not own[id] then bits[#bits + 1] = "from /models" end
+				if not own[id] then bits[#bits + 1] = "from catalog" end
 				options[#options + 1] = {
 					label = id,
 					value = "model:" .. id,
@@ -1154,16 +1168,20 @@ return function(env)
 			end
 			if #options > 0 then options[#options + 1] = { divider = true } end
 			options[#options + 1] = {
-				label = "Fetch from /models",
+				label = fetchLabel(editing),
 				value = "fetch",
-				detail = registry.endpoint(editing, "/models"),
+				detail = modelSource(editing),
+				searchable = false,
 				tone = "info",
 			}
-			options[#options + 1] = { label = "Type an id", value = "add", tone = "info" }
+			options[#options + 1] = { label = "Type an id", value = "add", tone = "info", searchable = false }
 			overlay.menu({
 				target = handle.instance,
 				width = theme.size.menuWide,
 				options = options,
+				searchable = true,
+				searchPlaceholder = "Search model IDs...",
+				emptyText = "No matching models. Refresh the catalog or type an exact ID.",
 				onSelect = function(value)
 					if revision ~= modelRevision then return end
 					if value == "fetch" then
@@ -1651,6 +1669,7 @@ return function(env)
 
 		local statusBox = nil
 		local healthError = nil
+		local modelQueries = {}
 
 		local function order()
 			panel.__order = (panel.__order or 0) + 1
@@ -1666,7 +1685,7 @@ return function(env)
 				local bits = {}
 				if models.isFree(record, id) then bits[#bits + 1] = "Free" end
 				if badge then bits[#bits + 1] = badge end
-				if not own[id] then bits[#bits + 1] = "from /models" end
+				if not own[id] then bits[#bits + 1] = "from catalog" end
 				options[#options + 1] = {
 					label = id,
 					value = "model:" .. id,
@@ -1677,16 +1696,20 @@ return function(env)
 			end
 			if #options > 0 then options[#options + 1] = { divider = true } end
 			options[#options + 1] = {
-				label = "Fetch from /models",
+				label = fetchLabel(record),
 				value = "fetch",
-				detail = registry.endpoint(record, "/models"),
+				detail = modelSource(record),
+				searchable = false,
 				tone = "info",
 			}
-			options[#options + 1] = { label = "Add a model by id", value = "add", tone = "info" }
+			options[#options + 1] = { label = "Add a model by id", value = "add", tone = "info", searchable = false }
 			overlay.menu({
 				target = target,
 				width = theme.size.menuWide,
 				options = options,
+				searchable = true,
+				searchPlaceholder = "Search model IDs...",
+				emptyText = "No matching models. Refresh the catalog or add an exact ID.",
 				onSelect = function(value)
 					if value == "fetch" then
 						local revision = selectionRevision
@@ -1880,6 +1903,8 @@ return function(env)
 			R.select(modelSection, {
 				name = "ActiveModel",
 				label = "Active model",
+				searchable = true,
+				searchPlaceholder = "Search model IDs...",
 				hint = #known == 0 and "Nothing known yet. Fetch the list, or add an id by hand."
 					or (traits.badge(record.model, record) and ("Context window " .. traits.badge(record.model, record))
 						or "No published context window for this id."),
@@ -1906,6 +1931,25 @@ return function(env)
 				},
 			}, { name = "ModelActions" })
 
+			local modelRows, modelCount, modelEmpty = {}, nil, nil
+			local function filterModels(text)
+				modelQueries[record.id] = tostring(text or "")
+				local matches = env.require("runtime/search").compile(text)
+				local visible = 0
+				for _, entry in ipairs(modelRows) do
+					entry.instance.Visible = matches(entry.id) ~= nil
+					if entry.instance.Visible then visible = visible + 1 end
+				end
+				if modelCount then modelCount.Text = string.format("%d of %d models", visible, #known) end
+				if modelEmpty then modelEmpty.Visible = visible == 0 end
+			end
+			if #known > 8 then
+				P.field(modelSection, { name = "SavedModelSearch", placeholder = "Search this provider's models...",
+					text = modelQueries[record.id] or "", layoutOrder = 50, onChange = filterModels })
+				modelCount = P.text(modelSection, { name = "SavedModelCount", role = "caption", color = theme.color.textTertiary, layoutOrder = 51 })
+				modelEmpty = P.text(modelSection, { name = "NoSavedModelsMatch", text = "No matching models. Clear the search or fetch the latest catalog.",
+					role = "small", color = theme.color.textTertiary, wrap = true, auto = "Y", visible = false, layoutOrder = 52 })
+			end
 			local own = {}
 			for _, id in ipairs(record.models or {}) do own[id] = true end
 			for index, id in ipairs(known) do
@@ -1928,6 +1972,7 @@ return function(env)
 					size = UDim2.fromOffset(theme.size.icon, theme.size.icon),
 					layoutOrder = 1,
 				})
+				modelRows[#modelRows + 1] = { instance = row.instance, id = id }
 				P.statusDot(slot, {
 					diameter = theme.size.dot,
 					color = id == record.model and theme.color.accent or theme.color.borderStrong,
@@ -1955,6 +2000,7 @@ return function(env)
 					remove.instance.LayoutOrder = 4
 				end
 			end
+			if modelCount then filterModels(modelQueries[record.id] or "") end
 
 			-- Behaviour ---------------------------------------------------------
 			local behaviour = R.section(detail.instance, {

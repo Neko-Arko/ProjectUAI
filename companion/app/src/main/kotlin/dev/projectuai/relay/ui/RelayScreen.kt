@@ -97,6 +97,7 @@ fun RelayScreen(settings: RelaySettings, log: RelayLog, updates: UpdateCoordinat
     val place by RelayService.place.collectAsStateWithLifecycle()
     val lastClientAt by RelayService.lastClientAt.collectAsStateWithLifecycle()
     val activity by RelayService.activity.collectAsStateWithLifecycle()
+    val kilo by RelayService.kilo.collectAsStateWithLifecycle()
     val install by updates.install.collectAsStateWithLifecycle()
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -134,7 +135,7 @@ fun RelayScreen(settings: RelaySettings, log: RelayLog, updates: UpdateCoordinat
             ActivityCard(activity, now)
             BatteryCard(context)
             UpdateCard(updates, onInstall, onAllowInstall)
-            SettingsCard(settings, token, place, context, running != null, activity.activeJobs > 0, updatePending)
+            SettingsCard(settings, token, place, context, running != null, activity.activeJobs > 0, updatePending, kilo)
             DiagnosticsCard(log)
 
             Text("Made for Project UAI on your phone.", Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp),

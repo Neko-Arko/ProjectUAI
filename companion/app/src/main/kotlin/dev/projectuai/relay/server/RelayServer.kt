@@ -50,6 +50,7 @@ class RelayServer(
     private val random = SecureRandom()
     private val pairLock = Any()
     private val pairTimes = ArrayDeque<Long>()
+    private fun hello() = Hello(instance = instance, capabilities = dev.projectuai.relay.protocol.Capabilities(kilo = engine.kiloCapability()))
 
     @Volatile
     var lastPlaceId: Long = 0
@@ -77,7 +78,7 @@ class RelayServer(
                 // Discovery remains public; only a valid saved bearer counts as
                 // continued client contact while Roblox is idle.
                 if (call.request.headers["Authorization"] != null) call.authorised()
-                call.respondJson(Hello(instance = instance))
+                call.respondJson(hello())
             }
             post("/api/pair") { handlePair(call) }
             post("/api/executor") { handleExecutor(call) }
@@ -117,7 +118,7 @@ class RelayServer(
         if (!authorisedToken(input.token)) { call.respondExecutor(ErrorBody("bad token"), 401); return }
         val id = Regex("^/api/inference/([A-Za-z0-9_-]{1,128})$").matchEntire(input.path)?.groupValues?.get(1)
         when {
-            input.method == "GET" && input.path == "/api/hello" -> call.respondExecutor(Hello(instance = instance))
+            input.method == "GET" && input.path == "/api/hello" -> call.respondExecutor(hello())
             input.method == "GET" && input.path == "/api/status" -> call.respondExecutor(status())
             input.method == "POST" && input.path == "/api/inference" -> {
                 val request = decodeJson<SubmitRequest>(input.body)

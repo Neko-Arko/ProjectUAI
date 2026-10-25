@@ -31,7 +31,7 @@ foreach ($size in @('normal', 'compact', 'narrow')) {
     if ($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $preview)) { throw 'Desktop preview failed.' }
     Write-Output "Inspect native window preview: $preview"
     if ($size -eq 'normal') {
-        foreach ($page in @('connections', 'updates', 'settings')) {
+        foreach ($page in @('connections', 'updates', 'settings', 'tunnels', 'tunnels-bottom')) {
             $pagePreview = Join-Path $evidence ("launcher-$page.png")
             if (!(Test-Path -LiteralPath $pagePreview)) { throw "Desktop $page preview failed." }
             Write-Output "Inspect native WPF page preview: $pagePreview"
@@ -41,6 +41,11 @@ foreach ($size in @('normal', 'compact', 'narrow')) {
         $bottomPreview = Join-Path $evidence 'launcher-narrow-bottom.png'
         if (!(Test-Path -LiteralPath $bottomPreview)) { throw 'Desktop narrow bottom preview failed.' }
         Write-Output "Inspect native window preview: $bottomPreview"
+        foreach ($suffix in @('tunnels', 'tunnels-bottom')) {
+            $tunnelPreview = Join-Path $evidence ("launcher-narrow-$suffix.png")
+            if (!(Test-Path -LiteralPath $tunnelPreview)) { throw "Desktop narrow $suffix preview failed." }
+            Write-Output "Inspect native WPF tunnel preview: $tunnelPreview"
+        }
     }
 }
 Write-Output 'Standalone executable verified without neighboring runtime or bridge folders.'

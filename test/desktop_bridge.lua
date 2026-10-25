@@ -16,6 +16,10 @@ local function setup(value)
 	h.http.handler = function(req)
 		if req.url:find("/api/agent/", 1, true) then
 			state.auth[#state.auth + 1] = { url = req.url, token = req.headers.Authorization }
+			if req.body then
+				local input = json.decode(req.body)
+				if input and input.state then state.snapshot = input.state end
+			end
 			return { StatusCode = 200, Body = req.url:find("inbox", 1, true) and '{"commands":[]}' or '{}' }
 		end
 		return { StatusCode = 404, Body = '{}' }
@@ -30,6 +34,9 @@ do
 	check("desktop is discovered at boot", app.bridge.running and app.bridge.status().source == "desktop")
 	check("manual settings remain disabled and unchanged", app.config.get("bridge.enabled") == false and app.config.get("bridge.port") == 8790 and app.config.get("bridge.token") == "")
 	check("bridge uses discovered token and dedicated port", #state.auth > 0 and state.auth[1].token == "Bearer " .. ("a"):rep(64) and state.auth[1].url:find(":28791/", 1, true))
+	app.env.require("agent/usage").record({ prompt_tokens = 20, completion_tokens = 5 }, "unpriced-fixture", nil, { baseUrl = "https://unpriced.fixture/v1" })
+	h.settle(2)
+	check("browser snapshot preserves unknown cost separately from zero", state.snapshot and state.snapshot.usage.unpriced == 1 and state.snapshot.usage.cost == 0)
 	app.config.saveNow()
 	check("ephemeral credentials are absent from saved config", not json.encode(app.config.data):find(("a"):rep(64), 1, true))
 	state.discovery = info(("b"):rep(64), "desktop-two")

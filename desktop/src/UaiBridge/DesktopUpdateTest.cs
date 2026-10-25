@@ -65,6 +65,7 @@ internal static class DesktopUpdateTest
                     info.Environment[FixtureEnvironment] = fixture.Spec;
                     info.Environment["UAI_BRIDGE_TEST_NO_UPDATES"] = "1";
                     info.Environment["UAI_OPENCODE_DISABLED"] = "1";
+                    info.Environment["UAI_CLINE_DISABLED"] = "1";
                     parent = Process.Start(info) ?? throw new IOException("The update parent fixture did not start.");
                     await WaitForFileAsync(fixture.ParentReport, parent, TimeSpan.FromSeconds(15));
                     using var parentReport = JsonDocument.Parse(UpdateFiles.ReadBounded(fixture.ParentReport, 8192));
@@ -215,6 +216,7 @@ internal static class DesktopUpdateTest
             if (!SamePath(Environment.ProcessPath!, expected)) throw new IOException("The update fixture launched an unexpected executable.");
             Environment.SetEnvironmentVariable("UAI_BRIDGE_TEST_NO_UPDATES", "1");
             Environment.SetEnvironmentVariable("UAI_OPENCODE_DISABLED", "1");
+            Environment.SetEnvironmentVariable("UAI_CLINE_DISABLED", "1");
             using var instance = new DesktopInstance("ProjectUAI.Bridge.UpdateTest." + fixture.Id);
             if (!instance.OwnsWindow) throw new IOException("The private update fixture instance is already owned.");
             var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };

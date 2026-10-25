@@ -15,6 +15,9 @@ case("documented effort scales clamp global preferences and expose provider defa
 	check("off means provider default", metadata.model(record).effectiveEffort == "off")
 	model.efforts[1] = "changed"
 	check("callers cannot mutate shared model traits", metadata.model(record).efforts[1] == "low")
+	local known = metadata.model({ baseUrl = "https://api.openai.com/v1" }, "gpt-6.1-sol")
+	check("GPT-6.1 Sol exposes its exact documented scale", known.reasoning == true and known.effortSource == "documented"
+		and table.concat(known.efforts, ",") == "low,medium,high,xhigh,max,off")
 	f.healthy(); f.close()
 end)
 
@@ -29,9 +32,15 @@ case("unknown capabilities stay unknown and manual reasoning is explicitly ident
 	model = metadata.model(record)
 	check("manual declarations are honored without claiming a documented scale", model.reasoning and model.effortSource == "manual" and model.contextWindow == 42000)
 	check("manual control matches native choices", table.concat(model.efforts, ",") == "low,medium,high,xhigh,max,off")
-	local known = metadata.model({ baseUrl = "https://api.openai.com/v1" }, "gpt-6.1-sol")
-	check("a catalog reasoning flag alone cannot invent effort controls", known.reasoning == true and known.efforts == nil and known.effortSource == "none")
 	check("reading metadata never sends traffic", f.h.http.requestCount == 0)
+	f.healthy(); f.close()
+end)
+
+case("catalog reasoning capability alone does not invent an effort scale", function()
+	local f = F.new(); local info = f.env.require("provider/model_info")
+	info.capabilities = function() return { reasoning = true } end
+	local model = f.env.require("net/bridge_metadata").model({ baseUrl = "https://catalog.fixture/v1", model = "catalog-only-fixture" })
+	check("catalog flag has no undocumented controls", model.reasoning == true and model.efforts == nil and model.effortSource == "none")
 	f.healthy(); f.close()
 end)
 
@@ -65,7 +74,7 @@ case("live routed model uses its own limits and calibration without changing sav
 	local request = ctx.observeRequest({ { role = "user", content = "Hello" } }, {}, routed); ctx.calibrate(100, request)
 	local session = { id = "routed-session", ctx = ctx, liveRequest = { providerId = record.id, model = routed.model } }
 	local live = metadata.context(session, record)
-	check("live same-provider route has its matching capacity and calibration", live.model == routed.model and live.windowTokens == 1000000 and live.calibrated)
+	check("live same-provider route has its matching catalog capacity and calibration", live.model == routed.model and live.windowTokens == 1048576 and live.calibrated)
 	check("metadata cannot overwrite the saved auto selection", record.model == "auto")
 	session.liveRequest.providerId = "different-provider"
 	local stale = metadata.context(session, record)

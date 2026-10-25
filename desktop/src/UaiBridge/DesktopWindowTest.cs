@@ -43,6 +43,15 @@ internal static class DesktopWindowTest
                 await window.Model.InitializeAsync();
                 await SettleAsync(window);
                 if (!window.Model.CanStart) throw new IOException("Offline initialization did not detect the installed Node runtime.");
+                if (window.Model.OpenCodeInstallation is not ("Installed" or "Not found") ||
+                    window.Model.ClineInstallation is not ("Installed" or "Not found") || bridge.BrowserUrl is not null)
+                    throw new IOException("Installed apps were not detected before Cowork activation.");
+                if (Named<TextBlock>(window, "OpenCodeInstallationStatus").Text != window.Model.OpenCodeInstallation ||
+                    Named<TextBlock>(window, "ClineInstallationStatus").Text != window.Model.ClineInstallation)
+                    throw new IOException("Native installation labels are detached from detection results.");
+                await window.Model.RefreshTunnelInstallationsAsync();
+                if (bridge.BrowserUrl is not null) throw new IOException("Refreshing installed apps started Cowork.");
+                checks.Add("Native installation status and refresh work before Cowork starts");
                 var start = Named<Button>(window, "StartButton");
                 var stop = Named<Button>(window, "StopButton");
                 var update = Named<Button>(window, "UpdateButton");
@@ -58,8 +67,10 @@ internal static class DesktopWindowTest
 
                 Named<ToggleButton>(window, "OpenCodeToggle").SetCurrentValue(ToggleButton.IsCheckedProperty, false);
                 Named<ToggleButton>(window, "McpToggle").SetCurrentValue(ToggleButton.IsCheckedProperty, false);
+                Named<ToggleButton>(window, "ClineToggle").SetCurrentValue(ToggleButton.IsCheckedProperty, false);
+                Named<ToggleButton>(window, "KiloToggle").SetCurrentValue(ToggleButton.IsCheckedProperty, false);
                 await SettleAsync(window);
-                if (window.Model.OpenCodeEnabled || window.Model.McpEnabled)
+                if (window.Model.OpenCodeEnabled || window.Model.McpEnabled || window.Model.ClineEnabled || window.Model.KiloEnabled)
                     throw new IOException("Native connection controls did not update their preferences.");
                 startCommand.Execute(start.CommandParameter);
                 if (window.Model.CanStart || window.Model.CanConfigureConnections)
@@ -67,7 +78,7 @@ internal static class DesktopWindowTest
                 await WaitUntilAsync(() => bridge.BrowserUrl is not null || bridge.State == "Could not start", TimeSpan.FromSeconds(45));
                 await bridge.RefreshAsync();
                 await SettleAsync(window);
-                if (bridge.BrowserUrl is null || bridge.OpenCodeState != "disabled" || bridge.McpEnabled)
+                if (bridge.BrowserUrl is null || bridge.OpenCodeState != "disabled" || bridge.McpEnabled || bridge.ClineState != "disabled" || bridge.KiloState != "disabled")
                     throw new IOException("Integration switches did not reach the packaged bridge.");
                 if (!window.Model.CanStop || start.IsEnabled != window.Model.CanStart || !stop.IsEnabled || window.Model.CanConfigureConnections)
                     throw new IOException("Running command availability does not match the bridge state.");
@@ -87,7 +98,7 @@ internal static class DesktopWindowTest
                 checks.Add("Stopping releases the bridge and restores connection settings");
 
                 await CheckLayoutAsync(window);
-                checks.Add("All four pages retain accessible, scroll-reachable actions at narrow and restored sizes");
+                checks.Add("All five pages retain accessible, scroll-reachable actions at narrow and restored sizes");
                 window.WindowState = WindowState.Minimized;
                 await Task.Delay(100);
                 if (!window.IsVisible || !window.ShowInTaskbar || window.WindowState != WindowState.Minimized)
@@ -169,14 +180,14 @@ internal static class DesktopWindowTest
 
     private static async Task CheckLayoutAsync(MainWindow window)
     {
-        string[] pageNames = ["WorkspacePage", "ConnectionsPage", "UpdatesPage", "SettingsPage"];
-        string[] actionNames = ["StartButton", "StopButton", "UpdateButton", "BridgeUpdateButton", "InstallNodeButton", "RecheckNodeButton", "OpenCodeToggle", "McpToggle", "OpenBrowserToggle", "AutomaticUpdatesToggle", "StartOnLaunchToggle"];
+        string[] pageNames = ["WorkspacePage", "ConnectionsPage", "UpdatesPage", "SettingsPage", "TunnelsPage"];
+        string[] actionNames = ["StartButton", "StopButton", "UpdateButton", "BridgeUpdateButton", "InstallNodeButton", "RecheckNodeButton", "OpenCodeToggle", "McpToggle", "OpenBrowserToggle", "AutomaticUpdatesToggle", "StartOnLaunchToggle", "ClineToggle", "KiloToggle", "ClineSetupButton", "ClineSignInButton", "RefreshInstallationsButton"];
         var pages = pageNames.Select(name => Named<FrameworkElement>(window, name)).ToArray();
         var actions = actionNames.Select(name => Named<FrameworkElement>(window, name)).ToArray();
         var scroll = Named<ScrollViewer>(window, "PageScroll");
         if (actions.Any(action => string.IsNullOrWhiteSpace(AutomationProperties.GetName(action))))
             throw new IOException("A native action has no accessible name.");
-        foreach (var size in new[] { new Size(760, 560), new Size(1120, 820) })
+        foreach (var size in new[] { new Size(640, 560), new Size(1120, 820) })
         {
             window.Width = size.Width;
             window.Height = size.Height;
@@ -231,6 +242,7 @@ internal static class DesktopWindowTest
             if (!window.Model.CanStart) throw new IOException("Startup cancellation fixture did not detect Node.js.");
             window.Model.OpenCodeEnabled = false;
             window.Model.McpEnabled = false;
+            window.Model.ClineEnabled = false;
             Environment.SetEnvironmentVariable("NODE_OPTIONS", "--require=\"" + preload.Replace('\\', '/') + "\"");
             starting = window.Model.StartAsync();
             await WaitUntilAsync(() => File.Exists(marker) && new FileInfo(marker).Length > 0, TimeSpan.FromSeconds(15));

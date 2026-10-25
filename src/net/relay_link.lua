@@ -15,6 +15,8 @@ return function(env)
 	local http = env.require("net/http")
 	local signal = env.require("runtime/signal")
 	local dataModel = env.require("net/relay_datamodel")
+	local kiloStatus = env.require("net/kilo_status")
+	local kilo
 
 	local M = { changed = signal.new("relay") }
 	local alive, started, nextProbe, epoch = true, false, 0, 0
@@ -83,6 +85,7 @@ return function(env)
 		return { mode = mode(), state = state, port = port(), server = tostring(config.get("relay.server", "")),
 			instance = tostring(config.get("relay.instance", "")), placeId = tonumber(config.get("relay.placeId", 0)) or 0,
 			error = lastError, lastProbeAt = lastProbeAt, unlimited = unlimited,
+			kilo = state == "ready" and kilo and util.copy(kilo) or nil,
 			transport = verifiedProfile and profileLabel(verifiedProfile) or nil }
 	end
 
@@ -256,8 +259,12 @@ return function(env)
 		verifiedToken, verifiedInstance = pairedToken, info.instance
 		verifiedProfile = copyProfile(profile)
 		local inference = type(info.capabilities) == "table" and info.capabilities.inference
+		local nextKilo = kiloStatus.read(type(info.capabilities) == "table" and info.capabilities.kilo)
+		local kiloChanged = util.encode(kilo) ~= util.encode(nextKilo)
+		kilo = nextKilo
 		unlimited = type(inference) == "table" and inference.schema == 1 and inference.unlimited == true
 		remember("relay.instance", tostring(info.instance))
+		if kiloChanged then M.changed:fire() end
 		return true
 	end
 
@@ -343,6 +350,7 @@ return function(env)
 	function M.forget()
 		epoch, failures = epoch + 1, 0
 		verifiedToken, verifiedInstance, unlimited = nil, nil, false
+		kilo = nil
 		verifiedProfile = nil
 		remember("relay.token", "")
 		remember("relay.server", "")
@@ -356,6 +364,7 @@ return function(env)
 		epoch, failures = epoch + 1, 0
 		nextProbe = 0
 		verifiedToken, verifiedInstance, verifiedProfile, unlimited = nil, nil, nil, false
+		kilo = nil
 		if path == "relay.port" then
 			remember("relay.token", "")
 			remember("relay.server", "")
@@ -365,7 +374,7 @@ return function(env)
 		M.ensure()
 		M.changed:fire()
 	end), "relay settings")
-	dispose.add(function() alive, epoch = false, epoch + 1 end, "relay prober")
+	dispose.add(function() alive, epoch, kilo = false, epoch + 1, nil end, "relay prober")
 
 	return M
 end

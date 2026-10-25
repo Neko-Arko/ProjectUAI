@@ -104,14 +104,23 @@ public partial class MainWindow : Window
                 {
                     PageScroll.ScrollToBottom(); await Task.Delay(60);
                     Capture(Sibling(output, "-bottom"));
+                    Model.SelectedPage = 4; PageScroll.ScrollToTop(); await Task.Delay(60);
+                    Capture(Sibling(output, "-tunnels"));
+                    PageScroll.ScrollToBottom(); await Task.Delay(60);
+                    Capture(Sibling(output, "-tunnels-bottom"));
                 }
                 if (!compact && !narrow)
                 {
-                    string[] destinations = ["workspace", "connections", "updates", "settings"];
+                    string[] destinations = ["workspace", "connections", "updates", "settings", "tunnels"];
                     for (int page = 1; page < destinations.Length; page++)
                     {
                         Model.SelectedPage = page; PageScroll.ScrollToTop(); await Task.Delay(60);
                         Capture(Sibling(output, "-" + destinations[page]));
+                        if (destinations[page] == "tunnels")
+                        {
+                            PageScroll.ScrollToBottom(); await Task.Delay(60);
+                            Capture(Sibling(output, "-tunnels-bottom"));
+                        }
                     }
                 }
             }

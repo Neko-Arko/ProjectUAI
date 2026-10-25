@@ -238,13 +238,14 @@ return function(env)
 				util.pluralise(row.requests, "request") }
 			local cost = env.require("agent/usage").formatCost(row.cost)
 			if cost ~= "" then facts[#facts + 1] = cost .. " known est." end
+			if (row.unpriced or 0) > 0 then facts[#facts + 1] = util.pluralise(row.unpriced, "request") .. " with unknown cost" end
 			local detail = P.text(entry, {
 				name = "Detail",
 				text = table.concat(facts, "  ") .. (window.estimated and "  (some estimated)" or ""),
 				role = "caption",
 				color = theme.color.textTertiary,
-				truncate = true,
-				size = UDim2.new(1, 0, 0, theme.text.caption.height),
+				wrap = true, auto = "Y",
+				size = UDim2.new(1, 0, 0, 0),
 				layoutOrder = 3,
 			})
 			detail.Name = "Detail"

@@ -8,6 +8,7 @@
 return function(env)
 	local util = env.require("runtime/util")
 	local signal = env.require("runtime/signal")
+	local search = env.require("runtime/search")
 
 	local LIMIT = 400
 
@@ -65,6 +66,10 @@ return function(env)
 		return text
 	end
 	M.redact = redact
+	local function bounded(value, limit)
+		local text = redact(value)
+		return util.truncate(text, limit)
+	end
 
 	local function push(level, source, message, detail)
 		if (LEVELS[level] or 2) < M.minLevel then return end
@@ -73,9 +78,9 @@ return function(env)
 			at = env.require("runtime/clock").ms(),
 			stamp = env.require("runtime/clock").stamp(),
 			level = level,
-			source = redact(source or "app"),
-			message = redact(message),
-			detail = detail ~= nil and redact(type(detail) == "table" and util.concatKeys(detail) or tostring(detail)) or nil,
+			source = bounded(source or "app", 256),
+			message = bounded(message, 8192),
+			detail = detail ~= nil and bounded(type(detail) == "table" and util.concatKeys(detail) or tostring(detail), 16384) or nil,
 		}
 		M.entries[#M.entries + 1] = entry
 		if #M.entries > LIMIT then
@@ -105,13 +110,11 @@ return function(env)
 
 	function M.filter(level, text)
 		local wanted = LEVELS[level] or 1
-		local needle = text and text:lower() or nil
+		local match = search.compile(text)
 		local out = {}
 		for _, entry in ipairs(M.entries) do
 			if (LEVELS[entry.level] or 2) >= wanted then
-				if not needle
-					or entry.message:lower():find(needle, 1, true)
-					or entry.source:lower():find(needle, 1, true) then
+				if match(entry.source, entry.message, entry.detail, entry.level) then
 					out[#out + 1] = entry
 				end
 			end

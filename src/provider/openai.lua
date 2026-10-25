@@ -1017,6 +1017,11 @@ return function(env)
 			local callback = request.onRetry
 			request.onRetry = function(info) if not pcall(callback, info) then log.warn("provider", "retry callback failed safely") end end
 		end
+		-- Choose a known native Responses route before building and limiting a
+		-- second, unused Chat Completions payload for the same tool catalog.
+		if responses.eligible(record) and (responses.remembered(record) or responses.wantsResponses(record)) then
+			return responses.complete(record, request)
+		end
 		local wantStream = request.stream
 		if wantStream == nil then wantStream = record.stream ~= false and config.get("agent.stream", true) end
 		if env.require("net/transport").streamForced() or registry.isOpencode(record) then wantStream = true end
@@ -1024,12 +1029,6 @@ return function(env)
 		local body = M.buildBody(record, util.merge(request, { stream = wantStream }))
 		applyRemembered(record, body)
 		local requestScope = registry.compatibilityKey(record)
-
-		-- A record that already learned the Responses lane, or names a model
-		-- verified to speak only that lane, skips chat entirely.
-		if responses.eligible(record) and (responses.remembered(record) or responses.wantsResponses(record)) then
-			return responses.complete(record, request)
-		end
 
 		local url = registry.endpoint(record, "/chat/completions")
 		local pool = registry.keysOf(record)

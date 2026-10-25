@@ -42,6 +42,8 @@ const { createPictureStore } = require('./picture-store');
 const RELEASE = require('./release');
 const { help, DISCORD } = require('./support');
 const { createOpenCode } = require('./opencode');
+const { createKilo } = require('./kilo');
+const { createCline } = require('./cline');
 const { createMcp } = require('./mcp');
 
 const args = process.argv.slice(2);
@@ -107,8 +109,10 @@ const commands = new Map();
 const commandPictures = new Map();
 const pictures = LEGACY ? null : createPictureStore({ limits: PICTURE_LIMITS });
 const opencode = createOpenCode();
+const kilo = createKilo({ onChange: value => broadcast({ kind: 'kilo:state', kilo: value }) });
+const cline = createCline({ onChange: value => broadcast({ kind: 'cline:state', cline: value }) });
 const inference = createInference({ publish: broadcast, legacy: LEGACY,
-  prepareBody: (body, sessionId) => pictures ? pictures.providerBody(body, sessionId) : body, opencode });
+  prepareBody: (body, sessionId) => pictures ? pictures.providerBody(body, sessionId) : body, opencode, kilo, cline });
 let gameInstance = null;
 
 const state = {
@@ -624,6 +628,9 @@ function serveStream(req, res) {
   }
   writeFrame(sub, `id: ${eventSequence}\ndata: ${JSON.stringify({ kind: 'bridge:cursor' })}\n\n`);
   writeFrame(sub, `data: ${JSON.stringify({ kind: 'bridge:game', connected: state.connected })}\n\n`);
+  writeFrame(sub, `data: ${JSON.stringify({ kind: 'kilo:state', kilo: kilo.capability() })}\n\n`);
+  writeFrame(sub, `data: ${JSON.stringify({ kind: 'cline:state', cline: cline.capability() })}\n\n`);
+  writeFrame(sub, `data: ${JSON.stringify({ kind: 'opencode:state', opencode: opencode.capability() })}\n\n`);
 
   // Comment frames keep the connection from being reaped by an idle timeout on a
   // quiet conversation. They are ignored by EventSource.
@@ -787,6 +794,8 @@ const server = http.createServer(async (req, res) => {
       const capabilities = { browserStream: { schema: 1, replay: true }, agentInbox: { waitHeader: 'X-UAI-Poll-Wait-Ms', maxWaitMs: HOLD_MS } };
       capabilities.inferencePreview = { schema: 1 };
       capabilities.opencode = opencode.capability();
+      capabilities.kilo = kilo.capability();
+      capabilities.cline = cline.capability();
       capabilities.mcp = mcp.capability();
       if (!LEGACY) capabilities.pictures = { mode: 'provider-image-content', version: 2 };
       sendJson(res, 200, {
@@ -815,6 +824,8 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, { ok: true, update: updateState });
     } else if (route === '/api/opencode/models' && req.method === 'GET') {
       sendJson(res, 200, await opencode.models());
+    } else if (route === '/api/tunnels/cline/models' && req.method === 'GET') {
+      sendJson(res, 200, await cline.models());
     } else if (route === '/api/inference' && post) {
       const input = JSON.parse(await readBody(req, 20 << 20));
       sendJson(res, 202, inference.start(input));
@@ -981,6 +992,7 @@ setInterval(() => {
 
 server.listen(PORT, HOST, () => {
   if (opencode.capability().available) opencode.start().catch(() => {});
+  cline.start().catch(() => {});
   const origin = `http://${HOST}:${PORT}`;
   process.send({ type: 'ready', version: RELEASE.version, updateProtocol: RELEASE.updateProtocol, token: TOKEN, port: PORT }, () => {});
   if (DESKTOP) {
@@ -1013,7 +1025,7 @@ function shutdown() {
   inference.close();
   pictures?.close();
   server.closeAllConnections();
-  const stopped = opencode.close();
+  const stopped = Promise.allSettled([opencode.close(), kilo.close(), cline.close()]);
   server.close(() => stopped.finally(() => process.exit(0)));
   setTimeout(() => process.exit(0), 5000).unref();
 }

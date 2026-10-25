@@ -101,6 +101,7 @@ return function(env)
 			if #token > 10 then parts[#parts + 1] = "paired ···" .. token:sub(-4) end
 			if (status.placeId or 0) > 0 then parts[#parts + 1] = "place " .. tostring(status.placeId) end
 			if status.error then parts[#parts + 1] = tostring(status.error) end
+			if status.kilo then parts[#parts + 1] = "Kilo: " .. status.kilo.state .. " - " .. status.kilo.message end
 			relayDetail.Text = table.concat(parts, "  ·  ")
 		end
 		local relayMode = C.segmented(relayCard, {
@@ -200,6 +201,8 @@ return function(env)
 				statusText.Text = status.source == "desktop" and "Desktop app connected automatically. Cowork is ready."
 					or "Connected. Open the browser link and start chatting."
 				detail.Text = string.format("%s\nsharing: %s\nqueued: %d", status.url, shared.title, status.queued or 0)
+				if status.kilo then detail.Text = detail.Text .. "\nKilo: " .. status.kilo.state .. " - " .. status.kilo.message end
+				if status.cline then detail.Text = detail.Text .. "\nCline: " .. status.cline.state .. " - " .. status.cline.message end
 				return
 			end
 			dot.BackgroundColor3 = theme.color.warn

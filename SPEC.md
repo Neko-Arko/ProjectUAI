@@ -1,16 +1,34 @@
 # Project UAI — contract
 
-Current client release: **3.6.6 — October 23, 2026**. The bridge and the Windows
-app are **3.6.7 — October 24, 2026**; the Android companion remains 3.6.5 until
-its own build.
+Current coordinated release: **3.7.0 - October 25, 2026** for the Roblox client,
+bridge and web UI, Windows desktop app, and Android companion (version code 7).
 
-Bridge 3.6.7 and Windows desktop 3.6.7 use verified automatic GitHub updates.
+Bridge 3.7.0 and Windows desktop 3.7.0 use verified automatic GitHub updates.
 Bridge worker replacement waits for idle work and retains its session token;
 desktop app updates stage for restart with a retained fallback. Desktop detects
 Node.js 18+ or downloads a verified LTS runtime per user instead of bundling Node.
 The Windows distribution is one independent executable. Bridge, browser, client
 and license files are embedded and verified into a private cache automatically;
 users do not extract a ZIP or maintain an adjacent support folder.
+
+Kilo free quota recovery is enabled by default in both local apps and starts
+only on a complete anonymous `PROMOTION_MODEL_LIMIT_REACHED` refusal. Its scope
+is exact HTTPS Kilo inference routes with free models and no credential headers
+or URL credentials/query. One tunnel attempt and one circuit retry retain the
+original payload and deadline; uncertain outcomes and partial streams are never
+replayed. The apps advertise optional `capabilities.kilo` schema 1 with enabled,
+available, state and a bounded display message. Disconnect clears client state.
+See [Kilo tunnel](docs/KILO_TUNNEL.md) for controls and quota evidence.
+
+Cline is a bridge-only local CLI route. Its provider uses the reserved
+`https://uai-tunnel.invalid/cline/v1` marker, which must never reach executor
+HTTP or the Android companion. The bridge accepts Chat Completions only,
+requires no provider credential headers, and admits only current free models
+available through the authenticated CLI. Optional `capabilities.cline` schema 1
+advertises enabled, available, state and a bounded message. Missing authentication
+is visible as `auth-required`; it cannot be reported as ready. CLI host tool
+requests are denied; validated UAI calls return to Roblox's normal permissions.
+See [Cline tunnel](docs/CLINE_TUNNEL.md).
 
 A universal Roblox AI agent client. Universal means: no game, no gateway and no
 host script is assumed. It runs standalone under an executor, embedded in a host
@@ -171,6 +189,7 @@ credentials or raw error bodies. Runtime modules do not depend on `net/*`.
   configured gateway implements UAI's envelope protocol. A normal local server
   or OpenAI Responses/Realtime socket does not implement that protocol. See
   [the provider and WebSocket contract](docs/PROVIDER_COMPATIBILITY.md).
+* Explicit `x-should-retry: false` suppresses transport retries.
 * Retries: 408/409/429/5xx and transport errors, exponential backoff with
   jitter, `Retry-After` honoured, capped attempts, then the next provider in the
   fallback chain.
@@ -365,9 +384,13 @@ provider-editor drafts remain isolated. Cached model discovery uses no key slot.
 Project UAI Free default uses the live-verified `auto` router. `provider/models`
 resolves a provider's models from exactly two sources — ids the user added by
 hand (which rank first, and persist on the record) and whatever `GET /v1/models`
-reported (cached for ten minutes, not persisted). Nothing is filtered out of the
-endpoint's answer, because deciding which of its ids are chat models would be a
-guess. An endpoint with no `/models` route is a normal case: the Providers editor
+reported, or the authenticated desktop backend's catalog for CLI routes (cached
+for ten minutes, not persisted). Generic catalogs retain every ID. Native Gemini
+uses explicit generation methods; exact AI/ML API, Vercel, FriendliAI and Venice
+catalog routes use documented type/mode fields to omit explicit non-chat APIs.
+Unknown field shapes, custom routes and manually entered IDs remain available.
+Names never determine whether a model is chat-compatible. An endpoint with no
+`/models` route is a normal case: the Providers editor
 takes a typed id, and saving requires one.
 
 Model metadata is independent of discovery: the reviewed catalog enriches known
@@ -380,6 +403,20 @@ cache categories and context tiers. Unknown gateway prices stay unknown. Include
 Project UAI Free access costs zero; personal HCNSEC rates are not assumed. Context
 and reply limits use the same catalog, while protocol-specific request traits
 remain explicit. User-declared context overrides remain effective.
+
+Usage counters must be finite and nonnegative. Missing or invalid input/output
+counts use the labelled estimate for that side. Cache reads/writes stay within
+input tokens and reasoning stays within output. Unknown-cost request counts and
+cache-write totals persist with usage history; unknown prices are never treated
+as evidence of free access.
+
+Tool discovery filters the same current capability, permission, group and
+conversation scope as provider declarations without cloning all schemas.
+`tool_search` supports bounded multiword queries and returns normalized schema
+pages with byte limits separate from listing row limits. The Tools panel builds
+parameter/permission details only when expanded. Diagnostic searches span
+request fields and retained log details. Stored log values are bounded after
+redaction, with omission markers for truncated content.
 
 Rolling compaction writes a structured handover: goal, current state, decisions,
 exact facts (paths/IDs/revisions/commands), completed work and checks, open
@@ -1189,6 +1226,12 @@ its control sizes. Standard icons have a 12px minimum to retain their strokes.
 Controls have a 15px minimum on handhelds, 28px
 with a pointer and 48px on a console. Native dimensions are reduced directly;
 the application is not resampled through a UIScale.
+
+The model and saved-provider pickers use 40px touch targets for their primary
+controls and may use more available vertical space for the catalogue. This
+does not reposition or rescale the main window. Short or keyboard-obstructed
+layouts keep one scrolling body so effort controls and custom model actions
+remain reachable.
 
 The shared header retains its brand, detail and Minimize/Maximise/Close actions.
 The shared welcome view, composer, Quick Chat, Code tabs and document tabs remain

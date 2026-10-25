@@ -19,6 +19,44 @@ return function(env)
 	local CATEGORY_ORDER = { "added", "improved", "fixed" }
 	local ENTRIES = {
 		{
+			version = "3.7.0",
+			revision = "2026-10-25-models-tunnels-workflows",
+			date = "October 25, 2026",
+			title = "Models, tunnels and faster workflows",
+			highlights = "Find providers and models faster, use AgentRouter's supported GPT models, and manage desktop tunnels in one place. Tools, logs and usage history are clearer across the coordinated 3.7.0 apps.",
+			sections = {
+				{ category = "added", label = "Provider choices", items = {
+					"Add Vercel AI Gateway, Perplexity Orchestrator, FriendliAI, Venice, Nscale, Arcee AI and AI/ML API with current setup instructions. Vercel's free credits apply to eligible models; the other new presets require paid API access.",
+					"AgentRouter selects the supported GPT Responses route and reasoning controls while retaining Claude Messages. Fetch the models available to your account; a catalog entry does not guarantee capacity.",
+				} },
+				{ category = "added", label = "Tunnels and Cline", items = {
+					"The Windows app's Tunnels tab brings OpenCode, Kilo and Cline status and controls together. Install Cline separately, enable it and sign in, then choose Cline in the provider gallery and fetch its current free models.",
+					"Cline uses your existing Cline profile through the connected desktop bridge and supports text only. Missing sign-in or a disconnected bridge gives a clear setup message. Its credentials stay on the desktop.",
+				} },
+				{ category = "added", label = "Kilo recovery", items = {
+					"Kilo recovery is enabled by default in the Windows and Android apps and starts only after an explicit anonymous quota refusal. The original request stays within its deadline and can be stopped.",
+					"Change Kilo tunnel in the app's settings while the bridge or relay is stopped. Cowork in Roblox and the browser shows the helper's current status; direct executor requests need a connected helper to recover.",
+				} },
+				{ category = "improved", label = "Model selection", items = {
+					"The model picker shows your current provider and model together, with connection and free-model information. Search saved providers in the new switcher without losing your model search, effort controls or custom model options.",
+					"The picker gives touch controls more room and keeps reasoning settings reachable above the keyboard. Model menus and large saved catalogs support multiword search, with refresh and manual entry available when no models match.",
+					"Refresh pricing and context information for 1,760 model entries. Known non-chat API types are omitted from supported mixed catalogs, while manual model IDs stay available.",
+				} },
+				{ category = "improved", label = "Tools, logs and usage", items = {
+					"Search Tools and Logs with multiple words and open full details when needed. Tool discovery respects the current conversation's permissions and available tool groups.",
+					"Usage history distinguishes unknown prices from zero-cost work and keeps cache-write usage in cost estimates. Older history retains its known totals without inventing missing prices.",
+				} },
+				{ category = "improved", label = "Coordinated apps", items = {
+					"The client, bridge, Windows app and Android companion all ship as 3.7.0. The desktop app checks installed tunnel helpers before Cowork starts and shows their setup status.",
+					"Browser model dialogs cancel closed requests and ignore results from a previous provider. Unrelated status updates preserve the current model selection, focus and scroll position.",
+				} },
+				{ category = "fixed", label = "Bounded retries", items = {
+					"One alternate connection and one circuit retry are allowed after a complete quota refusal. Exhausted exits pause recovery for 60 seconds. Signed-in requests, other providers, partial replies and uncertain outcomes never switch connections.",
+					"Honor provider instructions not to retry a terminal refusal. Shared connections still have provider allowances, so recovery cannot guarantee unlimited requests.",
+				} },
+			},
+		},
+		{
 			version = "3.6.6",
 			revision = "2026-10-23-provider-gallery",
 			date = "October 23, 2026",

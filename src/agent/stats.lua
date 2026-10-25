@@ -50,7 +50,7 @@ return function(env)
 	local function blankTotals()
 		return {
 			sessions = 0, messages = 0, userMessages = 0, replies = 0,
-			tokensIn = 0, tokensOut = 0, cached = 0, reasoning = 0,
+			tokensIn = 0, tokensOut = 0, cached = 0, cacheCreated = 0, reasoning = 0, unpriced = 0,
 			cost = 0, requests = 0, toolCalls = 0, toolErrors = 0, errors = 0,
 		}
 	end
@@ -98,7 +98,7 @@ return function(env)
 
 	local DAY_TEMPLATE = {
 		sessions = 0, messages = 0, userMessages = 0, replies = 0,
-		tokensIn = 0, tokensOut = 0, cost = 0, requests = 0,
+		tokensIn = 0, tokensOut = 0, cost = 0, requests = 0, unpriced = 0,
 		toolCalls = 0, toolErrors = 0, errors = 0,
 	}
 
@@ -127,7 +127,7 @@ return function(env)
 				if type(id) == "string" and type(entry) == "table" then
 					M.data.models[id] = {
 						requests = number(entry.requests), tokensIn = number(entry.tokensIn),
-						tokensOut = number(entry.tokensOut), cost = number(entry.cost),
+						tokensOut = number(entry.tokensOut), cost = number(entry.cost), unpriced = number(entry.unpriced),
 						firstAt = number(entry.firstAt) > 0 and number(entry.firstAt) or nil,
 						lastAt = number(entry.lastAt) > 0 and number(entry.lastAt) or nil,
 					}
@@ -152,6 +152,7 @@ return function(env)
 									tokensIn = number(entry.tokensIn),
 									tokensOut = number(entry.tokensOut),
 									cost = number(entry.cost),
+									unpriced = number(entry.unpriced),
 								}
 							end
 						end
@@ -277,15 +278,19 @@ return function(env)
 		local tokensIn = number(delta.prompt)
 		local tokensOut = number(delta.completion)
 		local cost = number(delta.cost)
+		local unpriced = delta.costKnown == false and 1 or 0
 
 		bump(day, "requests")
 		bump(day, "tokensIn", tokensIn)
 		bump(day, "tokensOut", tokensOut)
 		bump(day, "cost", cost)
+		bump(day, "unpriced", unpriced)
 		bump(M.data.totals, "requests")
 		bump(M.data.totals, "tokensIn", tokensIn)
 		bump(M.data.totals, "tokensOut", tokensOut)
 		bump(M.data.totals, "cached", number(delta.cached))
+		bump(M.data.totals, "cacheCreated", number(delta.cacheCreated))
+		bump(M.data.totals, "unpriced", unpriced)
 		bump(M.data.totals, "reasoning", number(delta.reasoning))
 		bump(M.data.totals, "cost", cost)
 		if delta.estimated then M.data.estimated = true end
@@ -302,6 +307,7 @@ return function(env)
 			bump(perDay, "tokensIn", tokensIn)
 			bump(perDay, "tokensOut", tokensOut)
 			bump(perDay, "cost", cost)
+			bump(perDay, "unpriced", unpriced)
 
 			local lifetime = M.data.models[model]
 			if not lifetime then
@@ -312,6 +318,7 @@ return function(env)
 			bump(lifetime, "tokensIn", tokensIn)
 			bump(lifetime, "tokensOut", tokensOut)
 			bump(lifetime, "cost", cost)
+			bump(lifetime, "unpriced", unpriced)
 			lifetime.lastAt = at
 		end
 
@@ -498,7 +505,7 @@ return function(env)
 			fromKey = from and clock.keyFromDayNumber(from) or nil,
 			activeDays = 0,
 			sessions = 0, messages = 0, userMessages = 0, replies = 0,
-			tokensIn = 0, tokensOut = 0, tokens = 0, cost = 0,
+			tokensIn = 0, tokensOut = 0, tokens = 0, cost = 0, unpriced = 0,
 			requests = 0, toolCalls = 0, toolErrors = 0, errors = 0,
 			estimated = M.data.estimated == true,
 			hours = {},
@@ -518,6 +525,7 @@ return function(env)
 				out.tokensIn = out.tokensIn + number(day.tokensIn)
 				out.tokensOut = out.tokensOut + number(day.tokensOut)
 				out.cost = out.cost + number(day.cost)
+				out.unpriced = out.unpriced + number(day.unpriced)
 				out.requests = out.requests + number(day.requests)
 				out.toolCalls = out.toolCalls + number(day.toolCalls)
 				out.toolErrors = out.toolErrors + number(day.toolErrors)
@@ -528,13 +536,14 @@ return function(env)
 				for id, entry in pairs(day.models or {}) do
 					local row = perModel[id]
 					if not row then
-						row = { id = id, requests = 0, tokensIn = 0, tokensOut = 0, cost = 0 }
+						row = { id = id, requests = 0, tokensIn = 0, tokensOut = 0, cost = 0, unpriced = 0 }
 						perModel[id] = row
 					end
 					row.requests = row.requests + number(entry.requests)
 					row.tokensIn = row.tokensIn + number(entry.tokensIn)
 					row.tokensOut = row.tokensOut + number(entry.tokensOut)
 					row.cost = row.cost + number(entry.cost)
+					row.unpriced = row.unpriced + number(entry.unpriced)
 				end
 				if dayIsActive(day) then
 					active[index] = true

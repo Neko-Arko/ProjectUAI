@@ -87,7 +87,7 @@ Tool calls:
 
 	local TOOLBOX = [[
 Toolbox:
-- A tool profile may hide tools. Use tool_search list to find one, describe for its exact schema, then call; hidden tools keep normal permissions and scope.]]
+- A tool profile may hide tools. Use tool_search list with a few action/name words to find one, describe for its exact schema (follow nextOffset for more), then call; hidden tools keep normal permissions and scope.]]
 
 	local SKILLS = [[
 Skills:

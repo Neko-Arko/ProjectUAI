@@ -14,6 +14,7 @@ return function(env)
 	local http = env.require("net/http")
 	local log = env.require("runtime/log")
 	local deadlineHelp = env.require("ui/deadline_help")
+	local search = env.require("runtime/search")
 
 	local M = {}
 
@@ -109,6 +110,7 @@ return function(env)
 
 	function M.new(parent)
 		local panel = { view = "requests" }
+		local filter = ""
 		local function inspect(entry, kind)
 			if panel.detail and not panel.detail.closed then panel.detail.close() end
 			local fields = kind == "requests" and requestDetails(entry) or logDetails(entry)
@@ -180,7 +182,12 @@ return function(env)
 			end,
 		})
 
-		local actions = P.row(head, { size = UDim2.new(1, 0, 0, 0), auto = "Y", wrap = true, gap = theme.space.xs, layoutOrder = 3 })
+		P.field(head, { name = "DiagnosticsSearch", placeholder = "Search host, status, tool or message", layoutOrder = 3,
+			onChange = function(value)
+				filter = util.trim(value); render()
+				if scroll then scroll.instance.CanvasPosition = Vector2.new(0, 0) end
+			end })
+		local actions = P.row(head, { size = UDim2.new(1, 0, 0, 0), auto = "Y", wrap = true, gap = theme.space.xs, layoutOrder = 4 })
 		local countLabel = P.text(actions, {
 			text = "",
 			role = "caption",
@@ -203,7 +210,8 @@ return function(env)
 				layoutOrder = 3,
 				onClick = function(button)
 					local exported = panel.view == "requests" and requestExport() or log.export()
-					local ok = pcall(caps.fn.clipboard, exported)
+					local ok, copied = pcall(caps.fn.clipboard, exported)
+					ok = ok and copied ~= false
 					button.setText(ok and "Copied" or "Retry")
 					if not ok then overlay.toast("Could not copy diagnostics", "bad", 3) end
 					clock.delay(2, function()
@@ -382,23 +390,28 @@ return function(env)
 			local position = scroll.instance.CanvasPosition
 			scroll.clear()
 			if panel.view == "requests" then
-				local entries = util.reverse(http.history)
-				countLabel.Text = util.pluralise(#entries, "request") .. " kept"
+				local match, entries = search.compile(filter), {}
+				for index = #http.history, 1, -1 do
+					local entry = http.history[index]
+					if match(safeUrl(entry.url), entry.status, entry.tag, entry.method, entry.via, entry.error) then entries[#entries + 1] = entry end
+				end
+				countLabel.Text = util.pluralise(#entries, "request") .. (filter ~= "" and (" matched / " .. #http.history .. " kept") or " kept")
 				if #entries == 0 then
 					C.emptyState(scroll.instance, {
 						icon = "document",
-						title = "No requests yet",
-						description = "Requests appear here with status, duration and transport details after you send a message.",
+						title = filter ~= "" and "No matching requests" or "No requests yet",
+						description = filter ~= "" and "Try fewer words, an HTTP status or a provider host." or "Requests appear here with status, duration and transport details after you send a message.",
 						layoutOrder = 1,
 					})
 					return
 				end
 				for index, entry in ipairs(entries) do requestRow(entry, index) end
 			else
-				local entries = util.reverse(log.entries)
-				countLabel.Text = util.pluralise(#entries, "line") .. " kept"
+				local entries = util.reverse(log.filter(nil, filter))
+				countLabel.Text = util.pluralise(#entries, "line") .. (filter ~= "" and (" matched / " .. #log.entries .. " kept") or " kept")
 				if #entries == 0 then
-					C.emptyState(scroll.instance, { icon = "document", title = "All clear", description = "Application events will appear here as they occur.", layoutOrder = 1 })
+					C.emptyState(scroll.instance, { icon = "document", title = filter ~= "" and "No matching log entries" or "All clear",
+						description = filter ~= "" and "Try a source, level or a word from the details." or "Application events will appear here as they occur.", layoutOrder = 1 })
 					return
 				end
 				for index, entry in ipairs(entries) do logRow(entry, index) end

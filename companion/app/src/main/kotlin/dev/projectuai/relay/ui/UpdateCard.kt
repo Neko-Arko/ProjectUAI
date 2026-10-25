@@ -80,7 +80,7 @@ fun UpdateCard(updates: UpdateCoordinator, onInstall: () -> Unit, onAllowInstall
         if (expanded) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             ToggleSetting("Download updates automatically", "Checks every 15 minutes while the app is running. Installation always needs your confirmation.",
-                automatic, updates::automaticDownloads)
+                automatic, onChange = updates::automaticDownloads)
             if (lastChecked > 0) Text("Last checked ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(lastChecked))}",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedButton(onClick = updates::checkNow, enabled = !checking && !installing && !pending,

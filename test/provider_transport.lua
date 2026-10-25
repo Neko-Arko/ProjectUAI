@@ -347,7 +347,7 @@ case("buffered errors fail both adapters without shrinking caps or retrying", fu
 		local record = { id = "stream-error", label = "Stream error", model = "fixture-model", api = style,
 			baseUrl = "https://fixture.test/v1", apiKey = "fixture-key", params = {} }
 		f.h.http.handler = function()
-			return { StatusCode = 200, Body = 'event: error\ndata: {"error":{"code":"quota","message":"Daily quota exhausted"}}\n\n',
+			return { StatusCode = 200, Body = 'event: error\ndata: {"error":{"code":"rate_limit_exceeded","message":"Daily quota exhausted"}}\n\n',
 				Headers = { ["Content-Type"] = "text/event-stream" } }
 		end
 		local result, why = f.run(function()

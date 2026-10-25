@@ -11,7 +11,7 @@ async function startBridge(t, args = [], entry = 'bridge/server.js') {
   reserve.listen(0, '127.0.0.1'); await once(reserve, 'listening');
   const port = reserve.address().port; await new Promise(resolve => reserve.close(resolve));
   const proc = spawn(process.execPath, [entry, '--port', String(port), ...args],
-    { cwd: root, env: { ...process.env, UAI_BRIDGE_TEST_NO_UPDATES: '1', UAI_OPENCODE_DISABLED: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    { cwd: root, env: { ...process.env, UAI_BRIDGE_TEST_NO_UPDATES: '1', UAI_OPENCODE_DISABLED: '1', UAI_CLINE_DISABLED: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
   const stop = async () => {
     if (proc.exitCode !== null || proc.signalCode !== null) return;
     const exited = once(proc, 'exit'); proc.kill(); await exited;

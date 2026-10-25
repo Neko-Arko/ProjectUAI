@@ -18,6 +18,8 @@ return function(env)
 	local urls = env.require("net/url")
 	local headerMap = env.require("net/headers")
 	local registry = env.require("provider/registry")
+	local agentrouter = env.require("provider/agentrouter")
+	local proxy = env.require("provider/proxy")
 	local toolCatalog = env.require("provider/tool_catalog")
 
 	local M = {}
@@ -26,7 +28,7 @@ return function(env)
 	function M.key() return RESPONSES_KEY end
 
 	function M.eligible(record)
-		return registry.isOpencode(record)
+		return registry.isOpencode(record) or agentrouter.matches(record)
 	end
 
 	-- Models verified to speak only the Responses lane (live 200 on
@@ -36,6 +38,7 @@ return function(env)
 	-- would never fire there.
 	function M.wantsResponses(record)
 		if not M.eligible(record) then return false end
+		if agentrouter.matches(record) then return agentrouter.protocol(record) == "responses" end
 		if registry.isOpencodeGo(record) then return registry.opencodeGoProtocol(record) == "responses" end
 		return tostring(record and record.model or ""):find("muse-spark", 1, true) ~= nil
 	end
@@ -45,12 +48,16 @@ return function(env)
 		local decoded = util.decode(tostring(res.body or ""))
 		if type(decoded) ~= "table" then return false end
 		local failure = decoded.error
+		local function unsupported(text)
+			return text:find("does not support this protocol", 1, true) ~= nil
+				or (text:find("does not support /v1/chat/completions", 1, true) ~= nil and text:find("/v1/responses", 1, true) ~= nil)
+		end
 		if type(failure) == "string" then
-			return failure:find("does not support this protocol", 1, true) ~= nil
+			return unsupported(failure)
 		end
 		if type(failure) == "table" then
 			if tostring(failure.type or "") == "ModelProtocolUnsupported" then return true end
-			return tostring(failure.message or ""):find("does not support this protocol", 1, true) ~= nil
+			return unsupported(tostring(failure.message or ""))
 		end
 		return false
 	end
@@ -97,7 +104,7 @@ return function(env)
 	-- Direct Responses endpoint. The desktop bridge recognizes this official URL
 	-- and translates it through the installed CLI; no OpenCode proxy remains.
 	function M.endpointFor(record)
-		if registry.isOpencodeGo(record) then return registry.endpoint(record, "/responses") end
+		if registry.isOpencodeGo(record) or agentrouter.matches(record) then return registry.endpoint(record, "/responses") end
 		local parsed = urls.parse(record.baseUrl or "")
 		local query = parsed and parsed.query
 		local base = "https://opencode.ai/inference/v1" .. (query and query ~= "" and ("?" .. query) or "")
@@ -180,12 +187,14 @@ return function(env)
 			if type(tool) == "table" then
 				local fn = tool["function"]
 				if type(fn) == "table" then
-					out[#out + 1] = {
+					local translated = {
 						type = "function",
 						name = tostring(fn.name or ""),
 						description = tostring(fn.description or ""),
 						parameters = type(fn.parameters) == "table" and fn.parameters or { type = "object", properties = {} },
 					}
+					if type(fn.strict) == "boolean" then translated.strict = fn.strict end
+					out[#out + 1] = translated
 				elseif type(tool.name) == "string" then
 					out[#out + 1] = tool
 				end
@@ -227,12 +236,14 @@ return function(env)
 		local ceiling = tonumber(request.outputCeiling)
 		if ceiling and ceiling >= 1 and ceiling < wanted then wanted = math.floor(ceiling) end
 		if wanted > 0 then body.max_output_tokens = wanted end
+		agentrouter.responsesDefaults(record, request, body)
 		for key, value in pairs(record.params or {}) do body[key] = value end
 		for key, value in pairs(request.extra or {}) do body[key] = value end
 		local toolCeiling = openai.toolCeiling(record)
 		if type(body.tools) == "table" and #body.tools > toolCeiling then
 			openai.limitTools(body, toolCeiling, registry.isOpencode(record))
 		end
+		agentrouter.toolDefaults(record, body)
 		env.require("provider/sampling").apply(record, request, body, { defaultOmit = true })
 		return body
 	end
@@ -478,11 +489,13 @@ return function(env)
 			or math.min(tonumber(request.deadlineMs) or math.huge,
 				started + math.max(1, math.min(300, tonumber(requestTimeout(request)) or 120)) * 1000))
 		local scope = registry.compatibilityKey(record)
+		local recovery = proxy.new(record, { aborted = request.aborted, onRetry = request.onRetry, deadlineMs = deadline })
 		local attemptsAllowed = request.attempts or config.get("agent.retries", 3)
 		local function fire()
 			if not owns() or registry.compatibilityKey(record) ~= scope then return nil, "aborted" end
+			if clock.ms() >= deadline then return nil, "deadline: request budget expired" end
 			local imageRequest = env.require("runtime/images").hasReferences(request.messages)
-			return http.send({
+			local res, err = http.send({
 				relay = env.require("net/transport").shouldRelay(imageRequest), sessionId = request.sessionId,
 				relayUnlimited = relayUnlimited,
 				url = url, method = "POST", headers = headersFor(), body = util.encode(body),
@@ -492,6 +505,12 @@ return function(env)
 				onFrame = request.onFrame,
 				timeout = requestTimeout(request), deadlineMs = deadline,
 			})
+			if request.aborted and request.aborted() then return nil, "aborted" end
+			if not (res and res.terminal) and not http.terminal(err) and recovery.recover(res, err) then
+				scope, url = registry.compatibilityKey(record), M.endpointFor(record)
+				return fire()
+			end
+			return res, err
 		end
 		local res, err = fire()
 		while res and not res.terminal and not http.terminal(err) do
@@ -512,6 +531,7 @@ return function(env)
 		if toolLimit and body.tools and #body.tools > toolLimit and owns() and registry.compatibilityKey(record) == scope then
 			local openai = env.require("provider/openai")
 			openai.limitTools(body, toolLimit, registry.isOpencode(record))
+			agentrouter.toolDefaults(record, body)
 			openai.rememberToolCeiling(record, toolLimit)
 			if request.onRetry then request.onRetry({ attempt = 1, attempts = 2, wait = 0, reason = "limited tool declarations with catalogue preserved", status = res.status }) end
 			res, err = fire()

@@ -1,6 +1,6 @@
 # Android companion updates
 
-Current companion: **3.6.5 (Android version code 6)**. It bounds the complete
+Current companion: **3.7.0 (Android version code 7)**. It bounds the complete
 executor-visible UTF-8 reply, including JSON escaping and the executor envelope,
 at 8 MiB. Oversized replies return status 413 without resubmitting inference.
 The APK retains the existing production signing identity and application ID.
@@ -104,7 +104,10 @@ the APK's signature. Keep the signing key separate from access to GitHub release
 
 ## Preparing a release
 
-JDK 17, Node.js and Android SDK build-tools are required. Set `ANDROID_HOME`, or
+JDK 17, Node.js, Android SDK platform 37.1 and SDK build-tools are required. The
+Gradle wrapper pins and verifies Gradle 9.6.0; AGP 9.4.1 supplies Kotlin 2.2.10.
+The newer compile API supports Tor Android while minimum and target Android
+versions remain 26 and 36. Set `ANDROID_HOME`, or
 pass `--sdk` to the packager. On Windows it also checks the normal local Android
 SDK directory. The Gradle signing configuration reads only these environment
 variables from the build process:
@@ -172,6 +175,34 @@ and confirmation, recovery through Resume relay, idle admission, data retention,
 service restart and an interrupted download. Confirm that a request in progress
 is never cancelled merely because an update is available. No native-device
 update run has been recorded for this implementation yet.
+
+## Local verification — October 25, 2026
+
+The reviewed production build is `UAI-Relay-3.7.0.apk`, Android version code 7,
+39,830,460 bytes. Its SHA-256 is:
+
+```text
+fc6c65cf8bbc27c6d701190a14142152c8ca7788c5727ebbc483006a0a876ad4
+```
+
+The signed APK and all three release assets were inspected before verification.
+SDK tools confirmed application ID `dev.projectuai.relay`, minimum SDK 26,
+target SDK 36, non-debuggable status and one valid APK Signature Scheme v2 signer
+matching the production pin. The APK includes Tor and its notices for
+`arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64`. All 64-bit native libraries have
+16 KiB ELF LOAD alignment, and `zipalign -c -P 16 4` passed for the final APK.
+
+All 89 companion JVM tests passed, with no failures, errors or skips, including
+seven Kilo cases covering credential exclusion, bounded quota recovery,
+cooldown status, original deadlines, cancellation and incomplete refusals.
+The packager's ten tests and `tools/build_companion.js --check` passed.
+`lintRelease` completed with zero errors and 35 warnings: target SDK policy,
+battery/wake-lock behavior, dependency updates, icon/label and Kotlin API
+suggestions. These warnings remain visible in the generated lint report.
+
+No Android device was attached for this run. Native Tor bootstrap, circuit
+changes, Android install/update behavior and actual mobile executor input remain
+device acceptance checks; JVM and static APK checks do not establish them.
 
 ## Local verification — October 18, 2026
 

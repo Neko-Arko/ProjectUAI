@@ -21,7 +21,7 @@ the original app design and historical implementation plan follow afterward.
 
 ## Current companion transport and diagnostics
 
-Companion **3.6.5 (version code 6)** caps the full UTF-8 reply to the executor at
+Companion **3.7.0 (version code 7)** caps the full UTF-8 reply to the executor at
 8 MiB, including JSON escaping and the additional `/api/executor` envelope. It
 counts the retained body's encoded size before allocating an oversized reply.
 Overflow returns HTTP 413, or status 413 inside the executor envelope, with a
