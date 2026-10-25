@@ -14,7 +14,10 @@ function eligible(url, headers, body) {
   if (Object.keys(headers).some(name => /authorization|api[-_]?key|token|cookie|organization/i.test(name))) return false;
   try {
     const model = JSON.parse(body).model;
-    return typeof model === 'string' && (model === 'kilo-auto/free' || model.endsWith(':free'));
+    // Kilo's catalog marks anonymous free routes with a trailing "free" behind a
+    // separator: ":free" for most, "/free" for the auto and OpenRouter routers,
+    // "-free" for reflection/beam-free. The separator keeps unrelated ids out.
+    return typeof model === 'string' && /[:\/-]free$/.test(model);
   } catch { return false; }
 }
 function quota(status, body) {

@@ -1,9 +1,11 @@
 # Project UAI — contract
 
 Current coordinated release: **3.7.0 - October 25, 2026** for the Roblox client,
-bridge and web UI, Windows desktop app, and Android companion (version code 7).
+Windows desktop app, and Android companion (version code 7). The bridge and web
+UI carry bridge patch **3.7.1**, which accepts every Kilo free-model spelling
+in quota recovery.
 
-Bridge 3.7.0 and Windows desktop 3.7.0 use verified automatic GitHub updates.
+Bridge 3.7.1 and Windows desktop 3.7.0 use verified automatic GitHub updates.
 Bridge worker replacement waits for idle work and retains its session token;
 desktop app updates stage for restart with a retained fallback. Desktop detects
 Node.js 18+ or downloads a verified LTS runtime per user instead of bundling Node.

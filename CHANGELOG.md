@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.7.1 - October 25, 2026 - Kilo tunnel accepts every free-model spelling
+
+- Bridge patch: the bridge and web UI move to 3.7.1 while the Roblox client,
+  Windows desktop and Android companion remain 3.7.0. Installed bridges pick
+  the fix up automatically from the `bridge-v3.7.1` GitHub release.
+- Accept Kilo free routes whose model id ends in `free` behind any separator:
+  `:free`, `/free` or `-free`. `reflection/beam-free` — the only free route
+  spelled with a dash in the October 25 catalog — and the `openrouter/free`
+  router previously failed the tunnel's model check, bypassed quota recovery
+  and returned the anonymous refusal directly. Verified live: with the local
+  address limited, the same `reflection/beam-free` request completed HTTP 200
+  through a fresh Tor exit. See [Kilo quota recovery](docs/KILO_TUNNEL.md) and
+  the [3.7.1 verification](docs/TESTING_3.7.1.md).
+- Apply the same rule in the Android companion's Kilo route; it reaches devices
+  with the companion's next APK build.
+
 ## 3.7.0 - October 25, 2026 - Models, tunnels and faster workflows
 
 - Align the Roblox client, bridge/web UI, Windows desktop and Android companion

@@ -86,7 +86,9 @@ class KiloRoute(private val connection: KiloConnection, private val clock: () ->
             if (request.headers.names().any { Regex("authorization|api[-_]?key|token|cookie|organization", RegexOption.IGNORE_CASE).containsMatchIn(it) }) return false
             return runCatching {
                 val model = Json.parseToJsonElement(body).jsonObject["model"]?.jsonPrimitive?.content.orEmpty()
-                model == "kilo-auto/free" || model.endsWith(":free")
+                // Mirror the bridge rule: a trailing "free" behind a separator
+                // (":free", "/free", "-free") marks Kilo's anonymous free routes.
+                listOf(":free", "/free", "-free").any { model.endsWith(it) }
             }.getOrDefault(false)
         }
         fun quota(body: String): Boolean = runCatching {

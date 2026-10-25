@@ -42,6 +42,7 @@ descriptions and capabilities; they are not comparative benchmark results.
 | Model ID | Good starting use | Advertised context |
 | --- | --- | --- |
 | `kilo-auto/free` | Simplest default; Kilo chooses an available free model | 256,000 |
+| `reflection/beam-free` | Agent coding with reasoning; the one free route spelled with a dash | 1,048,576 |
 | `recursive/flint-v1.0:free` | Agent coding and repository changes | 262,144 |
 | `cohere/north-mini-code:free` | Coding tasks and tool use | 256,000 |
 | `nvidia/nemotron-3.5-super-vl:free` | Screenshot/image questions and text | 1,000,000 |
@@ -81,7 +82,9 @@ VPN, global proxy settings or another provider's connection.
 ## Scope and replay rules
 
 Only HTTPS port 443 on `api.kilo.ai` or `ai-gateway.kilo.ai`, known gateway
-inference paths, and `kilo-auto/free` or `:free` models qualify. URL credentials,
+inference paths, and models whose id ends in `free` behind a separator — `:free`,
+`/free` (for example `kilo-auto/free`, `openrouter/free`) or `-free`
+(`reflection/beam-free`) — qualify. URL credentials,
 query strings, authorization, API-key, token, cookie or organization headers
 exclude the request. Signed-in requests remain direct. To use a Kilo account in
 the client, select **Bearer** and enter the Kilo key; the no-key preset's

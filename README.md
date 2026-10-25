@@ -5,8 +5,10 @@ with Chat Completions, OpenAI Responses and Anthropic Messages endpoints,
 including compatible local servers and relays.
 
 **Project UAI 3.7.0 - October 25, 2026: models, tunnels and faster workflows.**
-The Roblox client, bridge and web UI, Windows app, and Android companion now
-share version 3.7.0. Anonymous Kilo free requests start directly; an explicit
+The Roblox client, Windows app, and Android companion are 3.7.0; the bridge and
+web UI advance to 3.7.1, extending Kilo quota recovery to every free-model
+spelling (`:free`, `/free`, `-free`). Anonymous Kilo free requests start
+directly; an explicit
 address-quota refusal can start a private Tor connection and one bounded circuit
 retry. The connection is enabled by default, starts only when needed, and has
 status and off switches in the apps. Shared exits still have quotas: this is
@@ -70,7 +72,7 @@ workspace. Go keeps its own catalog and routes; the optional free CLI backend
 does not intercept it. Subscription and workspace region refusals identify the
 setting to check. See [provider setup](docs/PROVIDER_COMPATIBILITY.md).
 
-The client, bridge, Windows desktop and Android companion are 3.7.0.
+The client, Windows desktop and Android companion are 3.7.0; the bridge is 3.7.1.
 UI LIB remains 1.3.0 and SDK 1.0.0.
 Model pricing and context/reply limits use an October 25 catalog with 1,760
 entries across 15 providers, including exact Kilo and Cline routes. Unknown
@@ -87,7 +89,8 @@ it. The model modal edits the same global effort setting, including for other
 models when **Options → Reasoning support** is enabled. The Thinking row estimates
 visible text only. A long retained trace is labelled
 **Excerpt**, not a 5,999-token model limit. See [provider behavior](docs/PROVIDER_COMPATIBILITY.md).
-See [3.7.0 verification](docs/TESTING_3.7.0.md),
+See [3.7.1 bridge verification](docs/TESTING_3.7.1.md),
+[3.7.0 verification](docs/TESTING_3.7.0.md),
 [3.6.6 verification](docs/TESTING_3.6.6.md),
 [3.6.5 verification](docs/TESTING_3.6.5.md),
 [bridge 3.6.2 verification](docs/TESTING_3.6.2.md),

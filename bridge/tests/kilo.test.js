@@ -57,6 +57,13 @@ test('only exact anonymous Kilo free routes qualify', () => {
     'https://api.kilo.ai/api/gateway/models', 'https://example.com/api/gateway/chat/completions']) assert.equal(eligible(new URL(other), {}, body), false);
   assert.equal(eligible(url, {}, '{broken'), false);
   assert.equal(eligible(url, {}, JSON.stringify({ model: 'paid-model' })), false);
+  // Kilo spells free routes ":free", "/free" and "-free" (October 25 catalog:
+  // reflection/beam-free is the only dash-spelled free route; openrouter/free
+  // and kilo-auto/free use the slash).
+  for (const model of ['reflection/beam-free', 'openrouter/free', 'kilo-auto/free'])
+    assert.equal(eligible(url, {}, JSON.stringify({ model })), true);
+  for (const model of ['paid-model', 'free', 'carefree', 'kilo-auto/free-tier'])
+    assert.equal(eligible(url, {}, JSON.stringify({ model })), false);
 });
 test('a confirmed quota refusal retries through the tunnel with the same payload', async t => {
   const f = fixture(t, [limit, { status: 200, body: 'data: {"ok":true}\n\ndata: [DONE]\n\n', headers: { 'content-type': 'text/event-stream' } }]);

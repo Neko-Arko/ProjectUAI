@@ -45,6 +45,11 @@ class KiloRouteTest {
             "https://api.kilo.ai:444/api/gateway/chat/completions", "https://api.kilo.ai/api/gateway/models", "https://api.kilo.ai/api/gateway/chat/completions?key=private"))
             assertFalse(KiloRoute.eligible(request.newBuilder().url(url).build(), body))
         assertFalse(KiloRoute.eligible(request, """{"model":"paid-model"}"""))
+        // Kilo spells free routes ":free", "/free" and "-free".
+        for (model in listOf("reflection/beam-free", "openrouter/free", "kilo-auto/free"))
+            assertTrue(KiloRoute.eligible(request, """{"model":"$model"}"""))
+        for (model in listOf("paid-model", "free", "carefree", "kilo-auto/free-tier"))
+            assertFalse(KiloRoute.eligible(request, """{"model":"$model"}"""))
     }
     @Test fun quotaRecoveryPreservesPayloadAndOneDeadline() {
         var directCalls = 0
