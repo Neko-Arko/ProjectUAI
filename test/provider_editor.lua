@@ -47,7 +47,8 @@ local function chooseCustom(f)
 end
 
 local function key(f, value)
-	click(f, f.h.byName("ReplaceKey_1") and "ReplaceKey_1" or "SetKey")
+	click(f, "ManageKeys")
+	click(f, f.h.byName("ReplaceKey_1") and "ReplaceKey_1" or "AddKey")
 	assert(f.h.byName("PromptField")):FindFirstChildOfClass("TextBox").Text = value
 	f.h.settle(0.1)
 	for _, node in ipairs(f.env.root:GetDescendants()) do
@@ -56,6 +57,7 @@ local function key(f, value)
 			while button and button.ClassName ~= "TextButton" do button = button.Parent end
 			assert(button, "missing key confirmation")
 			f.h.click(button)
+			click(f, "ApplyKeys")
 			return
 		end
 	end

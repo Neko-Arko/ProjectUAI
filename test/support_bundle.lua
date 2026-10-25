@@ -5,6 +5,7 @@ local suite = F.suite("Support bundle")
 local case, check = suite.case, suite.check
 
 local SECRET = "sk-support-secret-1234"
+local KEY_NAME = "Private billing account"
 
 local function setup()
 	local f = F.new(); f.tools({ "support_bundle" })
@@ -12,6 +13,7 @@ local function setup()
 	config.set("providers.list", {
 		{ id = "fixture", label = "Fixture provider", baseUrl = "https://fixture.test/v1",
 			apiKey = SECRET, model = "fixture-model", api = "openai", enabled = true,
+			keyNames = { KEY_NAME }, keyMode = "single", selectedKey = 1,
 			params = { headers = { Authorization = "Bearer " .. SECRET, ["X-Custom"] = "custom-secret" } } },
 	})
 	config.set("agent.customInstructions", "A local preference")
@@ -30,6 +32,10 @@ case("the bundle contains diagnostics but no credentials or conversation text", 
 	local bundle = f.h.json.decode(raw)
 	check("bundle is versioned", bundle.format == "uai-support" and bundle.version == 1)
 	check("provider keys are redacted in config", bundle.config.providers.list[1].apiKey == "<redacted>")
+	check("private key names are omitted from diagnostics", bundle.config.providers.list[1].keyNames == nil
+		and bundle.providers[1].keyNames == nil and raw:find(KEY_NAME, 1, true) == nil)
+	check("diagnostics preserve policy without changing the saved key name", bundle.config.providers.list[1].keyMode == "single"
+		and bundle.config.providers.list[1].selectedKey == 1 and f.env.require("runtime/config").get("providers.list")[1].keyNames[1] == KEY_NAME)
 	check("custom header values are redacted", bundle.config.providers.list[1].params.headers["X-Custom"] == "<redacted>"
 		and raw:find("custom-secret", 1, true) == nil)
 	check("provider summary contains health but no key", bundle.providers[1].label == "Fixture provider"

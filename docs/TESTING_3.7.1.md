@@ -2,8 +2,9 @@
 
 Prepared October 25, 2026. The Roblox client joins the bridge, web UI and Android
 companion (version code 8) at 3.7.1; the Windows desktop remains 3.7.0.
-The client update finishes UI polish and adds independently editable numbered
-API keys. The existing bridge and Android patch accepts every Kilo free-model
+The client update finishes UI polish and adds a dedicated manager for named
+API keys, with rotation enabled by default and an optional selected key.
+The existing bridge and Android patch accepts every Kilo free-model
 spelling (`:free`, `/free`, `-free`) in quota recovery, so `reflection/beam-free`
 and `openrouter/free` no longer bypass the Kilo tunnel.
 
@@ -61,6 +62,36 @@ markers and generated documentation mirror were inspected before verification.
 - Official Luau compilation and deterministic bundle freshness passed.
 - Website freshness passed; both copies report 3.7.1, 182 tools and 24 groups.
   Public-site structural and contrast validation passed all 8,703 checks.
+
+### Named API key manager follow-up
+
+The follow-up replaces inline key entries with a padded, content-fitting modal.
+Keys can be named, appended, replaced or removed independently. Rotation remains
+the default; single-key mode uses only the chosen credential for inference,
+model discovery and quota retries. Removing that key restores rotation. Apply
+and Cancel isolate edits, and name-only saves preserve live rotation progress.
+Private configuration transfers retain names and routing preferences; diagnostic
+support exports omit names.
+
+All changed inputs were manually audited before rebuilding the client as
+`3.7.1-7575fac58e1e6f45`. The generated bundle and module manifest were inspected
+before these checks:
+
+| Check | Result |
+| --- | --- |
+| Key metadata, rotation and snapshots; Gemini, proxy and provider compatibility | 159 cases, 2,289 assertions, no failures |
+| Key manager UI, modal fitting, dismissal and motion | 320 checks/assertions passed, including named-key save/cancel isolation, concurrent requests, selected-key removal and keyboard resizing |
+| Provider editor, setup, gallery, free access and release UI ownership | 53 cases, 742 assertions, no failures |
+| Private configuration transfer and support diagnostics | 132 transfer checks and 14 support assertions passed |
+| Changelog history, unread markers and desktop/phone rendering | 2 scenarios, 492 checks passed |
+| Static client validation | 235 files, 234 modules, no warnings or failures |
+| Official Luau compilation and deterministic bundle freshness | Passed |
+| Visual review | 12 mock/Chromium previews inspected: rotation, selected key and empty states at desktop 1280x840, phone 390x844 and short-window 844x220, including scrolled controls |
+
+Follow-up logs and previews are under `refer/key-manager-20261025/` and
+`refer/api-key-manager-20261025/`. Phone previews use the existing handheld scale
+and bottom-sheet policy. They approximate layout and do not establish native
+Roblox rendering or host input behavior.
 
 ## Kilo rule change
 

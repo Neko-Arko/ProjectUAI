@@ -33,6 +33,7 @@ cache["runtime/clock"] = { ms = function() return 123456 end, debounce = functio
 cache["runtime/log"] = { warn = function() end }
 local config = env.require("runtime/config")
 local transfer = env.require("runtime/config_transfer")
+local keyPolicy = env.require("runtime/provider_keys")
 local checks = 0
 local function check(label, condition)
 	assert(condition, label)
@@ -64,6 +65,7 @@ full.providers = {
 	list = {
 		{
 			id = "first", label = "Primary", baseUrl = "https://example.invalid/v1", apiKey = "key-one\nkey-two, key-three\r\nkey-one",
+			keyNames = { "Private account label", "", "备用账号" }, keyMode = "single", selectedKey = 2,
 			model = "model-a", models = { "model-a", "model-b" }, preset = "custom", api = "openai", authStyle = "bearer",
 			headers = { Authorization = "header-secret", ["X-Custom"] = false, ["X-Version"] = 3 },
 			query = { key = "query-secret", enabled = false },
@@ -91,8 +93,11 @@ local decoded = assert(util.decode(body))
 check("export has a versioned format envelope", decoded.format == transfer.FORMAT and decoded.version == 1 and decoded.exportedAt == 123456 and decoded.appVersion == "test")
 check("export preserves every persisted value", same(decoded.config, full))
 check("export preserves multiline API key pools verbatim", decoded.config.providers.list[1].apiKey == full.providers.list[1].apiKey)
+check("export preserves names and selected-key policy", same(decoded.config.providers.list[1].keyNames, full.providers.list[1].keyNames)
+	and decoded.config.providers.list[1].keyMode == "single" and decoded.config.providers.list[1].selectedKey == 2)
 check("summary counts unique keys across multiline/comma pools", summary.keys == 4 and summary.providers == 2 and summary.active == "Secondary")
 check("summary includes preferences without credentials", summary.permissionMode == "auto" and summary.rules == 3 and summary.memory == 1 and summary.bridgeEnabled == true and not util.encode(summary):find("secret", 1, true))
+check("summary excludes private key names", not util.encode(summary):find("Private account label", 1, true) and summary.keyNames == nil)
 check("export has no persistence or observer side effects", #writes == 0 and #events == 0)
 local preview = assert(transfer.preview(body))
 check("preview roundtrips every persisted value", same(preview.config, full))
@@ -118,6 +123,21 @@ legacy.ui.reduceMotion = "on"
 legacy.bridge.requestTimeout = 35
 local migrated = assert(transfer.preview(util.encode(envelope(legacy))))
 check("older exports retire motion preferences without changing other values", same(migrated.config, full) and legacy.ui.reduceMotion == "on")
+local legacyKeys = util.deepCopy(full)
+local legacyProvider = legacyKeys.providers.list[1]
+legacyProvider.keyNames, legacyProvider.keyMode, legacyProvider.selectedKey = nil, nil, nil
+local legacyPreview = assert(transfer.preview(util.encode(envelope(legacyKeys))))
+check("legacy key pools import intact and default to rotation", same(legacyPreview.config, legacyKeys)
+	and keyPolicy.mode(legacyPreview.config.providers.list[1]) == "rotate" and keyPolicy.selected(legacyPreview.config.providers.list[1]) == 1)
+local rotating = util.deepCopy(full)
+rotating.providers.list[1].keyMode = "rotate"
+check("explicit rotation retains its names and preferred single-key selection", same(assert(transfer.preview(util.encode(envelope(rotating)))).config, rotating))
+local emptyKeys = util.deepCopy(rotating)
+emptyKeys.providers.list[1].apiKey, emptyKeys.providers.list[1].keyNames, emptyKeys.providers.list[1].selectedKey = "", {}, 1
+check("an empty rotating pool remains valid for keyless providers", same(assert(transfer.preview(util.encode(envelope(emptyKeys)))).config, emptyKeys))
+local maximumName = util.deepCopy(full)
+maximumName.providers.list[1].keyNames[1] = string.rep("界", 40)
+check("a valid 120-byte UTF-8 key name transfers intact", same(assert(transfer.preview(util.encode(envelope(maximumName)))).config, maximumName))
 local motionEvents, motionWrites = #events, #writes
 local motionSet, motionError = config.set("ui.reduceMotion", "on")
 check("motion cannot be disabled through the configuration API", motionSet == nil and type(motionError) == "string"
@@ -141,7 +161,8 @@ local function reject(label, mutate, viaApply)
 	local value, err
 	if viaApply then value, err = transfer.apply({ config = candidate })
 	else value, err = transfer.preview(util.encode(envelope(candidate))) end
-	check(label, not value and type(err) == "string" and unchanged())
+	check(label, not value and type(err) == "string" and not err:find("key-one", 1, true)
+		and not err:find("Private account label", 1, true) and unchanged())
 end
 reject("reject wrong configuration version", function(c) c.version = 2 end)
 reject("reject missing required section", function(c) c.agent = nil end)
@@ -157,6 +178,25 @@ reject("reject provider list object", function(c) c.providers.list = { unexpecte
 reject("reject duplicate provider ids", function(c) c.providers.list[2].id = "first" end)
 reject("reject missing active provider", function(c) c.providers.active = "missing" end)
 reject("reject malformed key pool", function(c) c.providers.list[1].apiKey = {} end)
+reject("reject non-list key names", function(c) c.providers.list[1].keyNames = "Private account label" end)
+reject("reject non-text key names", function(c) c.providers.list[1].keyNames[2] = false end)
+reject("reject overlong UTF-8 key names", function(c) c.providers.list[1].keyNames[2] = string.rep("界", 41) end)
+reject("reject multiline key names", function(c) c.providers.list[1].keyNames[2] = "Line one\nLine two" end)
+reject("reject control characters in key names", function(c) c.providers.list[1].keyNames[2] = "Hidden\0value" end)
+reject("reject untrimmed persisted key names", function(c) c.providers.list[1].keyNames[2] = " Padded " end)
+reject("reject invalid UTF-8 key names before apply", function(c) c.providers.list[1].keyNames[2] = string.char(255) end, true)
+reject("reject extra key names", function(c) c.providers.list[1].keyNames[4] = "Extra" end)
+reject("reject incomplete key names", function(c) c.providers.list[1].keyNames = { "Only one" } end)
+reject("reject sparse key names before apply", function(c) c.providers.list[1].keyNames[2] = nil end, true)
+reject("reject mixed key-name fields before apply", function(c) c.providers.list[1].keyNames.extra = "Unexpected" end, true)
+reject("reject unknown key mode", function(c) c.providers.list[1].keyMode = "random" end)
+reject("reject non-text key mode", function(c) c.providers.list[1].keyMode = false end)
+reject("reject non-number selected key", function(c) c.providers.list[1].selectedKey = "2" end)
+reject("reject zero selected key", function(c) c.providers.list[1].selectedKey = 0 end)
+reject("reject fractional selected key", function(c) c.providers.list[1].selectedKey = 1.5 end)
+reject("reject selected key beyond the deduplicated pool", function(c) c.providers.list[1].selectedKey = 4 end)
+reject("reject single-key mode without credentials", function(c) c.providers.list[1].apiKey = ""; c.providers.list[1].keyNames = {}; c.providers.list[1].selectedKey = 1 end)
+reject("revalidate key metadata in an edited preview", function(c) c.providers.list[1].selectedKey = 20 end, true)
 reject("reject malformed model list", function(c) c.providers.list[1].models = { 42 } end)
 reject("reject nested header values", function(c) c.providers.list[1].headers.Authorization = {} end)
 reject("reject non-object provider params", function(c) c.providers.list[1].params = { "invalid" } end)
@@ -178,6 +218,7 @@ for label, invalid in pairs({
 	["reject wrong format"] = '{"format":"other","version":1,"config":{}}',
 	["reject future envelope version"] = '{"format":"project-uai-config","version":2,"config":{}}',
 	["reject null settings"] = body:gsub('"notifications":true', '"notifications":null'),
+	["reject invalid UTF-8 key names in JSON"] = body:gsub("Private account label", function() return string.char(255) end),
 	["reject oversized input"] = string.rep(" ", 8 * 1024 * 1024 + 1),
 }) do
 	mark()
@@ -250,10 +291,13 @@ for _, viewport in ipairs({ { 1280, 800 }, { 390, 844 }, { 320, 640 } }) do
 	imported.providers.active = "first"
 	imported.providers.list[1].enabled = true
 	imported.providers.list[1].apiKey = "ui-test-key"
+	imported.providers.list[1].keyNames = { "Private imported account" }
+	imported.providers.list[1].selectedKey = 1
 	local uiBody = util.encode(envelope(imported))
 	ui.type(input, uiBody)
 	ui.click(review)
-	check("review enables Apply with credential-free summary" .. suffix, apply.Active and status.Text:find("Ready to import", 1, true) and not status.Text:find("ui-test-key", 1, true) and handle.config.data == initial)
+	check("review enables Apply with credential-free summary" .. suffix, apply.Active and status.Text:find("Ready to import", 1, true)
+		and not status.Text:find("ui-test-key", 1, true) and not status.Text:find("Private imported account", 1, true) and handle.config.data == initial)
 	ui.type(input, uiBody .. " ")
 	check("editing a reviewed import disables Apply" .. suffix, apply.Active == false)
 	ui.click(apply)
@@ -262,6 +306,9 @@ for _, viewport in ipairs({ { 1280, 800 }, { 390, 844 }, { 320, 640 } }) do
 	ui.click(apply)
 	ui.settle(2)
 	check("Apply updates real provider and preference state" .. suffix, handle.config.get("providers.active") == "first" and handle.config.get("providers.list")[1].apiKey == "ui-test-key" and handle.config.get("ui.density") == "compact")
+	local appliedProvider = handle.config.get("providers.list")[1]
+	check("Apply retains private key name and policy" .. suffix, appliedProvider.keyNames[1] == "Private imported account"
+		and appliedProvider.keyMode == "single" and appliedProvider.selectedKey == 1)
 	local logger = handle.env.require("runtime/log")
 	check("Apply synchronizes live logging preferences" .. suffix, logger.mirror == true)
 	check("Apply dismisses stale import and Settings controls" .. suffix, ui.byName("ConfigImportJSON") == nil and ui.byName("SettingsDialog") == nil)

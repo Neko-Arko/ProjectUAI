@@ -17,6 +17,7 @@
 -- that rebuilt the entire panel mid-turn, scroll position included.
 return function(env)
 	local util = env.require("runtime/util")
+	local keyData = env.require("runtime/provider_keys")
 	local clock = env.require("runtime/clock")
 	local caps = env.require("runtime/caps")
 	local config = env.require("runtime/config")
@@ -53,6 +54,32 @@ return function(env)
 		return tostring(value)
 	end
 
+	local function keyUsage(record)
+		if keyData.mode(record) == "single" then
+			local index = keyData.selected(record)
+			local entry = keyData.entries(record)[index or 0]
+			local name = entry and entry.name ~= "" and entry.name or ("API key " .. tostring(index or 1))
+			return "Use one key: " .. name
+		end
+		return "Rotate keys automatically"
+	end
+
+	local function sameKeyConnection(record, updated)
+		return record.apiKey == updated.apiKey
+			and keyData.mode(record) == keyData.mode(updated)
+			and keyData.selected(record) == keyData.selected(updated)
+	end
+
+	local function applyKeys(record, updated)
+		local connectionChanged = not sameKeyConnection(record, updated)
+		record.apiKey = updated.apiKey
+		record.keyNames = util.deepCopy(updated.keyNames)
+		record.keyMode = updated.keyMode
+		record.selectedKey = updated.selectedKey
+		if connectionChanged then record.keyRotation = nil end
+		return connectionChanged
+	end
+
 	-- Never the key itself.
 	--
 	-- The editor rendered record.apiKey into an ordinary field, so opening Edit on any
@@ -66,6 +93,11 @@ return function(env)
 		if util.trim(raw) == "" and registry.opencodeKeyOptional(record) then return "Provided by connected OpenCode CLI", nil end
 		if util.trim(raw) == "" then return "not set", "warn" end
 		local pool = registry.keysOf(record)
+		if keyData.mode(record) == "single" then
+			local key = keyData.requestKeys(record)[1]
+			if not key then return "Choose an API key", "warn" end
+			return #key <= 4 and "set" or (string.rep("\226\128\162", 4) .. " " .. key:sub(-4)), nil
+		end
 		if #pool > 1 then
 			local last = pool[#pool]
 			local suffix = #last <= 4 and "set" or (string.rep("\226\128\162", 4) .. " " .. last:sub(-4))
@@ -113,6 +145,9 @@ return function(env)
 				.. "  \194\183  " .. key, tone = keyTone },
 			{ key = "Streaming", value = transport },
 		}
+		if not registry.isCline(record) and #registry.keysOf(record) > 0 then
+			out[#out + 1] = { key = "Key usage", value = keyUsage(record) }
+		end
 		if (health.ok or 0) + (health.fail or 0) > 0 then
 			out[#out + 1] = {
 				key = "Health",
@@ -657,6 +692,7 @@ return function(env)
 		local editing = util.deepCopy(record)
 		local adding = util.trim(editing.id) == ""
 		local retainDraft = adding
+		local keyManager
 		local modal = overlay.modal({
 			title = adding and "Connect a provider" or "Edit connection",
 			description = adding and "Add access, choose a model, and save when you're ready."
@@ -671,6 +707,7 @@ return function(env)
 			-- Scrim, close button and Escape preserve every editable connection
 			-- field. Saving and Start over explicitly release the retained draft.
 			onClose = function()
+				if keyManager and not keyManager.closed then keyManager.close() end
 				if retainDraft and util.trim(editing.id) == "" then
 					addDraft = draftDirty(editing) and util.deepCopy(editing) or nil
 				end
@@ -748,12 +785,11 @@ return function(env)
 		local accessNotice = R.paragraph(accessSection, "", { name = "AccessSummary", color = theme.color.textSecondary, layoutOrder = 1 })
 
 		local problemLabel
-		local presetButton, urlField, keyRow, nameField
+		local presetButton, urlField, nameField
 		local protocolControl, authControl, keyHintLabel
 		local docsRow, docsNoteRow, presetNoteRow
 		local proxyNote, communityRow, keyLabel, setKeyButton
-		local urlColumn, keyColumn
-		local refreshKeys
+		local urlColumn, keyUsageLabel
 		local function refreshConnectionInfo()
 			local custom = editing.preset == "custom"
 			connectionSection.Parent.LayoutOrder = custom and 10 or 30
@@ -798,9 +834,11 @@ return function(env)
 			end
 			if setKeyButton then
 				setKeyButton.instance.Visible = not registry.isCline(editing)
-				setKeyButton.setText(editing.authStyle == "none" and "Add optional key" or "Add API key")
 			end
-			if refreshKeys then refreshKeys() end
+			if keyUsageLabel then
+				keyUsageLabel.Text = keyUsage(editing)
+				keyUsageLabel.Visible = not registry.isCline(editing)
+			end
 			if problemLabel then
 				problemLabel.Text = ok and "" or (problems[1]:gsub("^%l", string.upper) .. ".")
 				problemLabel.Visible = not ok
@@ -1090,12 +1128,9 @@ return function(env)
 			return authControl
 		end)
 
-		-- The key goes in through a prompt and never comes back out.
-		--
-		-- A masked field would need a new primitive; a prompt needs none, and it has the
-		-- better property that the secret is on screen only while it is being typed.
+		-- Keep connection setup compact. The key manager owns its own draft and
+		-- applies names, credentials and routing together, without saving the provider.
 		row("API keys", nil, function(column)
-			keyColumn = column
 			local shown, tone = maskedKey(editing)
 			keyLabel = P.text(column, {
 				name = "KeyState",
@@ -1105,97 +1140,26 @@ return function(env)
 				wrap = true, auto = "Y",
 				layoutOrder = 2,
 			})
-			local entries = P.column(column, { name = "APIKeyEntries", size = UDim2.new(1, 0, 0, 0),
-				auto = "Y", gap = theme.space.sm, layoutOrder = 3 })
-			local keyHelp = R.paragraph(column, "Keys rotate automatically. Replace or remove an entry without changing the others.",
-				{ name = "APIKeyHelp", layoutOrder = 5 })
-			local renderedKeys, renderedCline
-			local function commitKeys(keys)
-				local value = table.concat(keys, "\n")
-				if value == table.concat(registry.keysOf(editing), "\n") then return end
-				editing.apiKey, editing.keyRotation = value, nil
-				if forgetFetchedModels then forgetFetchedModels() end
-				showProblems()
-			end
-			local function keyIndex(keys, value)
-				for index, key in ipairs(keys) do if key == value then return index end end
-			end
-			local function promptKey(index, original)
-				if modal.closed or registry.isCline(editing) then return end
-				overlay.prompt({
-					title = index and ("Replace API key " .. index) or "Add API key",
-					description = index and ("Paste a replacement for API key " .. index .. ". Other keys stay in place. Leave blank to keep this key.")
-						or ("Add access for " .. tostring(editing.label) .. ". Paste one key per line to add several. Existing keys stay in place."),
-					placeholder = (catalog.get(editing.preset) or {}).keyHint or "sk-...",
-					confirmText = "Save key",
-					multiline = not index,
-					onConfirm = function(text)
-						if modal.closed or registry.isCline(editing) then return end
-						local incoming = registry.keysOf({ apiKey = text })
-						if #incoming == 0 then return end
-						local keys = registry.keysOf(editing)
-						if index then
-							if #incoming ~= 1 then
-								overlay.toast("Paste one replacement key. Use Add API key to add several.", "warn")
-								return
-							end
-							local current = keyIndex(keys, original)
-							if not current then return end
-							local duplicate = keyIndex(keys, incoming[1])
-							if duplicate and duplicate ~= current then
-								overlay.toast("That key is already in another entry. Both entries were kept.", "warn")
-								return
-							end
-							keys[current] = incoming[1]
-						else
-							for _, key in ipairs(incoming) do
-								if not keyIndex(keys, key) then keys[#keys + 1] = key end
-							end
-						end
-						commitKeys(keys)
-					end,
-				})
-			end
-			refreshKeys = function()
-				local cline = registry.isCline(editing)
-				if renderedKeys == editing.apiKey and renderedCline == cline then return end
-				renderedKeys, renderedCline = editing.apiKey, cline
-				for _, child in ipairs(entries:GetChildren()) do
-					if not child:IsA("UIComponent") then child:Destroy() end
-				end
-				local keys = registry.keysOf(editing)
-				entries.Visible = not cline and #keys > 0
-				keyHelp.Visible = not cline
-				if cline then return end
-				for index, key in ipairs(keys) do
-					local slot, secret = index, key
-					local entry = P.card(entries, { name = "APIKey_" .. slot, padding = theme.space.sm,
-						gap = theme.space.xs, layoutOrder = slot })
-					local head = P.row(entry, { size = UDim2.new(1, 0, 0, 0), auto = "Y", gap = theme.space.sm, layoutOrder = 1 })
-					P.text(head, { name = "APIKeyLabel_" .. slot, text = "API key " .. slot, role = "label",
-						size = UDim2.new(0, 0, 0, 0), flex = "Fill", wrap = true, auto = "Y", layoutOrder = 1 })
-					P.text(head, { name = "APIKeyMask_" .. slot, text = #secret <= 4 and "set" or (string.rep("\226\128\162", 4) .. " " .. secret:sub(-4)),
-						role = "monoSmall", color = theme.color.textSecondary, auto = "XY", size = UDim2.fromOffset(0, 0), layoutOrder = 2 })
-					local actions = P.row(entry, { name = "APIKeyActions_" .. slot, size = UDim2.new(1, 0, 0, 0),
-						auto = "Y", wrap = true, gap = theme.space.xs, layoutOrder = 2 })
-					P.button(actions, { name = "ReplaceKey_" .. slot, text = "Replace", variant = "secondary", size = "sm", layoutOrder = 1,
-						onClick = function() promptKey(slot, secret) end })
-					P.button(actions, { name = "RemoveKey_" .. slot, text = "Remove", variant = "ghost", size = "sm", layoutOrder = 2,
-						onClick = function()
-							if modal.closed or registry.isCline(editing) then return end
-							local current = registry.keysOf(editing)
-							local position = keyIndex(current, secret)
-							if position then table.remove(current, position); commitKeys(current) end
-						end })
-				end
-			end
+			keyUsageLabel = R.paragraph(column, keyUsage(editing), { name = "KeyUsage", layoutOrder = 3 })
 			setKeyButton = P.button(column, {
-				name = "SetKey",
-				text = "Add API key",
+				name = "ManageKeys",
+				text = "Manage API keys",
 				variant = "secondary",
 				size = "sm",
 				layoutOrder = 4,
-				onClick = function() promptKey() end,
+				onClick = function()
+					if modal.closed or registry.isCline(editing) or (keyManager and not keyManager.closed) then return end
+					keyManager = env.require("ui/providerkeys").open({
+						record = editing,
+						onClose = function() keyManager = nil end,
+						onApply = function(updated)
+							if modal.closed or registry.isCline(editing) then return false end
+							if applyKeys(editing, updated) and forgetFetchedModels then forgetFetchedModels() end
+							showProblems()
+							return true
+						end,
+					})
+				end,
 			})
 			communityRow = P.column(column, { name = "CommunityKey", size = UDim2.new(1, 0, 0, 0), auto = "Y", gap = theme.space.xs, layoutOrder = 6 })
 			R.paragraph(communityRow, "Included community access is available. Switching replaces this draft's personal keys with included access.", { layoutOrder = 1 })
@@ -1526,6 +1490,12 @@ return function(env)
 			size = "sm",
 			layoutOrder = 2,
 			onClick = function()
+				local current = not adding and registry.get(editing.id)
+				if current and sameKeyConnection(current, editing) then
+					-- Requests may advance the live cursor while a connection draft is
+					-- open. A label-only edit must not restore its old copied cursor.
+					editing.keyRotation = current.keyRotation
+				end
 				local ok, problems = registry.save(editing)
 				if not ok then
 					-- Sentence-cased and one per line. It was table.concat(problems, ". "),
@@ -1566,6 +1536,36 @@ return function(env)
 			return
 		end
 		M.picker({ onSaved = onSaved })
+	end
+
+	local savedKeyManager
+	function M.manageKeys(record, onSaved)
+		if registry.isCline(record) then return nil end
+		if savedKeyManager and not savedKeyManager.closed then return savedKeyManager end
+		savedKeyManager = env.require("ui/providerkeys").open({
+			record = record,
+			applyHint = "Apply changes to save these keys and request preferences for this provider.",
+			onClose = function() savedKeyManager = nil end,
+			onApply = function(updated)
+				local current = registry.get(record.id)
+				if not current or registry.isCline(current) then
+					overlay.toast("This provider is no longer available. Reopen its settings.", "warn")
+					return false
+				end
+				local candidate = util.deepCopy(current)
+				candidate.keyRotation, candidate.health = current.keyRotation, current.health
+				local connectionChanged = applyKeys(candidate, updated)
+				local ok, problems = registry.save(candidate)
+				if not ok then
+					overlay.toast(problems[1] or "Could not save API keys", "warn")
+					return false
+				end
+				if connectionChanged then models.invalidate(candidate.id) end
+				if onSaved then onSaved(candidate.id) end
+				return true
+			end,
+		})
+		return savedKeyManager
 	end
 
 	-- The empty panel's start card.
@@ -2086,6 +2086,12 @@ return function(env)
 				variant = "secondary",
 				onClick = function() M.editor(record, function() panel.select(record.id) end) end,
 			}
+			if not registry.isCline(record) then
+				actions[#actions + 1] = {
+					name = "ManageProviderKeys", text = "Manage API keys", variant = "secondary",
+					onClick = function() M.manageKeys(record, function() panel.select(record.id) end) end,
+				}
+			end
 			if caps.clipboard then
 				actions[#actions + 1] = {
 					name = "CopyEndpoint",

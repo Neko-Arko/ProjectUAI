@@ -20,6 +20,7 @@ return function(env)
 	local modelCatalog = env.require("provider/model_catalog")
 	local communityKey = env.require("provider/community_key")
 	local support = env.require("runtime/support")
+	local providerKeys = env.require("runtime/provider_keys")
 
 	local CACHE_MS = 10 * 60 * 1000
 
@@ -35,6 +36,7 @@ return function(env)
 	local function scopeFor(record)
 		local scope = { baseUrl = registry.normaliseBaseUrl(record.baseUrl), api = record.api or "openai",
 			apiKey = record.apiKey, authStyle = record.authStyle, headers = record.headers or {}, query = record.query or {},
+			keyMode = providerKeys.mode(record), selectedKey = providerKeys.mode(record) == "single" and providerKeys.selected(record) or nil,
 			claudeUa = record.claudeUa }
 		if registry.isOpencodeZen(record) then
 			scope.opencode = env.require("net/bridge").opencodeStatus()

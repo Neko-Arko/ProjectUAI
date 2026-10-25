@@ -475,9 +475,9 @@ return function(env)
 		local url = M.endpointFor(record)
 		-- Share the live-verified desktop fingerprint with Chat, including stable
 		-- conversation affinity and explicit saved compatibility overrides.
-		local pool = registry.keysOf(record)
+		local pool = registry.requestKeys(record)
 		local currentKey = handoff.key or registry.nextKey(record)
-		local rotationsLeft = handoff.rotationsLeft or math.max(#pool - 1, 0)
+		local rotationsLeft = math.min(handoff.rotationsLeft or math.max(#pool - 1, 0), math.max(#pool - 1, 0))
 		local function headersFor()
 			return headerMap.merge(registry.authHeaders(record, currentKey or ""), registry.opencodeHeaders(record, request), record.headers)
 		end

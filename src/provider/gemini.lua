@@ -31,7 +31,10 @@ return function(env)
 	end
 	function M.headers(record, key)
 		local auth = record
-		if record.authStyle == nil and not registry.isOpencodeGo(record) then auth = util.copy(record); auth.authStyle = "x-goog-api-key" end
+		if record.authStyle == nil and not registry.isOpencodeGo(record) then
+			key = key or registry.nextKey(record) or ""
+			auth = util.copy(record); auth.authStyle = "x-goog-api-key"
+		end
 		return headers.merge({ ["Content-Type"] = "application/json" }, registry.authHeaders(auth, key))
 	end
 	function M.errorText(response, err) return openai.errorText(response, err) end
@@ -303,7 +306,7 @@ return function(env)
 		local relayUnlimited = transport.unlimited(request)
 		local deadline = relayUnlimited and math.huge or math.min(tonumber(request.deadlineMs) or math.huge,
 			started + math.max(1, math.min(300, tonumber(timeout) or 120)) * 1000)
-		local pool, key = registry.keysOf(record), registry.nextKey(record)
+		local pool, key = registry.requestKeys(record), registry.nextKey(record)
 		local left = math.max(0, #pool - 1)
 		local function cancelled()
 			return not owned() or registry.compatibilityKey(record) ~= scope or request.aborted and request.aborted()

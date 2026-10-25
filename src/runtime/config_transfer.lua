@@ -5,6 +5,7 @@ return function(env)
 	local util = env.require("runtime/util")
 	local config = env.require("runtime/config")
 	local clock = env.require("runtime/clock")
+	local keyPolicy = env.require("runtime/provider_keys")
 	local M = { FORMAT = "project-uai-config", VERSION = 1 }
 	local MAX_BYTES = 8 * 1024 * 1024
 
@@ -86,6 +87,8 @@ return function(env)
 			if type(record[key]) ~= "string" then return false, path .. "." .. key .. " must be text" end
 		end
 		if util.trim(record.id) == "" then return false, path .. ".id must not be empty" end
+		ok, err = keyPolicy.validate(record)
+		if not ok then return false, path .. "." .. err end
 		for _, key in ipairs({ "preset", "authStyle", "api", "wsUrl", "note", "requires", "opencodeSession" }) do
 			if record[key] ~= nil and type(record[key]) ~= "string" then
 				return false, path .. "." .. key .. " must be text"
@@ -219,11 +222,7 @@ return function(env)
 		local keyCount = 0
 		local active = "None"
 		for _, record in ipairs(snapshot.providers.list) do
-			local seen = {}
-			for key in record.apiKey:gmatch("[^\r\n,]+") do
-				key = util.trim(key)
-				if key ~= "" and not seen[key] then keyCount = keyCount + 1; seen[key] = true end
-			end
+			keyCount = keyCount + #keyPolicy.keys(record)
 			if record.id == snapshot.providers.active then active = record.label end
 		end
 		return {

@@ -1031,7 +1031,7 @@ return function(env)
 		local requestScope = registry.compatibilityKey(record)
 
 		local url = registry.endpoint(record, "/chat/completions")
-		local pool = registry.keysOf(record)
+		local pool = registry.requestKeys(record)
 		local currentKey = registry.nextKey(record)
 		local currentKeyIndex = 0
 

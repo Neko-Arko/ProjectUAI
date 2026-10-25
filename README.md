@@ -6,10 +6,11 @@ including compatible local servers and relays.
 
 **Project UAI 3.7.1 - October 25, 2026: UI polish and individual API keys.**
 The Roblox client, bridge, web UI and Android companion are 3.7.1; the Windows
-desktop remains 3.7.0. Provider configuration now lists **API key 1**, **API key 2**
-and further entries. Add, replace or remove a key without losing the others;
-existing key pools and automatic rotation are preserved. The setup guide opens
-expanded by default.
+desktop remains 3.7.0. **Manage API keys** opens a dedicated modal with named,
+masked entries. Add, rename, replace or remove a key without losing the others.
+**Rotate keys** is the default; choose **Use one key** to pin requests to a
+specific entry. Existing key pools are preserved. The setup guide opens expanded
+by default.
 
 Log details and context breakdown fit their contents, and shared modals have
 consistent inner padding. The Discord invitation, tutorial and donation dialogs
@@ -595,11 +596,15 @@ detail names the endpoint a request will actually go to, the model-list route, t
 wire protocol, whether a socket is configured (and therefore whether a long reply can
 arrive at all), the health counters, the last observed latency, how long a benched
 provider has left, and the extra headers, body fields and query parameters the record
-sends. Provider configuration lists numbered API key entries, each with its own
-Replace and Remove actions, plus Add API key for additional entries. Changing one
-entry preserves the others. Keys are entered through empty prompts; saved entries
-show only a masked suffix, and keys shorter than five characters are fully masked.
-Changes stay in the provider draft until Save.
+sends. **Manage API keys** opens from provider details or connection setup. Name
+each entry and use Add API key, Replace or Remove without changing the others.
+Rotation is on by default. **Use one key** applies only the selected credential
+to this provider's inference and model discovery, including quota retries. The
+ordinary provider fallback setting remains independent. Removing the selected key
+restores rotation; removing another key preserves the selected credential.
+Saved secrets show only a masked suffix, and keys shorter than five characters
+are fully masked. Cancel discards changes. Apply saves directly from provider
+details; during connection setup, it updates the draft for the provider's Save.
 
 The layout follows the live viewport: compact desktop controls on handhelds,
 a floating resizable window on a desktop, and a large centred panel on a console.

@@ -6,8 +6,11 @@
   code 8) at 3.7.1. The Windows desktop remains 3.7.0. Installed bridges and
   companion apps pick the patch up automatically from the `v3.7.1` GitHub
   release; the companion APK keeps the existing production signing identity.
-- Show provider credentials as API key 1, API key 2 and further numbered entries.
-  Add keys or replace and remove one entry without overwriting the others.
+- Manage provider credentials in a dedicated modal with named, masked entries.
+  Add, rename, replace or remove one entry without overwriting the others.
+  Rotation is the default; choose one specific key for inference and discovery.
+  Removing the selected key restores rotation. Apply/Cancel keeps edits isolated,
+  and configuration transfers retain key names and request preferences.
   Preserve existing key pools, automatic rotation and unsaved provider drafts;
   saved credentials stay masked, including keys shorter than five characters.
 - Finish the provider gallery and configuration polish with clearer sections,

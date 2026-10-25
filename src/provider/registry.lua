@@ -12,6 +12,7 @@ return function(env)
 	local signal = env.require("runtime/signal")
 	local catalog = env.require("provider/catalog")
 	local communityKey = env.require("provider/community_key")
+	local providerKeys = env.require("runtime/provider_keys")
 	local urls = env.require("net/url")
 
 	local COOLDOWN_AFTER = 3
@@ -45,20 +46,9 @@ return function(env)
 	local KEY_COOLDOWN_SECONDS = 30
 
 	function M.keysOf(record)
-		local raw = tostring(record and record.apiKey or "")
-		local keys, seen = {}, {}
-		-- Line breaks are the primary form (that is what a multi-line paste
-		-- produces); commas are accepted because a user who was handed
-		-- "key1,key2" should not have to edit it.
-		for token in raw:gmatch("[^\r\n,]+") do
-			local key = util.trim(token)
-			if key ~= "" and not seen[key] then
-				seen[key] = true
-				keys[#keys + 1] = key
-			end
-		end
-		return keys
+		return providerKeys.keys(record)
 	end
+	M.requestKeys = providerKeys.requestKeys
 
 	function M.keyPoolSize(record)
 		return #M.keysOf(record)
@@ -76,7 +66,9 @@ return function(env)
 	-- Request snapshots keep their existing copy semantics, but own one shared
 	-- cursor with the record they were copied from, even before the first request.
 	function M.shareKeyRotation(record, snapshot)
-		if M.keyPoolSize(record) > 1 then snapshot.keyRotation = keyState(record) end
+		if providerKeys.mode(record) == "rotate" and providerKeys.mode(snapshot) == "rotate" and M.keyPoolSize(record) > 1 then
+			snapshot.keyRotation = keyState(record)
+		end
 		return snapshot
 	end
 
@@ -85,7 +77,7 @@ return function(env)
 	-- is a pool that was just load-balanced, and waiting out the shortest
 	-- remaining bench is faster than hammering any single key.
 	function M.nextKey(record)
-		local keys = M.keysOf(record)
+		local keys = M.requestKeys(record)
 		if #keys == 0 then return nil end
 		if #keys == 1 then return keys[1] end
 
@@ -120,7 +112,7 @@ return function(env)
 	-- Bench one key after it was refused. `seconds` may be overridden by a
 	-- caller that read a Retry-After header, which outranks our default.
 	function M.cooldownKey(record, key, seconds)
-		local keys = M.keysOf(record)
+		local keys = M.requestKeys(record)
 		if #keys < 2 then return false end
 		local state = keyState(record)
 		state.cooldowns[key] = clock.ms() + (seconds or KEY_COOLDOWN_SECONDS) * 1000
@@ -183,6 +175,9 @@ return function(env)
 	end
 
 	function M.protocolProblem(record, opts)
+		if providerKeys.mode(record) == "single" and #M.requestKeys(record) == 0 then
+			return "choose an existing API key or turn on key rotation"
+		end
 		if record.api ~= nil and record.api ~= "openai" and record.api ~= "anthropic" and record.api ~= "gemini" then
 			return "choose Chat completions, Anthropic messages or Google Gemini; this API protocol is not implemented"
 		end
@@ -569,6 +564,8 @@ return function(env)
 		if (record.authStyle or "bearer") ~= "none" and util.trim(record.apiKey) == "" and not M.opencodeKeyOptional(record) then
 			problems[#problems + 1] = "an API key is required for this auth style"
 		end
+		local keysValid, keysProblem = providerKeys.validate(record)
+		if not keysValid then problems[#problems + 1] = keysProblem end
 		-- Azure takes the model from the deployment in the URL; everyone else needs
 		-- one named, and nothing here will guess it.
 		if record.preset ~= "azure" and util.trim(record.model) == "" then

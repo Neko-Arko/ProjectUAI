@@ -255,6 +255,9 @@ credentials or raw error bodies. Runtime modules do not depend on `net/*`.
     label = "OpenAI",
     baseUrl = "https://api.openai.com/v1",
     apiKey = "sk-...",
+    keyNames = { "Personal" },            -- optional labels aligned with deduplicated keys
+    keyMode = "rotate",                   -- rotate (default) | single
+    selectedKey = 1,                      -- saved key index used by single mode
     authStyle = "bearer",                -- bearer | x-api-key | api-key | both | none
     models = { "gpt-4o" },               -- only what the user added or picked
     model = "gpt-4o",                    -- current selection
@@ -389,10 +392,27 @@ cursor before network work can yield. Quota refusals bench their rejected key;
 proxy recovery and transport retries retain the selected request key. Intentional
 request snapshots share the originating record's cursor, while independent
 provider-editor drafts remain isolated. Cached model discovery uses no key slot.
-The provider editor shows numbered, masked key entries. Adding keys appends to
-the pool; replacing or removing an entry preserves every other key. There is no
-UI limit on the number of entries. Existing newline/comma-separated pools remain
-compatible, and edits take effect only when the provider is saved.
+Manage API keys opens a dedicated modal from provider setup or saved-provider
+details. Each masked entry has an optional name; empty names display API key N.
+Names are trimmed single-line UTF-8 text, at most 120 bytes, stored in the ordered
+`keyNames` array alongside the deduplicated `apiKey` pool. Adding appends keys;
+replacing or removing an entry preserves other credentials and their names. There
+is no UI limit on the number of entries. Existing newline/comma-separated pools
+remain compatible and default to rotation without rewriting their saved data.
+
+`keyMode` defaults to `rotate`. In `single` mode only `selectedKey` is used for
+inference and model discovery; quota recovery never selects a different key from
+that provider. The ordinary provider fallback setting remains independent. Removing
+an earlier entry adjusts the selected index; removing the selected entry restores
+rotation and explains the change. Discovery caches include the request policy,
+while a name-only edit preserves both discovery results and the rotation cursor.
+Accepted request snapshots retain their original key policy.
+
+The manager keeps an isolated draft until Apply. In provider setup, Apply returns
+the key changes to the connection draft and Save persists them; opening directly
+from a saved provider applies them to that provider. Cancel or Escape discards
+manager edits. Configuration transfer includes names and routing preferences;
+diagnostic support exports omit private key names.
 
 **Models are never guessed.** General presets carry no model list; the managed
 Project UAI Free default uses the live-verified `auto` router. `provider/models`

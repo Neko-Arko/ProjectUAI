@@ -135,8 +135,12 @@ return function(env)
 		end
 		if type(safeConfig.providers) == "table" and type(safeConfig.providers.list) == "table" then
 			for _, record in ipairs(safeConfig.providers.list) do
-				if type(record) == "table" and type(record.params) == "table" and type(record.params.headers) == "table" then
-					record.params.headers = redactHeaderTable(record.params.headers)
+				if type(record) == "table" then
+					-- Private account labels belong in explicit configuration transfers.
+					record.keyNames = nil
+					if type(record.params) == "table" and type(record.params.headers) == "table" then
+						record.params.headers = redactHeaderTable(record.params.headers)
+					end
 				end
 			end
 		end

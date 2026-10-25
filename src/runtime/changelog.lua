@@ -20,14 +20,15 @@ return function(env)
 	local ENTRIES = {
 		{
 			version = "3.7.1",
-			revision = "2026-10-25-ui-polish-key-entries",
+			revision = "2026-10-25-named-key-manager",
 			date = "October 25, 2026",
 			title = "UI polish and individual API keys",
-			highlights = "Manage numbered API keys without replacing the whole pool. Modals have more breathing room, short details fit their contents, and provider setup, model selection and the Code workspace are clearer.",
+			highlights = "Manage named API keys in a dedicated modal. Rotate requests by default or choose one specific key. Modals have more breathing room, short details fit their contents, and provider setup, model selection and the Code workspace are clearer.",
 			sections = {
 				{ category = "added", label = "Individual API keys", items = {
-					"Each provider key has its own numbered, masked entry with Replace and Remove actions. Add as many entries as you need, or paste several keys to append them together.",
-					"Existing key pools keep their automatic rotation. Changes stay in the provider draft until you save, and cancelling a replacement leaves the original key intact.",
+					"Manage API keys opens a dedicated modal from provider details or connection setup. Name each masked entry, replace or remove it, and add more keys individually or in one paste.",
+					"Rotate keys is the default. Choose Use one key to send this provider's requests through a specific entry; other keys stay saved. Removing the selected key restores rotation.",
+					"Apply saves key changes from provider details or returns them to an unfinished connection draft. Cancel keeps the original keys, names and request preference. Configuration transfers preserve the complete setup.",
 				} },
 				{ category = "improved", label = "Modals and setup", items = {
 					"Log details and context usage fit their contents and scroll when needed. Modal bodies have balanced padding, including the tutorial, Discord invitation and donation options.",

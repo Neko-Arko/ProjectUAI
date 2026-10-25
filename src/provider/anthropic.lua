@@ -512,7 +512,7 @@ return function(env)
 		local body = M.buildBody(record, util.merge(request, { stream = wantStream }))
 		local requestScope = registry.compatibilityKey(record)
 		local url = M.endpoint(record)
-		local pool = registry.keysOf(record)
+		local pool = registry.requestKeys(record)
 		local currentKey = registry.nextKey(record)
 
 		local function rebuildHeaders()
