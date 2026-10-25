@@ -55,7 +55,9 @@ case("the recommended tier leads with included access, AgentRouter and the hybri
 	check("the Go route names its free half", f.h.byName("ChoiceBadge", f.h.byName("Choice_opencode-go")).Text == "Free CLI")
 	check("no-key routes say so", f.h.byName("ChoiceBadge", f.h.byName("Choice_kilo")).Text == "No key")
 	check("Cline identifies its desktop sign-in route", f.h.byName("ChoiceBadge", f.h.byName("Choice_cline")).Text == "Free CLI"
-		and f.h.byName("ChoiceDescription", f.h.byName("Choice_cline")).Text:find("desktop", 1, true) ~= nil)
+		and f.h.byName("ChoiceDescription", f.h.byName("Choice_cline")).Text:find("UAI Bridge on Windows", 1, true) ~= nil
+		and f.h.byName("ChoiceCost", f.h.byName("Choice_cline")).Text:find("desktop bridge", 1, true) ~= nil
+		and f.h.byName("ChoiceCost", f.h.byName("Choice_cline")).Text:find("Cline sign-in", 1, true) ~= nil)
 	check("the first card is described", f.h.byName("ChoiceDescription", f.h.byName("Choice_agentrouter")).Text
 		:find("Claude Messages and GPT Responses gateway", 1, true) ~= nil)
 	check("the description no longer recommends a model",
@@ -64,6 +66,14 @@ case("the recommended tier leads with included access, AgentRouter and the hybri
 	check("and neither does the stored note", catalog.get("agentrouter").note:find("Recommended model", 1, true) == nil)
 	check("the signup restriction is still highlighted", catalog.get("agentrouter").noteHighlight
 		== "a GitHub account at least 1 year old")
+	local agentDescription = f.h.byName("ChoiceDescription", f.h.byName("Choice_agentrouter"))
+	check("signup eligibility stays highlighted on the compact card", agentDescription.RichText
+		and agentDescription.Text:find("a GitHub account at least 1 year old", 1, true) ~= nil)
+	check("the mobile relay requirement stays visible before setup", f.h.byName("ChoiceDescription", f.h.byName("Choice_zen")).Text
+		:find("Mobile OpenCode requires the UAI Relay app from Discord", 1, true) ~= nil)
+	for _, id in ipairs({ "zen", "openrouter", "opencode-go", "cline" }) do
+		check(id .. " keeps its complete access limits", f.h.byName("ChoiceCost", f.h.byName("Choice_" .. id)).Text == catalog.get(id).cost)
+	end
 	check("the card carries the access line", f.h.byName("ChoiceCost", f.h.byName("Choice_agentrouter")).Text
 		:find("Free quota", 1, true) ~= nil)
 	check("no request was made", f.h.http.requestCount == 0)
@@ -146,6 +156,61 @@ case("the custom card opens an empty endpoint form", function()
 	check("the preset is custom", f.h.textOf(f.h.byName("Preset")) == "Custom endpoint")
 	check("the URL starts empty", f.h.byName("BaseUrl"):FindFirstChildOfClass("TextBox").Text == "")
 	check("no model is chosen for it", f.h.textOf(f.h.byName("ActiveModel")) == "Choose a model")
+	f.healthy(); f.close()
+end)
+
+case("custom setup remains reachable from an empty search", function()
+	local f = F.ui(390, 700)
+	open(f)
+	search(f, "   ")
+	check("whitespace keeps the current tier", f.h.byName("Choice_hcnsec") ~= nil and f.h.byName("ProviderCount").Text == "18 free routes")
+	search(f, "zzzz-nothing")
+	click(f, "CustomProviderShortcut")
+	check("the custom shortcut opens a blank editable connection", f.h.byName("BaseUrl"):FindFirstChildOfClass("TextBox").Text == ""
+		and f.h.byName("Protocol").Parent.Parent == f.h.byName("ConnectionSetup"))
+	check("the shortcut never saves or contacts a provider", f.env.require("provider/registry").count() == 0 and f.h.http.requestCount == 0)
+	f.healthy(); f.close()
+end)
+
+case("short gallery layouts keep the original focused search in one scrolling body", function()
+	local f = F.ui(1000, 850)
+	f.env.require("ui/responsive").init(f.env.root)
+	open(f)
+	search(f, "claude")
+	local box = f.h.byName("ProviderSearch"):FindFirstChildOfClass("TextBox")
+	box:CaptureFocus()
+	f.h.setViewport(740, 240)
+	check("the whole gallery scrolls in short space", f.h.byName("PickerViewport").ScrollingEnabled
+		and not f.h.byName("ProviderGallery").ScrollingEnabled
+		and f.h.byName("PickerRoot").AutomaticSize == f.h.sandbox.Enum.AutomaticSize.Y)
+	check("resizing preserves native search focus and results", f.h.byName("ProviderSearch"):FindFirstChildOfClass("TextBox") == box
+		and box:IsFocused() and box.Text == "claude" and f.h.byName("Choice_agentrouter") ~= nil)
+	f.h.setViewport(1000, 850)
+	check("roomy layouts restore the inner catalog scroll", not f.h.byName("PickerViewport").ScrollingEnabled
+		and f.h.byName("ProviderGallery").ScrollingEnabled and box:IsFocused())
+	f.healthy(); f.close()
+end)
+
+case("the gallery reflows without replacing the search or provider choices", function()
+	local f = F.ui(1280, 900)
+	f.env.require("ui/responsive").init(f.env.root)
+	open(f)
+	search(f, "claude")
+	local box = f.h.byName("ProviderSearch"):FindFirstChildOfClass("TextBox")
+	local card = assert(f.h.byName("Choice_agentrouter"))
+	box:CaptureFocus()
+	check("wide layouts put two cards on each line", f.h.byName("ProviderGalleryHolder"):GetAttribute("Columns") == 2
+		and card.Size.X.Scale == 0.5)
+	check("the card offers a clear setup action", f.h.byName("ChoiceAction", card).Text == "Set up")
+	f.h.setViewport(500, 850)
+	check("narrow layouts keep one readable card per line", f.h.byName("ProviderGalleryHolder"):GetAttribute("Columns") == 1
+		and card.Size.X.Scale == 1)
+	check("reflow keeps the mounted choices, query and native focus", f.h.byName("Choice_agentrouter") == card
+		and f.h.byName("ProviderSearch"):FindFirstChildOfClass("TextBox") == box and box:IsFocused() and box.Text == "claude")
+	f.h.setViewport(1280, 900)
+	check("restoring width restores the gallery columns", f.h.byName("ProviderGalleryHolder"):GetAttribute("Columns") == 2
+		and f.h.byName("Choice_agentrouter") == card and box:IsFocused())
+	check("reflow never saves or contacts a provider", f.env.require("provider/registry").count() == 0 and f.h.http.requestCount == 0)
 	f.healthy(); f.close()
 end)
 

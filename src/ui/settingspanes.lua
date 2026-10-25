@@ -134,41 +134,40 @@ return function(env)
 		})
 
 		R.number(appearance, "Text scale", "Multiplies every type size.", "ui.fontScale", 0.85, 1.4, 0.05)
-		R.toggle(appearance, {
+		local conversation = build.section("Conversation display", "Choose how messages, tool activity and notifications appear.")
+		R.toggle(conversation, {
 			label = "Show reasoning",
 			hint = "Display the model's chain of thought when it sends one. Applies to the conversation already on screen.",
 			path = "ui.showReasoning",
 		})
-		R.toggle(appearance, {
+		R.toggle(conversation, {
 			label = "Show the code a tool was given",
 			hint = "Draws the Luau, the file body or the property map a tool call carries under its "
 				.. "row, outside the fold. Off, it is still there behind the row's own caret.",
 			path = "ui.showToolCode",
 		})
-		R.toggle(appearance, {
+		R.toggle(conversation, {
 			label = "Expand tool detail",
 			hint = "Open the remaining arguments and the result by default, rather than on the first click.",
 			path = "ui.showToolDetail",
 		})
-		R.toggle(appearance, {
+		R.toggle(conversation, {
 			label = "Show token counts",
 			hint = "Token and cost details in the composer's options menu.",
 			path = "ui.showUsage",
 		})
-		R.toggle(appearance, {
+		R.toggle(conversation, {
 			label = "Show the activity card",
 			hint = "The greeting and the counters an empty conversation opens with.",
 			path = "ui.showActivity",
 		})
-		R.toggle(appearance, {
+		R.toggle(conversation, {
 			label = "Notify while minimized",
 			hint = "A toast when a turn finishes, fails or is stopped with the window closed -- from any conversation. The count on the launcher appears either way.",
 			path = "ui.notifications",
 		})
 
-		-- Built here rather than after the section below it, because nothing in this
-		-- card sets a layout order: the rows appear in the order they are created, and a
-		-- note constructed later landed wherever the tie-break put it.
+		-- Keep the live layout note with the appearance controls it describes.
 		local viewportNote = P.text(appearance, {
 			text = "Now: " .. responsive.describe(),
 			role = "caption",
@@ -189,7 +188,7 @@ return function(env)
 		local text = P.column(row, {
 			size = UDim2.new(0, 0, 0, 0), auto = "Y", flex = "Fill", gap = 0, layoutOrder = 1,
 		})
-		P.text(text, { text = "Quick chat key", role = "small" })
+		P.text(text, { text = "Quick chat key", role = "label", wrap = true, auto = "Y" })
 		local keyHint = P.text(text, {
 			text = "",
 			role = "caption",
@@ -230,8 +229,8 @@ return function(env)
 		local build = builder(container)
 
 		local where = build.section("Where your data goes",
-			"This client has no telemetry and no home to call. The only outbound requests it "
-			.. "makes are the ones listed here, and every one of them is somewhere you added.")
+			"Enabled providers and connected local relays are listed below. The selected route receives "
+			.. "your messages and relevant tool results. Tools can make additional requests when used.")
 
 		local list = {}
 		for _, record in ipairs(providers.list()) do
@@ -251,9 +250,9 @@ return function(env)
 			list[#list + 1] = { key = "Companion relay", value = "127.0.0.1:" .. tostring(relayLink.status().port) }
 		end
 		if #list == 0 then
-			build.note("Nothing is configured, so nothing leaves this machine at all.")
+			R.paragraph(where, "No enabled provider or connected local relay.")
 		else
-			R.facts(container, list, { name = "Endpoints", layoutOrder = build.order() })
+			R.facts(where, list, { name = "Endpoints" })
 		end
 
 		local secrets = build.section("Keys and logs",
@@ -560,9 +559,7 @@ return function(env)
 		R.segmented(appearance, {
 			name = "CodeFont",
 			label = "Code font",
-			hint = "The monospace family for code and diagnostics. Roblox renders from a fixed "
-				.. "set of families, so this offers the ones that exist rather than a box to type "
-				.. "a font name into that could not be loaded.",
+			hint = "Monospace fonts available on this device. Used for code and diagnostic details.",
 			path = "ui.codeFont",
 			options = fontOptions,
 		})
@@ -576,9 +573,7 @@ return function(env)
 		R.select(interface, {
 			name = "InterfaceFont",
 			label = "Interface font",
-			hint = "Menus, the sidebar and the transcript. Only the families this client can "
-				.. "actually load are listed -- the list is probed against the engine rather than "
-				.. "declared, so it is shorter on an older client than a longer one.",
+			hint = "The font for menus, navigation and messages. Shows the families available on this device.",
 			path = "ui.interfaceFont",
 			options = interfaceOptions,
 		})
@@ -1148,12 +1143,7 @@ return function(env)
 	local function paneAgent(container)
 		local build = builder(container)
 
-		local agent = build.section("Agent", "How hard it works before it stops and answers.")
-		R.toggle(agent, {
-			name = "AutomaticFreeRouting", label = "Automatic free routing",
-			hint = "Choose a recently verified free model for included HCNSEC access when its model is Auto. Off keeps provider Auto and stops new local routing probes; an active request continues.",
-			path = "agent.autoFreeRouting", value = config.get("agent.autoFreeRouting", true) ~= false,
-		})
+		local agent = build.section("Tools & execution", "Control how much work the agent can do in one turn.")
 		R.number(agent, "Step limit", "Tool rounds allowed in one turn, unless the switch below removes it.",
 			"agent.maxTurns", 4, 60, 1)
 		R.toggle(agent, {
@@ -1182,15 +1172,39 @@ return function(env)
 		R.number(agent, "Tool timeout",
 			"Seconds before a tool is abandoned. Subagents are exempt: they run to their own budget below.",
 			"agent.toolTimeout", 5, 60, 1)
-		R.number(agent, "Request timeout",
+		R.number(agent, "Tool result cap",
+			"Maximum bytes kept from one tool result. A tool's own page limit can be smaller. Roughly four bytes per token for English text; code and Unicode vary.",
+			"agent.resultCap", RESULT_STOPS)
+
+		local requests = build.section("Model requests", "Routing, wait time and recovery when contacting your provider.")
+		R.toggle(requests, {
+			name = "AutomaticFreeRouting", label = "Automatic free routing",
+			hint = "Choose a recently verified free model for included HCNSEC access when its model is Auto. Off keeps provider Auto and stops new local routing probes; an active request continues.",
+			path = "agent.autoFreeRouting", value = config.get("agent.autoFreeRouting", true) ~= false,
+		})
+		R.number(requests, "Request timeout",
 			"Wait for a direct or companion model call. Direct native requests cap at 300 seconds; hosts and providers may stop sooner. Cowork bridge requests always wait until completion, failure or Stop.",
 			"agent.requestTimeout", REQUEST_STOPS)
-		R.toggle(agent, {
+		R.toggle(requests, {
 			label = "Maximum request wait",
 			hint = "Use the direct transport's maximum wait instead of a shorter timeout, up to 300 seconds. Cowork bridge requests already have no time limit. Stop remains available.",
 			path = "agent.requestUnlimited",
 		})
-		R.number(agent, "Subagent budget",
+		R.number(requests, "Retries", "Attempts per provider before moving to the next.",
+			"agent.retries", 1, 6, 1)
+		R.toggle(requests, {
+			label = "Ask for streams",
+			hint = "Streamed replies carry reasoning text and usage counts.",
+			path = "agent.stream",
+		})
+		R.toggle(requests, {
+			label = "Provider fallback",
+			hint = "Try the next enabled provider when one fails.",
+			path = "agent.fallback",
+		})
+
+		local delegation = build.section("Subagents", "Set the capacity and limits for delegated work.")
+		R.number(delegation, "Subagent budget",
 			"Seconds one subagent may work before it wraps up. The main agent can continue its own work and check progress while the child runs. Ignored while the switch below is on.",
 			"agent.subagentBudget", 30, 900, 30)
 		-- The switch the step-limit message asks for. A subagent that stops mid-job and
@@ -1198,68 +1212,57 @@ return function(env)
 		-- answered nothing, and until this existed the only way past it was to edit
 		-- config.json -- `Unlimited tool calls` deliberately stops at the conversation the
 		-- user is watching.
-		R.toggle(agent, {
+		R.toggle(delegation, {
 			label = "Unlimited subagents",
 			hint = "Let a dispatched subagent run with no step limit or clock while its parent continues working. The repeat breaker, each tool's timeout, the ceilings below and Stop still apply. The Subagents panel can stop one child, and ending the parent turn stops unfinished children.",
 			path = "agent.subagentUnlimited",
 		})
-		R.number(agent, "Parallel subagents",
+		R.number(delegation, "Parallel subagents",
 			"Subagents alive at once across the whole tree. Several dispatched in one step run together; this is the ceiling on how many, including the ones a subagent starts itself. Anything over it waits for a slot.",
 			"agent.subagentConcurrency", 1, 12, 1)
 		-- Two ceilings that had no control anywhere: the only way to change either was
 		-- to edit config.json, which for the depth cap means the only switch that can
 		-- turn delegation off entirely was unreachable.
-		R.number(agent, "Subagent steps",
+		R.number(delegation, "Subagent steps",
 			"Tool rounds one subagent may take before it has to answer the parent with what it has. Ignored while Unlimited subagents is on.",
 			"agent.subagentTurns", 1, 30, 1)
-		R.number(agent, "Delegation depth",
+		R.number(delegation, "Delegation depth",
 			"How many levels of subagent are allowed. A subagent given the full tool set can dispatch its own; at 0 the agent cannot dispatch at all and does the work in the conversation instead. The Subagents panel lists what is running under these limits.",
 			"agent.subagentDepth", 0, 4, 1)
-		R.number(agent, "Context budget",
+
+		local context = build.section("Conversation memory", "Keep long conversations within the model's context window.")
+		R.number(context, "Context budget",
 			"Hard ceiling on tokens kept before older turns are summarised. When the model's context window is known, compaction begins at the Compact-at fraction of it, so this mainly caps models with very large or unknown windows.",
 			"agent.contextTokens", BUDGET_STOPS)
-		R.number(agent, "Compact at",
+		R.number(context, "Compact at",
 			"Share of the model's context window at which older turns are summarised, when the window is known. Lower compacts sooner and cheaper; higher keeps more history in view. The Context budget above is still a hard ceiling.",
 			"agent.contextFraction", 0.5, 0.95, 0.05)
-		R.number(agent, "Reply ceiling",
+		R.toggle(context, {
+			label = "Summarise old turns",
+			hint = "Keeps a long conversation inside the context budget.",
+			path = "agent.compaction",
+		})
+
+		local response = build.section("Responses", "Adjust response length, effort and language.")
+		R.number(response, "Reply ceiling",
 			"Maximum generated tokens per request, including reasoning where the provider counts it. Model limits, available context and learned provider caps may lower it. This does not require the model to use the whole allowance.",
 			"agent.maxTokens", REPLY_STOPS)
-		R.number(agent, "Tool result cap",
-			"Maximum bytes kept from one tool result. A tool's own page limit can be smaller. Roughly four bytes per token for English text; code and Unicode vary.",
-			"agent.resultCap", RESULT_STOPS)
-		R.choice(agent, "Effort",
+		R.choice(response, "Effort",
 			"Low is the faster default; raise it for difficult tasks. Existing saved choices are kept. "
 			.. "Sent as the provider's effort level where supported; raw provider parameters can override it. Provider default omits the effort field and may still think extensively. The Thinking row shows visible text, not a 5,999-token limit.",
 			"agent.effort",
 			{ "low", "medium", "high", "xhigh", "max", "off" },
 			{ "Low", "Medium", "High", "Very high", "Max", "Provider default" },
 			{ "Faster", "Provider default" })
-		R.number(agent, "Temperature",
+		R.number(response, "Temperature",
 			"Lower is steadier; 0 is as deterministic as the provider allows. The current Claude models reject it, and it is not sent to them.",
 			"agent.temperature", 0, 1.5, 0.05)
-		R.number(agent, "Retries", "Attempts per provider before moving to the next.",
-			"agent.retries", 1, 6, 1)
-		R.toggle(agent, {
-			label = "Ask for streams",
-			hint = "Streamed replies carry reasoning text and usage counts.",
-			path = "agent.stream",
-		})
-		R.toggle(agent, {
-			label = "Summarise old turns",
-			hint = "Keeps a long conversation inside the context budget.",
-			path = "agent.compaction",
-		})
-		R.toggle(agent, {
-			label = "Provider fallback",
-			hint = "Try the next enabled provider when one fails.",
-			path = "agent.fallback",
-		})
 		-- One field, and the only half of the old language picker that was ever wired to
 		-- anything. That control was a grid of eleven tiles behind a modal behind a menu
 		-- entry, and it advertised two effects: the language the agent answers in, which
 		-- src/agent/prompt.lua does read, and the locale dates are formatted with, which
 		-- nothing reads at all. What survives is the effect that exists.
-		R.field(agent, {
+		R.field(response, {
 			name = "ReplyLanguage",
 			label = "Reply language",
 			hint = "Added to the system prompt as one line: answer in this language, leaving code "
@@ -1316,7 +1319,7 @@ return function(env)
 
 	local function panePermissions(container)
 		local build = builder(container)
-		local card = build.section("Permissions", permissions.MODE_HINTS[permissions.mode()])
+		local card = build.section("Permissions", "Choose when tools can run and review saved exceptions.")
 
 		local modeOptions = {}
 		for _, mode in ipairs(permissions.MODES) do
@@ -1544,8 +1547,8 @@ return function(env)
 	local function paneConnectors(container)
 		local build = builder(container)
 
-		local card = build.section("Inference",
-			"Where requests go. A provider is a base URL, an auth style, a key and a model.")
+		local card = build.section("Inference providers",
+			"Your configured providers and models. Add a service or edit its connection details in Providers.")
 		local list = providers.list()
 		if #list == 0 then
 			R.paragraph(card, "Nothing configured yet.")
@@ -1566,7 +1569,7 @@ return function(env)
 		end
 		R.actions(card, { {
 			name = "OpenInference",
-			text = "Configure third-party inference",
+			text = "Manage providers",
 			variant = "secondary",
 			onClick = function()
 				env.require("ui/app").show("providers")
@@ -1683,7 +1686,7 @@ return function(env)
 			local text = P.column(row, {
 				size = UDim2.new(0, 0, 0, 0), auto = "Y", flex = "Fill", gap = 0, layoutOrder = 1,
 			})
-			P.text(text, { text = group.label, role = "small" })
+			P.text(text, { text = group.label, role = "label", wrap = true, auto = "Y" })
 			local detail = util.pluralise(group.total, "tool")
 			if group.unavailable > 0 then
 				detail = detail .. ", " .. tostring(group.unavailable) .. " unavailable on this host"
@@ -1763,6 +1766,12 @@ return function(env)
 	function M.render(id, container)
 		local entry = M.pane(id)
 		if not entry then return false end
+		local heading = P.column(container, { name = "SettingsPaneHeading", size = UDim2.new(1, 0, 0, 0),
+			auto = "Y", gap = theme.space.xxs, layoutOrder = -1 })
+		P.text(heading, { name = "SettingsPaneSection", text = entry.section, role = "caption",
+			color = theme.color.textTertiary, auto = "Y", wrap = true, layoutOrder = 1 })
+		P.text(heading, { name = "SettingsPaneTitle", text = entry.label, role = "title",
+			auto = "Y", wrap = true, layoutOrder = 2 })
 		local ok, err = pcall(entry.build, container)
 		if not ok then
 			log.warn("settings", "the " .. tostring(id) .. " pane failed to build", err)

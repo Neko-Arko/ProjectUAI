@@ -11,8 +11,9 @@ return function(env)
 		button.Active, button.Selectable = true, false
 		P.frame(button, { name = "Rule", bg = theme.color.borderSubtle, size = horizontal and UDim2.new(1, 0, 0, 1) or UDim2.new(0, 1, 1, 0), position = horizontal and UDim2.new(0, 0, 0.5, 0) or UDim2.new(0.5, 0, 0, 0) })
 		local dragging, touch, alive = false, nil, true
+		local function release() dragging, touch = false, nil end
 		button.InputBegan:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			if alive and button.Visible and not dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 				dragging, touch = true, input.UserInputType == Enum.UserInputType.Touch and input or nil
 			end
 		end)
@@ -20,10 +21,16 @@ return function(env)
 			if alive and dragging and button.Visible and ((touch and input == touch) or (not touch and input.UserInputType == Enum.UserInputType.MouseMovement)) then onMove(input.Position) end
 		end)
 		local ended = env.uis.InputEnded:Connect(function(input)
-			if input == touch or input.UserInputType == Enum.UserInputType.MouseButton1 then dragging, touch = false, nil end
+			if (touch and input == touch) or (not touch and input.UserInputType == Enum.UserInputType.MouseButton1) then release() end
 		end)
-		button:GetPropertyChangedSignal("Visible"):Connect(function() if not button.Visible then dragging, touch = false, nil end end)
-		local function destroy() if not alive then return end; alive = false; move:Disconnect(); ended:Disconnect(); button:Destroy() end
+		local focus = env.uis.WindowFocusReleased:Connect(release)
+		button:GetPropertyChangedSignal("Visible"):Connect(function() if not button.Visible then release() end end)
+		local function cleanup()
+			if not alive then return false end
+			alive = false; release(); move:Disconnect(); ended:Disconnect(); focus:Disconnect(); return true
+		end
+		button.Destroying:Connect(cleanup)
+		local function destroy() if cleanup() then button:Destroy() end end
 		return { root = button, destroy = destroy }
 	end
 	return M

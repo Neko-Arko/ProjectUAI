@@ -15,11 +15,13 @@ return function(env)
 	local log = env.require("runtime/log")
 	local deadlineHelp = env.require("ui/deadline_help")
 	local search = env.require("runtime/search")
+	local textUtil = env.require("runtime/code_text")
 
 	local M = {}
 
 	local LEVEL_TONE = { debug = "info", info = "info", warn = "warn", error = "bad" }
 	local DETAIL_LIMIT = 65536
+	local PREVIEW_LIMIT = 480
 
 	local function safe(value, limit)
 		if value == nil then return "Not recorded" end
@@ -28,6 +30,21 @@ return function(env)
 		local text = log.redact(tostring(value))
 		limit = limit or 2048
 		if #text > limit then return util.truncate(text, limit) .. "\n[Remaining text omitted from this detail view.]" end
+		return text
+	end
+
+	-- The list is a scan of events; selected details retain the complete snapshot.
+	-- Bound both bytes and lines so one stack trace cannot bury the next event.
+	local function preview(value)
+		local text = safe(value, DETAIL_LIMIT)
+		local limit, start = math.min(#text, PREVIEW_LIMIT), 1
+		for line = 1, 4 do
+			local newline = text:find("\n", start, true)
+			if not newline then break end
+			if line == 4 then limit = math.min(limit, newline - 1) end
+			start = newline + 1
+		end
+		if limit < #text then return textUtil.slice(text, 1, limit + 1) .. "\nOpen details for more." end
 		return text
 	end
 
@@ -116,7 +133,7 @@ return function(env)
 			local fields = kind == "requests" and requestDetails(entry) or logDetails(entry)
 			local title = kind == "requests" and "Request details" or "Log details"
 			local dialog
-			dialog = overlay.modal({ title = title, width = theme.size.modalWide, height = theme.size.modalHistory, scroll = true,
+			dialog = overlay.modal({ title = title, width = theme.size.modalWide,
 				onClose = function() if panel.detail == dialog then panel.detail = nil end end })
 			if not dialog then return end
 			panel.detail = dialog
@@ -265,9 +282,11 @@ return function(env)
 				onClick = function() inspect(entry, "requests") end,
 			})
 			local card = item.row
-			local top = P.row(card, { size = UDim2.new(1, 0, 0, 0), auto = "Y", gap = theme.space.xs })
+			local top = P.row(card, { name = "RequestSummary", size = UDim2.new(1, 0, 0, 0),
+				auto = "Y", gap = theme.space.xs, layoutOrder = 1 })
 			P.statusDot(top, { color = theme.toneColor(tone), diameter = theme.size.dot, layoutOrder = 1 })
 			local title = P.text(top, {
+				name = "RequestTitle",
 				text = string.format("%s %s", entry.method, entry.tag or ""),
 				role = "monoSmall",
 				-- Fills rather than reserving 150 for a dot and a 96px meta column,
@@ -278,21 +297,24 @@ return function(env)
 				layoutOrder = 2,
 			})
 			local meta = P.text(top, {
+				name = "RequestStatus",
 				text = string.format("%s %s", entry.status > 0 and tostring(entry.status) or "-",
 					util.formatDuration(entry.ms or 0)),
 				role = "caption",
-				color = theme.color.textTertiary,
+				color = theme.toneColor(tone),
 				align = "Right",
+				auto = "X",
 				layoutOrder = 3,
 			})
-			meta.Size = UDim2.fromOffset(theme.size.metaColumnWide + theme.space.sm, theme.text.caption.height)
 
 			local url = P.text(card, {
-				text = safeUrl(entry.url),
+				name = "RequestUrl",
+				text = preview(safeUrl(entry.url)),
 				role = "caption",
 				color = theme.color.textSecondary,
 				wrap = true,
 				auto = "Y",
+				layoutOrder = 2,
 			})
 			url.Size = UDim2.new(1, 0, 0, 0)
 
@@ -321,21 +343,25 @@ return function(env)
 				bits[#bits + 1] = "empty body"
 			end
 			local detail = P.text(card, {
-				text = table.concat(bits, "  |  "),
+				name = "RequestEvidence",
+				text = preview(table.concat(bits, "  |  ")),
 				role = "caption",
 				color = theme.color.textTertiary,
 				wrap = true,
 				auto = "Y",
+				layoutOrder = 3,
 			})
 			detail.Size = UDim2.new(1, 0, 0, 0)
 
 			if entry.error then
 				local err = P.text(card, {
-					text = safe(entry.error, DETAIL_LIMIT),
+					name = "RequestError",
+					text = preview(entry.error),
 					role = "caption",
 					color = theme.color.danger,
 					wrap = true,
 					auto = "Y",
+					layoutOrder = 4,
 				})
 				err.Size = UDim2.new(1, 0, 0, 0)
 			end
@@ -372,13 +398,13 @@ return function(env)
 				color = theme.color.textTertiary, auto = "X", layoutOrder = 3,
 			})
 			P.text(row, {
-				name = "Message", text = safe(entry.message, DETAIL_LIMIT), role = "monoSmall",
+				name = "Message", text = preview(entry.message), role = "small",
 				color = entry.level == "error" and theme.color.danger or theme.color.textSecondary,
 				wrap = true, auto = "Y", layoutOrder = 2,
 			})
 			if entry.detail then
 				P.text(row, {
-					name = "Detail", text = safe(entry.detail, DETAIL_LIMIT), role = "monoSmall",
+					name = "Detail", text = preview(entry.detail), role = "monoSmall",
 					color = theme.color.textTertiary, wrap = true, auto = "Y", layoutOrder = 3,
 				})
 			end

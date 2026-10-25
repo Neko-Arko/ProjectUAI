@@ -30,9 +30,19 @@ return function(env)
 		return record.uncertain and "Unknown" or values.format(record.after)
 	end
 	function M.new(parent, gameChanges, navigate)
+		local pathHeight = math.max(common.pixels(30), theme.text.caption.height + theme.space.sm)
+		local headingHeight = math.max(common.pixels(22), theme.text.caption.height + theme.space.xxs * 2)
+		local minimumTray = pathHeight + headingHeight + theme.text.mono.height * 2 + theme.space.sm * 2
 		local root, surface, surfaceScroll = common.surface(parent, { name = gameChanges and "GameChanges" or "SourceHistory", size = UDim2.fromScale(1, 1), clip = true },
-			function() return math.max(common.pixels(360), common.barHeight() * 4 + theme.text.body.height
-				+ theme.text.caption.height * 3 + theme.space.md + theme.space.xl + theme.text.mono.height * 3) end)
+			function()
+				local header = common.barHeight() * 2 + theme.text.body.height + theme.text.caption.height * 3 + theme.space.md + theme.space.xl
+				local review = common.barHeight() * 2 + theme.text.mono.height * 3
+				if gameChanges then
+					local fieldRow = math.max(common.pixels(58), common.controlHeight(), theme.text.small.height + theme.text.caption.height + theme.space.xs * 2)
+					review = math.max(review, minimumTray + fieldRow)
+				end
+				return math.max(common.pixels(360), header + review)
+			end)
 		local handle = { root = surface, surfaceScroll = surfaceScroll, alive = true, visible = true }
 		local render, layout, renderDetail
 		local selected, selectedId, documentId, reviewRevision, previewView, valuePreview, renderedKey, fieldLayout
@@ -124,15 +134,15 @@ return function(env)
 		local reviewEmpty = P.text(detail, { name = "HistoryReviewEmpty", text = gameChanges and "Select an edit to inspect its before and after values." or "Select a version or proposal to review its changes.", wrap = true, color = theme.color.textSecondary,
 			position = UDim2.fromOffset(common.pixels(20), common.pixels(24)), size = UDim2.new(1, common.pixels(-40), 0, common.pixels(90)) })
 		local function fieldReview(batch)
-			local trayHeight = common.pixels(140)
+			local trayHeight = math.max(common.pixels(140), minimumTray)
 			local tray = P.frame(content, { name = "ChangedFieldValues", position = UDim2.new(0, 0, 1, -trayHeight), size = UDim2.new(1, 0, 0, trayHeight), bg = theme.color.codeSurface, clip = true })
-			local pathLabel = P.text(tray, { name = "ChangedFieldPath", text = "", role = "caption", color = theme.color.codeGutter, truncate = true, position = UDim2.fromOffset(common.pixels(10), 0), size = UDim2.new(1, common.pixels(-20), 0, common.pixels(30)) })
-			local beforeHost = P.frame(tray, { name = "BeforeField", position = UDim2.fromOffset(0, common.pixels(30)), size = UDim2.new(0.5, common.pixels(-3), 1, common.pixels(-30)), clip = true })
-			local afterHost = P.frame(tray, { name = "AfterField", position = UDim2.new(0.5, common.pixels(3), 0, common.pixels(30)), size = UDim2.new(0.5, common.pixels(-3), 1, common.pixels(-30)), clip = true })
-			P.text(beforeHost, { text = "Before", role = "caption", color = theme.color.codeRemoveText, position = UDim2.fromOffset(common.pixels(10), 0), size = UDim2.new(1, common.pixels(-20), 0, common.pixels(22)) })
-			P.text(afterHost, { text = "After", role = "caption", color = theme.color.codeAddText, position = UDim2.fromOffset(common.pixels(10), 0), size = UDim2.new(1, common.pixels(-20), 0, common.pixels(22)) })
-			local beforeValues = P.frame(beforeHost, { position = UDim2.fromOffset(0, common.pixels(22)), size = UDim2.new(1, 0, 1, common.pixels(-22)), clip = true })
-			local afterValues = P.frame(afterHost, { position = UDim2.fromOffset(0, common.pixels(22)), size = UDim2.new(1, 0, 1, common.pixels(-22)), clip = true })
+			local pathLabel = P.text(tray, { name = "ChangedFieldPath", text = "", role = "caption", color = theme.color.codeGutter, truncate = true, position = UDim2.fromOffset(common.pixels(10), 0), size = UDim2.new(1, common.pixels(-20), 0, pathHeight) })
+			local beforeHost = P.frame(tray, { name = "BeforeField", position = UDim2.fromOffset(0, pathHeight), size = UDim2.new(0.5, common.pixels(-3), 1, -pathHeight), clip = true })
+			local afterHost = P.frame(tray, { name = "AfterField", position = UDim2.new(0.5, common.pixels(3), 0, pathHeight), size = UDim2.new(0.5, common.pixels(-3), 1, -pathHeight), clip = true })
+			P.text(beforeHost, { name = "BeforeFieldLabel", text = "Before", role = "caption", color = theme.color.codeRemoveText, position = UDim2.fromOffset(common.pixels(10), 0), size = UDim2.new(1, common.pixels(-20), 0, headingHeight) })
+			P.text(afterHost, { name = "AfterFieldLabel", text = "After", role = "caption", color = theme.color.codeAddText, position = UDim2.fromOffset(common.pixels(10), 0), size = UDim2.new(1, common.pixels(-20), 0, headingHeight) })
+			local beforeValues = P.frame(beforeHost, { position = UDim2.fromOffset(0, headingHeight), size = UDim2.new(1, 0, 1, -headingHeight), clip = true })
+			local afterValues = P.frame(afterHost, { position = UDim2.fromOffset(0, headingHeight), size = UDim2.new(1, 0, 1, -headingHeight), clip = true })
 			local fieldsList
 			local rows = {}
 			for index, record in ipairs(batch.records) do
@@ -153,10 +163,10 @@ return function(env)
 			fieldsList = common.virtualList(content, { name = "ChangedFields", size = UDim2.new(1, 0, 1, -trayHeight), rowHeight = common.pixels(58), detail = function(item) return item.description end, onSelect = function(item) selectField(item.index) end })
 			selectField(fieldIndex)
 			sizeFields = function()
-				local height = math.min(trayHeight, math.max(common.pixels(100), content.AbsoluteSize.Y * 0.46))
+				local height = math.min(trayHeight, math.max(minimumTray, common.pixels(100), content.AbsoluteSize.Y * 0.46))
 				pathLabel.Visible, fieldsList.root.Visible = true, true
-				beforeHost.Position, beforeHost.Size = UDim2.fromOffset(0, common.pixels(30)), UDim2.new(0.5, common.pixels(-3), 1, common.pixels(-30))
-				afterHost.Position, afterHost.Size = UDim2.new(0.5, common.pixels(3), 0, common.pixels(30)), UDim2.new(0.5, common.pixels(-3), 1, common.pixels(-30))
+				beforeHost.Position, beforeHost.Size = UDim2.fromOffset(0, pathHeight), UDim2.new(0.5, common.pixels(-3), 1, -pathHeight)
+				afterHost.Position, afterHost.Size = UDim2.new(0.5, common.pixels(3), 0, pathHeight), UDim2.new(0.5, common.pixels(-3), 1, -pathHeight)
 				tray.Position, tray.Size = UDim2.new(0, 0, 1, -height), UDim2.new(1, 0, 0, height)
 				fieldsList.root.Size = UDim2.new(1, 0, 1, -height)
 			end

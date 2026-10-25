@@ -138,7 +138,7 @@ return function(env)
 			gap = 0,
 			layoutOrder = 1,
 		})
-		P.text(rememberText, { text = "Remember this answer", role = "small" })
+		P.text(rememberText, { text = "Remember this answer", role = "label", wrap = true, auto = "Y" })
 		P.text(rememberText, {
 			text = "Applies to every future " .. tostring(request.name) .. " call. Change it later in the Tools panel.",
 			role = "caption",

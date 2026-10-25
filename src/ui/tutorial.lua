@@ -18,9 +18,9 @@ return function(env)
 	-- UTF-8 middle dot, shared with the release-note list style.
 	local MARKER = "\194\183"
 
-	-- Match the home panel's coral title tile.
-	local TILE = 32
-	local MARK_SIZE = 20
+	-- Follow the same density and device scale as the surrounding controls.
+	local TILE = theme.size.control
+	local MARK_SIZE = theme.size.iconLarge
 
 	-- Actions navigate to existing panels/dialogs without submitting work.
 	local PAGES = {
@@ -120,7 +120,7 @@ return function(env)
 	-- Paints the dotted trail: the current step stretches into an accent pill,
 	-- the rest stay dimmed dots. Tweened, so the pill glides along the trail
 	-- instead of snapping between steps.
-	local DOT, PILL = 6, 18
+	local DOT, PILL = theme.size.dot, theme.size.dot * 3
 	local function paintDots(tour)
 		for position, dot in ipairs(tour.dots) do
 			local active = position == tour.index
@@ -217,7 +217,6 @@ return function(env)
 					name = "Marker",
 					text = MARKER,
 					role = "small",
-					textSize = role.size + 3,
 					line = role.line,
 					color = theme.color.accentHot,
 					align = "Right",

@@ -3959,8 +3959,14 @@ scenario("the composer states what is actually in force", function()
 	check("changing the mode changes the label", permissionLabel.Text, "Ask first")
 
 	local modelLabel = harness.byName("ModelLabel")
-	contains("the model is the one the provider is pointed at", modelLabel.Text, "claude-opus-5")
-	contains("with the window this client knows it has", modelLabel.Text, "1M")
+	check("the chip names the model the provider is pointed at", modelLabel.Text, "claude-opus-5")
+	harness.click(harness.byName("ComposerOptions"))
+	harness.click(harness.byName("Option_context_inspect"))
+	harness.settle(1)
+	local limits = harness.byName("ContextLimits")
+	contains("context details retain the known model window", limits and limits.Text or "", "Model window: 1,000,000 tokens")
+	harness.press("Escape")
+	harness.settle(1)
 
 	-- Isolation is the worktree chip: a conversation marked that way is never written.
 	local session = handle.sessions.current()
@@ -5378,7 +5384,10 @@ scenario("the model picker separates endpoint, model and effort", function()
 	local modelRow = harness.byName("Model_claude-opus-5")
 	truthy("the model it is pointed at is listed", modelRow ~= nil)
 	contains("with the window this client documents", harness.textOf(modelRow), "1M")
-	truthy("model rows are compact", modelRow.Size.Y.Offset <= 44)
+	local modelName = modelRow and harness.byName("ModelName", modelRow)
+	local modelMetadata = modelRow and harness.byName("ModelMetadata", modelRow)
+	truthy("model rows fit the name and metadata lines", modelName and modelMetadata
+		and modelRow.Size.Y.Offset >= modelName.Size.Y.Offset + modelMetadata.Size.Y.Offset)
 
 	-- Effort is the model's own scale, and Opus 5 documents five levels.
 	truthy("the effort scale is the model's own", harness.byName("Effort_xhigh") ~= nil)
@@ -6159,8 +6168,7 @@ scenario("adding a provider starts at the gallery and seeds the editor", functio
 	check("the docs link followed the switch",
 		linkAfter and linkAfter.Text, "https://console.anthropic.com/settings/keys")
 	local authRow = harness.byName("AuthStyle", harness.byName("Form"))
-	local selected = authRow and harness.byName("Segment_x-api-key", authRow)
-	truthy("the auth segment control follows", selected ~= nil, harness.dump(authRow))
+	contains("the auth header selector follows the preset", authRow and harness.textOf(authRow) or "", "x-api-key")
 
 	check("no thread errors", #harness.errors(), 0,
 		harness.errors()[1] and harness.errors()[1].traceback or nil)

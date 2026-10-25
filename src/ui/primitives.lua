@@ -819,10 +819,23 @@ return function(env)
 		box.TextWrapped = multiline
 		box.ClipsDescendants = true
 		box.Selectable = true
-		P.pad(box, {
+		local padding = P.pad(box, {
 			x = props.padX or (bare and theme.space.none or theme.space.md),
 			y = multiline and theme.space.sm or 0,
 		})
+		if multiline then
+			-- Compact composers keep their native field when the keyboard opens.
+			-- Let the inset yield before it clips the first line of the draft.
+			local function fitPadding()
+				local room = shell.AbsoluteSize.Y
+				if room <= 0 then room = height end
+				local inset = math.max(0, math.min(theme.space.sm, math.floor((room - role.height) / 2)))
+				padding.PaddingTop = UDim.new(0, inset)
+				padding.PaddingBottom = UDim.new(0, inset)
+			end
+			shell:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitPadding)
+			fitPadding()
+		end
 
 		local handle = { instance = box, shell = shell, stroke = stroke }
 

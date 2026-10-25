@@ -53,12 +53,34 @@ check("missing metadata is stated honestly", has(dialog.card, "Not recorded"))
 h.click(h.byName("CloseDetails", dialog.card))
 
 log.clear()
+log.info("ui", "Ready")
+h.click(h.byName("Segment_log", frame))
+h.click(h.byName("LogEntry", frame))
+dialog = assert(panel.detail)
+-- Publish native list measurements: the mock does not run AutomaticSize.
+local bodyLayout = dialog.content:FindFirstChildOfClass("UIListLayout")
+bodyLayout.AbsoluteContentSize = h.dt.Vector2.new(400, 220)
+h.settle(0.2)
+local shortHeight = dialog.card.Size.Y.Offset
+check("short log details fit their contents instead of reserving history height",
+	shortHeight < handle.env.require("ui/theme").size.modalHistory and dialog.scroll.instance.Size.Y.Offset >= 220)
+bodyLayout.AbsoluteContentSize = h.dt.Vector2.new(400, 1800)
+h.settle(0.2)
+check("long details grow into a bounded scroll viewport", dialog.card.Size.Y.Offset > shortHeight
+	and dialog.scroll.instance.Size.Y.Offset < 1800)
+h.click(h.byName("CloseDetails", dialog.card))
+log.clear()
 local message = string.rep("A detailed application message.\n", 70) .. "MESSAGE_END"
 local detail = string.rep("A diagnostic line.\n", 70) .. "DETAIL_END Bearer abcdefghijklmnop sk-private-log-TAIL"
 log.error("provider", message, detail)
 h.click(h.byName("Segment_log", frame))
 local logRow = h.byName("LogEntry", frame)
 check("application logs use the entire row too", logRow:IsA("TextButton") and h.byName("Content", logRow).Parent == logRow)
+check("long log messages remain compact in the event list", not has(logRow, "MESSAGE_END") and not has(logRow, "DETAIL_END")
+	and has(logRow, "Open details for more."))
+local preview = h.byName("Message", logRow).Text
+local _, newlines = preview:gsub("\n", "")
+check("stack trace previews keep at most four source lines", newlines <= 4 and #preview < 550)
 h.click(logRow)
 dialog = assert(panel.detail)
 check("application popup retains the full message and detail", dialog.card.Name == "LogDetails" and has(dialog.card, message)

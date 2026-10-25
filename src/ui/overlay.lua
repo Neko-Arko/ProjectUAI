@@ -494,6 +494,7 @@ return function(env)
 	-- fit their contents up to the same usable-room ceiling. Both have a scrolling
 	-- body. In short mobile keyboard space the footer joins that scroll region,
 	-- keeping both editable fields and complete action targets reachable.
+	-- Catalogue dialogs can opt into pinFooter when their own list owns scrolling.
 	function M.modal(props)
 		props = props or {}
 		if not ensure() then return nil end
@@ -529,6 +530,7 @@ return function(env)
 			theme.text.title.height + (props.description and (theme.space.hair + theme.text.small.height) or 0))
 		local footerContentHeight = math.max(theme.size.control, responsive.minTarget())
 		local pad = theme.space.lg
+		local bodyPad = theme.space.md
 		local headerPad = theme.space.sm
 		local footerPad = theme.space.sm
 		local headerTotal = headerContentHeight + headerPad * 2
@@ -651,7 +653,7 @@ return function(env)
 				position = UDim2.new(0, 0, 0, headerTotal),
 				size = UDim2.new(1, 0, 1, -(headerTotal + footerTotal)),
 				gap = theme.space.sm,
-				padding = { left = pad, right = pad, top = theme.space.xxs, bottom = theme.space.sm },
+				padding = { x = pad, y = bodyPad },
 			})
 			handle.scroll.instance.CanvasPosition = Vector2.new(0, 0)
 			handle.content = P.column(handle.scroll.instance, {
@@ -735,7 +737,7 @@ return function(env)
 				local bodyHeight = bodyBounds and bodyBounds.Y or handle.content.AbsoluteSize.Y
 				local chromePad = roomNow < (headerTotal + footerTotal + closeDiameter) and theme.space.xs or headerPad
 				local wantedHeader = math.max(closeDiameter, titleHeight) + chromePad * 2
-				local bodyPadding = bodyHeight > 0 and (theme.space.sm + theme.space.xxs) or 0
+				local bodyPadding = bodyHeight > 0 and bodyPad * 2 or 0
 				local preferred = props.height or (props.scroll == true and theme.size.modalTall
 					or (wantedHeader + footerTotal + bodyHeight + bodyPadding))
 				local cardHeight = math.max(1, math.floor(math.min(preferred, roomNow)))
@@ -750,7 +752,7 @@ return function(env)
 				for _, child in ipairs(handle.content:GetChildren()) do
 					if child:IsA("GuiObject") and child.Visible then minimumBody = minimumBody + closeDiameter; break end
 				end
-				local inlineFooter = hasFooter
+				local inlineFooter = hasFooter and props.pinFooter ~= true
 					and cardHeight - measured - footerTotal < minimumBody
 				if inlineFooter then
 					chromePad = math.min(chromePad, math.max(0, math.floor((cardHeight - closeDiameter - minimumBody) / 2)))

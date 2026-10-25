@@ -64,12 +64,15 @@ return function(env)
 	function M.donate()
 		local modal = overlay.modal({
 			title = "Support Project Ptolemy",
-			description = "You may now support Project Ptolemy by donating via Robux or Ko-fi. "
-				.. "This is completely optional -- any donation would be appreciated.",
+			description = "Optional donations help keep the project and shared free access running.",
 			width = theme.size.modal,
 		})
 		if not modal then return end
-		local note = P.text(modal.content, {
+		local options = P.card(modal.content, { name = "DonationOptions", padding = theme.space.md,
+			gap = theme.space.sm, bg = theme.color.surface, layoutOrder = 1 })
+		P.text(options, { text = "Choose how to support us", role = "label",
+			size = UDim2.new(1, 0, 0, 0), auto = "Y", wrap = true, layoutOrder = 1 })
+		P.text(options, {
 			name = "DonationNote",
 			text = "Robux donations go to the Project Ptolemy donation place; supporters are thanked in our Discord. "
 				.. "Ko-fi copies its link, which you can open in a browser.",
@@ -78,7 +81,7 @@ return function(env)
 			wrap = true,
 			auto = "Y",
 			size = UDim2.new(1, 0, 0, 0),
-			layoutOrder = 1,
+			layoutOrder = 2,
 		})
 		P.button(modal.footer, {
 			text = "Ko-fi",

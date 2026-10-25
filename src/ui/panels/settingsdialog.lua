@@ -93,6 +93,26 @@ return function(env)
 		local rows = {}
 		local active = nil
 		local cached = {}
+		local function revealCategory()
+			local selected = rows[active]
+			if dialog.closed or not selected or not selected.instance.Parent then return end
+			local axis = narrow and "X" or "Y"
+			local viewport = nav.instance.AbsoluteSize[axis]
+			local length = selected.instance.AbsoluteSize[axis]
+			if viewport <= 0 or length <= 0 then return end
+			local position = nav.instance.CanvasPosition[axis]
+			local start = selected.instance.AbsolutePosition[axis] - nav.instance.AbsolutePosition[axis]
+			local target = position
+			if start < theme.space.xs then
+				target = position + start - theme.space.xs
+			elseif start + length > viewport - theme.space.xs then
+				target = position + start + length - viewport + theme.space.xs
+			end
+			if target ~= position then
+				nav.instance.CanvasPosition = narrow and Vector2.new(math.max(0, target), 0)
+					or Vector2.new(0, math.max(0, target))
+			end
+		end
 		-- Keep native drafts when switching categories. External changes invalidate
 		-- the saved view; only drafts still bound to the same value are restored.
 		local function visitFields(column, callback)
@@ -152,7 +172,10 @@ return function(env)
 			cached[id].column.Visible = true
 			body.instance.CanvasPosition = cached[id].position
 			task.defer(function()
-				if not dialog.closed and active == id then body.instance.CanvasPosition = cached[id].position end
+				if not dialog.closed and active == id then
+					body.instance.CanvasPosition = cached[id].position
+					revealCategory()
+				end
 			end)
 		end
 
@@ -237,6 +260,7 @@ return function(env)
 				nav.instance.CanvasPosition = Vector2.new(0, 0)
 				renderNav()
 			end
+			task.defer(revealCategory)
 		end
 		renderNav()
 		dialog.card:GetPropertyChangedSignal("AbsoluteSize"):Connect(reflow)

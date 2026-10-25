@@ -23,7 +23,7 @@ for _, size in ipairs({ { 320, 640 }, { 844, 390 } }) do
 		and picker.card.AbsolutePosition.X + picker.card.AbsoluteSize.X <= size[1]
 		and picker.card.AbsolutePosition.Y + picker.card.AbsoluteSize.Y <= size[2])
 	check("portrait picker can use more than the old compact height", size[2] < 500 or picker.card.AbsoluteSize.Y > 400)
-	for _, name in ipairs({ "Section_Endpoint", "FreeOnly", "Model_claude-opus-5", "Effort_low", "FetchModels", "ModelOptions", "PickerDone", "Close" }) do
+	for _, name in ipairs({ "Section_Endpoint", "FreeOnly", "Model_claude-opus-5", "FetchModels", "ModelOptions", "PickerDone", "Close" }) do
 		local node = assert(h.byName(name, picker.card), name)
 		check(name .. " has a 40px touch target", node.AbsoluteSize.X >= 40 and node.AbsoluteSize.Y >= 40)
 	end
@@ -33,34 +33,31 @@ for _, size in ipairs({ { 320, 640 }, { 844, 390 } }) do
 		if (node:IsA("TextLabel") or node:IsA("TextBox")) and node.Text ~= "" then check("text respects the handheld reading floor", node.TextSize >= 10) end
 	end
 	local list = h.byName("ModelScroll", picker.card)
-	check("only one vertical scroll owns the model body", picker.scroll.instance.ScrollingEnabled ~= list.ScrollingEnabled)
+	check("only the model catalog scrolls", not picker.scroll.instance.ScrollingEnabled and list.ScrollingEnabled)
+	list.CanvasPosition = h.dt.Vector2.new(0, 60)
 	uis.OnScreenKeyboardSize, uis.OnScreenKeyboardVisible = h.dt.Vector2.new(size[1], math.floor(size[2] * 0.55)), true
 	uis:GetPropertyChangedSignal("OnScreenKeyboardVisible"):Fire(); h.settle(0.3)
-	check("keyboard keeps one scrolling owner", picker.scroll.instance.ScrollingEnabled and not list.ScrollingEnabled)
+	check("keyboard keeps the catalog as the scrolling owner", not picker.scroll.instance.ScrollingEnabled and list.ScrollingEnabled)
+	check("keyboard leaves a bounded model viewport", list.Size.Y.Offset > 0 and list.Position.Y.Offset + list.Size.Y.Offset <= picker.scroll.viewportSize().Y)
+	check("keyboard retains the current model scroll", list.CanvasPosition.Y == 60)
+	check("footer actions stay outside the model viewport", picker.footer.Parent == picker.card)
+	local provider = h.byName("Section_Endpoint", picker.card)
+	local providerPosition, searchPosition = provider.AbsolutePosition, search.AbsolutePosition
+	list.CanvasPosition = h.dt.Vector2.new(0, 120); h.settle(0.1)
+	check("scrolling models leaves provider and search fixed", provider.AbsolutePosition == providerPosition and search.AbsolutePosition == searchPosition
+		and picker.scroll.instance.CanvasPosition.Y == 0)
 	local effort = h.byName("Section_ReasoningEffort", picker.card)
-	check("effort remains inside scrollable content", effort:IsDescendantOf(picker.content) and effort.Visible)
-	-- The mock does not populate ScrollingFrame.AbsoluteCanvasSize. Derive the
-	-- native automatic canvas extent from the actual assigned body bounds.
-	local verticalEnd = math.max(0, picker.content.Size.Y.Offset - picker.scroll.viewportSize().Y)
-	picker.scroll.instance.CanvasPosition = h.dt.Vector2.new(0, verticalEnd); h.settle(0.1)
-	check("the complete body has a reachable scroll end", verticalEnd > 0 and picker.scroll.instance.CanvasPosition.Y == verticalEnd)
-	h.click(h.byName("Effort_high", picker.card)); h.settle(0.1)
-	check("scrolling to effort changes the real preference", app.config.get("agent.effort") == "high")
-	local pills = h.byName("EffortPills", picker.card)
-	local width, count = 0, 0
-	local primitives, theme = app.env.require("ui/primitives"), app.env.require("ui/theme")
-	for _, child in ipairs(pills:GetChildren()) do
-		if child:IsA("GuiButton") then
-			local natural = primitives.measureText(h.textOf(child), { role = "small" }).X + theme.space.md * 2 + theme.space.sm
-			width = width + math.max(child.AbsoluteSize.X, natural); count = count + 1
-		end
-	end
-	width = width + math.max(0, count - 1) * pills:FindFirstChildOfClass("UIListLayout").Padding.Offset
-	pills.CanvasPosition = h.dt.Vector2.new(math.max(0, width - pills.AbsoluteSize.X), 0)
-	check("effort choices scroll horizontally when wider than the picker", pills.ScrollingEnabled and pills.ScrollingDirection == h.sandbox.Enum.ScrollingDirection.X
-		and (width <= pills.AbsoluteSize.X or pills.CanvasPosition.X > 0))
-	h.click(h.byName("Effort_off", picker.card)); h.settle(0.1)
-	check("the final horizontally scrollable effort choice works", app.config.get("agent.effort") == "off")
+	check("compact views reserve model space by moving effort into Options", not effort.Visible)
+	h.click(h.byName("ModelOptions", picker.card)); h.settle(0.1)
+	h.click(h.byName("Option_effort")); h.settle(0.1)
+	local high = assert(h.byName("Option_high"))
+	check("compact effort choices retain a touch target", high.AbsoluteSize.Y >= 40)
+	h.click(high); h.settle(0.1)
+	check("compact effort changes the real preference", app.config.get("agent.effort") == "high")
+	h.click(h.byName("ModelOptions", picker.card)); h.settle(0.1)
+	h.click(h.byName("Option_effort")); h.settle(0.1)
+	h.click(h.byName("Option_off")); h.settle(0.1)
+	check("provider-default effort remains available", app.config.get("agent.effort") == "off")
 	h.click(h.byName("ModelOptions", picker.card)); h.settle(0.1)
 	check("custom model entry remains available", h.byName("Option_add") ~= nil)
 	h.click(h.byName("Option_add")); h.settle(0.1)

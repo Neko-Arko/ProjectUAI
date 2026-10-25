@@ -19,6 +19,31 @@ return function(env)
 	local CATEGORY_ORDER = { "added", "improved", "fixed" }
 	local ENTRIES = {
 		{
+			version = "3.7.1",
+			revision = "2026-10-25-ui-polish-key-entries",
+			date = "October 25, 2026",
+			title = "UI polish and individual API keys",
+			highlights = "Manage numbered API keys without replacing the whole pool. Modals have more breathing room, short details fit their contents, and provider setup, model selection and the Code workspace are clearer.",
+			sections = {
+				{ category = "added", label = "Individual API keys", items = {
+					"Each provider key has its own numbered, masked entry with Replace and Remove actions. Add as many entries as you need, or paste several keys to append them together.",
+					"Existing key pools keep their automatic rotation. Changes stay in the provider draft until you save, and cancelling a replacement leaves the original key intact.",
+				} },
+				{ category = "improved", label = "Modals and setup", items = {
+					"Log details and context usage fit their contents and scroll when needed. Modal bodies have balanced padding, including the tutorial, Discord invitation and donation options.",
+					"Provider setup groups access, model and connection settings, with the setup guide expanded by default. The gallery adapts its card columns to the available width.",
+					"Model search and actions remain reachable while the catalog scrolls. Settings, conversation controls and log previews have clearer spacing and wrapping on narrow screens.",
+				} },
+				{ category = "improved", label = "Code workspace", items = {
+					"Syntax colors stay visible while selecting code. Selection fills, preview line spacing, tabs, history and comparison views follow the active type size and code palette.",
+				} },
+				{ category = "fixed", label = "Keys and compact layouts", items = {
+					"Replacing one API key preserves the other entries. Duplicate or empty replacements leave the pool intact, and short credentials stay masked in both entry rows and the pool summary.",
+					"Compact controls reserve enough room for larger text. Multiline fields adjust their padding without replacing the field, draft or selection when keyboard space changes.",
+				} },
+			},
+		},
+		{
 			version = "3.7.0",
 			revision = "2026-10-25-models-tunnels-workflows",
 			date = "October 25, 2026",

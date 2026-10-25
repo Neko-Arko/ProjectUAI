@@ -45,7 +45,7 @@ return function(env)
 		local function paint(row)
 			local selected = row.item and row.item.selected
 			local background = row.item and (row.item.background or (options.background and options.background(row.item)))
-			row.button.instance.BackgroundColor3 = selected and theme.color.surfaceSelected or (row.hovered or row.focused) and theme.color.surfaceHover or background or theme.color.surfaceHover
+			row.button.instance.BackgroundColor3 = selected and theme.color.surfaceSelected or (row.hovered or row.focused) and (options.hoverColor or theme.color.surfaceHover) or background or theme.color.surfaceHover
 			row.button.instance.BackgroundTransparency = (selected or row.hovered or row.focused or background) and 0 or 1
 			row.mark.Visible = selected == true
 		end

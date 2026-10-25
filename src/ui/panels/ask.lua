@@ -14,6 +14,7 @@ return function(env)
 	local util = env.require("runtime/util")
 	local caps = env.require("runtime/caps")
 	local theme = env.require("ui/theme")
+	local responsive = env.require("ui/responsive")
 	local P = env.require("ui/primitives")
 	local overlay = env.require("ui/overlay")
 
@@ -97,17 +98,23 @@ return function(env)
 		-- hides every answer but the one on top, and a choice the reader has to scroll
 		-- to discover is a choice they did not know they had.
 		for index, option in ipairs(options) do
-			P.button(modal.content, {
+			local choice = P.rowButton(modal.content, {
 				name = "AskOption" .. tostring(index),
-				text = option,
-				variant = "secondary",
-				fill = true,
+				vertical = true,
+				size = UDim2.new(1, 0, 0, math.max(theme.size.control, responsive.minTarget())),
+				auto = "Y",
+				bg = theme.color.surfaceRaised,
+				stroke = true,
+				radius = theme.radius.md,
+				padding = { x = theme.space.md, y = theme.space.sm },
 				layoutOrder = index + 1,
 				onClick = function()
 					reply(option)
 					modal.close()
 				end,
 			})
+			P.text(choice.row, { name = "Label", text = option, role = "small",
+				size = UDim2.new(1, 0, 0, 0), auto = "Y", wrap = true, layoutOrder = 1 })
 		end
 
 		-- The open answer. Always offered -- an option list is the model's guess at
@@ -115,7 +122,7 @@ return function(env)
 		local field
 		field = P.field(modal.content, {
 			name = "AskField",
-			placeholder = "Or type an answer",
+			placeholder = #options > 0 and "Or type your own answer" or "Type your answer",
 			layoutOrder = #options + 2,
 			onSubmit = function(text)
 				reply(util.trim(text))

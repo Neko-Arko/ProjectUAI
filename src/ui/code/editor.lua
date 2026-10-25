@@ -1,6 +1,6 @@
--- A native TextBox owns editing, hit testing, selection and IME. Its raw text
--- stays separate from the syntax layer. Dragging or selecting shows the native
--- text/selection together, so a separately measured overlay cannot shift it.
+-- A native TextBox owns editing, hit testing, selection and IME. Bounded line
+-- labels remain the visible source during selection: asking the native renderer
+-- to repaint an entire selected document can leave long sources blank.
 return function(env)
 	local P = env.require("ui/primitives")
 	local theme = env.require("ui/theme")
@@ -43,9 +43,13 @@ return function(env)
 		end
 		local singleProbe = probe("SourceSingleLineMetrics", "Mg")
 		local linesProbe = probe("SourceLineMetrics", "Mg" .. string.rep("\nMg", 32))
-		local gutter = P.frame(scroll.instance, { name = "Gutter", bg = theme.color.codeBar, zIndex = 4 })
-		P.frame(gutter, { name = "GutterRule", size = UDim2.new(0, theme.stroke.hair, 1, 0), position = UDim2.new(1, -theme.stroke.hair, 0, 0), bg = theme.color.codeBorder, zIndex = 5 })
-		local caret = P.frame(scroll.instance, { name = "SourceCaret", bg = theme.color.codeText, size = UDim2.fromOffset(2, role.height), zIndex = 4, visible = false })
+		local layer = P.frame(box, { name = "SourcePresentation", size = UDim2.fromScale(1, 1), bg = theme.color.codeSurface, zIndex = 4 })
+		layer.Active, layer.Selectable = false, false
+		local currentLine = P.frame(layer, { name = "SourceCurrentLine", bg = theme.color.codeBar, zIndex = 5, visible = false })
+		currentLine.Active, currentLine.Selectable = false, false
+		local gutter = P.frame(scroll.instance, { name = "Gutter", bg = theme.color.codeBar, zIndex = 8 })
+		P.frame(gutter, { name = "GutterRule", size = UDim2.new(0, theme.stroke.hair, 1, 0), position = UDim2.new(1, -theme.stroke.hair, 0, 0), bg = theme.color.codeBorder, zIndex = 9 })
+		local caret = P.frame(scroll.instance, { name = "SourceCaret", bg = theme.color.codeText, size = UDim2.fromOffset(2, role.height), zIndex = 7, visible = false })
 		caret.Active, caret.Selectable = false, false
 		local handle = { root = root, box = box, scroll = scroll.instance, alive = true, syntax = "", visible = true }
 		local document, ignore, focused, cache, pending = nil, false, false, nil, false
@@ -84,10 +88,12 @@ return function(env)
 		local function drawCaret()
 			blinkCaret()
 			local offset = box.CursorPosition
+			currentLine.Visible = focused and not nativeSelection() and handle.visible and document ~= nil and offset > 0
 			if focused and handle.visible and document and offset > 0 and cache then
 				local index = lineAt(offset)
 				caret.Position = UDim2.fromOffset(gutterWidth + theme.space.sm + advance(index, offset), theme.space.sm + (index - 1) * lineHeight)
 				caret.Size = UDim2.fromOffset(2, math.max(role.size, lineHeight))
+				currentLine.Position, currentLine.Size = UDim2.fromOffset(0, (index - 1) * lineHeight), UDim2.new(1, 0, 0, lineHeight)
 			end
 		end
 		local function saveView()
@@ -116,29 +122,41 @@ return function(env)
 			gutter.Position = UDim2.fromOffset(x, 0); gutter.Size = UDim2.fromOffset(gutterWidth, math.max(scroll.instance.AbsoluteSize.Y, #cache.lines * lineHeight + theme.space.sm * 2))
 			local first = math.max(1, math.floor(y / lineHeight) + 1 - theme.size.codeOverscan)
 			local count = math.min(160, math.ceil(math.max(1, scroll.instance.AbsoluteSize.Y) / lineHeight) + theme.size.codeOverscan * 2)
-			local native = nativeSelection()
+			local cursor, anchor = box.CursorPosition, box.SelectionStart
+			local selecting = focused and cursor > 0 and anchor > 0 and cursor ~= anchor
+			local selectedFirst, selectedAfter = math.min(cursor, anchor), math.max(cursor, anchor)
+			local activeLine = focused and cursor > 0 and lineAt(cursor) or nil
 			for slot = 1, count do
 				local row = pool[slot]
 				if not row then
-					row = { number = P.text(gutter, { text = "", role = "mono", color = theme.color.codeGutter, align = "Right", zIndex = 5 }),
-						text = P.text(scroll.instance, { name = "SyntaxLine", text = "", role = "mono", color = theme.color.codeText, rich = true, zIndex = 2 }) }
+					row = { number = P.text(gutter, { text = "", role = "mono", color = theme.color.codeGutter, align = "Right", zIndex = 9 }),
+						text = P.text(layer, { name = "SyntaxLine", text = "", role = "mono", color = theme.color.codeText, rich = true, zIndex = 6 }),
+						selection = P.frame(layer, { name = "SourceSelection", bg = theme.color.codeSelection, zIndex = 5, visible = false }) }
 					row.text.RichText = true; row.text.TextYAlignment, row.number.TextYAlignment = Enum.TextYAlignment.Top, Enum.TextYAlignment.Top
-					row.text.Active, row.number.Active = false, false
+					row.text.Active, row.number.Active, row.selection.Active = false, false, false
 					pool[slot] = row
 				end
 				local index = first + slot - 1; local value = cache.lines[index]
-				row.number.Visible, row.text.Visible = value ~= nil, value ~= nil and not native
+				row.number.Visible, row.text.Visible, row.selection.Visible = value ~= nil, value ~= nil, false
 				for _, mark in ipairs(row.matches or {}) do mark.Visible = false end
 				if value then
 					local top = theme.space.sm + (index - 1) * lineHeight
 					row.number.Position, row.number.Size, row.number.Text = UDim2.fromOffset(theme.space.xs, top), UDim2.fromOffset(gutterWidth - theme.space.md, lineHeight), tostring(index)
+					row.number.TextColor3 = index == activeLine and theme.color.codeText or theme.color.codeGutter
 					local left, firstByte, afterByte = metrics.window(measurements[value], value, x, scroll.instance.AbsoluteSize.X)
-					row.text.Position, row.text.Size = UDim2.fromOffset(gutterWidth + theme.space.sm + left, top), UDim2.fromOffset(math.max(1, width - left), lineHeight)
+					row.text.Position, row.text.Size = UDim2.fromOffset(left, (index - 1) * lineHeight), UDim2.fromOffset(math.max(1, width - left), lineHeight)
 					if row.source ~= value or row.spans ~= cache.spans[index] or row.first ~= firstByte or row.after ~= afterByte then
 						row.text.Text = lexer.richWindow(value, cache.spans[index], palette, firstByte, afterByte - 1)
 						row.source, row.spans, row.first, row.after = value, cache.spans[index], firstByte, afterByte
 					end
 					local start, finish = cache.starts[index], cache.starts[index] + #value
+					if selecting and selectedFirst <= finish and selectedAfter > start then
+						local left = advance(index, math.max(start, selectedFirst))
+						local right = advance(index, math.min(finish, selectedAfter))
+						row.selection.Position = UDim2.fromOffset(left, (index - 1) * lineHeight)
+						row.selection.Size = UDim2.fromOffset(math.max(theme.space.xs, right - left + (selectedAfter > finish and theme.space.sm or 0)), lineHeight)
+						row.selection.Visible = true
+					end
 					row.matches = row.matches or {}
 					local painted = 0
 					for matchIndex = firstMatch(start), #searchState.items do
@@ -147,19 +165,20 @@ return function(env)
 						if match.after > start and painted < 64 then
 							painted = painted + 1
 							local mark = row.matches[painted]
-							if not mark then mark = P.frame(scroll.instance, { name = "SearchMatch", bg = theme.mix(theme.color.codeSurface, theme.color.accent, 0.25), zIndex = 1 }); mark.Active = false; row.matches[painted] = mark end
+							if not mark then mark = P.frame(layer, { name = "SearchMatch", bg = theme.mix(theme.color.codeSurface, theme.color.accent, 0.10), zIndex = 5 }); mark.Active = false; row.matches[painted] = mark end
 							local left, right = advance(index, math.max(start, match.first)), advance(index, math.min(finish, match.after))
-							mark.Position, mark.Size, mark.Visible = UDim2.fromOffset(gutterWidth + theme.space.sm + left, top), UDim2.fromOffset(math.max(3, right - left), lineHeight), not native
+							mark.Position, mark.Size, mark.Visible = UDim2.fromOffset(left, (index - 1) * lineHeight), UDim2.fromOffset(math.max(3, right - left), lineHeight), not selecting
 						end
 					end
 					for i = painted + 1, #row.matches do row.matches[i].Visible = false end
 				end
 			end
 			for i = count + 1, #pool do
-				pool[i].number.Visible, pool[i].text.Visible = false, false
+				pool[i].number.Visible, pool[i].text.Visible, pool[i].selection.Visible = false, false, false
 				for _, mark in ipairs(pool[i].matches or {}) do mark.Visible = false end
 			end
-			box.TextTransparency = (native or #box.Text == 0) and 0 or 1
+			layer.Visible = #box.Text > 0
+			box.TextTransparency = #box.Text == 0 and 0 or 1
 			drawCaret()
 		end
 		local function layout()
@@ -230,7 +249,8 @@ return function(env)
 			end)
 		end
 		box:GetPropertyChangedSignal("Text"):Connect(function()
-			box.TextTransparency = (nativeSelection() or #box.Text == 0) and 0 or 1
+			box.TextTransparency = #box.Text == 0 and 0 or 1
+			layer.Visible = #box.Text > 0
 			caretMovedAt = clock.ms()
 			if ignore or not document then return end
 			local updated, why = store.update(document.id, box.Text, { origin = "typing" })
@@ -276,7 +296,7 @@ return function(env)
 			pinSource()
 			local view = doc and util.copy(store.view(doc.id))
 			ignore = true; box.Text = doc and doc.source or ""; ignore = false
-			box.TextEditable = doc ~= nil and not doc.readOnly; box.PlaceholderText = doc and (doc.readOnly and "-- Empty read-only source" or "-- Write Luau here") or "Open a file from Files or create a script with +"
+			box.TextEditable = doc ~= nil and not doc.readOnly; box.PlaceholderText = doc and (doc.readOnly and "-- Empty read-only source" or "-- Write Luau here") or "Open a file from Files or select New to create a script"
 			layout()
 			if view then
 				box.CursorPosition, box.SelectionStart = view.cursor or -1, view.selection or -1
@@ -343,8 +363,8 @@ return function(env)
 			if cache then line = codeText.lineAt(cache.starts, offset) end
 			return line, codeText.column(box.Text, cache and cache.starts[line] or 1, offset)
 		end
-		findBar = P.frame(root, { name = "EditorFind", size = UDim2.new(1, 0, 0, common.barHeight() * 2), bg = theme.color.codeBar, visible = false, zIndex = 6 })
-		findCount = P.text(findBar, { name = "FindMatchCount", text = "0 matches", role = "caption", truncate = true, zIndex = 7 })
+		findBar = P.frame(root, { name = "EditorFind", size = UDim2.new(1, 0, 0, common.barHeight() * 2), bg = theme.color.codeBar, visible = false, zIndex = 10 })
+		findCount = P.text(findBar, { name = "FindMatchCount", text = "0 matches", role = "caption", truncate = true, zIndex = 11 })
 		local function findNext(backwards)
 			local ok, why = handle.find(findField.get(), backwards)
 			if not ok then common.message(nil, why) end
@@ -352,7 +372,7 @@ return function(env)
 		findField = P.field(findBar, { name = "FindSourceText", placeholder = "Find in this file", role = "small", onSubmit = function() findNext(false) end })
 		local previous = common.button(findBar, { name = "FindPrevious", text = "", icon = "arrowLeft", tight = true, fill = true, variant = "ghost", onClick = function() findNext(true) end })
 		local nextButton = common.button(findBar, { name = "FindNext", text = "", icon = "arrowRight", tight = true, fill = true, variant = "ghost", onClick = function() findNext(false) end })
-		local close = common.button(findBar, { name = "CloseFind", text = "", icon = "x", tight = true, fill = true, variant = "ghost", onClick = function() handle.closeFind() end })
+		local close = common.button(findBar, { name = "CloseFind", text = "", icon = "close", tight = true, fill = true, variant = "ghost", onClick = function() handle.closeFind() end })
 		local caseButton, wordButton
 		caseButton = common.button(findBar, { name = "FindCaseSensitive", text = "Aa: on", tight = true, onClick = function()
 			searchState.options.caseSensitive = not searchState.options.caseSensitive; caseButton.setText(searchState.options.caseSensitive and "Aa: on" or "Aa: off"); findNext(false)
@@ -423,7 +443,7 @@ return function(env)
 			handle.visible = visible
 			pinSource()
 			if visible then handle.needsLayout = nil; layout(); checkSyntax()
-			else syntaxGeneration = syntaxGeneration + 1; saveView(); caret.Visible = false; if focused then pcall(function() box:ReleaseFocus() end) end end
+			else syntaxGeneration = syntaxGeneration + 1; saveView(); caret.Visible, currentLine.Visible = false, false; if focused then pcall(function() box:ReleaseFocus() end) end end
 		end
 		handle.select(store.active())
 		return handle

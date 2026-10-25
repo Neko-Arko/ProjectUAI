@@ -102,6 +102,8 @@ local providers = { changed = signal.new("providers"),
 	list = function() return records end, active = function() return active end,
 	get = function(id) for _, record in ipairs(records) do if record.id == id then return record end end end,
 	count = function() return #records end, cooling = function() return false end,
+	isCline = function() return false end,
+	isOpencodeZen = function() return false end,
 	keysOf = function() return {} end,
 	opencodeKeyOptional = function() return false end,
 	requiresClaude = function() return false end,
@@ -112,7 +114,8 @@ local providers = { changed = signal.new("providers"),
 providers.proxyTarget = function() return nil end
 providers.proxyProvider = function() return nil end
 cache["provider/registry"] = providers
-cache["provider/catalog"] = { presets = {}, get = function() return nil end }
+cache["provider/catalog"] = { presets = {}, get = function() return nil end,
+	badge = function() return "Custom", "neutral" end }
 cache["provider/models"] = { list = function(record) return record.models end,
 	isFree = function() return false end,
 	discover = function() h.sandbox.task.wait(0.3); return { "fetched" }, "Fetched" end }
@@ -311,8 +314,32 @@ check("settings dialog reflows on container resize", nav.ScrollingDirection == E
 dialog.card.AbsoluteSize = dt.Vector2.new(360, 600)
 check("settings resize retains active input", nav.ScrollingDirection == Enum.ScrollingDirection.X
 	and paneBuilds == 1 and find(dialog.card, "LiveInput") == input)
+h.sched.advance(0.1)
+nav.AbsoluteSize = dt.Vector2.new(280, 48)
+nav.CanvasPosition = dt.Vector2.new(0, 0)
+local secondCategory = find(nav, "Category_two")
+secondCategory.AbsoluteSize = dt.Vector2.new(140, 44)
+secondCategory.AbsolutePosition = dt.Vector2.new(nav.AbsolutePosition.X + 320, nav.AbsolutePosition.Y)
+dialog.select("two")
+h.sched.advance(0.1)
+check("opening an offscreen settings category reveals its tab", nav.CanvasPosition.X > 0
+	and dialog.activeCategory() == "two" and paneBuilds == 2)
 dialog.close()
 check("settings dialog releases pane observers", config.changed:count() == configObservers)
+
+-- Long model-provided answers must remain readable and resolve without truncation.
+sessions.anyEvent = signal.new("session.anyEvent")
+local ask = env.require("ui/panels/ask").watch()
+local answer, option = nil, string.rep("Keep the complete answer visible. ", 12)
+sessions.anyEvent:fire({ title = "Long choices" }, { kind = "ask:user", id = "polish-choice",
+	question = "Which option?", options = { option }, resolve = function(value) answer = value end })
+local choice = find(lastModal.card, "AskOption1")
+local choiceLabel = find(choice, "Label")
+check("long answer choices wrap inside their activation target", choice.AutomaticSize == Enum.AutomaticSize.Y
+	and choice.Size.Y.Offset >= target and choiceLabel.TextWrapped and choiceLabel.Text == option:gsub("%s+$", ""))
+choice.Activated:Fire()
+check("choosing a wrapped answer resolves its complete text", answer == option:gsub("%s+$", "") and not ask.showing)
+ask.watching()
 
 parent = mount(240)
 local sidebar = env.require("ui/sidebar").new(parent, { panel = "chat", canBack = function() return false end,

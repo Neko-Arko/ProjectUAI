@@ -51,9 +51,9 @@ return function(env)
 			layoutOrder = 1,
 		})
 		local summary = P.text(head, {
-			text = string.format("%d unavailable on this host: %s",
-				#stats.unavailable,
-				#stats.unavailable > 0 and caps.summary() or "everything is available"),
+			text = #stats.unavailable > 0
+				and string.format("%d unavailable on this host. %s", #stats.unavailable, caps.summary())
+				or "All tools are available on this host. Open a tool to review its parameters and permissions.",
 			role = "caption",
 			color = theme.color.textTertiary,
 			wrap = true,
@@ -105,7 +105,7 @@ return function(env)
 					-- The same inset a card gives its own contents, so a group's name lines up
 					-- with the tool names under it instead of sitting sixteen pixels to their
 					-- left, and its switch lines up with theirs.
-					padding = { x = theme.space.lg, top = theme.space.sm, bottom = theme.space.xxs },
+					padding = { x = theme.space.md, top = theme.space.sm, bottom = theme.space.xxs },
 					layoutOrder = position,
 				})
 				local headText = P.column(header, {
@@ -165,7 +165,7 @@ return function(env)
 					local name = P.text(top, {
 						text = tool.name,
 						role = "monoSmall",
-						color = missing and theme.color.textDisabled or theme.color.text,
+						color = missing and theme.color.textSecondary or theme.color.text,
 						wrap = true,
 						auto = "Y",
 						layoutOrder = 1,
@@ -205,7 +205,12 @@ return function(env)
 					populateDetails = function()
 						if populated then return end
 						populated = true
-						local params = P.text(details, {
+						P.divider(details, { layoutOrder = 1 })
+						P.text(details, { name = "ParametersTitle", text = "Parameters", role = "label", layoutOrder = 2 })
+						local parameters = P.column(details, { name = "Parameters", size = UDim2.new(1, 0, 0, 0),
+							auto = "Y", bg = theme.color.canvas, radius = theme.radius.sm,
+							padding = theme.space.sm, layoutOrder = 3 })
+						local params = P.text(parameters, {
 							text = schema.describe(tool.parameters),
 							role = "caption",
 							color = theme.color.textTertiary,
@@ -226,10 +231,11 @@ return function(env)
 							})
 							reason.Size = UDim2.new(1, 0, 0, 0)
 						else
+							P.text(details, { name = "PermissionTitle", text = "Permission rule", role = "label", layoutOrder = 4 })
 							C.segmented(details, {
 								options = RULE_OPTIONS,
 								value = permissions.ruleFor(tool.name) or "default",
-								layoutOrder = 4,
+								layoutOrder = 5,
 								onChange = function(value)
 									permissions.setRule(tool.name, value)
 								end,

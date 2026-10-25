@@ -81,7 +81,7 @@ case("focused syntax previews blink without rescanning or measuring unchanged te
 	check("idle focused previews do no syntax scans or text measurements", scanned == 0 and measured == 0)
 	check("the caret keeps blinking and the row pool stays stable", blinks >= 3 and rows(box, "SyntaxPreviewLine") == initialRows)
 	box.CursorPosition = 10; box.SelectionStart = 7; f.h.sched.advance(0.05)
-	check("native cursor and selection changes still redraw geometry", caret.Visible and caret.Position.X.Offset > initialX and f.h.byName("PreviewSelection", box).Visible and scanned > 0)
+	check("native selection redraws geometry without a duplicate collapsed caret", not caret.Visible and caret.Position.X.Offset > initialX and f.h.byName("PreviewSelection", box).Visible and scanned > 0)
 	box.Text = "return 42"; box.CursorPosition, box.SelectionStart = 9, -1; f.h.sched.advance(0.05)
 	check("editing still updates visible syntax", f.h.byName("SyntaxPreviewLine", box).Text:find("return", 1, true) ~= nil)
 	box:ReleaseFocus(); field.shell:Destroy(); f.h.sched.advance(0.05)

@@ -606,6 +606,8 @@ return function(env)
 			codeBorder = code.border,
 			codeBar = code.bar,
 			codeText = code.text,
+			-- Keeps every syntax foreground above 4.5:1 in both code palettes.
+			codeSelection = M.mix(code.surface, accent.base, 0.16),
 			codeGutter = code.gutter,
 			codeAddSurface = code.addSurface,
 			codeAddText = code.addText,
@@ -649,6 +651,17 @@ return function(env)
 			-- been the width it said it was.
 			M.size[name] = math.max(math.floor(value * sizeScale + 0.5), 1)
 		end
+		-- Density shrinks chrome independently of type. Reserve the actual line
+		-- box before callers budget their toolbars, fields and navigation rows;
+		-- enlarging only the label lets it spill out of an otherwise compact control.
+		M.size.controlSmall = math.max(M.size.controlSmall, M.text.small.height + M.space.hair * 2)
+		M.size.control = math.max(M.size.control, M.text.body.height + M.space.hair * 2)
+		M.size.controlLarge = math.max(M.size.controlLarge, M.size.control)
+		M.size.rowSmall = math.max(M.size.rowSmall, M.size.controlSmall)
+		M.size.row = math.max(M.size.row, M.size.control)
+		M.size.chip = math.max(M.size.chip, M.text.caption.height + M.space.hair * 2)
+		M.size.tab = math.max(M.size.tab, M.size.controlSmall)
+		M.size.codeStatus = math.max(M.size.codeStatus, M.text.caption.height + M.space.hair * 2)
 		if M.handheld then
 			-- The existing icon artwork has a one-pixel stroke at twelve pixels.
 			M.size.icon = math.max(12, M.size.icon)

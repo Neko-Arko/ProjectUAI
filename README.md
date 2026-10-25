@@ -4,13 +4,22 @@ A universal AI agent that runs inside a Roblox client. It works in any game,
 with Chat Completions, OpenAI Responses and Anthropic Messages endpoints,
 including compatible local servers and relays.
 
-**Project UAI 3.7.0 - October 25, 2026: models, tunnels and faster workflows.**
-The Roblox client and Windows app are 3.7.0; the bridge, web UI and Android
-companion advance to 3.7.1, extending Kilo quota recovery to every free-model
-spelling (`:free`, `/free`, `-free`). Anonymous Kilo free requests start
-directly; an explicit
-address-quota refusal can start a private Tor connection and one bounded circuit
-retry. The connection is enabled by default, starts only when needed, and has
+**Project UAI 3.7.1 - October 25, 2026: UI polish and individual API keys.**
+The Roblox client, bridge, web UI and Android companion are 3.7.1; the Windows
+desktop remains 3.7.0. Provider configuration now lists **API key 1**, **API key 2**
+and further entries. Add, replace or remove a key without losing the others;
+existing key pools and automatic rotation are preserved. The setup guide opens
+expanded by default.
+
+Log details and context breakdown fit their contents, and shared modals have
+consistent inner padding. The Discord invitation, tutorial and donation dialogs
+are cleaner, settings group related controls, and Code keeps long selections
+visible with improved tabs, captions and comparison contrast.
+
+The bridge and Android patch extends Kilo quota recovery to every free-model
+spelling (`:free`, `/free`, `-free`). Anonymous Kilo free requests start directly;
+an explicit address-quota refusal can start a private Tor connection and one
+bounded circuit retry. The connection is enabled by default, starts only when needed, and has
 status and off switches in the apps. Shared exits still have quotas: this is
 recovery from one address allowance, not guaranteed unlimited access.
 See [Kilo setup, evidence and limitations](docs/KILO_TUNNEL.md).
@@ -29,10 +38,11 @@ account quotas and availability still apply. See [AgentRouter setup](docs/AGENTR
 Seven additional services join the gallery with explicit access labels and
 [individual setup guides](docs/providers/README.md).
 
-The Roblox model picker now includes a searchable saved-provider switcher,
-clearer model details and current connection status. Larger touch controls and
-scrolling keep selection, reasoning options and custom models reachable on small
-screens. Closing or switching providers cancels an outdated model refresh.
+The Roblox model picker includes a searchable saved-provider switcher, model
+names and metadata on separate lines, and current connection status. The model
+list scrolls while search, provider selection and footer controls stay fixed.
+Compact layouts preserve focused fields and keep reasoning options and custom
+models reachable. Closing or switching providers cancels an outdated model refresh.
 
 Tools and Logs now support multiword searches. Tool details are built when
 opened, keeping the full catalog lighter to browse. Usage history preserves
@@ -72,7 +82,7 @@ workspace. Go keeps its own catalog and routes; the optional free CLI backend
 does not intercept it. Subscription and workspace region refusals identify the
 setting to check. See [provider setup](docs/PROVIDER_COMPATIBILITY.md).
 
-The client and Windows desktop are 3.7.0; the bridge and Android companion are 3.7.1.
+The client, bridge, web UI and Android companion are 3.7.1; the Windows desktop is 3.7.0.
 UI LIB remains 1.3.0 and SDK 1.0.0.
 Model pricing and context/reply limits use an October 25 catalog with 1,760
 entries across 15 providers, including exact Kilo and Cline routes. Unknown
@@ -89,7 +99,7 @@ it. The model modal edits the same global effort setting, including for other
 models when **Options → Reasoning support** is enabled. The Thinking row estimates
 visible text only. A long retained trace is labelled
 **Excerpt**, not a 5,999-token model limit. See [provider behavior](docs/PROVIDER_COMPATIBILITY.md).
-See [3.7.1 bridge verification](docs/TESTING_3.7.1.md),
+See [3.7.1 verification](docs/TESTING_3.7.1.md),
 [3.7.0 verification](docs/TESTING_3.7.0.md),
 [3.6.6 verification](docs/TESTING_3.6.6.md),
 [3.6.5 verification](docs/TESTING_3.6.5.md),
@@ -585,8 +595,11 @@ detail names the endpoint a request will actually go to, the model-list route, t
 wire protocol, whether a socket is configured (and therefore whether a long reply can
 arrive at all), the health counters, the last observed latency, how long a benched
 provider has left, and the extra headers, body fields and query parameters the record
-sends. The API key is never rendered: it is set through a prompt and shown as its last
-four characters.
+sends. Provider configuration lists numbered API key entries, each with its own
+Replace and Remove actions, plus Add API key for additional entries. Changing one
+entry preserves the others. Keys are entered through empty prompts; saved entries
+show only a masked suffix, and keys shorter than five characters are fully masked.
+Changes stay in the provider draft until Save.
 
 The layout follows the live viewport: compact desktop controls on handhelds,
 a floating resizable window on a desktop, and a large centred panel on a console.

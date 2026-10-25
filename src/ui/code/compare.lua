@@ -14,13 +14,16 @@ return function(env)
 		local unified = P.frame(host, { size = UDim2.fromScale(1, 1) })
 		local left = P.frame(host, { size = UDim2.new(0.5, -theme.space.xs, 1, 0) })
 		local right = P.frame(host, { position = UDim2.fromScale(0.5, 0), size = UDim2.fromScale(0.5, 1) })
-		local list = common.virtualList(unified, { label = function(row) return (row.kind == "add" and "+ " or row.kind == "remove" and "− " or "  ") .. row.text end,
+		local list = common.virtualList(unified, { name = "UnifiedComparison", role = "mono", bg = theme.color.codeSurface, hoverColor = theme.color.codeBar,
+			label = function(row) return (row.kind == "add" and "+ " or row.kind == "remove" and "− " or "  ") .. row.text end,
 			onSelect = function(row) overlay.code({ title = row.kind .. " · line " .. tostring(row.newLine or row.oldLine), code = row.text, text = row.text }) end })
 		P.text(left, { text = "Before", role = "small", size = UDim2.new(1, 0, 0, theme.text.small.height) })
 		P.text(right, { text = "After", role = "small", size = UDim2.new(1, 0, 0, theme.text.small.height) })
-		local beforeList = common.virtualList(left, { position = UDim2.fromOffset(0, theme.text.small.height), size = UDim2.new(1, 0, 1, -theme.text.small.height), label = function(row) return row.kind == "add" and " " or (row.kind == "remove" and "− " or "  ") .. tostring(row.oldLine) .. "  " .. row.text end,
+		local beforeList = common.virtualList(left, { name = "BeforeComparison", role = "mono", bg = theme.color.codeSurface, hoverColor = theme.color.codeBar,
+			position = UDim2.fromOffset(0, theme.text.small.height), size = UDim2.new(1, 0, 1, -theme.text.small.height), label = function(row) return row.kind == "add" and " " or (row.kind == "remove" and "− " or "  ") .. tostring(row.oldLine) .. "  " .. row.text end,
 			onSelect = function(row) if row.kind ~= "add" then overlay.code({ title = "Before · line " .. tostring(row.oldLine), code = row.text }) end end })
-		local afterList = common.virtualList(right, { position = UDim2.fromOffset(0, theme.text.small.height), size = UDim2.new(1, 0, 1, -theme.text.small.height), label = function(row) return row.kind == "remove" and " " or (row.kind == "add" and "+ " or "  ") .. tostring(row.newLine) .. "  " .. row.text end,
+		local afterList = common.virtualList(right, { name = "AfterComparison", role = "mono", bg = theme.color.codeSurface, hoverColor = theme.color.codeBar,
+			position = UDim2.fromOffset(0, theme.text.small.height), size = UDim2.new(1, 0, 1, -theme.text.small.height), label = function(row) return row.kind == "remove" and " " or (row.kind == "add" and "+ " or "  ") .. tostring(row.newLine) .. "  " .. row.text end,
 			onSelect = function(row) if row.kind ~= "remove" then overlay.code({ title = "After · line " .. tostring(row.newLine), code = row.text }) end end })
 		for _, row in ipairs(comparison.rows) do row.color = row.kind == "add" and theme.color.codeAddText or row.kind == "remove" and theme.color.codeRemoveText or theme.color.codeText end
 		list.set(comparison.rows); beforeList.set(comparison.rows); afterList.set(comparison.rows)

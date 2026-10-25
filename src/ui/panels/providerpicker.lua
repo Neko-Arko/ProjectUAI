@@ -1,6 +1,7 @@
 -- Saved-provider navigation for the model picker. Configuration stays in registry.
 return function(env)
 	local util = env.require("runtime/util")
+	local search = env.require("runtime/search")
 	local theme = env.require("ui/theme")
 	local responsive = env.require("ui/responsive")
 	local P = env.require("ui/primitives")
@@ -60,18 +61,23 @@ return function(env)
 		if not modal then return end
 		opened = modal
 		local rows, filter = {}, ""
+		local count
 		local function filterRows()
-			local needle, visible = util.trim(filter):lower(), 0
+			local matches, visible = search.compile(filter), 0
 			for _, entry in ipairs(rows) do
-				entry.button.instance.Visible = needle == "" or entry.search:find(needle, 1, true) ~= nil
+				entry.button.instance.Visible = matches(entry.search) ~= nil
 				if entry.button.instance.Visible then visible = visible + 1 end
+			end
+			if count then
+				count.Text = visible == #rows and util.pluralise(#rows, "saved connection")
+					or string.format("%d of %d connections", visible, #rows)
 			end
 			local empty = modal.content:FindFirstChild("NoSavedProviderMatch")
 			if empty then empty.Visible = visible == 0 end
 		end
 		P.field(modal.content, { name = "ProviderSwitchSearch", placeholder = "Search saved providers...", role = "small", height = target,
 			layoutOrder = 1, onChange = function(text) filter = text; filterRows() end })
-		P.text(modal.content, { text = "Your saved connections", role = "overline", color = theme.color.textTertiary, layoutOrder = 2 })
+		count = P.text(modal.content, { name = "SavedProviderCount", text = "Your saved connections", role = "caption", color = theme.color.textTertiary, layoutOrder = 2 })
 		local function render()
 			if modal.closed then return end
 			local previous = {}
@@ -86,6 +92,7 @@ return function(env)
 					local button = P.rowButton(modal.content, { name = "Option_" .. record.id,
 						height = theme.text.small.height + theme.text.caption.height * 2 + theme.space.sm * 2 + theme.space.hair * 2,
 						selected = active and active.id == record.id, bgSelected = theme.color.surfaceActive,
+						bg = theme.color.surface, radius = theme.radius.md,
 						stroke = true, strokeColor = theme.color.borderSubtle, padding = { x = theme.space.md }, gap = theme.space.sm,
 						layoutOrder = index + 2, onClick = function()
 							providers.setActive(record.id); modal.close(); if onChange then onChange() end

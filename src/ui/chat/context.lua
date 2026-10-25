@@ -23,7 +23,6 @@ return function(env)
 			title = "Context usage",
 			description = "What the next request will include",
 			width = theme.size.modalWide,
-			height = theme.size.modalWide + theme.space.xl * 2,
 			onClose = cleanup,
 		})
 		if not modal then return nil end

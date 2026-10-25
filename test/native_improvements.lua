@@ -238,7 +238,7 @@ case("editor exposes multiline selection, match counts and horizontal caret reve
 	assert(store.update(store.activeId(), "你好 alpha\nsecond\nalpha ALPHA alphaWord"))
 	local editor = f.env.require("ui/code/editor").new(f.host); local box = editor.box
 	box:CaptureFocus(); box.SelectionStart, box.CursorPosition = 1, #box.Text + 1
-	check("multiline UTF-8 selection uses the native text and selection layer", box.TextTransparency == 0 and box.SelectionStart == 1 and box.CursorPosition == #box.Text + 1 and not f.h.byName("SyntaxLine", editor.root).Visible)
+	check("multiline UTF-8 selection retains raw native endpoints and visible syntax", box.TextTransparency == 1 and box.SelectionStart == 1 and box.CursorPosition == #box.Text + 1 and f.h.byName("SyntaxLine", editor.root).Visible)
 	box.CursorPosition = 1; assert(editor.find("alpha", false, { caseSensitive = false, wholeWord = true }))
 	check("match count and exact range are visible", editor.matches().total == 3 and editor.matches().current == 1 and box.Text:sub(box.SelectionStart, box.CursorPosition - 1) == "alpha")
 	assert(editor.find("alpha", false)); check("Next advances the current match", editor.matches().current == 2)

@@ -20,6 +20,11 @@ local function closeMenu(f)
 	if f.h.byName("MenuLayer") then f.h.press("Escape") end
 end
 
+local function auth(f, value)
+	click(f, "AuthStyle")
+	click(f, "Option_" .. value)
+end
+
 -- The preset control opens the provider gallery now, so a preset is chosen by
 -- clicking its card in the tier it belongs to. Custom is appended to every tier.
 local function preset(f, id)
@@ -42,8 +47,9 @@ local function chooseCustom(f)
 end
 
 local function key(f, value)
-	click(f, "SetKey")
-	field(f, "PromptField", value)
+	click(f, f.h.byName("ReplaceKey_1") and "ReplaceKey_1" or "SetKey")
+	assert(f.h.byName("PromptField")):FindFirstChildOfClass("TextBox").Text = value
+	f.h.settle(0.1)
 	for _, node in ipairs(f.env.root:GetDescendants()) do
 		if node.ClassName == "TextLabel" and node.Text == "Save key" then
 			local button = node.Parent
@@ -89,7 +95,8 @@ for _, setting in ipairs({
 		local registry = f.env.require("provider/registry")
 		providers.add()
 		chooseCustom(f)
-		click(f, "Segment_" .. setting.value, f.h.byName(setting.control))
+		if setting.control == "AuthStyle" then auth(f, setting.value)
+		else click(f, "Segment_" .. setting.value, f.h.byName(setting.control)) end
 		if setting.field == "api" then
 			f.h.press("Escape")
 		else
@@ -188,7 +195,7 @@ end)
 local changes = {
 	{ "URL", function(f, changed) field(f, "BaseUrl", changed and "https://other.fixture/prefix/v1" or f.original.baseUrl) end },
 	{ "protocol", function(f, changed) click(f, "Segment_" .. (changed and "anthropic" or "openai"), f.h.byName("Protocol")) end },
-	{ "auth header", function(f, changed) click(f, "Segment_" .. (changed and "x-api-key" or "bearer"), f.h.byName("AuthStyle")) end },
+	{ "auth header", function(f, changed) auth(f, changed and "x-api-key" or "bearer") end },
 	{ "key", function(f, changed) key(f, changed and "fixture-replacement" or "fixture-key") end },
 	{ "preset", function(f, changed)
 		preset(f, changed and "ollama" or "custom")

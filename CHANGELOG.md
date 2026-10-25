@@ -1,11 +1,29 @@
 # Changelog
 
-## 3.7.1 - October 25, 2026 - Kilo tunnel accepts every free-model spelling
+## 3.7.1 - October 25, 2026 - UI polish, individual API keys and Kilo free routes
 
-- The bridge, web UI and Android companion (version code 8) move to 3.7.1 while
-  the Roblox client and Windows desktop remain 3.7.0. Installed bridges and
+- The Roblox client joins the bridge, web UI and Android companion (version
+  code 8) at 3.7.1. The Windows desktop remains 3.7.0. Installed bridges and
   companion apps pick the patch up automatically from the `v3.7.1` GitHub
   release; the companion APK keeps the existing production signing identity.
+- Show provider credentials as API key 1, API key 2 and further numbered entries.
+  Add keys or replace and remove one entry without overwriting the others.
+  Preserve existing key pools, automatic rotation and unsaved provider drafts;
+  saved credentials stay masked, including keys shorter than five characters.
+- Finish the provider gallery and configuration polish with clearer sections,
+  model controls and validation. Keep the setup guide expanded by default.
+- Fit log details and context breakdown to their contents, retaining scrolling
+  when space is limited. Give shared modal bodies consistent padding and improve
+  the Discord invitation, tutorial and donation dialogs.
+- Keep model search, provider selection and footer controls fixed while the model
+  list scrolls. Show names and metadata on separate lines, preserve focused fields
+  through compact layouts, and keep reasoning options reachable on small screens.
+- Group related settings, reveal the selected category, wrap long answer choices
+  and improve tool, conversation and subagent rows. Keep larger text readable in
+  compact controls, captions and forms.
+- Keep long Code documents and previews visible while selecting text, with bounded
+  syntax and selection layers aligned to native line spacing. Improve comparison
+  contrast, document tabs, status details and resize gesture cleanup.
 - Accept Kilo free routes whose model id ends in `free` behind any separator:
   `:free`, `/free` or `-free`. `reflection/beam-free` — the only free route
   spelled with a dash in the October 25 catalog — and the `openrouter/free`

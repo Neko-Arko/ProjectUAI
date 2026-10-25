@@ -1,9 +1,9 @@
 # Project UAI — contract
 
-Current coordinated release: **3.7.0 - October 25, 2026** for the Roblox client
-and Windows desktop app. The bridge, web UI and Android companion (version
-code 8) carry patch **3.7.1**, which accepts every Kilo free-model spelling
-in quota recovery.
+Current client release: **3.7.1 - October 25, 2026**, with individually editable
+API keys and UI polish. The bridge, web UI and Android companion (version code 8)
+also carry **3.7.1**, which accepts every Kilo free-model spelling in quota
+recovery. The Windows desktop app remains **3.7.0**.
 
 Bridge 3.7.1 and Windows desktop 3.7.0 use verified automatic GitHub updates.
 Bridge worker replacement waits for idle work and retains its session token;
@@ -286,6 +286,14 @@ Zen's CLI models, OpenRouter's free ids, OpenCode Go's CLI catalog). A hybrid is
 never labelled Paid, and no label claims a whole service is free when only part
 of it is.
 
+The setup form groups Connection, Access and Model, with direct catalog and
+manual model-ID actions. Custom setup puts the URL, protocol and authentication
+header together at the top; connection controls remain directly visible.
+Extended vendor guidance has its own disclosure, expanded by default. The gallery
+uses two card columns when space allows and one on narrow screens, with inset card boundaries,
+aligned Set up actions and complete access lines. Short viewports scroll the
+complete gallery body while retaining its search field and current tier.
+
 `registry.requiresClaude(record)` recognizes `agentrouter.org` and its subdomains,
 including manually entered endpoints. `identityFor` returns `claude` there even
 when `record.claudeUa` is false. Inference and model-discovery requests mark this
@@ -381,6 +389,10 @@ cursor before network work can yield. Quota refusals bench their rejected key;
 proxy recovery and transport retries retain the selected request key. Intentional
 request snapshots share the originating record's cursor, while independent
 provider-editor drafts remain isolated. Cached model discovery uses no key slot.
+The provider editor shows numbered, masked key entries. Adding keys appends to
+the pool; replacing or removing an entry preserves every other key. There is no
+UI limit on the number of entries. Existing newline/comma-separated pools remain
+compatible, and edits take effect only when the provider is saved.
 
 **Models are never guessed.** General presets carry no model list; the managed
 Project UAI Free default uses the live-verified `auto` router. `provider/models`
@@ -1208,6 +1220,10 @@ removed from settings, bridge commands and configuration transfer; legacy values
 are discarded. The main window and transcript remain plain frames. The standalone
 UI LIB and browser system accessibility preferences remain independently owned.
 
+Shared modal bodies use balanced vertical padding and consistent horizontal
+insets. Log details and the context breakdown fit their current contents up to
+the usable viewport height, scrolling when needed instead of reserving blank space.
+
 The transcript canvas uses `UIListLayout.AbsoluteContentSize` plus vertical padding.
 Lightweight spacers preserve the measured size of unmounted dialogue. Drawing
 work is bounded independently of the retained event count, and data retention
@@ -1229,11 +1245,20 @@ Controls have a 15px minimum on handhelds, 28px
 with a pointer and 48px on a console. Native dimensions are reduced directly;
 the application is not resampled through a UIScale.
 
+Control, row, tab and status heights also reserve their text line boxes when
+large type and compact density are combined. Compact multiline fields reduce
+their vertical inset as needed to keep the first line readable, preserving the
+same field, draft and selection through expansion and keyboard changes.
+
 The model and saved-provider pickers use 40px touch targets for their primary
 controls and may use more available vertical space for the catalogue. This
-does not reposition or rescale the main window. Short or keyboard-obstructed
-layouts keep one scrolling body so effort controls and custom model actions
-remain reachable.
+does not reposition or rescale the main window. The model catalogue always has
+its own scrolling viewport; provider, search and footer controls stay fixed.
+Short or keyboard-obstructed layouts compact the fixed controls and keep
+reasoning effort and the free filter available through Options. The original
+search field, selection and catalogue position survive these layout changes.
+Catalogue modals use the shared modal's `pinFooter` option to keep actions out
+of the body scroll. Other forms retain the normal scrolling-footer fallback.
 
 The shared header retains its brand, detail and Minimize/Maximise/Close actions.
 The shared welcome view, composer, Quick Chat, Code tabs and document tabs remain
@@ -1345,10 +1370,11 @@ The Code workspace is owned by `runtime/code_store` and composed in
 are destinations within Code. Layout follows the available panel rectangle. Native
 TextBox editing owns source input, selection and IME; escaped line-state syntax
 highlighting, a visible caret, virtual labels and an independent gutter remain
-available during ordinary editing. While dragging or selecting a range, the
-native TextBox renders its text, caret and selection together; syntax colors
-return when the range collapses. Native multiline font probes calibrate the
-syntax line advance without accumulated rounded-height drift. Cursor-follow
+available during ordinary editing. Syntax labels remain visible while dragging
+or selecting a range; bounded selection fills follow the native TextBox's byte
+endpoints without switching to its full-document text renderer. Native multiline
+font probes calibrate editor and preview line advances without accumulated
+rounded-height drift. Cursor-follow
 scrolling yields to pointer selection. Source
 remains raw and unwrapped. Enter inserts a newline; Run is explicit.
 

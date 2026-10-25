@@ -83,6 +83,9 @@ return function(env)
 					end })
 			end })
 		selectionLabel = picker.label("", 1)
+		local caret = P.frame(picker.row, { name = "FolderCaret",
+			size = UDim2.fromOffset(theme.size.icon, theme.size.icon), layoutOrder = 2 })
+		env.require("ui/icons").chevron(caret, theme.size.icon, theme.color.textTertiary, "down")
 		nameField = P.field(modal.content, { name = "NewFolderName", placeholder = "New folder name", layoutOrder = 4 })
 		local errorText = errorLabel(modal.content, 5)
 		refreshSelection()
@@ -125,6 +128,9 @@ return function(env)
 			for _, child in ipairs(modal.content:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
 			for index, folder in ipairs(sessions.folders()) do
 				local row = P.rowButton(modal.content, { name = "Folder_" .. folder.id, layoutOrder = index,
+					vertical = true, auto = "Y", size = UDim2.new(1, 0, 0, 0),
+					bg = theme.color.surfaceRaised, stroke = true, radius = theme.radius.md,
+					padding = { x = theme.space.md, y = theme.space.sm }, gap = theme.space.xxs,
 					onClick = function(button)
 						local options = { { label = "New conversation", value = "new" } }
 						if folder.kind == "custom" then
@@ -147,7 +153,12 @@ return function(env)
 								end
 							end })
 					end })
-				row.label(folder.label, 1)
+				P.text(row.row, { name = "Label", text = folder.label, role = "label",
+					auto = "Y", wrap = true, layoutOrder = 1 })
+				P.text(row.row, { name = "FolderKind",
+					text = folder.current and "Current game" or (folder.kind == "custom" and "Custom folder"
+						or (folder.kind == "game" and "Game conversations" or "Shared across games")),
+					role = "caption", color = theme.color.textTertiary, auto = "Y", wrap = true, layoutOrder = 2 })
 			end
 		end
 		P.button(modal.footer, { text = "Done", variant = "ghost", size = "sm", layoutOrder = 1,

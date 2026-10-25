@@ -19,8 +19,9 @@ local search = h.byName("ModelFilter"):FindFirstChildOfClass("TextBox")
 local paid = h.byName("Model_vendor/paid")
 local free = h.byName("Model_vendor/free:free")
 check("picker stays within its compact desktop width", picker.card.Size.X.Offset <= 540)
-check("rows have no redundant second line", h.byName("Detail", paid) == nil)
-check("row fits in one control height", paid.Size.Y.Offset <= 44)
+check("model names and metadata have separate text lines", h.byName("ModelName", free).Text == "vendor/free:free"
+	and h.byName("ModelMetadata", free).Text:find("Free", 1, true) ~= nil)
+check("row fits both text lines", free.Size.Y.Offset >= h.byName("ModelName", free).Size.Y.Offset + h.byName("ModelMetadata", free).Size.Y.Offset)
 search.Text = "free"
 check("filter hides nonmatches", not paid.Visible and free.Visible)
 check("typing keeps search instance alive", search.Parent ~= nil)
@@ -44,14 +45,14 @@ for _, height in ipairs({ 380, 180, 100 }) do
 	local scroll = h.byName("ModelScroll", root)
 	local parentHeight = picker.content.Size.Y.Offset
 	local listHeight = scroll.Size.Y.Scale * parentHeight + scroll.Size.Y.Offset
-	check("model list stays usable at height " .. height, listHeight >= 68)
-	check("small viewport gains outer scrolling " .. height, height >= parentHeight or picker.scroll.instance.ScrollingEnabled)
-	check("only one scroll owns the gesture " .. height, picker.scroll.instance.ScrollingEnabled ~= scroll.ScrollingEnabled)
+	check("model list remains bounded at height " .. height, listHeight > 0 and scroll.Position.Y.Offset + listHeight <= parentHeight)
+	check("small viewport keeps fixed body bounds " .. height, parentHeight == picker.scroll.viewportSize().Y)
+	check("only the model list owns the gesture " .. height, not picker.scroll.instance.ScrollingEnabled and scroll.ScrollingEnabled)
 end
 search.Text = "free"
 local beforeFilterHeight = picker.content.Size.Y.Offset
 search.Text = "no-match"
-check("compact filtering removes empty list space", picker.content.Size.Y.Offset < beforeFilterHeight)
+check("filtering keeps the search and model viewport in place", picker.content.Size.Y.Offset == beforeFilterHeight)
 search.Text = ""
 local chip = h.byName("ModelChip", app.app.chatPanel.composer.shell)
 local chipSurface = h.byName("ComposerSurface", app.app.chatPanel.composer.shell)

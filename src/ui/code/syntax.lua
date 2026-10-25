@@ -8,17 +8,34 @@ return function(env)
 	local M = {}
 	function M.attach(box, language)
 		local P = env.require("ui/primitives")
-		local layer = P.frame(box, { name = "CodeSyntax", size = UDim2.fromScale(1, 1), zIndex = box.ZIndex + 1 })
+		-- Keep the full-document native renderer behind a stable presentation.
+		-- A selection changes only these bounded fills, never the visible source.
+		local layer = P.frame(box, { name = "CodeSyntax", size = UDim2.fromScale(1, 1), bg = theme.color.codeSurface, zIndex = box.ZIndex + 1 })
 		layer.Active, layer.Selectable = false, false
+		local probes = P.frame(box, { name = "PreviewMetrics", size = UDim2.fromOffset(0, 0), clip = true })
+		local function probe(name, value)
+			local node = Instance.new("TextBox", probes)
+			node.Name, node.Text, node.TextTransparency, node.BackgroundTransparency = name, value, 1, 1
+			node.Active, node.Selectable, node.TextEditable = false, false, false
+			node.MultiLine, node.TextWrapped, node.RichText = true, false, false
+			node.Font, node.TextSize, node.LineHeight = box.Font, box.TextSize, box.LineHeight
+			pcall(function() node.FontFace = box.FontFace end)
+			node.Position, node.Size = UDim2.fromOffset(-2000, 0), UDim2.fromOffset(1000, 2000)
+			return node
+		end
+		local singleProbe = probe("PreviewSingleLineMetrics", "Mg")
+		local linesProbe = probe("PreviewLineMetrics", "Mg" .. string.rep("\nMg", 32))
 		local alive, pending, focused, cache, rows, connections = true, false, false, nil, {}, {}
 		local measured, caretAt, lineHeight = {}, clock.ms(), theme.text.mono.height
+		local handle = { lineHeight = lineHeight }
 		local caret = P.frame(layer, { name = "PreviewCaret", bg = theme.color.codeText, size = UDim2.fromOffset(2, theme.text.mono.height), zIndex = layer.ZIndex + 2, visible = false })
 		caret.Active, caret.Selectable = false, false
 		local palette = {}; for _, key in ipairs({ "keyword", "string", "number", "comment", "call" }) do palette[key] = "#" .. theme.code[key]:ToHex() end
 		local scroll, ancestor = nil, box.Parent
 		while ancestor do if ancestor:IsA("ScrollingFrame") then scroll = ancestor; break end; ancestor = ancestor.Parent end
 		local function blinkCaret()
-			local visible = focused and box.CursorPosition > 0 and (clock.ms() - caretAt) % 1000 < 550
+			local selecting = box.SelectionStart > 0 and box.CursorPosition ~= box.SelectionStart
+			local visible = focused and not selecting and box.CursorPosition > 0 and (clock.ms() - caretAt) % 1000 < 550
 			if caret.Visible ~= visible then caret.Visible = visible end
 		end
 		local function drawCaret()
@@ -38,8 +55,13 @@ return function(env)
 			if previous ~= cache then
 				measured = {}
 			end
-			local height = math.max(1, P.measureText("Mg", { role = "mono", line = 1 }).Y * box.LineHeight)
-			lineHeight = height
+			local nativeAdvance = (linesProbe.TextBounds.Y - singleProbe.TextBounds.Y) / 32
+			local measuredAdvance = P.measureText("Mg\nMg", { role = "mono", line = 1 }).Y - P.measureText("Mg", { role = "mono", line = 1 }).Y
+			local height = nativeAdvance >= box.TextSize * 0.5 and nativeAdvance <= box.TextSize * 4 and nativeAdvance or math.max(1, measuredAdvance * box.LineHeight)
+			if lineHeight ~= height then
+				lineHeight, handle.lineHeight = height, height
+				if handle.onLineHeight then handle.onLineHeight(height) end
+			end
 			local viewport = scroll and scroll.AbsoluteSize.Y or box.AbsoluteSize.Y
 			local y = scroll and math.max(0, scroll.AbsolutePosition.Y - box.AbsolutePosition.Y) or 0
 			local first, count = math.max(1, math.floor(y / height) - 2), math.min(160, math.ceil(math.max(height, viewport) / height) + 6)
@@ -50,7 +72,7 @@ return function(env)
 				local row = rows[slot]
 				if not row then
 					row = { label = P.text(layer, { name = "SyntaxPreviewLine", role = "mono", rich = true, color = theme.color.codeText, zIndex = layer.ZIndex + 1 }),
-						selection = P.frame(layer, { name = "PreviewSelection", bg = theme.mix(theme.color.codeSurface, theme.color.accent, 0.35), zIndex = layer.ZIndex }) }
+						selection = P.frame(layer, { name = "PreviewSelection", bg = theme.color.codeSelection, zIndex = layer.ZIndex }) }
 					row.label.Active, row.selection.Active = false, false; rows[slot] = row
 				end
 				local index, value = first + slot - 1, cache.lines[first + slot - 1]
@@ -70,12 +92,13 @@ return function(env)
 					if selecting and a <= finish and b > start then
 						local left = metrics.at(measured[value], value, math.max(1, a - start + 1))
 						local right = metrics.at(measured[value], value, math.min(#value + 1, b - start + 1))
-						row.selection.Position, row.selection.Size, row.selection.Visible = UDim2.fromOffset(left, (index - 1) * height), UDim2.fromOffset(math.max(3, right - left + (b > finish and 6 or 0)), height), true
+						row.selection.Position, row.selection.Size, row.selection.Visible = UDim2.fromOffset(left, (index - 1) * height), UDim2.fromOffset(math.max(theme.space.xs, right - left + (b > finish and theme.space.sm or 0)), height), true
 					end
 				end
 			end
 			for i = count + 1, #rows do rows[i].label.Visible, rows[i].selection.Visible = false, false end
 			local transparency = #box.Text == 0 and 0 or 1
+			layer.Visible = #box.Text > 0
 			if box.TextTransparency ~= transparency then box.TextTransparency = transparency end
 			drawCaret()
 		end
@@ -83,6 +106,8 @@ return function(env)
 			if pending or not alive then return end; pending = true
 			clock.delay(0.015, function() pending = false; if alive then draw() end end)
 		end
+		connections[#connections + 1] = singleProbe:GetPropertyChangedSignal("TextBounds"):Connect(queue)
+		connections[#connections + 1] = linesProbe:GetPropertyChangedSignal("TextBounds"):Connect(queue)
 		for _, property in ipairs({ "Text", "AbsoluteSize", "AbsolutePosition", "LineHeight", "CursorPosition", "SelectionStart", "TextTransparency", "TextWrapped" }) do connections[#connections + 1] = box:GetPropertyChangedSignal(property):Connect(queue) end
 		connections[#connections + 1] = box.Focused:Connect(function() focused = true; caretAt = clock.ms(); queue() end)
 		connections[#connections + 1] = box.FocusLost:Connect(function() focused = false; queue() end)
@@ -94,11 +119,11 @@ return function(env)
 			connections[#connections + 1] = scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(queue)
 			connections[#connections + 1] = scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(queue)
 		end
-		local handle = {}
 		function handle.destroy()
 			if not alive then return end; alive = false
 			for _, connection in ipairs(connections) do pcall(function() connection:Disconnect() end) end
-			layer:Destroy()
+			handle.onLineHeight = nil
+			layer:Destroy(); probes:Destroy()
 		end
 		connections[#connections + 1] = box.Destroying:Connect(handle.destroy)
 		queue(); return handle

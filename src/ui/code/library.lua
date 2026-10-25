@@ -131,12 +131,12 @@ return function(env)
 		render = function()
 			if not alive or not list then return end
 			local items, present, needle = {}, {}, query:lower()
-			local function add(kind, item, label)
+			local function add(kind, item, detail)
 				local id = kind .. ":" .. item.id; present[id] = true
-				if item.name:lower():find(needle, 1, true) then items[#items + 1] = { kind = kind, id = item.id, label = label, selected = selecting and selected[id] == true } end
+				if item.name:lower():find(needle, 1, true) then items[#items + 1] = { kind = kind, id = item.id, label = item.name, detail = detail, selected = selecting and selected[id] == true } end
 			end
-			for _, doc in ipairs(store.list()) do add("document", doc, "Script · " .. doc.name .. " · r" .. doc.revision .. " · " .. #doc.source .. " bytes") end
-			for _, action in ipairs(store.actions()) do add("action", action, "Action · " .. action.name .. " · " .. #action.inputs .. " inputs · r" .. action.revision) end
+			for _, doc in ipairs(store.list()) do add("document", doc, "Script · revision " .. doc.revision .. " · " .. #doc.source .. " bytes") end
+			for _, action in ipairs(store.actions()) do add("action", action, "Action · " .. #action.inputs .. " inputs · revision " .. action.revision) end
 			for id in pairs(selected) do if not present[id] then selected[id] = nil end end
 			list.set(items, true)
 			local scripts, acts = #store.list(), #store.actions()
@@ -153,7 +153,7 @@ return function(env)
 			selectionInfo.Text = selecting and (count .. " selected" .. (count > visible and (" · " .. (count - visible) .. " hidden by search") or "") .. ". Select rows, then delete once.")
 				or ((scripts == limits.documents or acts == limits.actions) and "Library limit reached. Use Select to remove several entries with one confirmation." or "Use Select to remove several scripts or actions at once.")
 		end
-		mode = bar.add("Scripts & actions", function() end, { flex = true })
+		mode = bar.add("Scripts & actions", function() end, { flex = true, trailing = false })
 		selectButton = bar.add("Select", function()
 			selecting = not selecting; store.workspace.librarySelecting = selecting
 			if not selecting then clearSelection() end
@@ -174,6 +174,7 @@ return function(env)
 			position = UDim2.fromOffset(common.inset(), infoTop), size = UDim2.new(1, -common.inset() * 2, 0, theme.text.caption.height) })
 		local top = infoTop + theme.text.caption.height + theme.space.sm
 		list = common.virtualList(root, { position = UDim2.fromOffset(0, top), size = UDim2.new(1, 0, 1, -top),
+			detail = function(row) return row.detail end,
 			key = key, closable = function() return not selecting end,
 			onClose = function(row) remove({ row }) end,
 			onSelect = function(row, _, button)

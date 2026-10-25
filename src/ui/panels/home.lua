@@ -90,6 +90,7 @@ return function(env)
 			radius = theme.radius.sm,
 			padding = { x = theme.space.sm },
 			selected = selected,
+			layoutOrder = order,
 			onClick = onClick,
 		})
 		P.text(handle.row, {
@@ -419,6 +420,7 @@ return function(env)
 			local intro = P.column(holder, { name = "FreeIntroduction", size = UDim2.new(1, 0, 0, 0),
 				maxSize = Vector2.new(theme.size.statCard, math.huge), auto = "Y", gap = theme.space.xs,
 				padding = theme.space.md, bg = theme.color.surface, radius = theme.radius.lg, layoutOrder = 3 })
+			P.stroke(intro, theme.color.borderSubtle)
 			P.text(intro, { name = "FreeIntroductionTitle", text = "Project UAI Free is ready", role = "label",
 				size = UDim2.new(1, 0, 0, 0), auto = "Y", wrap = true, layoutOrder = 1 })
 			P.text(intro, { name = "FreeIntroductionText",
@@ -569,12 +571,15 @@ return function(env)
 		-- screen changes every number on it. Debounced because a turn records a message,
 		-- a request and a tool result within the same few frames, and rebuilding the
 		-- grid three times for one turn is three times the work for one result.
-		local refresh = clock.debounce(function()
+		local refresh, cancelRefresh = clock.debounce(function()
 			if not card.Parent then return end
 			render()
 		end, theme.motion.slow)
 		local unsubscribe = stats.changed:connect(refresh)
-		card.Destroying:Connect(function() pcall(unsubscribe) end)
+		card.Destroying:Connect(function()
+			cancelRefresh()
+			pcall(unsubscribe)
+		end)
 
 		return holder
 	end

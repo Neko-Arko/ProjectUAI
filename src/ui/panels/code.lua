@@ -37,7 +37,13 @@ return function(env)
 		local chooseDocument
 		local body = P.frame(root, { name = "WorkspaceContent", clip = true })
 		local status = P.text(root, { name = "CodeStatus", text = "", role = "caption", truncate = true, color = theme.color.textSecondary })
+		local positionStatus = P.text(root, { name = "CodePosition", text = "", role = "caption", align = "Right", truncate = true, color = theme.color.textSecondary })
 		local statusRule = P.frame(root, { name = "CodeStatusRule", size = UDim2.new(1, 0, 0, 1), bg = theme.color.borderSubtle })
+		local function placeStatus()
+			local width = positionStatus.Visible and math.min(root.AbsoluteSize.X * 0.45, math.max(common.pixels(100), P.measureText(positionStatus.Text, { role = "caption" }).X + theme.space.md)) or 0
+			status.Position, status.Size = UDim2.new(0, theme.space.md, 1, -theme.size.codeStatus), UDim2.new(1, -theme.space.md * 2 - width, 0, theme.size.codeStatus)
+			positionStatus.Position, positionStatus.Size = UDim2.new(1, -theme.space.md - width, 1, -theme.size.codeStatus), UDim2.fromOffset(width, theme.size.codeStatus)
+		end
 		local filePath = P.text(root, { name = "CodeFilePath", text = "", role = "caption", color = theme.color.textSecondary, truncate = true })
 		local actionBar = common.toolbar(root, { name = "EditorActions", gap = 4, padding = 4 })
 		local documentTabs, runButton, saveButton, stopButton, moreButton
@@ -155,7 +161,7 @@ return function(env)
 			onClose = function(id) if id ~= "new" then common.message(store.close(id)); sync() end end })
 		runButton = actionBar.add("Run", run, { variant = "primary", name = "RunCode", tight = true, minWidth = common.pixels(52) })
 		saveButton = actionBar.add("Save", function() save(false) end, { name = "SaveCodeFile", tight = true, minWidth = common.pixels(56) })
-		stopButton = actionBar.add("", function() runner.stop() end, { icon = "square", iconOnly = true, name = "StopCode" })
+		stopButton = actionBar.add("", function() runner.stop() end, { icon = "stop", iconOnly = true, name = "StopCode" })
 		stopButton.instance.Visible = false
 		moreButton = actionBar.add("", more, { icon = "ellipsis", iconOnly = true, name = "CodeActions" })
 		local function getView(id)
@@ -187,6 +193,7 @@ return function(env)
 			local compact = root.AbsoluteSize.Y < common.pixels(360)
 			local statusHeight = root.AbsoluteSize.Y < barHeight * 3 + theme.size.codeStatus and 0 or theme.size.codeStatus
 			status.Visible, statusRule.Visible = statusHeight > 0, statusHeight > 0
+			positionStatus.Visible = statusHeight > 0 and editing and root.AbsoluteSize.X >= common.pixels(300)
 			saveButton.instance.Visible = root.AbsoluteSize.X >= common.pixels(380)
 			local actionsWidth = math.min(actionBar.width(), root.AbsoluteSize.X * 0.62)
 			documentTabs.root.Visible, actionBar.root.Visible, filePath.Visible = editing, editing, editing and not compact
@@ -196,7 +203,7 @@ return function(env)
 			filePath.Position, filePath.Size = UDim2.fromOffset(theme.space.md, barHeight * 2), UDim2.new(1, -theme.space.md * 2, 0, pathHeight)
 			local top = editing and barHeight * 2 + (compact and 0 or pathHeight) or barHeight
 			body.Position, body.Size = UDim2.fromOffset(0, top), UDim2.new(1, 0, 1, -top - statusHeight)
-			status.Position, status.Size = UDim2.new(0, common.pixels(10), 1, -theme.size.codeStatus), UDim2.new(1, -common.pixels(20), 0, theme.size.codeStatus)
+			placeStatus()
 			statusRule.Position = UDim2.new(0, 0, 1, -theme.size.codeStatus)
 			local actual = editing and store.workspace.sourceId and "Large source" or id
 			local dockFiles = editing and root.AbsoluteSize.X >= common.pixels(640) and not compact and store.workspace.filesVisible ~= false
@@ -235,24 +242,27 @@ return function(env)
 				local item = store.resolve(id)
 				if item then documents[#documents + 1] = { id = id, label = item.name .. (files.dirty(id) and " •" or "") } end
 			end
-			documents[#documents + 1] = { id = "new", label = "+", closable = false }
+			documents[#documents + 1] = { id = "new", label = "New", closable = false }
 			documentTabs.set(documents, store.activeId())
 			runButton.setEnabled(caps.exec and doc ~= nil and not store.workspace.sourceId and not doc.readOnly and not runner.busy())
 			stopButton.setEnabled(runner.busy())
 			local stopping = runner.busy()
 			if stopButton.instance.Visible ~= stopping then stopButton.instance.Visible = stopping; layout() end
 			local binding = doc and files.binding(doc.id)
-			filePath.Text = store.workspace.sourceId and "Read-only source · extract a selection to edit" or binding and (files.root .. " / " .. binding.path:gsub("/", " / ")) or doc and (doc.provenance or ("Workspace draft / " .. doc.name)) or "Open a file or create a script with +"
+			filePath.Text = store.workspace.sourceId and "Read-only source · extract a selection to edit" or binding and (files.root .. " / " .. binding.path:gsub("/", " / ")) or doc and (doc.provenance or ("Workspace draft / " .. doc.name)) or "Open a file or select New to create a script"
 			local states = { saved = "Workspace saved", dirty = "Autosave pending", saving = "Saving workspace…", session_only = "Session only", failed = "Retry required", conflict = "Conflict · external workspace change", protected = "Workspace protected" }
 			local text = states[store.storage.state] or store.storage.state
+			positionStatus.Text = ""
 			if store.workspace.destination == "Editor" and doc then
 				local line, column = 1, 1; if editor() then line, column = editor().position() end
-				text = "Ln " .. line .. ", Col " .. column .. "   ·   " .. (files.dirty(doc.id) and "File has unsaved changes" or text)
+				positionStatus.Text = "Ln " .. line .. ", Col " .. column
+				text = files.dirty(doc.id) and "File has unsaved changes" or text
 				if not caps.exec then text = text .. "   ·   Run unavailable" elseif editor() then text = text .. "   ·   " .. editor().syntax end
 			elseif store.workspace.destination == "Remotes" then
 				local state = capture.state(); text = state.retained .. " calls retained   ·   " .. state.status .. (#capture.rules > 0 and ("   ·   " .. #capture.rules .. " traffic rules") or "")
 			end
 			status.Text = text
+			placeStatus()
 		end
 		navigate = function(id)
 			local known = false; for _, item in ipairs(destinations) do if item.id == id then known = true; break end end
