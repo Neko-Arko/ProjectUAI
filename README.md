@@ -1,3 +1,5 @@
+[English](README.md) · [简体中文](README.zh-CN.md)
+
 # Project UAI
 
 A universal AI agent that runs inside a Roblox client. It works in any game,
