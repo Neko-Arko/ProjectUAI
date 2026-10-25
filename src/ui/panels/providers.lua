@@ -1263,8 +1263,8 @@ return function(env)
 					handle.setText("Test")
 					handle.setEnabled(true)
 					if result then
-						overlay.toast(string.format("Reached %s in %s",
-							candidate.label, util.formatDuration(result.ms)), "good")
+						overlay.toast(env.t("Reached %{provider} in %{time}",
+							{ provider = candidate.label, time = util.formatDuration(result.ms) }), "good")
 					else
 						problemLabel.Text = tostring(err)
 						problemLabel.Visible = true
@@ -2046,8 +2046,8 @@ return function(env)
 				local ordering = R.section(detail.instance, {
 					name = "Order",
 					title = "Fallback order",
-					description = string.format(
-						"Position %d of %d. When the active provider fails, the chain walks this list in order. registry.reorder has existed since the beginning with no control attached to it.", position, #list),
+					description = env.t("Position %{position} of %{total}. When the active provider fails, the chain walks this list in order.",
+						{ position = position, total = #list }),
 					layoutOrder = order(),
 				})
 				local moves = {}
