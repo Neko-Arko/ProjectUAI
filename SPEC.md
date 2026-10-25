@@ -1,8 +1,8 @@
 # Project UAI — contract
 
-Current coordinated release: **3.7.0 - October 25, 2026** for the Roblox client,
-Windows desktop app, and Android companion (version code 7). The bridge and web
-UI carry bridge patch **3.7.1**, which accepts every Kilo free-model spelling
+Current coordinated release: **3.7.0 - October 25, 2026** for the Roblox client
+and Windows desktop app. The bridge, web UI and Android companion (version
+code 8) carry patch **3.7.1**, which accepts every Kilo free-model spelling
 in quota recovery.
 
 Bridge 3.7.1 and Windows desktop 3.7.0 use verified automatic GitHub updates.

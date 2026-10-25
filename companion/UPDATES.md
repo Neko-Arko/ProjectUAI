@@ -1,9 +1,12 @@
 # Android companion updates
 
-Current companion: **3.7.0 (Android version code 7)**. It bounds the complete
-executor-visible UTF-8 reply, including JSON escaping and the executor envelope,
-at 8 MiB. Oversized replies return status 413 without resubmitting inference.
-The APK retains the existing production signing identity and application ID.
+Current companion: **3.7.1 (Android version code 8)**. Kilo quota recovery now
+accepts every Kilo free-model spelling: model ids ending in `free` behind a
+`:`, `/` or `-` separator, so `reflection/beam-free` and `openrouter/free`
+recover through the tunnel like `:free` routes. Replies remain bounded at
+8 MiB, and oversized replies still return status 413 without resubmitting
+inference. The APK retains the existing production signing identity and
+application ID.
 
 The companion checks the official `Project-Ptolemy/ProjectUAI` GitHub releases at
 startup and every 15 minutes while its app or relay process is alive. Compatible

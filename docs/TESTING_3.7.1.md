@@ -1,7 +1,7 @@
 # Project UAI bridge 3.7.1 verification
 
-Prepared October 25, 2026. Bridge patch only: the bridge and web UI move to
-3.7.1; the Roblox client, Windows desktop and Android companion remain 3.7.0.
+Prepared October 25, 2026. The bridge, web UI and Android companion (version
+code 8) move to 3.7.1; the Roblox client and Windows desktop remain 3.7.0.
 The patch accepts every Kilo free-model spelling (`:free`, `/free`, `-free`) in
 quota recovery, so `reflection/beam-free` and `openrouter/free` no longer
 bypass the Kilo tunnel.
@@ -9,8 +9,7 @@ bypass the Kilo tunnel.
 Changed source, documentation, tests and build inputs were manually reviewed
 before builds. Generated outputs were inspected before verification, and fixes
 were reviewed before retesting. The checks below establish bridge, companion
-unit and live Kilo behavior; they do not establish native Roblox behavior, and
-the Android rule fix reaches devices with the companion's next APK build.
+and live Kilo behavior; they do not establish native Roblox behavior.
 
 ## Rule change
 
@@ -32,9 +31,10 @@ cooldown, unchanged.
 | Eligibility after the fix | `accepts()` true for `reflection/beam-free`, `openrouter/free`, `kilo-auto/free` and `:free` routes; false for `reflection/beam-1.0-501b-a23b` |
 | Full bridge suite | 176 tests: 173 passed, 0 failures, 0 cancellations, 3 conditional/platform skips |
 | Kilo focused fixtures | Extended with the `-free`/`/free` spellings and the separator-negative cases; unchanged quota, rotation, cooldown and cancellation fixtures all pass |
-| Android unit tests | `KiloRouteTest`: 7 tests, 0 failures, 0 errors, 0 skipped, including the extended anonymous-scope cases |
+| Android unit tests | Full `testDebugUnitTest` suite: 88 tests across 12 classes, 0 failures, 0 errors, 0 skipped, including the extended `KiloRouteTest` anonymous-scope cases; `lintRelease` clean |
+| Signed companion APK | 3.7.1, version code 8, 39,830,600 bytes; `tools/build_companion.js` verified badging and the pinned production signer (`ad7d215b…`) and generated the manifest, APK and checksum; deterministic asset check passed |
 | Bridge package | 21 files, 1,334,506 package bytes; embedded `server.js` inspected: new rule present, old `endsWith(':free')` rule absent; deterministic freshness check passed |
-| Release compatibility | The bridge updater matches tag `bridge-v3.7.1` (`(?:bridge-)?v` pattern) with `bridge-release.json` and `uai-bridge-package.json` assets; the Android updater requires `relay-release.json` plus an APK asset and ignores the bridge-only release |
+| Release compatibility | One `v3.7.1` release carries the bridge (`bridge-release.json`, `uai-bridge-package.json`) and companion (`relay-release.json`, `UAI-Relay-3.7.1.apk`, checksum) assets; the bridge updater discovers it via its `(?:bridge-)?v` tag rule and the companion via its `(?:relay-)?v` rule (both verified against the live release list); the desktop shell ignores it because it has no `desktop-release.json` |
 
 ## Operational note
 

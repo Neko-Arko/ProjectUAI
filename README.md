@@ -5,8 +5,8 @@ with Chat Completions, OpenAI Responses and Anthropic Messages endpoints,
 including compatible local servers and relays.
 
 **Project UAI 3.7.0 - October 25, 2026: models, tunnels and faster workflows.**
-The Roblox client, Windows app, and Android companion are 3.7.0; the bridge and
-web UI advance to 3.7.1, extending Kilo quota recovery to every free-model
+The Roblox client and Windows app are 3.7.0; the bridge, web UI and Android
+companion advance to 3.7.1, extending Kilo quota recovery to every free-model
 spelling (`:free`, `/free`, `-free`). Anonymous Kilo free requests start
 directly; an explicit
 address-quota refusal can start a private Tor connection and one bounded circuit
@@ -72,7 +72,7 @@ workspace. Go keeps its own catalog and routes; the optional free CLI backend
 does not intercept it. Subscription and workspace region refusals identify the
 setting to check. See [provider setup](docs/PROVIDER_COMPATIBILITY.md).
 
-The client, Windows desktop and Android companion are 3.7.0; the bridge is 3.7.1.
+The client and Windows desktop are 3.7.0; the bridge and Android companion are 3.7.1.
 UI LIB remains 1.3.0 and SDK 1.0.0.
 Model pricing and context/reply limits use an October 25 catalog with 1,760
 entries across 15 providers, including exact Kilo and Cline routes. Unknown
