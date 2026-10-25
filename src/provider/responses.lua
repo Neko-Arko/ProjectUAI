@@ -477,6 +477,7 @@ return function(env)
 		-- conversation affinity and explicit saved compatibility overrides.
 		local pool = registry.requestKeys(record)
 		local currentKey = handoff.key or registry.nextKey(record)
+		local accounting = env.require("runtime/request_accounting").new(record, request)
 		local rotationsLeft = math.min(handoff.rotationsLeft or math.max(#pool - 1, 0), math.max(#pool - 1, 0))
 		local function headersFor()
 			return headerMap.merge(registry.authHeaders(record, currentKey or ""), registry.opencodeHeaders(record, request), record.headers)
@@ -495,10 +496,12 @@ return function(env)
 			if not owns() or registry.compatibilityKey(record) ~= scope then return nil, "aborted" end
 			if clock.ms() >= deadline then return nil, "deadline: request budget expired" end
 			local imageRequest = env.require("runtime/images").hasReferences(request.messages)
+			local headers = headersFor()
 			local res, err = http.send({
+				onDispatch = function() accounting.dispatch(currentKey, headers) end,
 				relay = env.require("net/transport").shouldRelay(imageRequest), sessionId = request.sessionId,
 				relayUnlimited = relayUnlimited,
-				url = url, method = "POST", headers = headersFor(), body = util.encode(body),
+				url = url, method = "POST", headers = headers, body = util.encode(body),
 				identity = registry.identityFor(record), identityRequired = registry.requiresClaude(record),
 				attempts = attemptsAllowed, skipStatus = #pool > 1 and { [429] = true } or nil,
 				aborted = request.aborted, onRetry = request.onRetry, tag = "responses:" .. record.id,
@@ -563,6 +566,7 @@ return function(env)
 			end
 			parsed = M.fromResponse(decoded)
 		end
+		accounting.attach(parsed)
 		if parsed.streamError then
 			registry.markFail(record, parsed.streamError)
 			return nil, "stream error: " .. parsed.streamError, res

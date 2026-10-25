@@ -156,6 +156,7 @@ return function(env)
 				})
 				if result then
 					usage.record(result.usage, result.model or bot.model, {
+						accounting = result.accounting,
 						prompt = usage.estimateMessages(messages),
 						completion = usage.estimateText(result.content) + usage.estimateText(result.reasoning), background = true,
 					}, record)

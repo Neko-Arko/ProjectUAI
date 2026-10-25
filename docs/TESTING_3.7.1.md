@@ -93,6 +93,52 @@ Follow-up logs and previews are under `refer/key-manager-20261025/` and
 and bottom-sheet policy. They approximate layout and do not establish native
 Roblox rendering or host input behavior.
 
+### Per-key usage, pausing and conversation requests
+
+The next follow-up adds Pause/Resume and locally recorded requests plus input/
+output tokens to each key card. Conversation headers show AI request attempts,
+with detail in the context inspector. Counts include retries and subagents;
+discovery and relay polling are excluded. Relay submission retries for the same
+job count once; the counters do not claim to measure internal provider retries
+or billed usage. Opaque IDs preserve usage through rename, pause and index shifts.
+Replacing a credential starts fresh usage, and counters persist in `stats.json`.
+
+Source, documentation and tests were manually audited before building
+`3.7.1-825b52d085e1cb4e`; generated code and the module manifest were inspected
+before verification. The following passed:
+
+| Check | Result |
+| --- | --- |
+| Pause, key metadata, rotation, snapshots and free-provider routing | 64 cases, 417 assertions |
+| Accounting, token normalization, costs, provider transport, HTTP diagnostics and relay/mobile ownership | 60 cases, 715 assertions |
+| Chatbot inference | 12 scenarios, 89 checks |
+| Existing key manager UI, private transfer and diagnostic exports | 97 key UI assertions, 158 transfer checks, 16 support assertions |
+| Provider editor/setup, app unload and modal fitting | 217 assertions and 26 modal checks |
+| Changelog history and rendering | 2 scenarios, 493 checks |
+| Static validation, official Luau compiler and deterministic freshness | 236 files, 235 modules, no warnings or failures; compile and freshness passed |
+
+The free-routing UI fixture still expected an earlier two-pixel outline; its
+assertions were reviewed and updated to the existing subtle outline and distinct
+focus accent. Chatbot fixtures assumed empty startup, so they now explicitly
+remove the included default and select their synthetic provider. Both affected
+suites passed after reviewed fixture corrections; neither required a production
+behavior change.
+
+Visual review found that a narrow phone header could clip the request label.
+After manually reviewing the compact-label fix, the client was rebuilt as
+`3.7.1-e1d06d949a26134f` and its generated app code and manifest were inspected.
+The affected usage UI suite passed all 8 cases / 60 assertions, including full
+and compact labels, background conversations, subagent attribution, paused-key
+Apply/Cancel and live usage without losing drafts. App unload, static checks,
+official compilation and bundle freshness passed again. The fixture searches
+the application ScreenGui explicitly so the temporary boot splash cannot hide
+the header under test.
+
+All 15 final mock/Chromium previews were inspected under
+`refer/request-usage-20261025/`, covering desktop, phone and short windows,
+including scrolled controls. These approximate layout; native Roblox rendering
+and host input still require an in-app check.
+
 ## Kilo rule change
 
 `bridge/kilo.js` `eligible()` and the Android `KiloRoute.eligible` now accept a

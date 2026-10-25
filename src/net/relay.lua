@@ -44,10 +44,17 @@ return function(env)
 		local unlimited = transport.unlimited(spec, endpoint)
 		if unlimited then deadline = math.huge end
 		local nativeOwner = {}
-		local ended
+		local ended, counted
 		local function short(method, path, body)
 			if clock.ms() >= deadline then return nil, "deadline: relay request budget expired" end
 			return call({ url = base .. path, method = method, body = body,
+				onDispatch = method == "POST" and path == "/api/inference" and function()
+					-- Submission receipt recovery reuses this inference ID. Polls and
+					-- repeated POSTs are never additional provider requests.
+					if counted then return end
+					counted = true
+					if spec.onDispatch then pcall(spec.onDispatch) end
+				end or nil,
 				headers = { Authorization = "Bearer " .. token }, identity = "none", silent = true,
 				waitForSlot = true, timeout = math.min(5, (deadline - clock.ms()) / 1000), deadlineMs = deadline,
 				aborted = ended, executorProfile = executorProfile, nativeOwner = nativeOwner })

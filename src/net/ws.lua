@@ -115,6 +115,7 @@ return function(env)
 					-- Once Send is entered, even an exception may follow delivery. No
 					-- automatic HTTP fallback is safe from this point onward.
 					dispatched = true
+					if spec.onDispatch then pcall(spec.onDispatch) end
 					socket:Send(envelope)
 				end
 			end)

@@ -18,6 +18,7 @@ return function(env)
 	local permissions = env.require("agent/permissions")
 	local state = env.require("agent/state")
 	local folderStore = env.require("runtime/conversation_folders")
+	local accounting = env.require("agent/stats")
 
 	local THREAD_DIR = "sessions"
 	-- Disk history survives eviction. Unsaved/ephemeral threads stay in memory.
@@ -45,7 +46,12 @@ return function(env)
 		-- running in the background raised a prompt into a stream with no listener and sat
 		-- there until its own deadline denied every call it had asked for.
 		anyEvent = signal.new("session:any"),
+		usageChanged = accounting.changed,
 	}
+
+	-- Presentation reads recorded counters through the session boundary.
+	function M.keyUsage(record, index) return accounting.keyUsage(record, index) end
+	function M.conversationUsage(session) return accounting.conversationUsage(session) end
 
 	-- Published for the composer's paste detection, so the two halves of the feature
 	-- share one number rather than each keeping a copy that drifts.

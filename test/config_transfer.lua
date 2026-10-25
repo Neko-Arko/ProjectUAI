@@ -66,6 +66,8 @@ full.providers = {
 		{
 			id = "first", label = "Primary", baseUrl = "https://example.invalid/v1", apiKey = "key-one\nkey-two, key-three\r\nkey-one",
 			keyNames = { "Private account label", "", "备用账号" }, keyMode = "single", selectedKey = 2,
+			keyPaused = { true, false, true },
+			keyIds = { "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333" },
 			model = "model-a", models = { "model-a", "model-b" }, preset = "custom", api = "openai", authStyle = "bearer",
 			headers = { Authorization = "header-secret", ["X-Custom"] = false, ["X-Version"] = 3 },
 			query = { key = "query-secret", enabled = false },
@@ -95,6 +97,8 @@ check("export preserves every persisted value", same(decoded.config, full))
 check("export preserves multiline API key pools verbatim", decoded.config.providers.list[1].apiKey == full.providers.list[1].apiKey)
 check("export preserves names and selected-key policy", same(decoded.config.providers.list[1].keyNames, full.providers.list[1].keyNames)
 	and decoded.config.providers.list[1].keyMode == "single" and decoded.config.providers.list[1].selectedKey == 2)
+check("export preserves each paused and active key", same(decoded.config.providers.list[1].keyPaused, { true, false, true }))
+check("export preserves opaque usage identities", same(decoded.config.providers.list[1].keyIds, full.providers.list[1].keyIds))
 check("summary counts unique keys across multiline/comma pools", summary.keys == 4 and summary.providers == 2 and summary.active == "Secondary")
 check("summary includes preferences without credentials", summary.permissionMode == "auto" and summary.rules == 3 and summary.memory == 1 and summary.bridgeEnabled == true and not util.encode(summary):find("secret", 1, true))
 check("summary excludes private key names", not util.encode(summary):find("Private account label", 1, true) and summary.keyNames == nil)
@@ -126,15 +130,32 @@ check("older exports retire motion preferences without changing other values", s
 local legacyKeys = util.deepCopy(full)
 local legacyProvider = legacyKeys.providers.list[1]
 legacyProvider.keyNames, legacyProvider.keyMode, legacyProvider.selectedKey = nil, nil, nil
+legacyProvider.keyPaused = nil
+legacyProvider.keyIds = nil
 local legacyPreview = assert(transfer.preview(util.encode(envelope(legacyKeys))))
 check("legacy key pools import intact and default to rotation", same(legacyPreview.config, legacyKeys)
 	and keyPolicy.mode(legacyPreview.config.providers.list[1]) == "rotate" and keyPolicy.selected(legacyPreview.config.providers.list[1]) == 1)
+check("legacy imports do not invent pause or usage metadata", legacyPreview.config.providers.list[1].keyPaused == nil
+	and legacyPreview.config.providers.list[1].keyIds == nil
+	and #keyPolicy.requestKeys(legacyPreview.config.providers.list[1]) == 3)
 local rotating = util.deepCopy(full)
 rotating.providers.list[1].keyMode = "rotate"
 check("explicit rotation retains its names and preferred single-key selection", same(assert(transfer.preview(util.encode(envelope(rotating)))).config, rotating))
 local emptyKeys = util.deepCopy(rotating)
 emptyKeys.providers.list[1].apiKey, emptyKeys.providers.list[1].keyNames, emptyKeys.providers.list[1].selectedKey = "", {}, 1
+emptyKeys.providers.list[1].keyPaused = {}
+emptyKeys.providers.list[1].keyIds = {}
 check("an empty rotating pool remains valid for keyless providers", same(assert(transfer.preview(util.encode(envelope(emptyKeys)))).config, emptyKeys))
+local allPaused = util.deepCopy(rotating)
+allPaused.providers.list[1].keyPaused = { true, true, true }
+local pausedPreview = assert(transfer.preview(util.encode(envelope(allPaused))))
+check("all-paused pools transfer without silently resuming a key", same(pausedPreview.config, allPaused)
+	and #keyPolicy.requestKeys(pausedPreview.config.providers.list[1]) == 0)
+local selectedPaused = util.deepCopy(full)
+selectedPaused.providers.list[1].keyPaused[2] = true
+local selectedPausedPreview = assert(transfer.preview(util.encode(envelope(selectedPaused))))
+check("a paused selected key remains selected and paused after transfer", same(selectedPausedPreview.config, selectedPaused)
+	and #keyPolicy.requestKeys(selectedPausedPreview.config.providers.list[1]) == 0)
 local maximumName = util.deepCopy(full)
 maximumName.providers.list[1].keyNames[1] = string.rep("界", 40)
 check("a valid 120-byte UTF-8 key name transfers intact", same(assert(transfer.preview(util.encode(envelope(maximumName)))).config, maximumName))
@@ -189,13 +210,32 @@ reject("reject extra key names", function(c) c.providers.list[1].keyNames[4] = "
 reject("reject incomplete key names", function(c) c.providers.list[1].keyNames = { "Only one" } end)
 reject("reject sparse key names before apply", function(c) c.providers.list[1].keyNames[2] = nil end, true)
 reject("reject mixed key-name fields before apply", function(c) c.providers.list[1].keyNames.extra = "Unexpected" end, true)
+reject("reject non-list pause metadata", function(c) c.providers.list[1].keyPaused = true end)
+reject("reject non-boolean pause metadata", function(c) c.providers.list[1].keyPaused[2] = "false" end)
+reject("reject incomplete pause metadata", function(c) c.providers.list[1].keyPaused = { true } end)
+reject("reject extra pause metadata", function(c) c.providers.list[1].keyPaused[4] = false end)
+reject("reject sparse pause metadata before apply", function(c) c.providers.list[1].keyPaused[2] = nil end, true)
+reject("reject mixed pause fields before apply", function(c) c.providers.list[1].keyPaused.extra = false end, true)
+reject("reject non-list usage identities", function(c) c.providers.list[1].keyIds = "invalid" end)
+reject("reject non-text usage identities", function(c) c.providers.list[1].keyIds[2] = false end)
+reject("reject malformed usage identities", function(c) c.providers.list[1].keyIds[2] = "account-secret" end)
+reject("reject noncanonical usage identities", function(c) c.providers.list[1].keyIds[2] = "ABCDEFAB-2222-4222-8222-222222222222" end)
+reject("reject duplicate usage identities", function(c) c.providers.list[1].keyIds[2] = c.providers.list[1].keyIds[1] end)
+reject("reject incomplete usage identities", function(c) c.providers.list[1].keyIds = { c.providers.list[1].keyIds[1] } end)
+reject("reject extra usage identities", function(c) c.providers.list[1].keyIds[4] = "44444444-4444-4444-8444-444444444444" end)
+reject("reject sparse usage identities before apply", function(c) c.providers.list[1].keyIds[2] = nil end, true)
+reject("reject mixed usage identity fields before apply", function(c) c.providers.list[1].keyIds.extra = "44444444-4444-4444-8444-444444444444" end, true)
 reject("reject unknown key mode", function(c) c.providers.list[1].keyMode = "random" end)
 reject("reject non-text key mode", function(c) c.providers.list[1].keyMode = false end)
 reject("reject non-number selected key", function(c) c.providers.list[1].selectedKey = "2" end)
 reject("reject zero selected key", function(c) c.providers.list[1].selectedKey = 0 end)
 reject("reject fractional selected key", function(c) c.providers.list[1].selectedKey = 1.5 end)
 reject("reject selected key beyond the deduplicated pool", function(c) c.providers.list[1].selectedKey = 4 end)
-reject("reject single-key mode without credentials", function(c) c.providers.list[1].apiKey = ""; c.providers.list[1].keyNames = {}; c.providers.list[1].selectedKey = 1 end)
+reject("reject single-key mode without credentials", function(c)
+	c.providers.list[1].apiKey, c.providers.list[1].keyNames, c.providers.list[1].keyPaused = "", {}, {}
+	c.providers.list[1].keyIds = {}
+	c.providers.list[1].selectedKey = 1
+end)
 reject("revalidate key metadata in an edited preview", function(c) c.providers.list[1].selectedKey = 20 end, true)
 reject("reject malformed model list", function(c) c.providers.list[1].models = { 42 } end)
 reject("reject nested header values", function(c) c.providers.list[1].headers.Authorization = {} end)
@@ -292,6 +332,8 @@ for _, viewport in ipairs({ { 1280, 800 }, { 390, 844 }, { 320, 640 } }) do
 	imported.providers.list[1].enabled = true
 	imported.providers.list[1].apiKey = "ui-test-key"
 	imported.providers.list[1].keyNames = { "Private imported account" }
+	imported.providers.list[1].keyPaused = { true }
+	imported.providers.list[1].keyIds = { "11111111-1111-4111-8111-111111111111" }
 	imported.providers.list[1].selectedKey = 1
 	local uiBody = util.encode(envelope(imported))
 	ui.type(input, uiBody)
@@ -309,6 +351,9 @@ for _, viewport in ipairs({ { 1280, 800 }, { 390, 844 }, { 320, 640 } }) do
 	local appliedProvider = handle.config.get("providers.list")[1]
 	check("Apply retains private key name and policy" .. suffix, appliedProvider.keyNames[1] == "Private imported account"
 		and appliedProvider.keyMode == "single" and appliedProvider.selectedKey == 1)
+	check("Apply retains the selected key pause" .. suffix, appliedProvider.keyPaused[1] == true
+		and #handle.env.require("runtime/provider_keys").requestKeys(appliedProvider) == 0)
+	check("Apply retains the selected key usage identity" .. suffix, appliedProvider.keyIds[1] == imported.providers.list[1].keyIds[1])
 	local logger = handle.env.require("runtime/log")
 	check("Apply synchronizes live logging preferences" .. suffix, logger.mirror == true)
 	check("Apply dismisses stale import and Settings controls" .. suffix, ui.byName("ConfigImportJSON") == nil and ui.byName("SettingsDialog") == nil)

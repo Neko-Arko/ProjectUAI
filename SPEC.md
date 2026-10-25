@@ -256,6 +256,8 @@ credentials or raw error bodies. Runtime modules do not depend on `net/*`.
     baseUrl = "https://api.openai.com/v1",
     apiKey = "sk-...",
     keyNames = { "Personal" },            -- optional labels aligned with deduplicated keys
+    keyPaused = { false },                -- optional pause flags; missing means active
+    keyIds = { "00000000-0000-4000-8000-000000000001" }, -- generated accounting IDs
     keyMode = "rotate",                   -- rotate (default) | single
     selectedKey = 1,                      -- saved key index used by single mode
     authStyle = "bearer",                -- bearer | x-api-key | api-key | both | none
@@ -407,6 +409,20 @@ an earlier entry adjusts the selected index; removing the selected entry restore
 rotation and explains the change. Discovery caches include the request policy,
 while a name-only edit preserves both discovery results and the rotation cursor.
 Accepted request snapshots retain their original key policy.
+
+`keyPaused` is an optional dense boolean array aligned with the keys. Paused
+entries are excluded from rotation and model discovery. All-paused and pinned
+paused configurations may be saved; requests then stop with an actionable error
+instead of sending anonymously or selecting another credential. Selecting a new
+single key requires an active entry. Replacements preserve pause state; appended
+keys start active. Pausing affects future requests, not accepted snapshots.
+
+`keyIds` is an optional dense array of unique lowercase GUIDs, generated before
+live records are copied for requests or editing and persisted with configuration.
+Names, pauses and index shifts preserve IDs; a different replacement credential
+gets a new ID. These identities are for local accounting and do not invalidate
+authentication caches or expose credentials. Diagnostic exports omit key IDs and
+private names; full configuration transfers preserve the metadata.
 
 The manager keeps an isolated draft until Apply. In provider setup, Apply returns
 the key changes to the connection draft and Save persists them; opening directly
@@ -1139,6 +1155,23 @@ was kept. Conversation search includes retained dialogue after model compaction.
 comes from. It observes the stream through the `onEvent` hook and the
 `usage.recorded` signal, buckets everything by local day and local hour, and
 persists to `stats.json`.
+
+Per-key and per-conversation request counters observe actual inference dispatches
+through `runtime/request_accounting`. Native retries and protocol/key/provider
+fallbacks count separately; relay submission retries for the same inference job
+count once. Model discovery, connection health checks and relay polling do not
+count; synthetic inference probes count toward their key, without a conversation.
+Failed requests count if dispatched; rejected preparation and cancellation before
+dispatch do not. A subagent's attribution is captured from its parent before dispatch.
+These local counters persist from their tracking start; past requests are not
+inferred from transcript length. The chat header and context breakdown show the
+conversation total, independent of the currently active provider.
+
+Per-key records use provider ID plus opaque key ID, never credential strings or
+key names. Input and output usage are credited once from normalized provider
+counts, with labelled estimates filling missing fields when available. UI reads
+these counters and their change signal through the `agent/session` facade; usage
+refreshes update existing labels without rebuilding key drafts or prompts.
 
 Anthropic input accounting includes uncached, cache-read and cache-creation
 tokens; all occupy context. Price estimates retain their documented approximation

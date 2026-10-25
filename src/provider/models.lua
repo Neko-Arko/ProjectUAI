@@ -37,6 +37,7 @@ return function(env)
 		local scope = { baseUrl = registry.normaliseBaseUrl(record.baseUrl), api = record.api or "openai",
 			apiKey = record.apiKey, authStyle = record.authStyle, headers = record.headers or {}, query = record.query or {},
 			keyMode = providerKeys.mode(record), selectedKey = providerKeys.mode(record) == "single" and providerKeys.selected(record) or nil,
+			keyPaused = providerKeys.pauseFlags(record),
 			claudeUa = record.claudeUa }
 		if registry.isOpencodeZen(record) then
 			scope.opencode = env.require("net/bridge").opencodeStatus()

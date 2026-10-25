@@ -16,7 +16,8 @@ return function(env)
 		record.apiKey = key
 		record.authStyle = "bearer"
 		record.keyRotation = nil
-		record.keyNames, record.keyMode, record.selectedKey = nil, "rotate", 1
+		record.keyNames, record.keyMode, record.selectedKey, record.keyPaused = nil, "rotate", 1, nil
+		record.keyIds = nil
 		for name, value in pairs(record.headers or {}) do
 			local lower = type(name) == "string" and name:lower() or ""
 			if (lower == "authorization" and tostring(value) ~= "Bearer " .. key)

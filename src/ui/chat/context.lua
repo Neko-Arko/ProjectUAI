@@ -84,11 +84,20 @@ return function(env)
 			name = "ContextEstimates", text = "", role = "caption", color = theme.color.textSecondary,
 			wrap = true, auto = "Y", layoutOrder = 11,
 		})
+		P.divider(modal.content, { layoutOrder = 12 })
+		local requests = P.text(modal.content, {
+			name = "ConversationRequestTotal", text = "", role = "label", wrap = true, auto = "Y", layoutOrder = 13,
+		})
+		P.text(modal.content, { name = "ConversationRequestHint",
+			text = "AI calls in this conversation, including retries, tool follow-ups, summaries and subagents. Counted on this device from this update; earlier requests are not reconstructed.",
+			role = "caption", color = theme.color.textSecondary, wrap = true, auto = "Y", layoutOrder = 14 })
 
 		local function tokens(value) return util.formatNumber(value) .. " tokens" end
 		local function refresh()
 			if closed or modal.closed then return end
 			if session.removed then modal.close(); return end
+			local recorded = sessions.conversationUsage(session)
+			requests.Text = "This conversation: " .. util.formatNumber(recorded.requests) .. (recorded.requests == 1 and " AI request" or " AI requests")
 			local ctx, record = session.ctx, providers.active()
 			local model = record and record.model
 			local window = traits.contextWindow(model, record)
@@ -140,6 +149,7 @@ return function(env)
 		unsubscribes[#unsubscribes + 1] = config.changed:connect(queue)
 		unsubscribes[#unsubscribes + 1] = providers.changed:connect(queue)
 		unsubscribes[#unsubscribes + 1] = sessions.listChanged:connect(queue)
+		unsubscribes[#unsubscribes + 1] = sessions.usageChanged:connect(queue)
 		modal.scrim.Destroying:Connect(cleanup)
 		return modal
 	end

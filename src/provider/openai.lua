@@ -1033,6 +1033,7 @@ return function(env)
 		local url = registry.endpoint(record, "/chat/completions")
 		local pool = registry.requestKeys(record)
 		local currentKey = registry.nextKey(record)
+		local accounting = env.require("runtime/request_accounting").new(record, request)
 		local currentKeyIndex = 0
 
 		local function rebuildHeaders()
@@ -1076,6 +1077,7 @@ return function(env)
 					path = urls.requestTarget(url),
 					headers = socketHeaders,
 					body = payload,
+					onDispatch = function() accounting.dispatch(currentKey, socketHeaders) end,
 					aborted = request.aborted,
 					onFrame = request.onFrame,
 					-- The transport bounds this setting to 1..300 seconds.
@@ -1098,6 +1100,7 @@ return function(env)
 				recovery = proxy.new(record, { aborted = request.aborted, onRetry = request.onRetry, deadlineMs = deadline })
 			end
 			local res, err = http.send({
+				onDispatch = function() accounting.dispatch(currentKey, headers) end,
 				relay = web,
 				relayUnlimited = relayUnlimited,
 				sessionId = request.sessionId,
@@ -1250,6 +1253,7 @@ return function(env)
 			parsed = sse.fromResponse(decoded)
 		end
 
+		accounting.attach(parsed)
 		if parsed.streamError then
 			registry.markFail(record, parsed.streamError)
 			return nil, "stream error: " .. parsed.streamError, res

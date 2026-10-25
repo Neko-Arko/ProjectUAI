@@ -238,7 +238,7 @@ return function(env)
 		}
 	end
 
-	local function send(url, method, headers, body, timeout, profile)
+	local function send(url, method, headers, body, timeout, profile, onDispatch)
 		local options = { Url = url, Method = method, Headers = headers }
 		if body and body ~= "" and method ~= "GET" and method ~= "HEAD" then
 			options.Body = body
@@ -255,6 +255,7 @@ return function(env)
 				if timeout and timeout > 0 then options.Timeout = math.max(1, math.ceil(timeout)) end
 			end
 			if profile and profile.omitEmptyHeaders and next(headers) == nil then options.Headers = nil end
+			if onDispatch then pcall(onDispatch) end
 			local ok, res = pcall(guard.run, request, options)
 			if not ok then return nil, tostring(res), "transport" end
 			if type(res) ~= "table" then return nil, "empty executor response", "response" end
@@ -262,6 +263,7 @@ return function(env)
 		end
 
 		if caps.http == "none" then return nil, caps.reason("http"), "terminal" end
+		if onDispatch then pcall(onDispatch) end
 		local ok, res = pcall(guard.run, function() return env.hs:RequestAsync(options) end)
 		if not ok then return nil, tostring(res), "transport" end
 		if type(res) ~= "table" then return nil, "empty HttpService response", "response" end
@@ -367,7 +369,7 @@ return function(env)
 					relaySpec.aborted = function() return not pending.accepting or aborted(spec) end
 					return env.require("net/relay").request(relaySpec, headers, M.request)
 				end
-				return send(url, method, headers, spec.body, remaining / 1000, profile)
+				return send(url, method, headers, spec.body, remaining / 1000, profile, spec.onDispatch)
 			end)
 			if relayed then relayWorkers = math.max(0, relayWorkers - 1) else workers = math.max(0, workers - 1) end
 			if owner and owner.pending == pending then owner.pending = nil end

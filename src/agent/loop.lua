@@ -299,6 +299,7 @@ return function(env)
 			if session.toolEpoch ~= epoch or session.aborted() then return nil end
 			if result then
 				usage.record(result.usage, result.model or record.model, {
+					accounting = result.accounting,
 					prompt = usage.estimateMessages(messages),
 					completion = usage.estimateText(result.content) + usage.estimateText(result.reasoning),
 				}, record)
@@ -432,6 +433,7 @@ return function(env)
 			end
 
 			local spent = usage.record(result.usage, result.model or (record and record.model), {
+				accounting = result.accounting,
 				prompt = accounting and (accounting.history + accounting.estimate) or usage.estimateMessages(request.messages),
 				completion = usage.estimateText(result.content) + usage.estimateText(result.reasoning),
 			}, record)

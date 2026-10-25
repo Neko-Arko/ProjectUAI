@@ -236,6 +236,7 @@ return function(env)
 			M.setLauncherBusy(sessions.busyCount() > 0 and not M.window.visible)
 			M.syncNav()
 		end), "app.busyPulse")
+		dispose.add(sessions.usageChanged:connect(function() M.syncRequestCount() end), "app.requestCount")
 
 		-- Notifications for background conversations -----------------------------
 		--
@@ -783,16 +784,26 @@ return function(env)
 			size = UDim2.new(1, 0, 0, math.ceil(theme.text.bodyStrong.size * theme.line.tight)),
 			layoutOrder = 1,
 		})
-		M.subtitleLabel = P.text(titleColumn, {
+		local titleDetail = P.row(titleColumn, {
+			name = "TitleDetails", size = UDim2.new(1, 0, 0, math.ceil(theme.text.caption.size * theme.line.tight)),
+			gap = theme.space.xs, layoutOrder = 2,
+		})
+		M.requestDetailRow = titleDetail
+		M.requestCountLabel = P.text(titleDetail, {
+			name = "ConversationRequests", text = "", role = "caption", line = theme.line.tight,
+			color = theme.color.textSecondary, auto = "X", size = UDim2.fromScale(0, 1), layoutOrder = 1,
+		})
+		M.subtitleLabel = P.text(titleDetail, {
 			name = "TitleDetail",
 			text = "",
 			role = "caption",
 			line = theme.line.tight,
 			color = theme.color.textTertiary,
 			truncate = true,
-			size = UDim2.new(1, 0, 0, math.ceil(theme.text.caption.size * theme.line.tight)),
+			size = UDim2.fromScale(0, 1), flex = "Fill",
 			layoutOrder = 2,
 		})
+		titleDetail:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() M.syncRequestCount() end)
 
 		local right = P.row(header, {
 			name = "Right",
@@ -1136,6 +1147,7 @@ return function(env)
 
 	function M.syncNav()
 		local session = sessions.current()
+		M.syncRequestCount()
 		if M.titleLabel then
 			if M.panel == "chat" then
 				M.titleLabel.Text = session.title
@@ -1162,6 +1174,18 @@ return function(env)
 			M.subtitleLabel.Text = table.concat(parts, "  \194\183  ")
 		end
 		if M.sidebar then M.sidebar.refresh() end
+	end
+
+	function M.syncRequestCount()
+		if not M.requestCountLabel then return end
+		M.requestCountLabel.Visible = M.panel == "chat"
+		if M.panel ~= "chat" then return end
+		local used = sessions.conversationUsage(sessions.current())
+		local count = util.formatNumber(used.requests)
+		local full = count .. (used.requests == 1 and " request" or " requests") .. " \194\183"
+		local available = M.requestDetailRow and M.requestDetailRow.AbsoluteSize.X or 0
+		M.requestCountLabel.Text = available > 0 and P.measureText(full, { role = "caption" }).X > available
+			and (count .. " req.") or full
 	end
 
 	-- Menus and dialogs -------------------------------------------------------
@@ -1659,6 +1683,8 @@ return function(env)
 		M.sidebar = nil
 		M.titleLabel = nil
 		M.subtitleLabel = nil
+		M.requestCountLabel = nil
+		M.requestDetailRow = nil
 		if M.window then M.window.destroy() end
 		if M.launcher then
 			M.launcher:Destroy()

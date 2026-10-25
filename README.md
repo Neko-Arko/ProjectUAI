@@ -12,6 +12,10 @@ masked entries. Add, rename, replace or remove a key without losing the others.
 specific entry. Existing key pools are preserved. The setup guide opens expanded
 by default.
 
+Pause individual keys while keeping them saved, and see their locally recorded
+requests and input/output tokens. Each conversation also shows its AI request
+count, including retries, tool follow-ups, summaries and subagents.
+
 Log details and context breakdown fit their contents, and shared modals have
 consistent inner padding. The Discord invitation, tutorial and donation dialogs
 are cleaner, settings group related controls, and Code keeps long selections
@@ -605,6 +609,16 @@ restores rotation; removing another key preserves the selected credential.
 Saved secrets show only a masked suffix, and keys shorter than five characters
 are fully masked. Cancel discards changes. Apply saves directly from provider
 details; during connection setup, it updates the draft for the provider's Save.
+Pause excludes a key from new requests without deleting it. A paused selected key
+stays selected and blocks that provider until resumed or another active key is
+chosen. Calls already in progress retain their original request policy.
+
+Each key card shows locally recorded request attempts and input/output tokens;
+estimates are labelled. Renaming or pausing retains usage, while replacing a
+credential starts a fresh counter. The conversation header shows that chat's AI
+request attempts; Context breakdown explains what is included. Counts persist on
+this device from this update and do not reconstruct earlier requests. Model
+discovery and relay status polling are excluded.
 
 The layout follows the live viewport: compact desktop controls on handhelds,
 a floating resizable window on a desktop, and a large centred panel on a console.

@@ -3,6 +3,7 @@
 return function(env)
 	local util = env.require("runtime/util")
 	local keys = env.require("runtime/provider_keys")
+	local sessions = env.require("agent/session")
 	local theme = env.require("ui/theme")
 	local P = env.require("ui/primitives")
 	local C = env.require("ui/controls")
@@ -14,22 +15,27 @@ return function(env)
 	end
 
 	local function snapshot(record)
-		local names = {}
+		local names, paused = {}, {}
 		for index, entry in ipairs(keys.entries(record)) do
 			names[index] = entry.name
+			paused[index] = entry.paused == true
 		end
 		-- Retain legacy separators until credentials actually change. Naming a key
 		-- does not change authentication or invalidate a provider's model cache.
-		return { apiKey = tostring(record.apiKey or ""), keyNames = names,
+		return { apiKey = tostring(record.apiKey or ""), keyNames = names, keyPaused = paused,
+			keyIds = util.deepCopy(record.keyIds),
 			keyMode = keys.mode(record), selectedKey = keys.selected(record) }
 	end
 
 	function M.open(props)
 		props = props or {}
 		local record = props.record or {}
+		keys.ensureIds(record)
 		local draft = snapshot(record)
-		local prompt, modal
+		draft.id = record.id
+		local prompt, modal, unsubscribeUsage
 		local function cleanup()
+			if unsubscribeUsage then unsubscribeUsage(); unsubscribeUsage = nil end
 			if prompt and not prompt.closed then prompt.close() end
 			prompt = nil
 			if props.onClose then props.onClose() end
@@ -55,7 +61,13 @@ return function(env)
 			options = { { value = "rotate", label = "Rotate keys" }, { value = "single", label = "Use one key" } },
 			onChange = function(value)
 				if modal.closed then return end
-				local ok, why = keys.setMode(draft, value)
+				local selected = keys.selected(draft)
+				if value == "single" and keys.paused(draft, selected) then
+					for index, entry in ipairs(keys.entries(draft)) do
+						if not entry.paused then selected = index; break end
+					end
+				end
+				local ok, why = keys.setMode(draft, value, value == "single" and selected or nil)
 				status(ok and "" or why)
 				refresh()
 			end })
@@ -68,6 +80,16 @@ return function(env)
 		P.spacer(listHeader, { grow = true, size = UDim2.fromOffset(0, 1), layoutOrder = 2 })
 		local entries = P.column(form, { name = "APIKeyEntries", size = UDim2.new(1, 0, 0, 0),
 			auto = "Y", gap = theme.space.sm, layoutOrder = 4 })
+		local usageNodes = {}
+		local function refreshUsage()
+			if modal.closed then return end
+			for index, node in pairs(usageNodes) do
+				local used = sessions.keyUsage(draft, index)
+				node.Text = util.formatNumber(used.requests) .. (used.requests == 1 and " request" or " requests")
+					.. "\n" .. (used.estimated and "About " or "") .. util.formatNumber(used.tokensIn)
+					.. " input / " .. util.formatNumber(used.tokensOut) .. " output tokens"
+			end
+		end
 		local function locate(secret)
 			for index, entry in ipairs(keys.entries(draft)) do
 				if entry.key == secret then return index end
@@ -94,18 +116,25 @@ return function(env)
 			end })
 		P.text(form, { name = "KeyDraftHint", text = props.applyHint or "Apply changes returns these keys to provider setup. Save the provider to keep them.",
 			role = "caption", color = theme.color.textTertiary, wrap = true, auto = "Y", layoutOrder = 5 })
+		P.text(form, { name = "KeyUsageHint", text = "Usage is recorded on this device from this update. Requests include retries; estimated tokens are marked.",
+			role = "caption", color = theme.color.textTertiary, wrap = true, auto = "Y", layoutOrder = 6 })
 		refresh = function()
 			if modal.closed then return end
 			local pool, mode, selected = keys.entries(draft), keys.mode(draft), keys.selected(draft)
 			modeControl.set(mode)
-			count.Text = util.pluralise(#pool, "key")
+			local active = 0
+			for _, entry in ipairs(pool) do if not entry.paused then active = active + 1 end end
+			count.Text = util.pluralise(#pool, "key") .. (active < #pool and (" / " .. active .. " active") or "")
 			if mode == "single" then
-				modeHelp.Text = pool[selected] and ("Only " .. label(pool[selected], selected)
+				modeHelp.Text = pool[selected] and pool[selected].paused and "The selected key is paused. Resume it or choose another active key."
+					or pool[selected] and ("Only " .. label(pool[selected], selected)
 					.. " will be used. Other keys will not be tried.")
 					or "Choose a key below, or turn on rotation. No key is selected for requests."
 			else
-				modeHelp.Text = "New requests take turns using your keys. A key that reaches its rate limit can rest while another is tried."
+				modeHelp.Text = #pool > 0 and active == 0 and "All keys are paused. Resume a key to send requests."
+					or "New requests take turns using active keys. Paused keys stay saved until you resume them."
 			end
+			usageNodes = {}
 			for _, child in ipairs(entries:GetChildren()) do
 				if child:IsA("GuiObject") then child:Destroy() end
 			end
@@ -116,7 +145,7 @@ return function(env)
 					color = theme.color.textSecondary, auto = "Y", wrap = true, layoutOrder = 2 })
 			end
 			for index, entry in ipairs(pool) do
-				local slot, secret, name = index, entry.key, entry.name
+				local slot, secret, name, paused = index, entry.key, entry.name, entry.paused
 				local chosen = mode == "single" and selected == slot
 				local card = P.card(entries, { name = "APIKey_" .. slot, padding = theme.space.md, gap = theme.space.sm,
 					bg = chosen and theme.color.accentSurface or theme.color.surfaceRaised,
@@ -126,17 +155,20 @@ return function(env)
 					gap = theme.space.xxs, layoutOrder = 1 })
 				P.text(identity, { name = "APIKeyLabel_" .. slot, text = util.ellipsis(label(entry, slot), 120),
 					role = "label", wrap = true, auto = "Y", layoutOrder = 1 })
-				if name ~= "" then
-					P.text(identity, { text = "API key " .. slot, role = "caption", color = theme.color.textTertiary,
+				if name ~= "" or paused then
+					P.text(identity, { name = "APIKeyState_" .. slot,
+						text = "API key " .. slot .. (paused and " / Paused" or ""), role = "caption", color = theme.color.textTertiary,
 						wrap = true, auto = "Y", layoutOrder = 2 })
 				end
 				P.text(head, { name = "APIKeyMask_" .. slot,
 					text = #secret <= 4 and "set" or (string.rep("\226\128\162", 4) .. " " .. secret:sub(-4)),
 					role = "monoSmall", color = theme.color.textSecondary, auto = "XY", size = UDim2.fromOffset(0, 0), layoutOrder = 2 })
+				usageNodes[slot] = P.text(card, { name = "APIKeyUsage_" .. slot, text = "", role = "caption",
+					color = theme.color.textSecondary, wrap = true, auto = "Y", layoutOrder = 2 })
 				local actions = P.row(card, { name = "APIKeyActions_" .. slot, size = UDim2.new(1, 0, 0, 0),
-					auto = "Y", wrap = true, gap = theme.space.xs, layoutOrder = 2 })
+					auto = "Y", wrap = true, gap = theme.space.xs, layoutOrder = 3 })
 				local use = P.button(actions, { name = "UseKey_" .. slot, text = chosen and "Selected" or "Use this key",
-					variant = "secondary", size = "sm", layoutOrder = 1, enabled = not chosen,
+					variant = "secondary", size = "sm", layoutOrder = 1, enabled = not chosen and not paused,
 					onClick = function()
 						if modal.closed then return end
 						local position = locate(secret)
@@ -145,7 +177,16 @@ return function(env)
 						status(ok and "" or why); refresh()
 					end })
 				use.instance.Visible = mode == "single"
-				P.button(actions, { name = "RenameKey_" .. slot, text = "Rename", variant = "ghost", size = "sm", layoutOrder = 2,
+				P.button(actions, { name = "PauseKey_" .. slot, text = paused and "Resume" or "Pause",
+					variant = "secondary", size = "sm", layoutOrder = 2,
+					onClick = function()
+						if modal.closed then return end
+						local position = locate(secret)
+						if not position then return end
+						local ok, why = keys.setPaused(draft, position, not keys.paused(draft, position))
+						status(ok and "" or why); refresh()
+					end })
+				P.button(actions, { name = "RenameKey_" .. slot, text = "Rename", variant = "ghost", size = "sm", layoutOrder = 3,
 					onClick = function()
 						edit({ title = "Name this key", description = "Choose a name you recognize. Leave blank to use its number.",
 							value = name, placeholder = "API key " .. slot, confirmText = "Save name" }, function(value)
@@ -155,7 +196,7 @@ return function(env)
 							status(ok and "" or why); refresh()
 						end)
 					end })
-				P.button(actions, { name = "ReplaceKey_" .. slot, text = "Replace", variant = "ghost", size = "sm", layoutOrder = 3,
+				P.button(actions, { name = "ReplaceKey_" .. slot, text = "Replace", variant = "ghost", size = "sm", layoutOrder = 4,
 					onClick = function()
 						edit({ title = "Replace API key", description = "Paste a replacement for " .. label(entry, slot)
 							.. ". Its name and the other keys stay in place.", placeholder = "Paste replacement key", confirmText = "Save key" }, function(value)
@@ -165,7 +206,7 @@ return function(env)
 							status(ok and "" or why); refresh()
 						end)
 					end })
-				P.button(actions, { name = "RemoveKey_" .. slot, text = "Remove", variant = "ghost", size = "sm", layoutOrder = 4,
+				P.button(actions, { name = "RemoveKey_" .. slot, text = "Remove", variant = "ghost", size = "sm", layoutOrder = 5,
 					onClick = function()
 						if modal.closed then return end
 						local position = locate(secret)
@@ -176,6 +217,7 @@ return function(env)
 						refresh()
 					end })
 			end
+			refreshUsage()
 		end
 		P.button(modal.footer, { name = "CancelKeys", text = "Cancel", variant = "ghost", size = "sm", layoutOrder = 1,
 			onClick = function() modal.close() end })
@@ -196,6 +238,7 @@ return function(env)
 				modal.close()
 			end })
 		refresh()
+		unsubscribeUsage = sessions.usageChanged:connect(refreshUsage)
 		return modal
 	end
 

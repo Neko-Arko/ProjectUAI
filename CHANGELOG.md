@@ -13,6 +13,12 @@
   and configuration transfers retain key names and request preferences.
   Preserve existing key pools, automatic rotation and unsaved provider drafts;
   saved credentials stay masked, including keys shorter than five characters.
+- Pause and resume individual keys without deleting their names or local usage.
+  Show requests and input/output tokens per key, with estimates marked. Keep a
+  paused selected key pinned until the user resumes it or changes the selection.
+- Show each conversation's AI request count in its header and context breakdown.
+  Count retries, tool follow-ups, summaries and subagents; retain local counters
+  across reloads. Earlier untracked requests are not reconstructed.
 - Finish the provider gallery and configuration polish with clearer sections,
   model controls and validation. Keep the setup guide expanded by default.
 - Fit log details and context breakdown to their contents, retaining scrolling

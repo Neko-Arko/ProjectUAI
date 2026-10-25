@@ -68,6 +68,7 @@ return function(env)
 		return { baseUrl = registry.normaliseBaseUrl(record.baseUrl), api = record.api or "openai",
 			model = record.model, apiKey = record.apiKey, authStyle = record.authStyle,
 			keyMode = providerKeys.mode(record), selectedKey = providerKeys.mode(record) == "single" and providerKeys.selected(record) or nil,
+			keyPaused = providerKeys.pauseFlags(record),
 			headers = record.headers or {}, query = record.query or {}, claudeUa = record.claudeUa,
 			wsUrl = record.wsUrl }
 	end

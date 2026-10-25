@@ -260,22 +260,29 @@ case("relay probes retain their ten-second synthetic deadline and connection sco
 	f.healthy(); f.close()
 end)
 
-case("free model choices retain green rounded borders through focus and selection", function()
+case("free model choices retain subtle rounded outlines and a distinct focus state", function()
 	local f = F.ui(900, 800); local registry = f.env.require("provider/registry")
+	local theme, primitives = f.env.require("ui/theme"), f.env.require("ui/primitives")
 	local record = registry.blank("zen"); record.apiKey = "fixture"; record.models = { "big-pickle", "cat-jam-free", "paid-model" }; record.model = "paid-model"
 	registry.save(record); registry.setActive(record.id)
 	local picker = f.env.require("ui/panels/modelpicker").open(); f.h.settle(0.2)
 	local free = assert(f.h.byName("Model_big-pickle")); local paid = assert(f.h.byName("Model_paid-model"))
 	local border = free:FindFirstChildOfClass("UIStroke")
-	check("free choice uses visible two-pixel green outline", border.Thickness == 2 and border.Transparency == 0 and border.Color == f.env.require("ui/theme").color.success)
+	check("free choice uses a visible subtle one-pixel outline", border.Thickness == 1 and border.Transparency == 0
+		and border.Color == primitives.freeModelOutline(theme.color.surface))
 	check("outline follows rounded row", free:FindFirstChildOfClass("UICorner").CornerRadius.Offset > 0)
 	check("paid choice has no free outline", paid:FindFirstChildOfClass("UIStroke").Transparency == 1)
 	free.SelectionGained:Fire(); f.h.click(free); f.h.settle(0.2)
-	check("focused selected free choice keeps green outline", border.Transparency == 0 and border.Color == f.env.require("ui/theme").color.success and record.model == "big-pickle")
+	check("focused selected free choice uses the focus accent", border.Transparency == 0 and border.Color == theme.color.accent and record.model == "big-pickle")
+	free.SelectionLost:Fire(); f.h.settle(0.2)
+	check("leaving focus restores its free outline without losing selection", border.Color == primitives.freeModelOutline(theme.color.surface)
+		and border.Transparency == 0 and record.model == "big-pickle")
 	picker.close()
 	f.env.require("ui/panels/providers").editor(record); f.h.click(assert(f.h.byName("ActiveModel"))); f.h.settle(0.2)
 	local option = assert(f.h.byName("Option_model:big-pickle"))
-	check("provider editor model menu also marks free choices", option:GetAttribute("UAIFreeModel") and option:FindFirstChildOfClass("UIStroke").Thickness == 2)
+	check("provider editor model menu also marks free choices", option:GetAttribute("UAIFreeModel")
+		and option:FindFirstChildOfClass("UIStroke").Thickness == 1
+		and option:FindFirstChildOfClass("UIStroke").Color == primitives.freeModelOutline(theme.color.surfaceOverlay))
 	f.healthy(); f.close()
 end)
 

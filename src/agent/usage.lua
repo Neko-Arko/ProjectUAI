@@ -120,6 +120,7 @@ return function(env)
 			cacheCreated = created,
 			reasoning = tonumber(reasoning) or 0,
 		}
+		env.require("runtime/request_accounting").report(fallback and fallback.accounting, usage, { prompt = prompt, completion = completion })
 		M.recorded:fire(delta)
 		M.changed:fire(M.session, M.turn)
 		return { prompt = prompt, completion = completion, cost = cost, costKnown = pricedCost ~= nil, estimated = estimated }

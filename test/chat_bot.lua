@@ -38,12 +38,16 @@ local function boot(options)
 	end
 	local app = assert(h.boot()); h.settle(1)
 	app.config.set("permissions.mode", "full")
+	-- Startup now installs included Free access. These scenarios deliberately
+	-- exercise one chosen fixture provider, or a genuinely empty setup.
+	for _, record in ipairs(app.providers.list()) do app.providers.remove(record.id) end
 	if not options.noProvider then
 		local record = app.providers.blank("custom")
 		record.label, record.baseUrl, record.apiKey = "Chatbot test", "https://chatbot.test/v1", "test-key"
 		record.model, record.models, record.stream = "harness-model", { "harness-model" }, false
 		if options.anthropic then record.api = "anthropic" end
 		assert(app.providers.save(record))
+		app.providers.setActive(record.id)
 	end
 	h.settle(1)
 	return h, app, chat, app.env.require("runtime/chatloops"), requests, reply
@@ -244,9 +248,10 @@ scenario("legacy message IDs and ID-less duplicate events are consumed once", fu
 	end }
 	app = assert(legacy.boot()); legacy.settle(1)
 	app.config.set("permissions.mode", "full")
+	for _, existing in ipairs(app.providers.list()) do app.providers.remove(existing.id) end
 	local record = app.providers.blank("custom")
 	record.baseUrl, record.apiKey, record.model = "https://chatbot.test/v1", "test-key", "harness-model"
-	assert(app.providers.save(record)); legacy.settle(1)
+	assert(app.providers.save(record)); app.providers.setActive(record.id); legacy.settle(1)
 	assert(dispatch(app, "chat_bot", { channel = "Team" }).ok)
 	incoming:Fire({ Message = "hello", FromSpeaker = "Alice", SpeakerUserId = 2, OriginalChannel = "Team", ID = 42 })
 	incoming:Fire({ Message = "hello", FromSpeaker = "Alice", SpeakerUserId = 2, OriginalChannel = "Team", ID = 42 })

@@ -6,6 +6,7 @@ local case, check = suite.case, suite.check
 
 local SECRET = "sk-support-secret-1234"
 local KEY_NAME = "Private billing account"
+local KEY_ID = "11111111-1111-4111-8111-111111111111"
 
 local function setup()
 	local f = F.new(); f.tools({ "support_bundle" })
@@ -13,7 +14,8 @@ local function setup()
 	config.set("providers.list", {
 		{ id = "fixture", label = "Fixture provider", baseUrl = "https://fixture.test/v1",
 			apiKey = SECRET, model = "fixture-model", api = "openai", enabled = true,
-			keyNames = { KEY_NAME }, keyMode = "single", selectedKey = 1,
+			keyNames = { KEY_NAME }, keyMode = "single", selectedKey = 1, keyPaused = { true },
+			keyIds = { KEY_ID },
 			params = { headers = { Authorization = "Bearer " .. SECRET, ["X-Custom"] = "custom-secret" } } },
 	})
 	config.set("agent.customInstructions", "A local preference")
@@ -36,6 +38,11 @@ case("the bundle contains diagnostics but no credentials or conversation text", 
 		and bundle.providers[1].keyNames == nil and raw:find(KEY_NAME, 1, true) == nil)
 	check("diagnostics preserve policy without changing the saved key name", bundle.config.providers.list[1].keyMode == "single"
 		and bundle.config.providers.list[1].selectedKey == 1 and f.env.require("runtime/config").get("providers.list")[1].keyNames[1] == KEY_NAME)
+	check("pause diagnostics preserve saved state without resuming a key", bundle.config.providers.list[1].keyPaused[1] == true
+		and f.env.require("runtime/config").get("providers.list")[1].keyPaused[1] == true)
+	check("usage identities are omitted without changing saved identity", bundle.config.providers.list[1].keyIds == nil
+		and bundle.providers[1].keyIds == nil and raw:find(KEY_ID, 1, true) == nil
+		and f.env.require("runtime/config").get("providers.list")[1].keyIds[1] == KEY_ID)
 	check("custom header values are redacted", bundle.config.providers.list[1].params.headers["X-Custom"] == "<redacted>"
 		and raw:find("custom-secret", 1, true) == nil)
 	check("provider summary contains health but no key", bundle.providers[1].label == "Fixture provider"

@@ -66,6 +66,12 @@ return function(env)
 	-- Request snapshots keep their existing copy semantics, but own one shared
 	-- cursor with the record they were copied from, even before the first request.
 	function M.shareKeyRotation(record, snapshot)
+		providerKeys.ensureIds(record)
+		if table.concat(M.keysOf(record), "\n") == table.concat(M.keysOf(snapshot), "\n") then
+			snapshot.keyIds = util.deepCopy(record.keyIds)
+		else
+			providerKeys.ensureIds(snapshot)
+		end
 		if providerKeys.mode(record) == "rotate" and providerKeys.mode(snapshot) == "rotate" and M.keyPoolSize(record) > 1 then
 			snapshot.keyRotation = keyState(record)
 		end
@@ -175,8 +181,16 @@ return function(env)
 	end
 
 	function M.protocolProblem(record, opts)
-		if providerKeys.mode(record) == "single" and #M.requestKeys(record) == 0 then
-			return "choose an existing API key or turn on key rotation"
+		-- Pausing is a valid saved configuration, but must stop dispatch before a
+		-- missing effective key could become an anonymous HTTP request.
+		if not (opts and opts.configuration) and #M.requestKeys(record) == 0 then
+			if providerKeys.mode(record) == "single" then
+				if providerKeys.paused(record, providerKeys.selected(record)) then
+					return "the selected API key is paused; resume it, choose another key, or turn on key rotation"
+				end
+				return "choose an existing API key or turn on key rotation"
+			end
+			if M.keyPoolSize(record) > 0 then return "all API keys are paused; resume a key before making requests" end
 		end
 		if record.api ~= nil and record.api ~= "openai" and record.api ~= "anthropic" and record.api ~= "gemini" then
 			return "choose Chat completions, Anthropic messages or Google Gemini; this API protocol is not implemented"
@@ -519,10 +533,14 @@ return function(env)
 		M.migrate()
 		local stored = config.get("providers.list", {})
 		if type(stored) ~= "table" then return {} end
-		local out = {}
+		local out, migrated = {}, false
 		for _, record in ipairs(stored) do
-			if type(record) == "table" then out[#out + 1] = record end
+			if type(record) == "table" then
+				if providerKeys.ensureIds(record) then migrated = true end
+				out[#out + 1] = record
+			end
 		end
+		if migrated then config.save() end
 		table.sort(out, function(a, b)
 			if (a.order or 0) ~= (b.order or 0) then return (a.order or 0) < (b.order or 0) end
 			return tostring(a.id) < tostring(b.id)
@@ -553,7 +571,7 @@ return function(env)
 		elseif urlError then
 			problems[#problems + 1] = urlError
 		end
-		local protocolProblem = M.protocolProblem(record)
+		local protocolProblem = M.protocolProblem(record, { configuration = true })
 		if protocolProblem then problems[#problems + 1] = protocolProblem end
 		if util.trim(record.wsUrl) ~= "" then
 			local socketUrl = urls.parse(record.wsUrl)
@@ -584,6 +602,7 @@ return function(env)
 		if M.requiresClaude(record) then record.claudeUa = true end
 		local ok, problems = M.validate(record)
 		if not ok and not opts.force then return false, problems end
+		providerKeys.ensureIds(record)
 
 		local list = config.get("providers.list", {})
 		if type(list) ~= "table" then list = {} end

@@ -59,21 +59,29 @@ return function(env)
 			local index = keyData.selected(record)
 			local entry = keyData.entries(record)[index or 0]
 			local name = entry and entry.name ~= "" and entry.name or ("API key " .. tostring(index or 1))
-			return "Use one key: " .. name
+			return "Use one key: " .. name .. (entry and entry.paused and " (paused)" or "")
 		end
+		local pool, active = keyData.entries(record), 0
+		for _, entry in ipairs(pool) do if not entry.paused then active = active + 1 end end
+		if active < #pool then return active == 0 and "All API keys are paused" or ("Rotate " .. active .. " active keys / " .. #pool .. " saved") end
 		return "Rotate keys automatically"
 	end
 
 	local function sameKeyConnection(record, updated)
-		return record.apiKey == updated.apiKey
-			and keyData.mode(record) == keyData.mode(updated)
-			and keyData.selected(record) == keyData.selected(updated)
+		if record.apiKey ~= updated.apiKey or keyData.mode(record) ~= keyData.mode(updated)
+			or keyData.selected(record) ~= keyData.selected(updated) then return false end
+		for index in ipairs(keyData.keys(record)) do
+			if keyData.paused(record, index) ~= keyData.paused(updated, index) then return false end
+		end
+		return true
 	end
 
 	local function applyKeys(record, updated)
 		local connectionChanged = not sameKeyConnection(record, updated)
 		record.apiKey = updated.apiKey
 		record.keyNames = util.deepCopy(updated.keyNames)
+		record.keyPaused = util.deepCopy(updated.keyPaused)
+		record.keyIds = util.deepCopy(updated.keyIds)
 		record.keyMode = updated.keyMode
 		record.selectedKey = updated.selectedKey
 		if connectionChanged then record.keyRotation = nil end
@@ -93,6 +101,7 @@ return function(env)
 		if util.trim(raw) == "" and registry.opencodeKeyOptional(record) then return "Provided by connected OpenCode CLI", nil end
 		if util.trim(raw) == "" then return "not set", "warn" end
 		local pool = registry.keysOf(record)
+		if #pool > 0 and #keyData.requestKeys(record) == 0 then return "No active API key", "warn" end
 		if keyData.mode(record) == "single" then
 			local key = keyData.requestKeys(record)[1]
 			if not key then return "Choose an API key", "warn" end
@@ -689,6 +698,7 @@ return function(env)
 	-- be dismissed to see the rest of the screen. This modal exists for the one moment
 	-- when none of that is reachable yet: there is no record to select.
 	function M.editor(record, onSaved)
+		keyData.ensureIds(record)
 		local editing = util.deepCopy(record)
 		local adding = util.trim(editing.id) == ""
 		local retainDraft = adding

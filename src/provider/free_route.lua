@@ -25,7 +25,7 @@ return function(env)
 	end
 
 	function M.eligible(record)
-		return config.get("agent.autoFreeRouting", true) ~= false and eligibleRecord(record)
+		return config.get("agent.autoFreeRouting", true) ~= false and eligibleRecord(record) and #registry.requestKeys(record) > 0
 	end
 
 	local function same(a, b)
@@ -56,10 +56,15 @@ return function(env)
 	end
 
 	local function call(record, state, body)
+		if not current(record, state) then return nil end
 		local start = clock.ms()
+		local headers = env.require("provider/chat").headers(record)
+		local accounting = env.require("runtime/request_accounting").new(record)
+		local key = record.apiKey
 		local function aborted() return not current(record, state) or clock.since(start) >= TARGET end
 		local response = http.send({ url = registry.endpoint(record, "/chat/completions"), method = "POST",
-			headers = env.require("provider/chat").headers(record), body = util.encode(body),
+			headers = headers, body = util.encode(body),
+			onDispatch = function() accounting.dispatch(key, headers) end,
 			identity = registry.identityFor(record), identityRequired = registry.requiresClaude(record),
 			relay = state.scope.relay ~= nil, attempts = 1, timeout = TARGET / 1000, deadlineMs = start + TARGET,
 			aborted = aborted, silent = true, tag = "free:probe" })
@@ -71,6 +76,7 @@ return function(env)
 			if type(decoded) ~= "table" or decoded.error then return nil end
 			parsed = sse.fromResponse(decoded)
 		end
+		accounting.attach(parsed)
 		if parsed.streamError then return nil end
 		return parsed, clock.since(start)
 	end
