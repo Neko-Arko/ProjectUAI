@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "entries": {
+    "Memory": "记忆",
+    "More": "更多",
+    "Options": "选项",
+    "Review": "检查",
+    "Apply": "应用",
+    "Enabled": "启用",
+    "Start": "开始",
+    "Undo": "撤销",
+    "Install update": "安装更新",
+    "Web runtime": "网页运行时",
+    "Game runtime": "游戏内运行时"
+  }
+}
