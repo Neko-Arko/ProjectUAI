@@ -45,14 +45,14 @@ return function(env)
 
 		local stats = registry.stats()
 		P.text(head, {
-			text = string.format("%d tools in %d groups", stats.total, util.count(stats.byGroup)),
+			text = env.t("%{tools} tools in %{groups} groups", { tools = stats.total, groups = util.count(stats.byGroup) }),
 			role = "heading",
 			layoutOrder = 1,
 		})
 		local summary = P.text(head, {
-			text = string.format("%d unavailable on this host: %s",
-				#stats.unavailable,
-				#stats.unavailable > 0 and caps.summary() or "everything is available"),
+			text = #stats.unavailable > 0
+				and env.t("%{count} unavailable on this host: %{list}", { count = #stats.unavailable, list = caps.summary() })
+				or env.t("Everything is available on this host"),
 			role = "caption",
 			color = theme.color.textTertiary,
 			wrap = true,
