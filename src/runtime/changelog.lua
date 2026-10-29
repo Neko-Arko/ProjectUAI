@@ -19,6 +19,37 @@ return function(env)
 	local CATEGORY_ORDER = { "added", "improved", "fixed" }
 	local ENTRIES = {
 		{
+			version = "3.7.2",
+			revision = "2026-10-29-credential-choice-and-compact-progress",
+			date = "October 29, 2026",
+			title = "Password vault and scheduled free access",
+			highlights = "Choose password encryption or explicitly continue without it. Encryption and unlocking show a compact corner percentage, and password prompts fit their contents. The Claude Code Settings tab is now Project UAI.",
+			sections = {
+				{ category = "added", label = "Credential storage", items = {
+					"First setup offers password encryption or a red Continue without encryption option. The unprotected choice is saved and skips future password prompts. Encrypted vaults still require their password on every execution; existing keys and pool settings carry over after verified storage.",
+					"The vault uses AES-256-SIV and PBKDF2-HMAC-SHA256 entirely in Luau. Setup and password changes verify the encrypted save before switching. Cancel and failed writes preserve live keys; scripts sharing the executor can still intercept credentials during use.",
+					"New passwords use 100,000 PBKDF2 iterations. Older vaults retain their stored work factor until a password change rewrites them. Encryption and unlocking share a compact corner percentage with Cancel; startup password work leaves the game visible and interactive.",
+					"Privacy provides password changes, Lock now and the deliberate unprotected storage choice after unlocking. Forgotten-password removal discards saved vault credentials before returning to setup.",
+					"Older byte encoding is reversible and remains supported for migration. Replace exposed keys in the provider dashboard and revoke the old ones; UAI's Rotate keys only selects between existing keys. A forgotten vault password cannot be recovered.",
+				} },
+				{ category = "improved", label = "Copies and included access", items = {
+					"Normal configuration copies and diagnostics exclude connection credentials. Private copies retain encryption only when the vault is enabled; unprotected copies remain recoverable. Encrypted imports ask for their password before review. This device keeps its own storage choice and vault password.",
+					"Project UAI Free opens daily during 20:00–06:00 UTC+8 (Beijing/Singapore). Off-hours requests explain the schedule, and accepted replies continue after closing. Personal HCNSEC keys are unaffected.",
+					"The included community key has been replaced. Old included credentials migrate on the official endpoint; saved configs and exports use a reference. Bundle encoding deters simple searches but cannot make a client-held key secret.",
+				} },
+				{ category = "fixed", label = "Duplicate credential copies", items = {
+					"Custom headers, query/body overrides, URL credentials and learned scopes are protected with the key pool. Temporary rotation maps are never saved, because they can contain API keys.",
+					"Failed storage updates keep live keys and report the failure. Unreadable encoded records are preserved and cannot silently become anonymous requests. Older exports and backups remain under your control and may still contain plaintext credentials.",
+				} },
+				{ category = "fixed", label = "Reasoning levels", items = {
+					"Enabling reasoning support keeps its level buttons visible in short model pickers. Provider details and the caption compact first; extremely limited keyboard space keeps the levels available through Options.",
+				} },
+				{ category = "improved", label = "Settings", items = {
+					"The Claude Code Settings tab is now named Project UAI.",
+				} },
+			},
+		},
+		{
 			version = "3.7.1",
 			revision = "2026-10-25-key-usage-and-pausing",
 			date = "October 25, 2026",

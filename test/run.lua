@@ -9,6 +9,7 @@ package.path = "test/?.lua;test/mock/?.lua;" .. package.path
 
 local envMock = require("env")
 local json = require("json")
+local authenticate = require("password_fixture")
 
 local suite = { passed = 0, failed = 0, scenarios = 0, failures = {} }
 local filters, nativeOnly = {}, false
@@ -156,6 +157,7 @@ local function bootWith(opts)
 	local handle, err = harness.boot()
 	if not handle then error("boot failed: " .. tostring(err), 0) end
 	harness.settle(1)
+	authenticate(harness, handle)
 
 	-- Most scenarios deliberately choose their own endpoint or an empty setup.
 	-- Keep the real first-run default only in tests that request it explicitly.

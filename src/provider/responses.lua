@@ -498,6 +498,7 @@ return function(env)
 			local imageRequest = env.require("runtime/images").hasReferences(request.messages)
 			local headers = headersFor()
 			local res, err = http.send({
+				requiresAccess = true,
 				onDispatch = function() accounting.dispatch(currentKey, headers) end,
 				relay = env.require("net/transport").shouldRelay(imageRequest), sessionId = request.sessionId,
 				relayUnlimited = relayUnlimited,

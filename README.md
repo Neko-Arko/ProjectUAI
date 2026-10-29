@@ -4,13 +4,26 @@ A universal AI agent that runs inside a Roblox client. It works in any game,
 with Chat Completions, OpenAI Responses and Anthropic Messages endpoints,
 including compatible local servers and relays.
 
-**Project UAI 3.7.1 - October 25, 2026: UI polish and individual API keys.**
-The Roblox client, bridge, web UI and Android companion are 3.7.1; the Windows
+**Project UAI 3.7.2 - October 29, 2026: password vault and scheduled free access.**
+Startup offers password protection and a red **Continue without encryption**
+option. Existing keys and their pool metadata carry over after the chosen save is
+verified. Without encryption, keys are saved using reversible byte encoding and
+future password prompts are skipped. With a vault, each execution requires its
+password. New vaults use 100,000 derivation iterations; existing 600,000-iteration
+vaults stay unchanged until an explicit password change. Normal configuration
+copies exclude credentials; private copies retain the chosen protection.
+See [API key security, migration and rotation](docs/API_KEY_SECURITY.md).
+
+**Project UAI Free is available daily from 8 PM to 6 AM, GMT+8 / Beijing / Singapore.**
+The closing time is the following morning. Capacity and upstream limits still apply.
+The Roblox client is 3.7.2; bridge, web UI and Android remain 3.7.1, and Windows
 desktop remains 3.7.0. **Manage API keys** opens a dedicated modal with named,
 masked entries. Add, rename, replace or remove a key without losing the others.
 **Rotate keys** is the default; choose **Use one key** to pin requests to a
 specific entry. Existing key pools are preserved. The setup guide opens expanded
 by default.
+
+The former **Claude Code** Settings tab is now named **Project UAI**.
 
 Pause individual keys while keeping them saved, and see their locally recorded
 requests and input/output tokens. Each conversation also shows its AI request
@@ -65,8 +78,9 @@ and checking the connection simpler, and accepts compressed message submissions
 that previously failed JSON decoding after pairing. Both apps retain verified
 automatic updates, and Android installation still requires confirmation.
 
-Start chatting with **Project UAI Free** without supplying an API key. It is the
-default when no provider is configured. Its adaptive router measures small tool
+During its daily **20:00–06:00 UTC+8** window, use **Project UAI Free** without
+supplying an API key. It is the default when no provider is configured.
+Its adaptive router measures small tool
 requests and prefers verified fast HCNSEC models when compatible; otherwise it
 keeps the provider's `auto` route. Free models have rounded green outlines.
 Thank you for continuing to use and support Project UAI. Capacity and response
@@ -87,8 +101,8 @@ workspace. Go keeps its own catalog and routes; the optional free CLI backend
 does not intercept it. Subscription and workspace region refusals identify the
 setting to check. See [provider setup](docs/PROVIDER_COMPATIBILITY.md).
 
-The client, bridge, web UI and Android companion are 3.7.1; the Windows desktop is 3.7.0.
-UI LIB remains 1.3.0 and SDK 1.0.0.
+The client is 3.7.2; bridge, web UI and Android companion remain 3.7.1; Windows desktop is 3.7.0.
+UI LIB remains 1.4.0 and SDK 1.0.0.
 Model pricing and context/reply limits use an October 25 catalog with 1,760
 entries across 15 providers, including exact Kilo and Cline routes. Unknown
 prices stay unknown; included Project UAI Free access is counted at zero cost.
@@ -104,7 +118,7 @@ it. The model modal edits the same global effort setting, including for other
 models when **Options → Reasoning support** is enabled. The Thinking row estimates
 visible text only. A long retained trace is labelled
 **Excerpt**, not a 5,999-token model limit. See [provider behavior](docs/PROVIDER_COMPATIBILITY.md).
-See [3.7.1 verification](docs/TESTING_3.7.1.md),
+See [3.7.2 verification](docs/TESTING_3.7.2.md), [3.7.1 verification](docs/TESTING_3.7.1.md),
 [3.7.0 verification](docs/TESTING_3.7.0.md),
 [3.6.6 verification](docs/TESTING_3.6.6.md),
 [3.6.5 verification](docs/TESTING_3.6.5.md),
@@ -128,18 +142,23 @@ executor it uses the executor's HTTP function; in a plain client it falls back t
 `HttpService` and says which capabilities it lost. Embedded in a host script it
 takes a context table and adds that script's own instructions and hooks.
 
-Running the same bundle again toggles the existing interface; embedding hosts can
-pass `{ reuse = true }` to reuse it without toggling. A changed bundle
+Running the same bundle again reuses the existing client. An enabled vault asks
+for its password; a saved unprotected-storage choice skips that prompt.
+It requests showing the normal app afterward; embedding hosts can pass
+`{ reuse = true }` to retain the existing display preference. A changed bundle
 reloads an idle client after saving its settings and conversations. If work, an
 unsent draft, or an isolated conversation would be lost, the current instance stays
 open with a notice; finish that work before running the updated loader again.
 
-In **Settings → Import & export → Full configuration**, use **Copy config · includes
-API keys** to transfer all saved configuration, including providers, key pools,
-custom headers, permissions, preferences, and saved memory. On the other device,
-choose **Paste configuration to import**, paste the JSON, select **Review**, then
-**Apply**. This private export contains credentials. Conversations, activity history,
-workspace files, and skill files are separate from configuration.
+In **Settings → Import & export → Configuration transfer**, the normal copy excludes
+provider and connection credentials. Choose the separately labelled private copy
+only when you need to transfer personal keys and custom authentication fields.
+On the other device, paste the JSON, select **Review**, enter its master password
+if encrypted, then **Apply**. Import replaces provider settings and keeps that
+device's storage choice and vault password; a copy without credentials requires
+re-entry. Memory and other personal settings still
+need review before sharing. Conversations, activity history, workspace files and
+skill files are separate from configuration.
 
 ## What it is
 
@@ -161,12 +180,13 @@ The [embedding reference](docs/EMBEDDING.md) covers host scripts, custom UIs,
 sessions, tools, hooks, providers, state binding, and cleanup.
 
 **Embedding SDK 1.0.0.** Load the client with `{ ui = false, reuse = true }` to
-use sessions and tools without mounting its application. `uai.sdk` provides
-owned integration scopes and requests with structured results, cancellation,
+keep the normal app hidden after choosing storage or unlocking a vault. The saved
+unprotected-storage choice skips future prompts; an enabled vault asks each time.
+`uai.sdk` provides owned integration scopes and requests with structured results, cancellation,
 completion callbacks, and optional waiting. Open named conversations without
-changing the user's selection, and explicitly mount the app when needed with
+changing the user's selection, and explicitly show the app when needed with
 `uai.show(...)` or `uai.openSession(id)`. Start with the
-[UI-free SDK example](examples/embedding/sdk.lua) and
+[SDK example](examples/embedding/sdk.lua) and
 [SDK quickstart](docs/EMBEDDING.md#sdk-quickstart). Providers and permissions remain
 shared client settings; runtime capabilities still depend on the host.
 
@@ -211,7 +231,8 @@ takes anything that speaks `/v1/chat/completions` -- a relay, a self-hosted vLLM
 Ollama on localhost. Model lists are never guessed: they come from
 `GET /v1/models` or from you typing one in.
 
-**Project UAI Free** is ready when no provider is configured. Add it later from the
+**Project UAI Free** is configured when no provider exists and opens daily during
+**20:00–06:00 UTC+8**. Add it later from the
 Recommended tier, or from the start card's Project UAI Free row; existing providers
 and personal keys stay as configured. AgentRouter can recover from explicit
 unauthorized-client errors using the
@@ -774,7 +795,10 @@ remain usable without JavaScript; only search and copy controls need it.
 
 ## First run
 
-Project UAI Free is ready on a fresh install. Open Chat and send a message, or
+Set a master password or deliberately choose the red **Continue without encryption**
+action at startup. The latter saves recoverable, unprotected keys and skips future
+password prompts. Project UAI Free is configured on a fresh install and opens daily
+during 20:00–06:00 UTC+8. During those hours, open Chat and send a message, or
 add your own connection in Providers: choose a provider in the gallery or enter a
 base URL, then enter its authentication details and fetch or type an exact model
 ID. Shared free capacity and speed can vary; existing provider choices stay
@@ -793,10 +817,11 @@ choices and rules are preserved. Read only, Ask first and Auto remain available;
 the chip under the composer names the active mode. Ask first shows a tool's
 arguments before changes or execution, including the code for `run_luau`.
 
-Nothing on disk until then, and only three things after: `config.json`,
-`sessions/<id>.json` per conversation, and `stats.json` for the activity counters.
-A conversation can be marked isolated from the composer, which keeps it out of the
-first two entirely.
+Settings are saved in `config.json`, conversations in `sessions/<id>.json`, and
+activity counters in `stats.json`. A password vault encrypts provider credentials;
+the explicit unprotected option saves them with reversible byte encoding.
+Older plaintext and byte-encoded configurations remain readable for migration.
+A conversation marked isolated from the composer is not saved to its conversation file.
 
 ## Cowork: your browser workspace
 
@@ -913,12 +938,15 @@ agent to use them; prompt text alone does not install capabilities. The returned
 handle exposes `env`, `app`, `sessions`, `config`, `providers`, `tools`, `caps`,
 `bridge`, and `log`. Runtime methods use dots; UI LIB methods use colons.
 
-The full client mounts its standard app unless `context.ui = false`. An explicit
-`show`, `toggle`, or `openSession` can mount it later. UI LIB is independent and
-mounts nothing until `CreateWindow`. A same-build client loader rerun toggles the
-live instance unless `context.reuse = true`, and ignores new context; reuse a saved
-handle or `getgenv().UAI` when
-attaching another view. Changed builds replace the client only after active and
+The full client opens the storage choice when undecided and password entry when
+a vault is enabled. A saved unprotected-storage choice skips these prompts.
+With `context.ui = false`, the normal app stays hidden after access is granted;
+`show`, `toggle`, or `openSession` can show it later. UI LIB is independent and
+mounts nothing until `CreateWindow`.
+A same-build client loader rerun reuses the live instance and follows the saved
+protection choice. It requests showing the app after any required unlock unless
+`context.reuse = true`, and ignores new context; reuse a saved handle or
+`getgenv().UAI` when attaching another view. Changed builds replace the client only after active and
 unsaved work is protected. Pin all bundle/module URLs to one reviewed commit SHA
 for reproducible host releases.
 

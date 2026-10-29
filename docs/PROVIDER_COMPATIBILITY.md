@@ -1,6 +1,6 @@
 # Provider compatibility and WebSockets
 
-Applies to **3.7.0**, October 25, 2026.
+Applies to **3.7.2**, October 29, 2026.
 
 UAI implements **Chat Completions**, **Anthropic Messages** and **Google Gemini**,
 plus a dedicated **Responses** path for supported OpenCode and AgentRouter models. Custom
@@ -13,6 +13,13 @@ model quality, tool-call accuracy, executor networking and TLS are outside that
 coverage.
 
 ## Provider setup and model discovery
+
+Initial use requires password setup or the explicit **Continue without encryption**
+choice before inference or discovery, including public no-key and included free
+routes. With a vault, every execution requires unlock, including `ui = false`
+embedding. A saved unprotected-storage choice skips future password prompts and
+stores keys with reversible byte encoding. The gate preserves existing credentials
+for verified migration; see [API key security](API_KEY_SECURITY.md).
 
 The [individual setup guides](providers/README.md) cover Vercel AI Gateway,
 Perplexity Orchestrator, FriendliAI Model APIs, Venice, Nscale, Arcee AI and
@@ -260,14 +267,24 @@ key or model entry is required. Existing providers and private credentials stay
 intact. Choose **Use Project UAI Free** to add it later. Thank you for your continued
 use and support of Project UAI; more free providers may become available soon.
 
+Included community access is scheduled **daily from 20:00 to 06:00 the following
+morning, fixed UTC+8 (Beijing/Singapore)**. The client's local timezone and daylight
+saving do not change these hours. Outside the schedule, UAI explains the next
+opening and skips new included-access inference, model discovery and background
+probes. Choose another provider or return at 20:00 UTC+8. You can still save the
+free provider; personal HCNSEC keys do not use this community schedule. An already
+accepted inference may finish after 06:00. These checks provide client guidance;
+the service controls actual availability and must enforce any server access limits.
+
 **Settings → Agent → Automatic free routing** is enabled by default and optional.
 Turn it off to stop background measurements and retain the selected provider model
 for future requests. An accepted request finishes on its existing route. When UAI
 selects a measured model, a conversation notice names it and gives this setting path.
 The provider may still perform its own routing when its selected model is `auto`.
 
-With automatic free routing enabled, `auto` selected and the default Chat settings, UAI measures models in the
-background when you open the model picker or send an agent request. It discovers
+During scheduled hours, with automatic free routing enabled, `auto` selected and
+the default Chat settings, UAI measures models in the background when you open the
+model picker or send an agent request. It discovers
 the live catalog, checks a small tool call and its result replay, and prefers the
 fastest verified candidate whose two responses each finished within ten seconds.
 The picker shows the latest synthetic probe time. The first request can use the

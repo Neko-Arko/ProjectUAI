@@ -21,6 +21,7 @@ end
 local util = env.require("runtime/util")
 local fsx = {
 	enabled = true,
+	exists = function() return false end,
 	readJson = function(_, fallback) return fallback end,
 	writeJson = function(path, value)
 		writes[#writes + 1] = { path = path, value = util.deepCopy(value) }
@@ -34,6 +35,7 @@ cache["runtime/log"] = { warn = function() end }
 local config = env.require("runtime/config")
 local transfer = env.require("runtime/config_transfer")
 local keyPolicy = env.require("runtime/provider_keys")
+local credentials = env.require("runtime/credentials")
 local checks = 0
 local function check(label, condition)
 	assert(condition, label)
@@ -51,6 +53,7 @@ local function envelope(snapshot)
 	return { format = transfer.FORMAT, version = transfer.VERSION, config = snapshot }
 end
 local full = util.deepCopy(config.defaults)
+full.security.rememberCredentials = true
 full.ui.density = "compact"
 full.ui.layout = "window"
 full.ui.window = { width = 1050, height = 700, x = 30, y = 40, maximised = false, placed = true }
@@ -89,33 +92,41 @@ full.extension = { token = "extension-secret", active = false }
 config.data = util.deepCopy(full)
 config.changed:connect(function(path, value) events[#events + 1] = { path = path, value = value } end)
 
-local body, summary = transfer.export()
+local body, summary = transfer.export({ includeCredentials = true })
 check("full configuration exports to JSON", type(body) == "string")
 local decoded = assert(util.decode(body))
+local exportedFull = util.deepCopy(full)
+exportedFull.providers.list[1].keyRotation = nil
+local decodedFull = assert(transfer.preview(body)).config
 check("export has a versioned format envelope", decoded.format == transfer.FORMAT and decoded.version == 1 and decoded.exportedAt == 123456 and decoded.appVersion == "test")
-check("export preserves every persisted value", same(decoded.config, full))
-check("export preserves multiline API key pools verbatim", decoded.config.providers.list[1].apiKey == full.providers.list[1].apiKey)
-check("export preserves names and selected-key policy", same(decoded.config.providers.list[1].keyNames, full.providers.list[1].keyNames)
-	and decoded.config.providers.list[1].keyMode == "single" and decoded.config.providers.list[1].selectedKey == 2)
-check("export preserves each paused and active key", same(decoded.config.providers.list[1].keyPaused, { true, false, true }))
-check("export preserves opaque usage identities", same(decoded.config.providers.list[1].keyIds, full.providers.list[1].keyIds))
+check("private export contains encoded provider and identity envelopes", type(decoded.config.providers.list[1].storedCredentials) == "table"
+	and type(decoded.config.identity.storedCredentials) == "table" and decoded.config.providers.list[1].apiKey == ""
+	and not body:find("key-one", 1, true) and not body:find("header-secret", 1, true) and not body:find("identity-secret", 1, true))
+check("private export reconstructs all retained configuration", same(decodedFull, exportedFull))
+check("export reconstructs multiline API key pools verbatim", decodedFull.providers.list[1].apiKey == full.providers.list[1].apiKey)
+check("export reconstructs names and selected-key policy", same(decodedFull.providers.list[1].keyNames, full.providers.list[1].keyNames)
+	and decodedFull.providers.list[1].keyMode == "single" and decodedFull.providers.list[1].selectedKey == 2)
+check("export reconstructs each paused and active key", same(decodedFull.providers.list[1].keyPaused, { true, false, true }))
+check("export reconstructs opaque usage identities", same(decodedFull.providers.list[1].keyIds, full.providers.list[1].keyIds))
 check("summary counts unique keys across multiline/comma pools", summary.keys == 4 and summary.providers == 2 and summary.active == "Secondary")
 check("summary includes preferences without credentials", summary.permissionMode == "auto" and summary.rules == 3 and summary.memory == 1 and summary.bridgeEnabled == true and not util.encode(summary):find("secret", 1, true))
 check("summary excludes private key names", not util.encode(summary):find("Private account label", 1, true) and summary.keyNames == nil)
 check("export has no persistence or observer side effects", #writes == 0 and #events == 0)
 local preview = assert(transfer.preview(body))
-check("preview roundtrips every persisted value", same(preview.config, full))
+check("preview roundtrips every retained value", same(preview.config, exportedFull))
 check("preview does not modify live settings", #writes == 0 and #events == 0 and same(config.data, full))
 preview.config.extension.active = true
 check("preview is isolated from live settings", config.data.extension.active == false)
 preview = assert(transfer.preview(body))
 config.data = util.deepCopy(config.defaults)
+config.data.security.rememberCredentials = true
 config.data.stale = true
 config.data.providers.list = { { id = "old" } }
 local ok, persisted = transfer.apply(preview)
 check("apply succeeds and persists", ok and persisted and #writes == 1 and writes[1].path == "config.json")
-check("apply replaces full configuration including old providers", same(config.data, full) and config.data.stale == nil)
-check("persisted snapshot matches the complete applied snapshot", same(writes[1].value, full))
+check("apply replaces full configuration including old providers", same(config.data, exportedFull) and config.data.stale == nil)
+check("persisted snapshot reconstructs state without transient key rotation", same(credentials.restore(writes[1].value), exportedFull)
+	and writes[1].value.providers.list[1].keyRotation == nil)
 check("apply publishes one complete snapshot and live layout preferences", #events == 2 and events[1].path == nil and events[1].value == config.data and events[2].path == "ui.layout")
 check("applied settings do not alias preview", config.data ~= preview.config and config.data.providers.list ~= preview.config.providers.list)
 local minimal = { version = 1, ui = {}, agent = {}, providers = {}, permissions = {} }
@@ -258,12 +269,25 @@ for label, invalid in pairs({
 	["reject wrong format"] = '{"format":"other","version":1,"config":{}}',
 	["reject future envelope version"] = '{"format":"project-uai-config","version":2,"config":{}}',
 	["reject null settings"] = body:gsub('"notifications":true', '"notifications":null'),
-	["reject invalid UTF-8 key names in JSON"] = body:gsub("Private account label", function() return string.char(255) end),
+	["reject invalid UTF-8 key names in JSON"] = util.encode(envelope(full)):gsub("Private account label", function() return string.char(255) end),
 	["reject oversized input"] = string.rep(" ", 8 * 1024 * 1024 + 1),
 }) do
 	mark()
 	local value, err = transfer.preview(invalid)
 	check(label, value == nil and type(err) == "string" and not err:find("private-value", 1, true) and unchanged())
+end
+for _, mutation in ipairs({
+	function(candidate) candidate.providers.list[1].storedCredentials.version = 999 end,
+	function(candidate) candidate.identity.storedCredentials.checksum = -1 end,
+}) do
+	local candidate = util.deepCopy(decoded.config)
+	mutation(candidate)
+	mark()
+	local value, err = transfer.preview(util.encode(envelope(candidate)))
+	check("unreadable encoded import rejects without changing live configuration", not value and type(err) == "string"
+		and not err:find("key-one", 1, true) and unchanged())
+	value, err = transfer.apply({ config = candidate })
+	check("edited preview cannot bypass encoded import validation", not value and type(err) == "string" and unchanged())
 end
 mark()
 failWrite = true
@@ -274,13 +298,14 @@ failWrite = false
 fsx.enabled = false
 mark()
 value, persisted = transfer.apply(preview)
-check("hosts without filesystem import for current session", value and persisted == false and #writes == beforeWrites and same(config.data, full))
+check("hosts without filesystem import for current session", value and persisted == false and #writes == beforeWrites and same(config.data, exportedFull))
 
 local clipboardCalls, clipboardBody = 0, nil
 check("clipboard export needs an explicit writer", transfer.copyToClipboard(nil) == false)
-value = transfer.copyToClipboard(function(text) clipboardCalls = clipboardCalls + 1; clipboardBody = text end)
+value = transfer.copyToClipboard(function(text) clipboardCalls = clipboardCalls + 1; clipboardBody = text end, { includeCredentials = true })
 check("explicit clipboard action writes once", value and clipboardCalls == 1)
-check("clipboard output includes full credentials", same(assert(util.decode(clipboardBody)).config, full))
+check("private clipboard output reconstructs complete credentials", same(assert(transfer.preview(clipboardBody)).config, exportedFull)
+	and not clipboardBody:find("key-one", 1, true))
 value, err = transfer.copyToClipboard(function() return false end)
 check("clipboard false result is reported as failure", not value and type(err) == "string")
 value, err = transfer.copyToClipboard(function() error("private-writer-error") end)
@@ -293,6 +318,7 @@ for _, viewport in ipairs({ { 1280, 800 }, { 390, 844 }, { 320, 640 } }) do
 	local handle, bootError = ui.boot()
 	assert(handle, bootError)
 	ui.settle(1)
+	require("password_fixture")(ui, handle)
 	ui.setViewport(viewport[1], viewport[2])
 	local suffix = " at " .. viewport[1] .. "px"
 	local initial = handle.config.data

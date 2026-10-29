@@ -4,6 +4,7 @@
 -- restarts mid-session is picked up without a reload.
 return function(env)
 	local util = env.require("runtime/util")
+	local config = env.require("runtime/config")
 	local clock = env.require("runtime/clock")
 	local dispose = env.require("runtime/dispose")
 	local transport = env.require("net/transport")
@@ -28,6 +29,8 @@ return function(env)
 	end
 
 	function M.request(spec, headers, call)
+		local access = config.accessProblem()
+		if access then return nil, "vault_required: " .. access end
 		local endpoint = spec.relayEndpoint or transport.endpoint()
 		if not endpoint then return noRelay() end
 		local base, token, target = endpoint.base, endpoint.token, endpoint.target
@@ -48,6 +51,10 @@ return function(env)
 		local function short(method, path, body)
 			if clock.ms() >= deadline then return nil, "deadline: relay request budget expired" end
 			return call({ url = base .. path, method = method, body = body,
+				-- Before the first submission, a hello or slot wait must not let a
+				-- newly challenged client start inference. Receipt recovery belongs
+				-- to the already dispatched job and must remain observable.
+				requiresAccess = not counted,
 				onDispatch = method == "POST" and path == "/api/inference" and function()
 					-- Submission receipt recovery reuses this inference ID. Polls and
 					-- repeated POSTs are never additional provider requests.
@@ -159,6 +166,8 @@ return function(env)
 				response, problem = short("POST", "/api/inference", payload)
 			else response, problem = short("GET", "/api/inference/" .. id .. (previews and not frozen and ("?after=" .. cursor) or "")) end
 			if ended() then cancel(); pending[id] = nil; return nil, "aborted" end
+			local access = not counted and config.accessProblem()
+			if access then pending[id] = nil; return nil, "vault_required: " .. access end
 			-- Unknown deadlines/capacity can recover behind the original native
 			-- owner. A received response that cannot fit or be decoded cannot improve
 			-- by fetching the same completed body again, especially with no deadline.

@@ -24,7 +24,7 @@ local function setup(value)
 		end
 		return { StatusCode = 404, Body = '{}' }
 	end
-	local app = assert(h.boot())
+	local app = assert(h.boot()); require("password_fixture")(h, app)
 	h.settle(1)
 	return h, app, state
 end

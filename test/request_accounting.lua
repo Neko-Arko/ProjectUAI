@@ -204,6 +204,7 @@ end)
 
 case("synthetic Free probes count against their key without any conversation", function()
 	local f = fixture("openai")
+	f.env.require("runtime/clock").ms = function() return 1767268800000 + f.h.sched.now * 1000 end -- 20:00 UTC+8.
 	local record = f.registry.blank("hcnsec"); assert(f.registry.save(record))
 	local posts = 0
 	f.h.http.handler = function(entry)

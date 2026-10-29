@@ -1,5 +1,46 @@
 # Changelog
 
+## 3.7.2 - October 29, 2026 - Password vault and scheduled free access
+
+- Offer password protection by default and a red **Continue without encryption**
+  choice. The explicit alternative verifies reversible byte-encoded storage,
+  preserves key pools, leaves saved API keys unprotected, and skips future password
+  prompts. Existing encrypted vaults must unlock or reset before opting out.
+  Legacy session-only preferences alone cannot make this choice.
+- Use AES-256-SIV and PBKDF2-HMAC-SHA256 entirely in bundled Luau. Existing
+  byte-encoded and plaintext keys migrate with their exact pool metadata after an
+  encrypted save is staged and verified. Cancellation and failed saves preserve
+  current keys. Password changes and locking are available in Privacy.
+  New vaults and explicit password changes use **100,000 iterations** for less
+  derivation work. Existing 600,000-iteration vaults keep their recorded count;
+  using Change master password, including the same password, rewrites at 100,000.
+  Password entry remains required on each execution while a vault is enabled.
+- Show encryption/unlock progress as a compact percentage with Cancel and Exit
+  at the screen edge. The password dialog and backdrop hide during the wait;
+  access remains gated, and failure or cancellation restores entry.
+- Encrypt custom authentication fields alongside key pools and omit temporary
+  key-rotation maps, which can contain duplicate keys.
+- Exclude credentials from normal settings copies and diagnostics. Keep a separate
+  clearly labelled private copy that retains encryption when enabled or reversible
+  encoding otherwise. Encrypted imports request their source password before
+  review; imports retain this device's storage choice and vault password.
+  Older byte-encoded imports remain supported for migration.
+  Preserve unreadable encoded records and reject unsafe imports instead of silently
+  discarding credentials. Existing exported files and backups are not automatically erased.
+- Replace the included community credential, migrate exact retired included keys
+  on the official endpoint and store only a community reference in config/exports.
+  Encode its bundle representation to deter literal searches; it remains recoverable
+  by scripts with equivalent executor access. Personal keys are not rotated remotely.
+- Admit included Project UAI Free requests daily from **20:00 to 06:00 UTC+8**
+  (Beijing/Singapore), with UI guidance and paused off-hours background probes.
+  Accepted replies continue across closing; personal HCNSEC keys are unaffected.
+- Explain that dashboard key replacement/revocation differs from UAI's request
+  rotation. Bridge, desktop and companion implementations remain unchanged.
+- Keep reasoning levels visible when enabling reasoning support in a short model
+  picker. Compact provider details and the effort caption first; only extremely
+  limited keyboard space uses the existing Options fallback.
+- Rename the Claude Code Settings tab to **Project UAI**.
+
 ## 3.7.1 - October 25, 2026 - UI polish, individual API keys and Kilo free routes
 
 - The Roblox client joins the bridge, web UI and Android companion (version

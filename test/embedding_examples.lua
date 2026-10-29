@@ -17,10 +17,17 @@ local function fixture()
 end
 local h, run = fixture()
 local integration = run("examples/embedding/sdk.lua")
-check("SDK example boots without UI or automatic inference", integration.client.alive and not integration.client.uiMounted and #h.coreGui:GetChildren() == 0)
+check("SDK example opens required password entry with the normal app hidden", integration.client.alive
+	and integration.client.uiMounted and not integration.client.app.window.visible
+	and not integration.client.config.vaultStatus().ready)
+check("SDK example cannot request before password entry", integration.ask("Read host status") == nil)
 check("SDK example installs only its named tool and isolated conversation", integration.session.ephemeral and integration.session.toolFilter.sdk_example_status and integration.client.tools.get("sdk_example_status"))
+require("password_fixture")(h, integration.client)
 -- Startup provisions Free; this scenario deliberately needs an empty chain.
-integration.client.config.set("providers.list", {})
+for _, record in ipairs(integration.client.providers.list()) do
+	assert(integration.client.providers.remove(record.id))
+end
+check("failure fixture explicitly removes the provider chain", #integration.client.providers.list() == 0)
 local missing = assert(integration.ask("Read host status"))
 local missingResult = assert(missing.await(5))
 check("example exposes request failures for unconfigured providers", missingResult.status == "failed")

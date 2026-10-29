@@ -14,6 +14,7 @@ return function(env)
 	local util = env.require("runtime/util")
 	local config = env.require("runtime/config")
 	local configTransfer = env.require("runtime/config_transfer")
+	local credentials = env.require("runtime/credentials")
 	local caps = env.require("runtime/caps")
 	local clock = env.require("runtime/clock")
 	local log = env.require("runtime/log")
@@ -237,7 +238,7 @@ return function(env)
 			if record.enabled ~= false then
 				list[#list + 1] = {
 					key = record.label,
-					value = record.baseUrl,
+					value = credentials.cleanUrl(record.baseUrl),
 					tone = record.id == (providers.active() or {}).id and "good" or nil,
 				}
 			end
@@ -255,10 +256,59 @@ return function(env)
 			R.facts(where, list, { name = "Endpoints" })
 		end
 
-		local secrets = build.section("Keys and logs",
-			"An API key is stored in the settings file so a request can be signed with it. "
-			.. "Request logs and diagnostic exports reduce API keys to their last four characters. "
-			.. "Full configuration export keeps all credentials so you can transfer settings; keep that copy private.")
+		local storage = build.section("Provider credential storage",
+			"Choose password encryption or explicitly save without encryption. Protected credentials need your password each time UAI starts. Other scripts can still intercept credentials while you use them.")
+		local storageStatus = R.paragraph(storage, "", { name = "CredentialStorageStatus", layoutOrder = 1 })
+		local function refreshStorage()
+			if not storage.Parent then return end
+			local vault = config.vaultStatus()
+			local unverified = type(config.storageError) == "string" and config.storageError ~= ""
+			storageStatus.Text = unverified and "Saved credential storage could not be verified. Keep this run open to preserve your keys and retry the storage choice."
+				or not fsx.enabled and "Filesystem access is unavailable. UAI needs verified storage before it can save your protection choice."
+				or vault.enabled and (vault.locked and "Saved provider credentials are encrypted and locked. Enter your master password to open UAI."
+					or "Saved provider credentials are encrypted. The vault is unlocked for this run.")
+				or vault.protection == "unprotected" and "Your API keys are saved without encryption. Their byte encoding is reversible; anyone with file access can recover them. Password prompts are skipped."
+				or "Set a master password or explicitly continue without encryption. Existing keys and key-pool settings carry over after storage is verified."
+			storageStatus.TextColor3 = (unverified or not vault.enabled) and theme.color.warn or theme.color.textSecondary
+		end
+		R.paragraph(storage,
+			"The vault covers provider keys, custom headers, query parameters and body overrides. Existing copies, clipboard history, backups and other scripts are outside the vault. "
+			.. "Review remaining configuration before sharing it; notes and other text can contain anything you entered.", { layoutOrder = 2 })
+		R.paragraph(storage,
+			"Replace personal keys regularly at the provider and revoke the old keys. Revoke immediately if theft is suspected. Daily replacement can shorten exposure, but it does not stop a malicious script stealing the replacement. "
+			.. "UAI's Rotate keys option only takes turns between keys; it does not renew or revoke them.", { layoutOrder = 3 })
+		refreshStorage()
+		local unsubscribeStorage = config.changed:connect(function(path)
+			if path == nil or path == "security" or path == "security.vault" then refreshStorage() end
+		end)
+		storage.Destroying:Connect(unsubscribeStorage)
+
+		local vaultSection = build.section("Master-password vault",
+			"Encrypted storage requires unlocking each run. There is no password recovery: forgotten-password reset removes saved vault credentials. You can also choose unprotected storage after unlocking.")
+		local vaultStatus = R.paragraph(vaultSection, "", { name = "CredentialVaultStatus", layoutOrder = 1 })
+		local vaultButton = P.button(vaultSection, { name = "ManageCredentialVault", text = "Set master password", fill = true, layoutOrder = 2,
+			onClick = function() env.require("ui/credentialvault").open() end })
+		local function refreshVault()
+			if not vaultSection.Parent then return end
+			local vault = config.vaultStatus()
+			vaultStatus.Text = vault.busy and "A vault operation is in progress."
+				or vault.error or (vault.enabled and (vault.locked and "Locked. Your encrypted credentials need your master password."
+					or "Unlocked for this run. Lock the vault or change the master password below.")
+				or vault.protection == "unprotected" and "Unprotected storage is active. Set a master password to encrypt your saved credentials."
+				or "Choose password protection or continue without encryption before using UAI.")
+			vaultStatus.TextColor3 = (vault.error or vault.protection == "unprotected") and theme.color.warn or theme.color.textSecondary
+			vaultButton.setText(vault.enabled and (vault.locked and "Unlock credential vault" or "Manage credential vault") or "Set master password")
+			vaultButton.setEnabled(not vault.busy)
+		end
+		refreshVault()
+		local unsubscribeVault = config.changed:connect(function(path)
+			if path == nil or path == "security" or path == "security.vault" then refreshVault() end
+		end)
+		vaultSection.Destroying:Connect(unsubscribeVault)
+
+		local secrets = build.section("Logs and exports",
+			"Request logs mask recognised credentials. Configuration and diagnostic exports exclude credential fields by default. "
+			.. "Only the explicitly labelled private configuration copy includes credentials; keep it private.")
 		R.toggle(secrets, {
 			label = "Mirror the log to the console",
 			hint = "Also print every entry with print/warn, which a developer console can read.",
@@ -641,18 +691,7 @@ return function(env)
 
 	-- What an export contains, and what it deliberately does not.
 	local function exportPayload()
-		local settings = util.deepCopy(config.data)
-		-- The keys are the one thing that must not be copied into a second file. Kept as
-		-- their last four characters so an exported provider list is still readable as a
-		-- list of providers.
-		for _, record in ipairs(util.get(settings, "providers.list", {}) or {}) do
-			local key = tostring(record.apiKey or "")
-			if key ~= "" then record.apiKey = "..." .. key:sub(-4) end
-		end
-		settings.bridge = settings.bridge or {}
-		if util.trim(tostring(settings.bridge.token or "")) ~= "" then
-			settings.bridge.token = "(removed)"
-		end
+		local settings = credentials.sanitise(config.data)
 		return {
 			exportedAt = clock.ms(),
 			version = env.info and env.info.version or "",
@@ -664,14 +703,19 @@ return function(env)
 
 	local function fullConfigImport()
 		local modal = overlay.modal({
-			title = "Import full configuration",
-			description = "Paste the private JSON copied by Full configuration export. Review it before replacing your settings.",
+			title = "Import configuration",
+			description = "Paste a configuration copy and review it before replacing your settings. Private copies can contain credentials.",
 			width = theme.size.modalWide,
 			height = theme.size.dialogTall,
 			scroll = true,
 		})
 		if not modal then return end
-		local candidate, applyButton
+		local candidate, applyButton, passwordModal
+		local sourceRevision = 0
+		modal.scrim.Destroying:Connect(function()
+			candidate = nil
+			if passwordModal and not passwordModal.closed then passwordModal.close() end
+		end)
 		local status = P.text(modal.content, {
 			name = "ConfigImportStatus",
 			text = "Paste your JSON below, then select Review.",
@@ -689,14 +733,16 @@ return function(env)
 			height = theme.text.monoSmall.height * 8 + theme.space.md * 2,
 			layoutOrder = 2,
 			onChange = function()
+				sourceRevision = sourceRevision + 1
 				candidate = nil
+				if passwordModal and not passwordModal.closed then passwordModal.close() end
 				if applyButton then applyButton.setEnabled(false) end
 				status.Text = "Select Review to validate this configuration."
 				status.TextColor3 = theme.color.textSecondary
 			end,
 		})
 		P.text(modal.content, {
-			text = "Applying replaces providers, credentials, permissions, and all saved preferences. Conversations, activity history, workspace files, and skill files stay on this device.",
+			text = "Applying replaces providers, credentials, permissions and preferences. Copies that exclude credentials require you to enter them again. This device keeps its storage choice and any vault password. Conversations, activity history, workspace files and skill files stay on this device.",
 			role = "caption",
 			color = theme.color.textTertiary,
 			wrap = true,
@@ -707,24 +753,50 @@ return function(env)
 			text = "Cancel", variant = "ghost", size = "sm", layoutOrder = 1,
 			onClick = function() modal.close() end,
 		})
+		local function displayPreview(preview, err)
+			if modal.closed then return end
+			candidate = preview
+			applyButton.setEnabled(preview ~= nil)
+			if not preview then
+				status.Text = tostring(err)
+				status.TextColor3 = theme.color.warn
+				return
+			end
+			local summary = preview.summary
+			status.Text = string.format("Ready to import\n%s · %s\nActive provider: %s\nPermission mode: %s · %s\n%s · Bridge %s",
+				util.pluralise(summary.providers, "provider"), util.pluralise(summary.keys, "API key"),
+				util.ellipsis(summary.active, 64), permissions.MODE_LABELS[summary.permissionMode] or summary.permissionMode,
+				util.pluralise(summary.rules, "rule"), util.pluralise(summary.memory, "memory entry"),
+				summary.bridgeEnabled and "enabled" or "disabled")
+			status.Text = status.Text .. (summary.credentialsIncluded == false
+				and "\nCredentials excluded: enter your credentials again after import."
+				or "\nThis copy can include private credentials.")
+			status.Text = status.Text .. (config.vaultStatus().enabled
+				and "\nThis device keeps its own master-password vault."
+				or summary.rememberCredentials == true and "\nThis device remembers provider credentials using reversible byte encoding."
+				or "\nProvider credentials will stay in this run only.")
+			status.TextColor3 = theme.color.text
+		end
 		P.button(modal.footer, {
 			name = "ReviewConfigImport", text = "Review", size = "sm", layoutOrder = 2,
 			onClick = function()
-				local preview, err = configTransfer.preview(field.get())
-				candidate = preview
-				applyButton.setEnabled(preview ~= nil)
-				if not preview then
-					status.Text = tostring(err)
-					status.TextColor3 = theme.color.warn
-					return
+				if passwordModal and not passwordModal.closed then return end
+				local source, revision = field.get(), sourceRevision
+				local preview, err, reason = configTransfer.preview(source)
+				if reason == "password" then
+					candidate = nil; applyButton.setEnabled(false)
+					status.Text, status.TextColor3 = "Enter the source master password to review this encrypted copy.", theme.color.textSecondary
+					passwordModal = env.require("ui/credentialvault").open("import", {
+						cancelled = function() return modal.closed or sourceRevision ~= revision end,
+						submit = function(password, options)
+							local unlocked, why = configTransfer.preview(source, { password = password, progress = options.progress, cancelled = options.cancelled })
+							return unlocked ~= nil, unlocked or why
+						end,
+						onSuccess = function(unlocked) if not modal.closed and sourceRevision == revision then displayPreview(unlocked) end end,
+					})
+				else
+					displayPreview(preview, err)
 				end
-				local summary = preview.summary
-				status.Text = string.format("Ready to import\n%s · %s\nActive provider: %s\nPermission mode: %s · %s\n%s · Bridge %s",
-					util.pluralise(summary.providers, "provider"), util.pluralise(summary.keys, "API key"),
-					util.ellipsis(summary.active, 64), permissions.MODE_LABELS[summary.permissionMode] or summary.permissionMode,
-					util.pluralise(summary.rules, "rule"), util.pluralise(summary.memory, "memory entry"),
-					summary.bridgeEnabled and "enabled" or "disabled")
-				status.TextColor3 = theme.color.text
 			end,
 		})
 		applyButton = P.button(modal.footer, {
@@ -750,7 +822,8 @@ return function(env)
 					local entry = overlay.open[index]
 					if entry.card and entry.card.Name == "SettingsDialog" then entry.close() end
 				end
-				overlay.toast(persisted and "Full configuration imported and saved" or "Configuration imported for this session", "good", 4)
+				overlay.toast(persisted and "Configuration imported with this device's credential storage preference"
+					or "Configuration imported for this session", "good", 4)
 			end,
 		})
 		clock.delay(theme.duration("fast"), function()
@@ -761,22 +834,36 @@ return function(env)
 	local function paneImportExport(container)
 		local build = builder(container)
 
-		local transfer = build.section("Full configuration",
-			"Copy every saved setting to another device, including provider records, API keys and key pools, custom headers and parameters, permissions, and preferences. This JSON includes credentials; keep it private.")
+		local transfer = build.section("Configuration transfer",
+			"Copy provider records, permissions and preferences to another device. The default copy excludes credential fields, custom headers, query parameters and body overrides. Enter those again after import.")
 		R.paragraph(transfer,
-			"Conversations, activity history, workspace files, and skill files are not included. Saved memory and skill preferences are included.")
+			"Saved memory and skill preferences are included. Review other text before sharing it. Conversations, activity history, workspace files and skill files are not included.")
 		local copyButton = P.button(transfer, {
 			name = "CopyFullConfig",
-			text = "Copy config · includes API keys",
+			text = "Copy config without credentials",
 			variant = "secondary",
 			fill = true,
 			enabled = caps.clipboard,
 			onClick = function()
 				local copied, err = configTransfer.copyToClipboard(caps.fn.clipboard)
-				overlay.toast(copied and "Full configuration copied, including API keys" or tostring(err), copied and "good" or "warn", 4)
+				overlay.toast(copied and "Configuration copied with credential fields excluded" or tostring(err), copied and "good" or "warn", 4)
 			end,
 		})
 		copyButton.setEnabled(caps.clipboard)
+		local privateCopyButton = P.button(transfer, {
+			name = "CopyPrivateConfig", text = "Copy private config including credentials", variant = "ghost", fill = true,
+			enabled = caps.clipboard,
+			onClick = function()
+				local copied, err = configTransfer.copyToClipboard(caps.fn.clipboard, { includeCredentials = true })
+				local message = config.vaultStatus().enabled and "Private configuration copied with encrypted provider credentials. Import requires its master password. Other settings and connection tokens remain readable; keep it private."
+					or "Private configuration copied with recoverable provider credentials and connection tokens. Do not share it."
+				overlay.toast(copied and message
+					or tostring(err), copied and "good" or "warn", 5)
+			end,
+		})
+		privateCopyButton.setEnabled(caps.clipboard)
+		R.paragraph(transfer,
+			"Private copies retain your storage mode. Encrypted copies require the source vault's password; unprotected copies contain recoverable credentials. Other settings and bridge/relay tokens remain readable. Clipboard managers may retain either copy.")
 		if not caps.clipboard then
 			R.paragraph(transfer, "This host cannot write to the clipboard. You can still paste an export to import it.")
 		end
@@ -787,8 +874,8 @@ return function(env)
 
 		local out = build.section("Diagnostic export",
 			"Writes a copy of your settings and the activity history into the client's own "
-			.. "folder. API keys are reduced to their last four characters and the bridge token "
-			.. "is dropped. Custom fields may still contain credentials, so review before sharing.")
+			.. "folder. Credential fields, custom headers, query parameters, body overrides and connection tokens "
+			.. "are excluded. Review remaining text before sharing.")
 		local outPath = EXPORT_DIR .. "/uai-export.json"
 		local result = P.text(out, {
 			name = "ExportResult",
@@ -1126,8 +1213,10 @@ return function(env)
 							local globals = (type(getgenv) == "function") and getgenv() or nil
 							local live = globals and globals.UAI
 							if live and live.destroy then
-								live.destroy()
+								local finished, why = live.destroy()
+								if finished == false then overlay.toast(why or "UAI could not finish unloading. Try again.", "warn", 5) end
 							else
+								if config.vaultStatus().busy then overlay.toast("Finish or cancel credential storage before unloading UAI.", "warn", 5); return end
 								env.require("runtime/dispose").drain()
 								pcall(function() env.require("ui/app").screen:Destroy() end)
 							end
@@ -1727,7 +1816,7 @@ return function(env)
 		{ id = "general", section = "Settings", label = "General", icon = "gear", build = paneGeneral },
 		{ id = "privacy", section = "Settings", label = "Privacy", icon = "worktree", build = paneprivacy },
 		{ id = "usage", section = "Settings", label = "Usage", icon = "sliders", build = paneUsage },
-		{ id = "claude_code", section = "Settings", label = "Claude Code", icon = "code", build = paneClaudeCode },
+		{ id = "claude_code", section = "Settings", label = "Project UAI", icon = "code", build = paneClaudeCode },
 		{ id = "cowork", section = "Settings", label = "Cowork", icon = "terminal", build = paneCowork },
 		{ id = "import_export", section = "Settings", label = "Import & export", icon = "document", build = paneImportExport },
 		{ id = "agent", section = "Agent", label = "Behaviour", icon = "spark", build = paneAgent },

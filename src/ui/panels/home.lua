@@ -421,10 +421,10 @@ return function(env)
 				maxSize = Vector2.new(theme.size.statCard, math.huge), auto = "Y", gap = theme.space.xs,
 				padding = theme.space.md, bg = theme.color.surface, radius = theme.radius.lg, layoutOrder = 3 })
 			P.stroke(intro, theme.color.borderSubtle)
-			P.text(intro, { name = "FreeIntroductionTitle", text = "Project UAI Free is ready", role = "label",
+			P.text(intro, { name = "FreeIntroductionTitle", text = "Project UAI Free hours", role = "label",
 				size = UDim2.new(1, 0, 0, 0), auto = "Y", wrap = true, layoutOrder = 1 })
 			P.text(intro, { name = "FreeIntroductionText",
-				text = "Thank you for your continued use and support of Project UAI. Free access powered by HCNSEC is included, with no account or personal key needed. Speed and availability vary with shared capacity. More free providers may be available soon.",
+				text = "Thank you for your continued use and support of Project UAI. Free access powered by HCNSEC is included daily 20:00-06:00 UTC+8 (Beijing/Singapore), ending the following morning, with no account or personal key needed. Outside these hours, choose another provider or return at 20:00 UTC+8. Speed and availability vary with shared capacity. More free providers may be available soon.",
 				role = "caption", color = theme.color.textSecondary, size = UDim2.new(1, 0, 0, 0),
 				auto = "Y", wrap = true, layoutOrder = 2 })
 			P.text(intro, { name = "FreeCommunityInvite", text = "Updates and help: https://discord.gg/9xYyyYuKap",

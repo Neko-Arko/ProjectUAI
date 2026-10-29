@@ -154,6 +154,7 @@ end)
 
 case("paused included access cannot start anonymous background model probes", function()
 	local f = fixture("openai")
+	f.env.require("runtime/clock").ms = function() return 1767268800000 + f.h.sched.now * 1000 end -- Test pause during open hours.
 	local record = f.registry.blank("hcnsec")
 	record.id, record.label, record.model = "included-pause", "Included pause", "auto"
 	assert(f.registry.save(record)); assert(f.keys.setPaused(record, 1, true))

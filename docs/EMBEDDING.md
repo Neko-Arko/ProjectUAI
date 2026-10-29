@@ -2,15 +2,19 @@
 
 Build a script interface with Project UAI UI LIB, add UAI to a host script, or
 connect your own library window to UAI's conversations and tools. This guide
-documents **embedding SDK 1.0.0** in **Project UAI 3.0.0 (October 13, 2026)**,
-alongside **UI LIB 1.3.0**. SDK metadata is exposed through `uai.sdk`; UI LIB
+documents **embedding SDK 1.0.0** in **Project UAI 3.7.2 (October 29, 2026)**,
+alongside **UI LIB 1.4.0**. SDK metadata is exposed through `uai.sdk`; UI LIB
 remains a separate bundle with its own version and lifetime.
 
-The 3.0.0 client improves shared tool validation, source-analysis reuse and
-resumable results without changing the SDK version. Host integrations still
-own their scopes and cleanup; inspect returned status and continuation metadata
-before following up on a tool call. See the [release notes](../CHANGELOG.md) and
-[focused verification record](TESTING_3.0.0.md).
+The 3.7.2 client initially requires password setup or the explicit **Continue
+without encryption** choice. A vault requires unlock on every execution, including
+reuse and `{ ui = false }` embedding. A saved unprotected-storage choice skips
+future prompts and saves keys using reversible byte encoding.
+`sdk.features.passwordGate` is true and `uiFreeBoot` is false: the normal app can
+stay hidden, but the loader can construct entry UI. Host integrations still own
+their scopes and cleanup; inspect returned admission status before sending work.
+See the [release notes](../CHANGELOG.md)
+and [focused verification record](TESTING_3.7.2.md).
 
 Start with [the complete workbench example](../examples/embedding/README.md) for
 working code. Use [the UI library reference](UI_LIBRARY.md) for every control,
@@ -44,7 +48,7 @@ standalone UI library does not provide.
 | --- | --- | --- | --- |
 | A settings panel, player picker, or script workbench | `dist/uai-ui.lua` | Domain state, callbacks, subscriptions | Window, controls, layout, input, motion, cleanup scope |
 | Add the normal assistant to an existing host script | `dist/uai.lua` | Host context and optional custom tools | Standard app, sessions, provider transport, permissions, persistence |
-| Use the agent without mounting its app | `dist/uai.lua` with `{ ui = false, reuse = true }` | Request handling, integration scope, approval presentation when needed | Sessions, tools, provider transport, permissions, persistence |
+| Keep the normal app hidden after the storage choice or vault unlock | `dist/uai.lua` with `{ ui = false, reuse = true }` | Request handling and integration scope | Storage choice/password entry, sessions, tools, provider transport, approval presentation, permissions, persistence |
 | A focused custom assistant panel | Both bundles | Declarative view, draft state, mapping events to controls | Agent turns, tools, retained conversation, standard permission and provider UI |
 | A new reusable control or layout capability | Repository sources | Implementation and its public API | Build, shared conventions, distribution |
 | A browser interface | Existing web bridge and its protocol | Browser view and bridge integration | Connected Roblox runtime and relay contracts |
@@ -52,10 +56,12 @@ standalone UI library does not provide.
 Loading UI LIB alone does not start an agent, create a conversation, contact a
 model provider, or mount a window. `UI:CreateWindow` mounts the window.
 
-Loading the full client normally mounts the established UAI application. Pass
-`ui = false` to start the runtime without constructing that application. The
-first explicit `uai.show(...)`, `uai.toggle()`, or `uai.openSession(id)` mounts it.
-`uai.hide()` only hides an already mounted app. The loader has no alternate client
+Loading the full client follows the saved protection choice: it shows setup when
+undecided, requires a vault password when encrypted, or continues after a previously
+verified unprotected-storage choice. Pass `ui = false` to keep the normal application
+hidden after access is granted. Explicit `uai.show(...)`, `uai.toggle()`, or
+`uai.openSession(id)` can then show it. `uai.hide()` cannot hide
+or bypass a pending storage choice or vault unlock. The loader has no alternate client
 `Parent` option. A session's `headless` flag separately controls transcript
 retention; most SDK integrations should leave it false.
 
@@ -95,6 +101,8 @@ The full client detects optional executor capabilities through `uai.caps`.
 Unavailable tools are omitted from provider tool definitions. File persistence,
 clipboard access, native hooks, arbitrary execution, and local endpoint access
 are not universally available. A table passed as context cannot grant them.
+The full client needs filesystem support to verify either saved-storage choice;
+without it, setup reports the failure and access stays blocked.
 
 The UI library can render without executor file access. Its JSON import/export
 works through Roblox HttpService; `SaveConfig` and `LoadConfig` need file
@@ -131,10 +139,12 @@ These short snippets assume successful HTTP and compilation. The
 [launcher](../examples/embedding/launcher.lua) supplies explicit download,
 compile, and startup checks for a complete example.
 
-### Reuse without toggling
+### Reuse without requesting display
 
-Pass `reuse = true` to return a running copy of the same build without toggling
-its app. This also supports a UI-free first boot:
+Pass `reuse = true` to return a running copy of the same build without requesting
+display of its normal app. An enabled vault still requires a password on each
+execution; the verified unprotected-storage choice skips future prompts. This
+example keeps the normal application hidden after access is granted:
 
 ```lua
 local source = game:HttpGet(
@@ -151,14 +161,16 @@ download. The optional global `getgenv().UAI` is available only where `getgenv`
 exists. Reusing a client preserves that client's provider settings,
 permissions, tools, and boot context. Register your integration against the
 returned live handle; do not assume a new context was applied. In particular,
-`ui = false` does not unmount an existing app.
+`ui = false` does not unmount an existing app or override the protection choice.
+Wait for the user to complete any setup/unlock or choose unprotected storage before
+sending requests; rejected requests return an admission reason and are not automatically retried.
 
 ### Loader reruns and changed builds
 
 | Situation | Loader behavior |
 | --- | --- |
-| Same live build | Returns the existing handle and toggles the app, unless `reuse = true`; does not adopt a new context table |
-| Different build, safe replacement | Preserves state, unloads the old client, boots the new one |
+| Same live build | Returns the existing handle and follows the saved protection choice; requires an enabled vault's password again; requests showing the app afterward unless `reuse = true`; does not adopt a new context table |
+| Different build, safe replacement | Preserves state, unloads the old client and boots the new one; encrypted vaults require the password again |
 | Different build, active or unsaved work | Keeps the old handle and reports what blocks replacement |
 | Previous cleanup did not finish | Keeps the blocked handle and reports that a rejoin is needed |
 | Bootstrap failure | Reports the startup error and returns nil |
@@ -219,8 +231,8 @@ Recognized integration fields are:
 | --- | --- | --- |
 | `prompt` | `agent/prompt` | Extra host instructions included when assembling prompts |
 | `hooks` | `agent/hooks` at boot | Map of hook kind to function; adopted once during startup |
-| `ui = false` | Bootstrap | Skip initial application mount; explicit navigation can mount it later |
-| `reuse = true` | Bootstrap | Return a live same-build client without toggling its app |
+| `ui = false` | Bootstrap | Follow the storage choice or vault unlock, then keep the normal app hidden until explicit navigation |
+| `reuse = true` | Bootstrap | Return a live same-build client without requesting normal-app display; does not override credential protection |
 | `gravity` | Runtime Gravity adapter | Optional host fallback for the existing Gravity integration |
 | Your own namespaced fields | Your code | Shared host objects or configuration; no automatic interpretation |
 
@@ -260,12 +272,13 @@ self argument. Signals use `signal:connect(...)`, with a lowercase `connect`.
 | `config` | Client configuration access and persistence |
 | `caps`, `log`, `bridge` | Detected capabilities, diagnostic logging, bridge runtime |
 | `env` | Factory-module environment and `env.require(id)` |
-| `app` | Established application controller, absent before mounting |
+| `app` | Established application controller, including storage choice and password entry |
 
 Common navigation calls are `uai.show("chat")`, `uai.show("providers")`, and
 `uai.show("logs")`. To align the native chat view with a registered conversation,
-call `uai.openSession(session.id)`. A UI-free host can inspect `uiMounted` before
-offering navigation. Once mounted, hiding the app does not reset that flag.
+call `uai.openSession(session.id)`. `uiMounted` is true once the application is
+constructed; it does not indicate that the storage choice/unlock is complete or that the
+normal window is visible. Hiding the app does not reset that flag.
 
 The SDK version describes the documented `uai.sdk` methods and their lifecycle
 contract. Feature availability is separate from executor capabilities in `caps`
@@ -276,9 +289,9 @@ use hooks, tool registration, and the public methods described here.
 
 ## SDK quickstart
 
-Load a UI-free client as shown above, then create an owned integration and a
-named conversation. This example assumes a provider and real model have already
-been configured; the SDK does not guess either:
+Load a client with its normal app hidden as shown above, complete any storage choice
+or vault unlock, then create an owned integration and a named conversation. This example assumes
+a provider and real model have already been configured; the SDK does not guess either:
 
 ```lua
 assert(uai.sdk and uai.sdk.features.requests and uai.sdk.features.resourceScopes,
@@ -809,10 +822,10 @@ explicit result identity, and idempotency where the domain supports it.
 
 Once mounted, the normal application owns approval presentation for all sessions.
 Keep **Open UAI** available in a custom panel so the user can reach full history,
-permissions, and provider configuration. A UI-free client does not mount an
-approval prompt automatically. A host can limit its session to read tools,
-explicitly open the native app before requesting work that needs approval, or
-implement an approval presenter with UI LIB. Unanswered approvals time out and
+permissions, and provider configuration. Bootstrap mounts the application's
+approval presenter even when the normal window stays hidden. A host can limit
+its session to read tools or use the existing approval presentation; do not install
+a competing presenter for the same pending request. Unanswered approvals time out and
 deny the call. Examples do not change permission mode to make tool calls succeed.
 
 The base modes are:
@@ -854,7 +867,7 @@ Permission methods are exposed through `uai.permissions`:
 
 Since 2.7.0, new configurations default to `full` (**Allow everything**). Existing
 saved modes and per-tool rules remain effective. Hosts can explicitly select a
-different base mode through `setMode`; UI-free boot uses the same configuration.
+different base mode through `setMode`; hidden-app embedding uses the same configuration.
 
 | Method | Behavior |
 | --- | --- |
@@ -1207,9 +1220,9 @@ conversations or unload the shared client. To own an active request, register
 as shown below. Keep domain policy/tool scopes separate from views that users can
 close while the host keeps working.
 
-Feature discovery uses `uai.sdk.features`: `uiFreeBoot`, `resourceScopes`,
-`requests`, and `sessionLookup` are true in SDK 1.0.0. Unknown or missing keys
-should be treated as unavailable. These keys describe API support, not executor
+Feature discovery uses `uai.sdk.features`: `passwordGate`, `resourceScopes`,
+`requests`, and `sessionLookup` are true in this client; `uiFreeBoot` is false.
+Unknown or missing keys should be treated as unavailable. These keys describe API support, not executor
 permissions, network reachability, or a provider's ability to call tools.
 
 ### Lifetime table
@@ -1373,7 +1386,7 @@ verification. Never edit generated bundles or embedded guide output directly.
 | Request hook changes do nothing | Use `payload.request` fields; replacing `payload.record` does not switch the captured provider |
 | An `onError` handler never fires | Observe `error` events or `onEvent`; automatic `onError` invocation is not implemented |
 | A request callback is treated as a success after failure | Prefer `sdk.request` and inspect `result.ok`/`result.status`; legacy send callbacks contain text only |
-| A UI-free request stalls on a write | Approval needs a presenter; open UAI or provide a UI LIB approval view, and preserve permission policy |
+| A hidden-app request waits for a write | Check the application's approval prompt and preserve permission policy |
 | A named conversation ignored new options | `sessions.open` preserves existing options; check `created` and the returned session |
 | Await timed out but the agent keeps working | Timeout stops waiting; call the request's `cancel()` to request cooperative Stop |
 | Send stays disabled after Ready | Refresh on `sessions.listChanged`/`onDone`, after the busy state is released |

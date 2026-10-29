@@ -2,6 +2,8 @@
 -- The provider editor owns persistence; this surface applies only key fields.
 return function(env)
 	local util = env.require("runtime/util")
+	local config = env.require("runtime/config")
+	local fsx = env.require("runtime/fsx")
 	local keys = env.require("runtime/provider_keys")
 	local sessions = env.require("agent/session")
 	local theme = env.require("ui/theme")
@@ -29,13 +31,16 @@ return function(env)
 
 	function M.open(props)
 		props = props or {}
+		if config.vaultStatus().locked then return env.require("ui/credentialvault").open("unlock") end
 		local record = props.record or {}
 		keys.ensureIds(record)
 		local draft = snapshot(record)
 		draft.id = record.id
-		local prompt, modal, unsubscribeUsage
+		local prompt, modal, unsubscribeUsage, unsubscribeStorage
 		local function cleanup()
+			for name in pairs(draft) do draft[name] = nil end
 			if unsubscribeUsage then unsubscribeUsage(); unsubscribeUsage = nil end
+			if unsubscribeStorage then unsubscribeStorage(); unsubscribeStorage = nil end
 			if prompt and not prompt.closed then prompt.close() end
 			prompt = nil
 			if props.onClose then props.onClose() end
@@ -47,6 +52,33 @@ return function(env)
 		modal.card.Name = "APIKeyManager"
 		local form = P.column(modal.content, { name = "KeyManagerContent", size = UDim2.new(1, 0, 0, 0),
 			auto = "Y", gap = theme.space.md, layoutOrder = 1 })
+		local storage = P.card(form, { name = "KeyStorageNotice", padding = theme.space.md, gap = theme.space.xs, layoutOrder = 0 })
+		local storageText = P.text(storage, { name = "KeyStorageSummary", text = "", role = "small", wrap = true,
+			auto = "Y", layoutOrder = 1 })
+		P.text(storage, { text = "Change this in Settings / Privacy. Other scripts sharing the executor can still intercept keys while they are in use.",
+			role = "caption", color = theme.color.textTertiary, wrap = true, auto = "Y", layoutOrder = 2 })
+		if record.credentialsOmitted == true then
+			P.text(storage, { name = "KeyRestorationRequired",
+				text = "Saved credentials were omitted. After applying keys, open Edit connection to review custom authentication and save the full connection before sending requests.",
+				role = "small", color = theme.color.warn, wrap = true, auto = "Y", layoutOrder = 3 })
+		end
+		local function refreshStorage()
+			if modal.closed then return end
+			local vault = config.vaultStatus()
+			if vault.locked then modal.close(); return end
+			local remember = fsx.enabled and config.get("security.rememberCredentials", true) == true
+			local unverified = type(config.storageError) == "string" and config.storageError ~= ""
+			storageText.Text = unverified and "Saved credential storage could not be verified. An earlier plaintext copy may remain. Keep this session open to retain your keys."
+				or not fsx.enabled and "Filesystem access is unavailable. These credentials stay in this run; previously saved files cannot be checked or removed."
+				or vault.enabled and "These keys and custom provider credentials are encrypted in UAI/config.json. The credential vault is unlocked for this run."
+				or remember and "These keys and custom provider credentials are remembered as byte-encoded data in UAI/config.json. Other scripts can decode them; encoding is not encryption."
+				or "These keys and custom provider credentials are session-only. Apply keeps them usable now; enter them again after restarting."
+			storageText.TextColor3 = (unverified or (remember and not vault.enabled)) and theme.color.warn or theme.color.textSecondary
+		end
+		refreshStorage()
+		unsubscribeStorage = config.changed:connect(function(path)
+			if path == nil or path == "security" or path == "security.rememberCredentials" or path == "security.vault" then refreshStorage() end
+		end)
 		local routing = P.card(form, { name = "KeyRouting", padding = theme.space.md, gap = theme.space.sm, layoutOrder = 1 })
 		P.text(routing, { text = "How to use your keys", role = "label", wrap = true, auto = "Y", layoutOrder = 1 })
 		local modeControl, refresh
@@ -73,6 +105,8 @@ return function(env)
 			end })
 		local modeHelp = P.text(routing, { name = "KeyModeHelp", text = "", role = "small",
 			color = theme.color.textSecondary, wrap = true, auto = "Y", layoutOrder = 3 })
+		P.text(routing, { text = "Rotate keys only takes turns between existing keys. Replace keys at the provider and revoke the old ones to rotate credentials securely. Revoke immediately if a key is stolen.",
+			role = "caption", color = theme.color.textTertiary, wrap = true, auto = "Y", layoutOrder = 4 })
 		local listHeader = P.row(form, { name = "KeyListHeader", size = UDim2.new(1, 0, 0, 0),
 			auto = "Y", wrap = true, gap = theme.space.sm, alignY = "Center", layoutOrder = 3 })
 		local count = P.text(listHeader, { name = "KeyCount", text = "", role = "label",
@@ -114,7 +148,7 @@ return function(env)
 					refresh()
 				end)
 			end })
-		P.text(form, { name = "KeyDraftHint", text = props.applyHint or "Apply changes returns these keys to provider setup. Save the provider to keep them.",
+		P.text(form, { name = "KeyDraftHint", text = props.applyHint or "Apply changes returns these keys to provider setup. Save the provider to use them with the storage preference shown above.",
 			role = "caption", color = theme.color.textTertiary, wrap = true, auto = "Y", layoutOrder = 5 })
 		P.text(form, { name = "KeyUsageHint", text = "Usage is recorded on this device from this update. Requests include retries; estimated tokens are marked.",
 			role = "caption", color = theme.color.textTertiary, wrap = true, auto = "Y", layoutOrder = 6 })
@@ -132,7 +166,7 @@ return function(env)
 					or "Choose a key below, or turn on rotation. No key is selected for requests."
 			else
 				modeHelp.Text = #pool > 0 and active == 0 and "All keys are paused. Resume a key to send requests."
-					or "New requests take turns using active keys. Paused keys stay saved until you resume them."
+					or "New requests take turns using active keys. Paused keys stay in this pool until you resume or remove them."
 			end
 			usageNodes = {}
 			for _, child in ipairs(entries:GetChildren()) do

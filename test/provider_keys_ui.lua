@@ -314,7 +314,7 @@ case("the saved-provider shortcut applies only keys and preserves a live rotatio
 	panel.select(record.id); f.h.settle(0.3)
 	click(f, "ManageProviderKeys")
 	check("the direct shortcut opens keys without a connection editor", f.h.byName("APIKeyManager") ~= nil
-		and f.h.byName("SaveProvider") == nil and f.h.byName("KeyDraftHint").Text:find("save these keys", 1, true))
+		and f.h.byName("SaveProvider") == nil)
 	rename(f, 2, "Work account", "Work")
 	-- An unrelated model change made while this manager is open must survive its
 	-- later key-only Apply, and active requests still own the same rotation table.

@@ -18,8 +18,9 @@ if type(MODULES) ~= "table" then
 end
 
 local hostContext = ...
+local replacementConfig, replacementVault
 
-local VERSION = "3.7.1"
+local VERSION = "3.7.2"
 local FOLDER = "UAI"
 local BUILD = type(__UAI_BUILD) == "string" and __UAI_BUILD or VERSION
 
@@ -40,6 +41,12 @@ if globalTable and type(globalTable.UAI) == "table" then
 			notice("The previous client did not finish unloading. Rejoin before loading the update.")
 			return existing
 		end
+		-- Reuse and replacement both begin a fresh password challenge. Retaining
+		-- the live key permits safe saves and accepted replies, never new work.
+		if existing.config and existing.config.requireVault then
+			existing.config.requireVault()
+			if existing.app and existing.app.syncCredentialAccess then existing.app.syncCredentialAccess() end
+		end
 		if existing.build == BUILD then
 			local options = type(hostContext) == "table" and hostContext
 				or (type(globalTable.UAI_CONTEXT) == "table" and globalTable.UAI_CONTEXT) or {}
@@ -48,6 +55,7 @@ if globalTable and type(globalTable.UAI) == "table" then
 		end
 		existing.pendingBuild = BUILD
 		local inspected, busy = pcall(function()
+			if existing.config.vaultStatus and existing.config.vaultStatus().busy then return true end
 			local runner = existing.env.loadedModules and existing.env.loadedModules["tools/code_runner"]
 			if runner and runner.busy and runner.busy() then return true end
 			for _, session in ipairs(existing.sessions.list()) do
@@ -108,6 +116,9 @@ if globalTable and type(globalTable.UAI) == "table" then
 					if not existing.sessions.persist(session) then return false end
 				end
 			end
+			replacementConfig = existing.env.require("runtime/util").deepCopy(existing.config.data)
+			local vault = existing.env.loadedModules and existing.env.loadedModules["runtime/credential_vault"]
+			if vault then replacementVault = vault.handoff(replacementConfig.credentialVault) end
 			return true
 		end)
 		if not saved or not complete then
@@ -258,7 +269,9 @@ local function start()
 	local log = env.require("runtime/log")
 	local config = env.require("runtime/config")
 
-	config.load()
+	config.requireVault()
+	config.load(replacementConfig, replacementVault)
+	replacementConfig, replacementVault = nil, nil
 	log.mirror = config.get("logs.mirror", false) == true
 	log.info("boot", string.format("UAI %s starting -- %s", VERSION, caps.summary()))
 
@@ -293,7 +306,7 @@ local function start()
 				local name = tostring(entry.name or "")
 				local clientOwns = name == "files" or name == "pastes" or name == "skills"
 					or name == "sessions" or name == "export" or name == "icons"
-					or name == "config.json" or name == "stats.json"
+					or name == "config.json" or name == "config.vault.pending.json" or name == "stats.json"
 				if not clientOwns then pending = pending + 1 end
 			end
 		end
@@ -342,12 +355,14 @@ local function start()
 		if handle then handle.uiMounted = true end
 		return app
 	end
+	-- Even an embedding that hides the application must present its password
+	-- prompt. The app keeps its normal window hidden after UI-free authentication.
+	local mounted, mountWhy = mountApp()
+	if not mounted then error(mountWhy, 0) end
 	if mountAtBoot then
-		local mounted, why = mountApp()
-		if not mounted then error(why, 0) end
 		app.show(config.get("ui.panel", "chat"))
 	else
-		-- A UI-free client still has a selected conversation for the bridge and ask().
+		-- A hidden client still has a selected conversation for the bridge and ask().
 		sessions.current()
 	end
 
@@ -364,12 +379,6 @@ local function start()
 	-- active and the interface is what establishes that on a fresh install. A
 	-- manual bridge is opt-in; the desktop app is discovered on its own local port.
 	local bridge = env.require("net/bridge")
-	local bridgeOk, bridgeWhy = bridge.sync()
-	if not bridgeOk and bridgeWhy then log.warn("bridge", "not started", bridgeWhy) end
-
-	-- The local relay prober starts alongside the bridge. It only spawns, so boot
-	-- never waits on it, and it is a no-op while its mode is off.
-	env.require("net/relay_link").ensure()
 
 	-- The handle a host script (or the user, from a console) can drive.
 	-- Declared before it is populated: `local handle = { ... }` does not put `handle`
@@ -430,6 +439,9 @@ local function start()
 		--     getgenv().UAI.destroy()
 		destroy = function()
 			if not handle.alive then return 0 end
+			if config.vaultStatus().busy then
+				return false, "Finish or cancel credential storage before unloading UAI."
+			end
 			handle.alive = false
 			-- Invalidate all turns immediately. The disposer owns cancellation and
 			-- final dirty saves once; aborting here used to rewrite every history and
@@ -449,7 +461,25 @@ local function start()
 		end,
 		unload = function() return handle.destroy() end,
 	}
+	env.exitClient = function() return handle.destroy() end
 	handle.sdk = env.require("embedding/sdk").attach(handle)
+	-- Pairing and discovery wait until setup/unlock succeeds. Warm challenges
+	-- retain accepted transport ownership; those modules gate new admissions.
+	local linksStarted = false
+	local function startLinks()
+		if linksStarted or not handle.alive or config.accessProblem() or config.vaultStatus().busy then return end
+		linksStarted = true
+		handle.providers.migrate()
+		env.require("provider/free").ensure()
+		local bridgeOk, bridgeWhy = bridge.sync()
+		if not bridgeOk and bridgeWhy then log.warn("bridge", "not started", bridgeWhy) end
+		env.require("net/relay_link").ensure()
+	end
+	env.require("runtime/dispose").add(config.changed:connect(function(path)
+		if path == "security.vault" then startLinks() end
+	end), "password-gated connections")
+	app.syncCredentialAccess()
+	startLinks()
 
 	if globalTable then globalTable.UAI = handle end
 	log.info("boot", "ready")

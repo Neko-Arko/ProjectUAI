@@ -31,7 +31,7 @@ return function(env)
 		local filter, freeOnly, fetching = "", false, false
 		local rows, render, filterRows, renderEffort, fit = {}, nil, nil, nil, nil
 		local signature, effortSignature, fitting = nil, nil, false
-		local effortLevels, effortSending, effortHeight = nil, nil, 0
+		local effortLevels, effortSending, effortHeight, effortLabel = nil, nil, 0, nil
 		local function notify() if not modal.closed and onChange then onChange() end end
 		local providerHeight = math.max(control, theme.text.label.height + theme.text.caption.height + theme.space.md * 2 + theme.space.hair)
 		local selectionHeight = theme.text.caption.height + theme.space.sm
@@ -145,7 +145,7 @@ return function(env)
 			if effortSignature == nextEffort then return end
 			effortSignature = nextEffort
 			for _, child in ipairs(effort:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
-			P.text(effort, { text = levels and (manual and "Reasoning effort (global, manual)" or "Reasoning effort (global)") or "No documented effort control", name = levels and "EffortLabel" or "NoEffort",
+			effortLabel = P.text(effort, { text = levels and (manual and "Reasoning effort (global, manual)" or "Reasoning effort (global)") or "No documented effort control", name = levels and "EffortLabel" or "NoEffort",
 				role = "caption", color = theme.color.textTertiary, size = UDim2.new(1, 0, 0, theme.text.caption.height), layoutOrder = 1 })
 			if levels then
 				local strip = P.scroll(effort, { name = "EffortPills", horizontal = true, gap = theme.space.xs,
@@ -170,11 +170,15 @@ return function(env)
 				if instance[property] ~= value then instance[property] = value end
 			end
 			local minimumList = modelHeight * 2 + rowGap + listPad * 2
-			local compact = room < expandedListTop + minimumList
-			local inline = compact and room < control * 2 + theme.space.xs * 2 + modelHeight + listPad * 2
-			local showEffort = not compact and effortHeight > 0
-				and room >= expandedListTop + minimumList + effortHeight + theme.space.md
-			local footerSpace = showEffort and effortHeight + theme.space.md or 0
+			-- Reserve the level buttons before fitting provider details and the list.
+			-- Only extreme keyboard space falls back to the same levels in Options.
+			local showEffort = effortHeight > 0 and room >= control * 2 + theme.space.xs * 2 + modelHeight + listPad * 2
+			local showEffortLabel = showEffort and room >= expandedListTop + minimumList + effortHeight + theme.space.md
+			local shownEffortHeight = showEffort and (showEffortLabel and effortHeight or control) or 0
+			local footerSpace = showEffort and shownEffortHeight + (showEffortLabel and theme.space.md or theme.space.xs) or 0
+			local catalogueRoom = room - footerSpace
+			local compact = catalogueRoom < expandedListTop + minimumList
+			local inline = compact and catalogueRoom < control * 2 + theme.space.xs * 2 + modelHeight + listPad * 2
 			local endpointHeight = compact and control or providerHeight
 			searchTop = compact and (endpointHeight + theme.space.xs) or (providerHeight + selectionHeight + theme.space.md)
 			listTop = compact and (searchTop + control + theme.space.xs) or expandedListTop
@@ -194,6 +198,8 @@ return function(env)
 			set(count, "Visible", not compact)
 			set(count, "Position", UDim2.fromOffset(theme.space.xxs, searchTop + control + theme.space.sm))
 			set(effort, "Visible", showEffort)
+			set(effort, "Size", UDim2.new(1, 0, 0, shownEffortHeight))
+			if effortLabel then set(effortLabel, "Visible", showEffortLabel) end
 			set(modal.content, "Size", UDim2.new(1, 0, 0, room))
 			set(modal.scroll.instance, "ScrollingEnabled", false)
 			set(list.instance, "ScrollingEnabled", true)
@@ -254,7 +260,9 @@ return function(env)
 				entry.meta.Visible = entry.meta.Text ~= ""
 				if entry.id == "auto" then
 					local route = freeRoute.status(record)
-					if route.supported and route.enabled == false then
+					if route.supported and route.available == false then
+						entry.label.Text, entry.meta.Text = "Auto (outside free hours)", "Free | 20:00-06:00 UTC+8"
+					elseif route.supported and route.enabled == false then
 						entry.label.Text, entry.meta.Text = "Auto (provider routing)", "Free | Automatic routing off"
 					elseif freeRoute.eligible(record) then
 						entry.label.Text = "Auto (fastest verified)"

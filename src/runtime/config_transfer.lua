@@ -6,6 +6,8 @@ return function(env)
 	local config = env.require("runtime/config")
 	local clock = env.require("runtime/clock")
 	local keyPolicy = env.require("runtime/provider_keys")
+	local credentials = env.require("runtime/credentials")
+	local vault = env.require("runtime/credential_vault")
 	local M = { FORMAT = "project-uai-config", VERSION = 1 }
 	local MAX_BYTES = 8 * 1024 * 1024
 
@@ -94,10 +96,26 @@ return function(env)
 				return false, path .. "." .. key .. " must be text"
 			end
 		end
-		for _, key in ipairs({ "stream", "claudeUa", "enabled" }) do
+		for _, key in ipairs({ "stream", "claudeUa", "enabled", "credentialsOmitted", "communityCredential" }) do
 			if record[key] ~= nil and type(record[key]) ~= "boolean" then
 				return false, path .. "." .. key .. " must be a boolean"
 			end
+		end
+		if record.communityKeyState ~= nil then
+			local state = record.communityKeyState
+			ok, err = object(state, path .. ".communityKeyState")
+			if not ok then return false, err end
+			if record.communityCredential ~= true or record.apiKey ~= "" or type(state.revision) ~= "string" or state.revision == "" then
+				return false, path .. ".communityKeyState requires a versioned included-access reference"
+			end
+			local reference = { apiKey = "included-reference" }
+			local allowed = { revision = true, keyNames = true, keyIds = true, keyPaused = true, keyMode = true, selectedKey = true }
+			for field, value in pairs(state) do
+				if not allowed[field] then return false, path .. ".communityKeyState has an unsupported field" end
+				if field ~= "revision" then reference[field] = value end
+			end
+			ok, err = keyPolicy.validate(reference)
+			if not ok then return false, path .. ".communityKeyState: " .. err end
 		end
 		if record.order ~= nil and type(record.order) ~= "number" then return false, path .. ".order must be a number" end
 		ok, err = array(record.models, path .. ".models", stringValue)
@@ -151,6 +169,15 @@ return function(env)
 	function M.validate(snapshot)
 		local ok, err = jsonValue(snapshot, "config", {}, 0)
 		if not ok then return nil, err end
+		if type(snapshot) ~= "table" then return nil, "Configuration must be an object" end
+		if snapshot.credentialVault ~= nil then return nil, "Unlock the encrypted configuration for review before applying it." end
+		snapshot = credentials.restore(snapshot)
+		for _, record in pairs(type(snapshot.providers) == "table" and type(snapshot.providers.list) == "table" and snapshot.providers.list or {}) do
+			if type(record) == "table" and record.credentialStorageError then return nil, "Could not decode stored provider credentials. Current settings are unchanged." end
+		end
+		if type(snapshot.identity) == "table" and snapshot.identity.credentialStorageError then
+			return nil, "Could not decode stored identity headers. Current settings are unchanged."
+		end
 		ok, err = typed(snapshot, config.defaults, "config")
 		if not ok then return nil, err end
 		if snapshot.version ~= config.defaults.version then return nil, "Unsupported configuration version" end
@@ -233,33 +260,54 @@ return function(env)
 			rules = util.count(snapshot.permissions.rules),
 			memory = #snapshot.memory.entries,
 			bridgeEnabled = snapshot.bridge.enabled,
+			rememberCredentials = snapshot.security.rememberCredentials == true,
 		}
 	end
 
-	function M.export()
-		local snapshot, err = M.validate(config.data)
+	function M.export(options)
+		local problem = config.accessProblem()
+		if problem then return nil, problem end
+		local snapshot, err = M.validate(credentials.withoutVault(config.data))
 		if not snapshot then return nil, err end
+		local include = type(options) == "table" and options.includeCredentials == true
+		local sourceSummary = include and summary(snapshot) or nil
+		if not include then snapshot = credentials.sanitise(snapshot)
+		else
+			if config.data.credentialVault ~= nil then
+				snapshot.credentialVault = util.deepCopy(config.data.credentialVault)
+				snapshot.credentialVaultLocked = config.vaultStatus().locked
+			end
+			snapshot, err = credentials.privateCopy(snapshot)
+			if not snapshot then return nil, err end
+		end
 		local ok, body = pcall(util.encode, {
 			format = M.FORMAT,
 			version = M.VERSION,
 			appVersion = env.info and env.info.version or "",
 			exportedAt = clock.ms(),
+			credentialsIncluded = include,
 			config = snapshot,
 		})
 		if not ok then return nil, "Could not encode the configuration" end
-		return body, summary(snapshot)
+		if #body > MAX_BYTES then return nil, "This configuration is larger than the 8 MB transfer limit" end
+		local report = sourceSummary or summary(snapshot)
+		report.credentialsIncluded = include
+		return body, report
 	end
 
-	function M.copyToClipboard(write)
+	function M.copyToClipboard(write, options)
 		if type(write) ~= "function" then return false, "This host cannot write to the clipboard" end
-		local body, err = M.export()
+		local body, err = M.export(options)
 		if not body then return false, err end
 		local ok, result = pcall(write, body)
 		if not ok or result == false then return false, "Could not reach the clipboard" end
 		return true
 	end
 
-	function M.preview(body)
+	function M.preview(body, options)
+		local problem = config.accessProblem()
+		if problem then return nil, problem end
+		options = type(options) == "table" and options or {}
 		if type(body) ~= "string" or util.trim(body) == "" then return nil, "Paste a full configuration export first" end
 		if #body > MAX_BYTES then return nil, "This configuration is larger than the 8 MB transfer limit" end
 		-- Null is not a persisted setting. JSONDecode drops null object fields,
@@ -280,14 +328,45 @@ return function(env)
 		if type(envelope) ~= "table" then return nil, "That is not valid configuration JSON" end
 		if envelope.format ~= M.FORMAT then return nil, "Use a full configuration export, not a diagnostic export" end
 		if envelope.version ~= M.VERSION then return nil, "Unsupported transfer version" end
-		local snapshot, err = M.validate(envelope.config)
+		if envelope.credentialsIncluded ~= nil and type(envelope.credentialsIncluded) ~= "boolean" then
+			return nil, "Credential inclusion must be a boolean"
+		end
+		local source = envelope.config
+		local encrypted = false
+		if type(source) == "table" and source.credentialVault ~= nil then
+			if envelope.credentialsIncluded == false then source = credentials.sanitise(source)
+			else
+				local valid, why = jsonValue(source, "config", {}, 0)
+				if not valid then return nil, why end
+				if not vault.validate(source.credentialVault) then return nil, vault.error end
+				if options.password == nil then return nil, "Enter this copy's master password to review its encrypted credentials.", "password" end
+				local key, keyError = vault.derive(options.password, source.credentialVault, options)
+				if not key then return nil, keyError end
+				local opened, openError = credentials.openVault(source, key)
+				if not opened then return nil, openError end
+				source, encrypted = credentials.withoutVault(opened), true
+			end
+		end
+		local snapshot, err = M.validate(source)
 		if not snapshot then return nil, err end
-		return { config = snapshot, summary = summary(snapshot) }
+		if envelope.credentialsIncluded == false then snapshot = credentials.sanitise(snapshot) end
+		local report = summary(snapshot)
+		problem = config.accessProblem()
+		if problem then return nil, problem end
+		report.credentialsIncluded = envelope.credentialsIncluded ~= false
+		report.rememberCredentials = config.get("security.rememberCredentials", false) == true
+		report.encrypted = encrypted
+		report.vaultEnabled = config.vaultStatus().enabled
+		return { config = snapshot, summary = report }
 	end
 
 	function M.apply(preview)
+		local problem = config.accessProblem()
+		if problem then return false, problem end
 		local snapshot, err = M.validate(type(preview) == "table" and preview.config or nil)
 		if not snapshot then return false, err end
+		-- A pasted configuration never changes this device's storage choice.
+		snapshot.security.rememberCredentials = config.get("security.rememberCredentials", false) == true
 		local ok, persisted = config.replace(snapshot)
 		if not ok then return false, persisted end
 		return true, persisted

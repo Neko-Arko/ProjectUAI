@@ -10,6 +10,10 @@ return function(env)
 	local unsubscribe
 
 	function M.use()
+		local access = config.accessProblem()
+		if access then return nil, access end
+		local vault = config.vaultStatus()
+		if vault.locked or vault.busy then return nil, "Unlock the credential vault before changing providers." end
 		for _, record in ipairs(registry.list()) do
 			if communityKey.isApplied(record) then
 				record.enabled = true
@@ -19,12 +23,17 @@ return function(env)
 			end
 		end
 		local record = registry.blank("hcnsec")
-		registry.save(record)
-		registry.setActive(record.id)
+		local saved, problems = registry.save(record)
+		if not saved then return nil, table.concat(problems or {}, "; ") end
+		local selected, problem = registry.setActive(record.id)
+		if not selected then return nil, problem end
 		return record
 	end
 
 	function M.ensure()
+		local access = config.accessProblem()
+		if access then return registry.active(), access end
+		if config.vaultStatus().locked then return registry.active() end
 		local list = registry.list()
 		if #list == 0 then return M.use() end
 		local selected = config.get("providers.active", "")

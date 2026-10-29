@@ -1,5 +1,6 @@
--- UI-free executor entry point. Pin the same reviewed revision in this entry URL
--- and its dependency below. Configure a real provider/model before calling ask.
+-- Executor entry point that keeps the normal app hidden after storage setup.
+-- Pin the same reviewed revision here and in this entry URL. Choose storage
+-- protection or unlock the vault, then configure a provider/model before ask.
 local revision = "main"
 local root = "https://raw.githubusercontent.com/Project-Ptolemy/ProjectUAI/" .. revision .. "/"
 local downloaded, source = pcall(function() return game:HttpGet(root .. "dist/uai.lua") end)

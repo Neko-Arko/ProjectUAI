@@ -19,6 +19,12 @@ return function(env)
 
 	local M = { toasts = {}, open = {} }
 	local closingSurfaces = {}
+	local function topSurface()
+		for index = #M.open, 1, -1 do
+			local surface = M.open[index]
+			if not surface.closed and not surface.suspended then return surface end
+		end
+	end
 
 	local function finishClosingSurfaces()
 		-- A replacement starts with one scrim. Letting its predecessor finish a
@@ -84,7 +90,7 @@ return function(env)
 			return origin, size, position, cardSize
 		end
 		local function activated(input)
-			if stopped or handle.closed or M.open[#M.open] ~= handle then return end
+			if stopped or handle.closed or handle.suspended or topSurface() ~= handle then return end
 			local origin, size, position, cardSize = bounds()
 			if size.X <= 0 or size.Y <= 0 or cardSize.X <= 0 or cardSize.Y <= 0 then return end
 			if input and (input.UserInputType == Enum.UserInputType.MouseButton1
@@ -204,7 +210,7 @@ return function(env)
 		local unbindEscape = dispose.connection(env.uis.InputBegan:Connect(function(input, processed)
 			if processed then return end
 			if input.KeyCode ~= Enum.KeyCode.Escape and input.KeyCode ~= Enum.KeyCode.ButtonB then return end
-			local topmost = M.open[#M.open]
+			local topmost = topSurface()
 			if topmost and topmost.dismissable ~= false then topmost.close() end
 		end))
 		M.layer.Destroying:Connect(unbindEscape)
@@ -601,6 +607,17 @@ return function(env)
 			unregister()
 			retireSurface(handle)
 			if confirmed ~= true and props.onClose then pcall(props.onClose) end
+		end
+
+		-- A background operation keeps its lifetime and cleanup ownership while
+		-- returning the screen and native text focus to the host game.
+		function handle.setSuspended(value)
+			if handle.closed then return end
+			handle.suspended = value == true
+			if handle.suspended then releaseFocusWithin(card) end
+			scrim.Visible = not handle.suspended
+			scrim.Active = not handle.suspended
+			if not handle.suspended and handle.relayout then handle.relayout() end
 		end
 
 		local function setLayout(instance, property, value)

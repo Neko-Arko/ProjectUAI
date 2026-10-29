@@ -8,6 +8,8 @@ local request = { messages = { { role = "user", content = "Private user task" } 
 
 local function fixture(options)
 	local f = F.new(); options = options or {}
+	f.now = 1767268800000 -- 20:00 UTC+8, when included access opens.
+	f.env.require("runtime/clock").ms = function() return f.now + f.h.sched.now * 1000 end
 	local registry = f.env.require("provider/registry")
 	local record = registry.blank("hcnsec"); registry.save(record); registry.setActive(record.id)
 	f.record, f.registry, f.posts = record, registry, {}
@@ -39,6 +41,56 @@ local function fixture(options)
 	function f.warm(seconds) f.route.refresh(record); f.h.sched.advance(seconds or 2) end
 	return f
 end
+
+case("closed hours skip probes and opening restores measurements", function()
+	local f = fixture()
+	f.now = 1767225600000 -- 08:00 UTC+8, outside the overnight schedule.
+	f.warm()
+	local status = f.route.status(f.record)
+	check("closed included access retains setup but reports its schedule", status.supported and not status.available
+		and status.availability:find("20:00-06:00 UTC+8", 1, true))
+	check("closed refresh and selection send no probes", f.route.select(f.record, request) == f.record and f.h.http.requestCount == 0)
+	f.now = 1767268800000
+	f.warm()
+	local selected = f.route.select(f.record, request)
+	check("the next open-hours action resumes measurement", selected.model == FAST and f.route.status(f.record).available)
+	f.now = 1767304800000 -- 06:00 UTC+8 the next morning.
+	check("closing hides stale measurements without cancelling accepted ownership", not f.route.status(f.record).ready and f.route.current(selected))
+	f.healthy(); f.close()
+end)
+
+case("probes accepted near closing never issue an off-hours replay", function()
+	local f = fixture({ delay = { [FAST] = 3, [OTHER] = 3, auto = 3 } })
+	f.now = 1767304800000 - 1000
+	f.warm(8)
+	check("closing stops follow-up probe work and publication", #f.posts == 2 and not f.route.status(f.record).ready)
+	f.healthy(); f.close()
+end)
+
+case("locking blocks new free probes while accepted routed snapshots can finish", function()
+	local f = fixture(); f.warm()
+	local selected = f.route.select(f.record, request)
+	check("the fixture has an accepted routed snapshot", selected ~= f.record and selected.model == FAST)
+	local config = f.env.require("runtime/config")
+	config.vaultStatus = function() return { enabled = true, locked = true, busy = false } end
+	f.record.apiKey = ""
+	local count = f.h.http.requestCount
+	f.route.refresh(f.record); f.h.sched.advance(0.2)
+	check("lock stops new selection and background traffic", not f.route.eligible(f.record)
+		and f.route.select(f.record, request) == f.record and f.h.http.requestCount == count)
+	check("lock retains the already accepted snapshot's ownership", f.route.current(selected) and selected.apiKey ~= "")
+	f.healthy(); f.close()
+end)
+
+case("the model picker explains closed free hours without probing", function()
+	local f = F.ui(390, 760); local registry = f.env.require("provider/registry")
+	local record = registry.blank("hcnsec"); registry.save(record); registry.setActive(record.id)
+	local picker = f.env.require("ui/panels/modelpicker").open(); f.h.settle(0.2)
+	local text = f.h.textOf()
+	check("closed Auto names its schedule", text:find("Auto (outside free hours)", 1, true) and text:find("20:00-06:00 UTC+8", 1, true))
+	check("opening the picker outside free hours dispatches no probes", f.h.http.requestCount == 0)
+	picker.close(); f.healthy(); f.close()
+end)
 
 case("cold selection is immediate; fresh verified measurements select the fastest", function()
 	local f = fixture()

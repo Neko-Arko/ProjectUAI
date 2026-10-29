@@ -32,7 +32,7 @@ return function(env)
 	end
 
 	function M.enabled() return M.get().enabled end
-	function M.searching() return automatic() and caps.has("http") end
+	function M.searching() return not config.accessProblem() and automatic() and caps.has("http") end
 
 	local function accept(value)
 		return type(value) == "table" and value.product == "project-uai-desktop" and value.protocol == 1
@@ -42,17 +42,17 @@ return function(env)
 	end
 
 	function M.startDiscovery()
-		if started or not alive or not caps.has("http") then return end
+		if config.accessProblem() or started or not alive or not caps.has("http") then return end
 		started = true
 		clock.spawn(function()
 			while alive do
-				if automatic() and clock.ms() >= nextProbe then
+				if not config.accessProblem() and automatic() and clock.ms() >= nextProbe then
 					local mine = epoch
 					local response, err = http.request({ url = "http://127.0.0.1:" .. M.PORT .. "/api/desktop/discover",
 						method = "POST", body = "{}", headers = { ["X-UAI-Discovery"] = "1" },
 						identity = "none", silent = true, timeout = 2, waitForSlot = true,
-						aborted = function() return not automatic() or epoch ~= mine end })
-					if alive and automatic() and mine == epoch then
+						aborted = function() return config.accessProblem() ~= nil or not automatic() or epoch ~= mine end })
+					if not config.accessProblem() and alive and automatic() and mine == epoch then
 						local capacity = not response and tostring(err or ""):find("capacity:", 1, true)
 						local value = response and response.ok and #response.body <= 1024 and util.decode(response.body)
 						if capacity then value = desktop elseif not accept(value) then value = nil end
@@ -74,6 +74,7 @@ return function(env)
 	end
 
 	function M.resume()
+		if config.accessProblem() then return end
 		paused, nextProbe = false, 0
 		M.startDiscovery()
 	end

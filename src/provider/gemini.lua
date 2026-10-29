@@ -320,6 +320,7 @@ return function(env)
 			local outgoing = headers.merge(M.headers(record, key), registry.opencodeHeaders(record, request), record.headers,
 				{ Accept = wantStream and "text/event-stream" or "application/json" })
 			return http.send({ url = M.endpoint(record, wantStream), method = "POST", body = util.encode(body),
+				requiresAccess = true,
 				onDispatch = function() accounting.dispatch(key, outgoing) end,
 				headers = outgoing,
 				relay = transport.shouldRelay(env.require("runtime/images").hasReferences(request.messages)), sessionId = request.sessionId,

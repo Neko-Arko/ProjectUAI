@@ -201,12 +201,14 @@ return function(env)
 	end
 
 	function M.clineModels(opts)
+		local access = config.accessProblem()
+		if access then return nil, access end
 		opts = opts or {}
 		local status, mine, instance = M.clineStatus(), generation, bridgeInstance
 		if not status.enabled then return nil, status.message end
 		-- Authentication can become ready during this explicit catalog refresh.
 		local res, err = call({ url = base() .. "/api/tunnels/cline/models", method = "GET",
-			timeout = opts.timeout or 20, aborted = opts.aborted })
+			requiresAccess = true, timeout = opts.timeout or 20, aborted = opts.aborted })
 		if mine ~= generation or instance ~= bridgeInstance or not M.online or not M.clineStatus().enabled then
 			return nil, "Cline connection changed; fetch models again."
 		end
@@ -224,11 +226,13 @@ return function(env)
 	end
 
 	function M.opencodeModels(opts)
+		local access = config.accessProblem()
+		if access then return nil, access end
 		opts = opts or {}
 		local support = env.require("runtime/support")
 		if not M.opencodeStatus().available then return nil, support.error(support.opencode()) end
 		local res, err = call({ url = base() .. "/api/opencode/models", method = "GET",
-			timeout = opts.timeout or 10, aborted = opts.aborted })
+			requiresAccess = true, timeout = opts.timeout or 10, aborted = opts.aborted })
 		if not res or not res.ok then return nil, env.require("provider/openai").errorText(res, err) end
 		local value = #res.body <= 2097152 and util.decode(res.body)
 		if type(value) ~= "table" or type(value.data) ~= "table" or value.error then
@@ -250,6 +254,8 @@ return function(env)
 		end
 		local sessions = env.require("agent/session")
 		local kind = tostring(command.type or "")
+		local access = config.accessProblem()
+		if access and kind ~= "abort" and kind ~= "subagent:stop" and kind ~= "loops:stop" then error(access, 0) end
 		local session = command.sessionId and sessions.threads[command.sessionId] or sessions.current()
 		if not session then error("Conversation no longer exists", 0) end
 
@@ -774,6 +780,8 @@ return function(env)
 	end
 
 	function M.start()
+		local access = config.accessProblem()
+		if access then return false, access end
 		if M.running then return true end
 		if not caps.has("http") then return false, caps.reason("http") end
 		if util.trim(connection.get().token) == "" then
@@ -820,6 +828,8 @@ return function(env)
 	-- One place decides whether the bridge should be up, so boot and the Settings
 	-- toggle cannot disagree about it.
 	function M.sync()
+		local access = config.accessProblem()
+		if access then return false, access end
 		connection.resume()
 		if connection.enabled() then return M.start() end
 		M.stop(true)

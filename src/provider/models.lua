@@ -170,6 +170,7 @@ return function(env)
 		local recovery = proxy.new(record, { aborted = opts.aborted, onRetry = opts.onRetry, deadlineMs = deadline })
 		local function fetch()
 			return http.send({
+				requiresAccess = true,
 				url = url,
 				method = "GET",
 				headers = headers,

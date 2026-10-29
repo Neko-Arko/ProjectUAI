@@ -181,6 +181,24 @@ return function(env)
 	end
 
 	function M.protocolProblem(record, opts)
+		if not (opts and opts.configuration) then
+			local access = config.accessProblem()
+			if access then return access end
+			if config.vaultStatus().locked then
+				return "The credential vault is locked. Unlock it in Settings > Privacy before making requests."
+			end
+			if record.credentialStorageError or config.get("identity.credentialStorageError") then
+				return "Saved credentials could not be decoded. The stored data has been preserved. Re-enter the affected credentials and save the connection before making requests."
+			end
+			if record.communityCredential == true and util.trim(record.apiKey) == "" then
+				return "Included credentials can only be restored for the official Project UAI Free endpoint. Edit this connection and enter your own credentials or select Project UAI Free."
+			end
+			local availability = communityKey.problem(record)
+			if availability then return availability end
+			if record.credentialsOmitted == true then
+				return "Provider credentials were not saved. Enter this session's API key or custom connection credentials, then save the provider. Settings > Privacy controls credential storage."
+			end
+		end
 		-- Pausing is a valid saved configuration, but must stop dispatch before a
 		-- missing effective key could become an anonymous HTTP request.
 		if not (opts and opts.configuration) and #M.requestKeys(record) == 0 then
@@ -531,12 +549,13 @@ return function(env)
 
 	function M.list()
 		M.migrate()
+		local vault = config.vaultStatus()
 		local stored = config.get("providers.list", {})
 		if type(stored) ~= "table" then return {} end
 		local out, migrated = {}, false
 		for _, record in ipairs(stored) do
 			if type(record) == "table" then
-				if providerKeys.ensureIds(record) then migrated = true end
+				if not vault.locked and not vault.busy and providerKeys.ensureIds(record) then migrated = true end
 				out[#out + 1] = record
 			end
 		end
@@ -597,12 +616,21 @@ return function(env)
 
 	function M.save(record, opts)
 		if requestSnapshots[record] then return true end
+		local access = config.accessProblem()
+		if access then return false, { access } end
+		local vault = config.vaultStatus()
+		if vault.locked or vault.busy then return false, { "Unlock the credential vault and finish any vault operation before editing providers" } end
 		opts = opts or {}
 		record.baseUrl = M.normaliseBaseUrl(record.baseUrl)
 		if M.requiresClaude(record) then record.claudeUa = true end
 		local ok, problems = M.validate(record)
 		if not ok and not opts.force then return false, problems end
 		providerKeys.ensureIds(record)
+		if opts.credentialsRestored then
+			record.credentialsOmitted = nil
+			record.storedCredentials, record.credentialStorageError = nil, nil
+			if not communityKey.isApplied(record) then record.communityCredential, record.communityKeyState = nil, nil end
+		end
 
 		local list = config.get("providers.list", {})
 		if type(list) ~= "table" then list = {} end
@@ -639,6 +667,8 @@ return function(env)
 	-- left alone. Idempotent, and writes nothing when there is nothing to change.
 	local RETIRED_REFERER = "https://carldv.github.io/ProjectUAI/"
 	function M.migrate()
+		local vault = config.vaultStatus()
+		if config.accessProblem() or vault.locked or vault.busy then return 0 end
 		local preset = catalog.get("openrouter")
 		local replacement = preset and preset.headers and preset.headers["HTTP-Referer"]
 		local stored = config.get("providers.list", {})
@@ -646,6 +676,7 @@ return function(env)
 		local retired = string.gsub(RETIRED_REFERER, "/+$", "")
 		local changed = 0
 		for _, record in ipairs(stored) do
+			if type(record) == "table" and (communityKey.migrate(record) or communityKey.restore(record)) then changed = changed + 1 end
 			if type(record) == "table" and retiredOpencode(record.baseUrl) then
 				record.baseUrl = "https://opencode.ai/zen/v1"
 				record.wsUrl = ""
@@ -674,6 +705,10 @@ return function(env)
 	end
 
 	function M.remove(id)
+		local access = config.accessProblem()
+		if access then return false, access end
+		local vault = config.vaultStatus()
+		if vault.locked or vault.busy then return false, "Unlock the credential vault and finish any vault operation before removing providers." end
 		local list = config.get("providers.list", {})
 		local kept = {}
 		for _, record in ipairs(list) do
@@ -688,6 +723,10 @@ return function(env)
 	end
 
 	function M.setActive(id)
+		local access = config.accessProblem()
+		if access then return false, access end
+		local vault = config.vaultStatus()
+		if vault.locked or vault.busy then return false, "Unlock the credential vault and finish any vault operation before changing providers." end
 		if not M.get(id) then return false, "unknown provider" end
 		config.set("providers.active", id)
 		M.changed:fire("active", id)
@@ -705,6 +744,10 @@ return function(env)
 	end
 
 	function M.setModel(id, model)
+		local access = config.accessProblem()
+		if access then return false, access end
+		local vault = config.vaultStatus()
+		if vault.locked or vault.busy then return false, "Unlock the credential vault and finish any vault operation before editing providers." end
 		local record = M.get(id)
 		if not record then return false end
 		record.model = model
@@ -718,6 +761,10 @@ return function(env)
 	end
 
 	function M.reorder(id, direction)
+		local access = config.accessProblem()
+		if access then return false, access end
+		local vault = config.vaultStatus()
+		if vault.locked or vault.busy then return false, "Unlock the credential vault and finish any vault operation before editing providers." end
 		local list = M.list()
 		for index, record in ipairs(list) do
 			if record.id == id then
@@ -816,5 +863,12 @@ return function(env)
 		return table.concat(bits, " | ")
 	end
 
+	env.require("runtime/dispose").add(config.changed:connect(function(path)
+		if path == "security.vault" then
+			local vault = config.vaultStatus()
+			if not vault.locked and not vault.busy then M.migrate() end
+			M.changed:fire("vault")
+		end
+	end), "provider vault state")
 	return M
 end

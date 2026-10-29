@@ -1100,6 +1100,7 @@ return function(env)
 				recovery = proxy.new(record, { aborted = request.aborted, onRetry = request.onRetry, deadlineMs = deadline })
 			end
 			local res, err = http.send({
+				requiresAccess = true,
 				onDispatch = function() accounting.dispatch(currentKey, headers) end,
 				relay = web,
 				relayUnlimited = relayUnlimited,

@@ -292,18 +292,19 @@ end)
 
 case("switching to free access preserves an existing personal key until chosen", function()
 	local f = fixture()
+	local publicKey = f.env.require("runtime/community_credential").key
 	preset(f, "hcnsec")
 	check("official setup offers the free key", f.h.byName("CommunityKey").Visible)
 	check("opening setup preserves the supplied key", f.h.byName("KeyState").Text:find("-key", 1, true) ~= nil)
 	check("setup never creates a saved provider", f.env.require("provider/registry").count() == 0)
 	click(f, "UseCommunityKey")
-	check("the public key stays masked", f.h.byName("KeyState").Text:find("1luY", 1, true) ~= nil
-		and not f.h.textOf():find("sk-ysUaToxu", 1, true))
+	check("the public key stays masked", f.h.byName("KeyState").Text:find(publicKey:sub(-4), 1, true) ~= nil
+		and not f.h.textOf():find(publicKey, 1, true))
 	check("the original record stays unchanged until Save", f.original.apiKey == "fixture-key"
 		and f.env.require("provider/registry").count() == 0)
 	click(f, "SaveProvider")
 	check("saving opts in only this provider", f.saved and f.saved.preset == "hcnsec"
-		and f.saved.apiKey:sub(-4) == "1luY" and f.saved.apiKey ~= "fixture-key")
+		and f.saved.apiKey == publicKey and f.saved.apiKey ~= "fixture-key")
 	check("the model remains the user's selection", f.saved.model == "manual-model")
 	check("opting in never sends a request", f.h.http.requestCount == 0)
 	f.healthy(); f.close()
@@ -330,12 +331,14 @@ end)
 case("choosing the community key replaces an entire key pool and its rotation state", function()
 	local f = F.ui(390, 700)
 	local registry = f.env.require("provider/registry")
+	local publicKey = f.env.require("runtime/community_credential").key
 	local record = registry.blank("hcnsec")
 	record.apiKey, record.model, record.models = "first-personal-key\nsecond-personal-key", "my-model", { "my-model" }
 	record.keyRotation = { index = 2, cooldowns = { ["first-personal-key"] = 9999999999999 } }
 	f.env.require("ui/panels/providers").editor(record, function(id) f.saved = registry.get(id) end)
 	click(f, "UseCommunityKey"); click(f, "SaveProvider")
-	check("only the chosen community key remains in the pool", f.saved and #registry.keysOf(f.saved) == 1 and registry.nextKey(f.saved):sub(-4) == "1luY")
+	check("only the chosen community key remains in the pool", f.saved and #registry.keysOf(f.saved) == 1 and registry.nextKey(f.saved) == publicKey)
+	check("replacing the pool never displays the complete public key", not f.h.textOf():find(publicKey, 1, true))
 	check("old rotation and cooldown state are discarded", f.saved.keyRotation == nil)
 	check("the source record retains its personal pool until explicit save", record.apiKey == "first-personal-key\nsecond-personal-key" and record.keyRotation.index == 2)
 	f.healthy(); f.close()

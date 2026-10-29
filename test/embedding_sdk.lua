@@ -6,6 +6,14 @@ local function check(label, value) assert(value, label); passed = passed + 1; pr
 local h = envMock.new({ context = { ui = false, reuse = true } })
 local uai = assert(h.boot())
 local sessions, sdk = uai.sessions, uai.sdk
+local crypto, sha = uai.env.require("runtime/credential_crypto"), uai.env.require("runtime/credential_sha256")
+crypto.derive = function(password, salt)
+	return sha.digest(password .. "\0" .. salt) .. sha.digest(salt .. "\0" .. password)
+end
+local unlocked
+h.sched.spawn(function() unlocked = uai.config.enableVault("sdk fixture master password") end)
+h.settle(1)
+assert(unlocked and uai.config.vaultStatus().ready, "SDK fixture must pass mandatory password setup")
 local delay, calls = 0, 0
 h.http.handler = function(entry)
 	if not entry.url:find("/chat/completions", 1, true) then return nil end
@@ -21,7 +29,9 @@ local record = uai.providers.blank("custom")
 record.label, record.baseUrl, record.apiKey = "SDK fixture", "https://sdk.test/v1", "fixture-key"
 record.model, record.models, record.stream = "fixture-model", { "fixture-model" }, false
 assert(uai.providers.save(record))
-check("SDK identifies supported public capabilities", sdk.version == "1.0.0" and sdk.features.requests and sdk.features.resourceScopes)
+assert(uai.providers.setActive(record.id))
+check("SDK identifies supported public capabilities", sdk.version == "1.0.0" and sdk.features.requests and sdk.features.resourceScopes
+	and sdk.features.uiFreeBoot == false and sdk.features.passwordGate == true)
 local selected = sessions.current()
 local session, created = sessions.open("sdk-conversation", { title = "SDK", ephemeral = true })
 check("opening a named conversation preserves native selection", created and sessions.current() == selected and session.ephemeral)
@@ -43,7 +53,8 @@ local request = assert(sdk.request(session, "hello", {
 	onComplete = function(result) completions = completions + 1; assert(result.ok) end,
 }))
 local result = assert(request.await(5))
-check("request returns final text and a successful terminal result", result.ok and result.status == "succeeded" and result.text == "Fixture answer" and result.sessionId == session.id)
+check("request returns final text and a successful terminal result: " .. tostring(result.error or result.text),
+	result.ok and result.status == "succeeded" and result.text == "Fixture answer" and result.sessionId == session.id)
 check("observation includes the first event and completion releases busy", firstEvent == "user" and completions == 1 and not session.busy)
 check("ephemeral constructor prevents conversation persistence", h.files["UAI/sessions/" .. session.id .. ".json"] == nil)
 check("completed requests release event and lifetime subscriptions", session.events:count() == initialListeners and uai.env.require("runtime/dispose").count() == initialDisposals)

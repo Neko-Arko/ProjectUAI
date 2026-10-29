@@ -33,6 +33,11 @@ for _, size in ipairs({ { 320, 640 }, { 844, 390 } }) do
 		if (node:IsA("TextLabel") or node:IsA("TextBox")) and node.Text ~= "" then check("text respects the handheld reading floor", node.TextSize >= 10) end
 	end
 	local list = h.byName("ModelScroll", picker.card)
+	local effort = h.byName("Section_ReasoningEffort", picker.card)
+	check("reasoning levels stay visible in portrait and short landscape pickers", effort.Visible
+		and h.byName("EffortPills", picker.card).AbsoluteSize.Y >= 40
+		and list.AbsolutePosition.Y + list.AbsoluteSize.Y < effort.AbsolutePosition.Y
+		and effort.AbsolutePosition.Y + effort.AbsoluteSize.Y <= picker.footer.AbsolutePosition.Y)
 	check("only the model catalog scrolls", not picker.scroll.instance.ScrollingEnabled and list.ScrollingEnabled)
 	list.CanvasPosition = h.dt.Vector2.new(0, 60)
 	uis.OnScreenKeyboardSize, uis.OnScreenKeyboardVisible = h.dt.Vector2.new(size[1], math.floor(size[2] * 0.55)), true
@@ -46,8 +51,15 @@ for _, size in ipairs({ { 320, 640 }, { 844, 390 } }) do
 	list.CanvasPosition = h.dt.Vector2.new(0, 120); h.settle(0.1)
 	check("scrolling models leaves provider and search fixed", provider.AbsolutePosition == providerPosition and search.AbsolutePosition == searchPosition
 		and picker.scroll.instance.CanvasPosition.Y == 0)
-	local effort = h.byName("Section_ReasoningEffort", picker.card)
-	check("compact views reserve model space by moving effort into Options", not effort.Visible)
+	if size[2] >= 500 then
+		check("portrait keyboard space keeps the reasoning levels visible", effort.Visible
+			and list.AbsolutePosition.Y + list.AbsoluteSize.Y < effort.AbsolutePosition.Y
+			and effort.AbsolutePosition.Y + effort.AbsoluteSize.Y <= picker.footer.AbsolutePosition.Y)
+		h.click(h.byName("Effort_medium", picker.card)); h.settle(0.1)
+		check("visible levels change the real preference above the keyboard", app.config.get("agent.effort") == "medium")
+	else
+		check("extreme landscape keyboard space retains the Options fallback", not effort.Visible)
+	end
 	h.click(h.byName("ModelOptions", picker.card)); h.settle(0.1)
 	h.click(h.byName("Option_effort")); h.settle(0.1)
 	local high = assert(h.byName("Option_high"))

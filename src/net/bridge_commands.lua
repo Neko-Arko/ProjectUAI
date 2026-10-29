@@ -6,6 +6,8 @@ return function(env)
 	local M = {}
 	function M.run(command)
 		local kind = command.type
+		local access = config.accessProblem()
+		if access and kind ~= "loops:stop" then error(access, 0) end
 		local session = command.sessionId and sessions.threads[command.sessionId] or sessions.current()
 		if not session then error("Conversation no longer exists", 0) end
 		if kind == "attachment:upload" then

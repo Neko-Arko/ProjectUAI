@@ -331,11 +331,13 @@ return function(env)
 
 	-- One call. Always returns a result table; never raises.
 	function M.dispatch(call, ctx)
-		M.load()
 		local fn = call["function"] or {}
 		local name = fn.name or call.name or "unknown"
 		local started = clock.ms()
 		local result = { id = call.id, name = name, ok = false, text = "", ms = 0 }
+		local access = config.accessProblem()
+		if access then result.error, result.text = "vault required", access; return result end
+		M.load()
 
 		-- This is a refusal receipt from the native tunnel, never an executable
 		-- tool. Reserve it before lookup even if a host directly mutates the registry.
@@ -367,7 +369,10 @@ return function(env)
 		local function blocked()
 			local owner = ctx and ctx.session
 			local reason
-			if M.tools[name] ~= tool or registrations[name] ~= registration then
+			local access = config.accessProblem()
+			if access then
+				result.error, result.text = "vault required", access
+			elseif M.tools[name] ~= tool or registrations[name] ~= registration then
 				result.error = "tool unregistered"
 				result.text = name .. " was unregistered before it ran. Do not retry this call."
 			elseif ctx and ctx.aborted and ctx.aborted() then
@@ -524,6 +529,8 @@ return function(env)
 		end
 		local finished, ok, value, stoppedWaiting = clock.timeout(timeout, function()
 			if scoped.aborted() then return { ok = false, text = "Stopped before " .. name .. " ran." } end
+			local access = config.accessProblem()
+			if access then return { ok = false, text = access } end
 			return tool.run(coerced, scoped, prepared)
 		end, scoped.aborted)
 		settled = true

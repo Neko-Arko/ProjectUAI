@@ -193,6 +193,9 @@ return function(env)
 	-- Keep an unfinished Add in memory for this client session. Existing records
 	-- remain isolated edit copies; their unsaved changes do not become Add drafts.
 	local addDraft = nil
+	env.require("runtime/dispose").add(config.changed:connect(function(path)
+		if (path == nil or path == "security" or path == "security.vault") and config.vaultStatus().locked then addDraft = nil end
+	end), "provider draft vault state")
 
 	local function draftDirty(candidate)
 		local blank = registry.blank("custom")
@@ -698,11 +701,12 @@ return function(env)
 	-- be dismissed to see the rest of the screen. This modal exists for the one moment
 	-- when none of that is reachable yet: there is no record to select.
 	function M.editor(record, onSaved)
+		if config.vaultStatus().locked then return env.require("ui/credentialvault").open("unlock") end
 		keyData.ensureIds(record)
 		local editing = util.deepCopy(record)
 		local adding = util.trim(editing.id) == ""
 		local retainDraft = adding
-		local keyManager
+		local keyManager, unsubscribeVault
 		local modal = overlay.modal({
 			title = adding and "Connect a provider" or "Edit connection",
 			description = adding and "Add access, choose a model, and save when you're ready."
@@ -717,6 +721,7 @@ return function(env)
 			-- Scrim, close button and Escape preserve every editable connection
 			-- field. Saving and Start over explicitly release the retained draft.
 			onClose = function()
+				if unsubscribeVault then unsubscribeVault(); unsubscribeVault = nil end
 				if keyManager and not keyManager.closed then keyManager.close() end
 				if retainDraft and util.trim(editing.id) == "" then
 					addDraft = draftDirty(editing) and util.deepCopy(editing) or nil
@@ -725,6 +730,16 @@ return function(env)
 		})
 		if not modal then return end
 		modal.card.BackgroundColor3 = theme.color.surface
+		unsubscribeVault = config.changed:connect(function(path)
+			if (path == nil or path == "security" or path == "security.vault") and config.vaultStatus().locked then
+				retainDraft, addDraft = false, nil
+				modal.close()
+				for _, child in ipairs(modal.card:GetDescendants()) do
+					if child:IsA("TextBox") then child.Text = "" end
+				end
+				for name in pairs(editing) do editing[name] = nil end
+			end
+		end)
 
 		local form = P.column(modal.content, {
 			name = "Form",
@@ -733,6 +748,11 @@ return function(env)
 			gap = theme.space.md,
 			layoutOrder = 1,
 		})
+		if editing.credentialsOmitted == true then
+			R.paragraph(form,
+				"Provider credentials were omitted from saved settings. Restore your API key and any required custom headers, query parameters, body fields or URL credentials. Saving this connection confirms you reviewed those fields and enables requests.",
+				{ name = "RestoreProviderCredentials", color = theme.color.warn, role = "small", layoutOrder = 0 })
+		end
 
 		-- What this vendor is, in the same words the gallery used to describe it. The
 		-- editor is where a key gets pasted, and pasting one into a screen that no
@@ -1203,7 +1223,7 @@ return function(env)
 		})
 		keyHintLabel.Size = UDim2.new(1, 0, 0, 0)
 		keyHintLabel.Visible = keyHintLabel.Text ~= ""
-		R.paragraph(guideBody, "API keys are stored on this device and masked here. Requests send them to the configured provider, gateway or relay.", { layoutOrder = 14 })
+		R.paragraph(guideBody, "Keys are masked here. Settings / Privacy lets you choose password encryption or unprotected storage. Requests send them to the configured provider, gateway or relay.", { layoutOrder = 14 })
 
 		-- Model.
 		--
@@ -1506,7 +1526,7 @@ return function(env)
 					-- open. A label-only edit must not restore its old copied cursor.
 					editing.keyRotation = current.keyRotation
 				end
-				local ok, problems = registry.save(editing)
+				local ok, problems = registry.save(editing, { credentialsRestored = true })
 				if not ok then
 					-- Sentence-cased and one per line. It was table.concat(problems, ". "),
 					-- which turned two lowercase fragments into "give the provider a name.
@@ -1554,7 +1574,7 @@ return function(env)
 		if savedKeyManager and not savedKeyManager.closed then return savedKeyManager end
 		savedKeyManager = env.require("ui/providerkeys").open({
 			record = record,
-			applyHint = "Apply changes to save these keys and request preferences for this provider.",
+			applyHint = "Apply changes updates this provider's keys and request preferences using the storage preference shown above.",
 			onClose = function() savedKeyManager = nil end,
 			onApply = function(updated)
 				local current = registry.get(record.id)
@@ -1571,6 +1591,9 @@ return function(env)
 					return false
 				end
 				if connectionChanged then models.invalidate(candidate.id) end
+				if candidate.credentialsOmitted == true then
+					overlay.toast("Keys updated. Open Edit connection to review custom authentication, then save to enable requests.", "info", 5)
+				end
 				if onSaved then onSaved(candidate.id) end
 				return true
 			end,
@@ -1668,7 +1691,8 @@ return function(env)
 				layoutOrder = index,
 				onClick = function()
 					if preset.free then
-						local record = env.require("provider/free").use()
+						local record, why = env.require("provider/free").use()
+						if not record then overlay.toast(why, "warn", 4); return end
 						if onSetup then onSetup(record.id) end
 						return
 					end
@@ -1970,6 +1994,13 @@ return function(env)
 			healthError = nil
 			panel.__order = 0
 			local record = selected and registry.get(selected) or nil
+			if config.vaultStatus().locked then
+				local locked = R.section(detail.instance, { name = "ProviderVaultLocked", title = "Credential vault locked",
+					description = "Unlock saved credentials before changing providers or making requests.", layoutOrder = order() })
+				P.button(locked, { name = "UnlockProviderVault", text = "Unlock credential vault", fill = true,
+					onClick = function() env.require("ui/credentialvault").open("unlock") end })
+				return
+			end
 			-- Included free access must not hide the way to anything else.
 			local list = registry.list()
 			if not record then
@@ -2411,7 +2442,8 @@ return function(env)
 							confirmText = "Remove",
 							danger = true,
 							onConfirm = function()
-								registry.remove(record.id)
+								local removed, why = registry.remove(record.id)
+								if not removed then overlay.toast(why, "warn", 4); return end
 								panel.select(successor and successor.id or nil)
 							end,
 						})
@@ -2474,9 +2506,13 @@ return function(env)
 				panel.select(selected)
 			end
 		end)
+		local unsubscribeVault = config.changed:connect(function(path)
+			if root.Parent and (path == nil or path == "security" or path == "security.vault") then panel.select(selected) end
+		end)
 		root.Destroying:Connect(function()
 			pcall(panel.unsubscribe)
 			pcall(unsubscribeLayout)
+			pcall(unsubscribeVault)
 		end)
 
 		panel.root = root

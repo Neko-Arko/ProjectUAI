@@ -61,14 +61,14 @@ local function subdued(stroke, theme, surface)
 		and stroke.Color.G > stroke.Color.R and stroke.Color.G > stroke.Color.B
 end
 
-case("screenshot viewport fits five complete rows with reasoning and quiet free outlines", function()
+case("screenshot viewport fits three complete rows with reasoning and quiet free outlines", function()
 	local f = fixture(777, 632)
 	local theme = f.env.require("ui/theme")
 	local picker = f.env.require("ui/panels/modelpicker").open(); f.h.settle(0.3)
 	local list, effort = assert(f.h.byName("ModelScroll")), assert(f.h.byName("Section_ReasoningEffort"))
 	local rows = modelRows(list)
 	check("dialog stays bounded with its provider context", picker.card.Size.X.Offset <= 540 and picker.card.Size.Y.Offset <= 560)
-	check("five complete rows fit with the reasoning controls shown", effort.Visible and #rows == 8 and fullRows(list) >= 5)
+	check("three complete rows fit with the reasoning controls shown", effort.Visible and #rows == 8 and fullRows(list) >= 3)
 	check("the active provider and model are visible above search", f.h.byName("CurrentProvider").Text == "Picker fixture"
 		and f.h.byName("CurrentModel").Text == f.record.model and f.h.byName("CurrentProviderStatus").Text:find("8 free", 1, true))
 	check("the catalogue owns scrolling at the screenshot size", list.ScrollingEnabled and not picker.scroll.instance.ScrollingEnabled)
@@ -100,11 +100,13 @@ case("short touch layouts keep one scroll owner and temperature under Options", 
 	f.env.require("ui/responsive").refresh("picker fixture")
 	local picker = f.env.require("ui/panels/modelpicker").open(); f.h.settle(0.3)
 	local list, search = assert(f.h.byName("ModelScroll")), f.h.byName("ModelFilter"):FindFirstChildOfClass("TextBox")
-	check("short screens scroll the complete body", picker.scroll.instance.ScrollingEnabled and not list.ScrollingEnabled
-		and picker.content.Size.Y.Offset > picker.scroll.viewportSize().Y)
+	check("short screens keep the catalogue as the scrolling owner", not picker.scroll.instance.ScrollingEnabled and list.ScrollingEnabled
+		and picker.content.Size.Y.Offset == picker.scroll.viewportSize().Y)
 	check("touch rows keep the shared input target minimum", modelRows(list)[1].Size.Y.Offset >= f.env.require("ui/responsive").minTarget())
-	check("search and effort remain in the scrollable body", search:IsDescendantOf(picker.content)
-		and f.h.byName("Section_ReasoningEffort"):IsDescendantOf(picker.content))
+	local effort = assert(f.h.byName("Section_ReasoningEffort"))
+	check("short screens keep reasoning levels visible below the catalogue", effort.Visible and f.h.byName("EffortPills").Visible
+		and list.AbsoluteSize.Y > 0 and list.AbsolutePosition.Y + list.AbsoluteSize.Y < effort.AbsolutePosition.Y
+		and effort.AbsolutePosition.Y + effort.AbsoluteSize.Y <= picker.footer.AbsolutePosition.Y)
 	search.Text = "free"
 	click(f, "ModelOptions")
 	local temperature = assert(f.h.byName("Option_temperature"))

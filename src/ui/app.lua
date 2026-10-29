@@ -37,12 +37,55 @@ return function(env)
 		{ id = "logs", label = "Logs", icon = "document" },
 	}
 
-	local M = { panel = "chat", built = false, history = { entries = {}, index = 0 } }
+	local M = { panel = "chat", built = false, history = { entries = {}, index = 0 },
+		suppressInitialShow = env.context and env.context.ui == false }
+	local credentialGate, accessSyncing
+	local function credentialAccessRequired()
+		local vault = config.vaultStatus()
+		return vault.required == true and vault.ready ~= true
+	end
+
+	-- Recheck at every public entry point as well as the runtime notification.
+	-- The hidden window and launcher cannot be exposed by closing the gate.
+	function M.syncCredentialAccess()
+		if M.disposed or dispose.draining or not M.screen or not M.screen.Parent then return not credentialAccessRequired() end
+		if accessSyncing then return not credentialAccessRequired() end
+		accessSyncing = true
+		if credentialAccessRequired() then
+			local entering = not M.credentialsGated
+			M.credentialsGated = true
+			if M.window then M.window.hide(); M.window.root.Visible = false end
+			if M.launcher then M.launcher.Visible = false end
+			quickchat.hide()
+			if quickchat.root then quickchat.root.Visible = false end
+			pcall(function()
+				local field = env.uis:GetFocusedTextBox()
+				if field and M.window and field:IsDescendantOf(M.window.root) then field:ReleaseFocus() end
+			end)
+			if entering then overlay.closeAll() end
+			credentialGate = env.require("ui/credentialvault").open("required", { onClose = M.syncCredentialAccess })
+			accessSyncing = false
+			return false
+		end
+		local wasGated = M.credentialsGated
+		M.credentialsGated = false
+		-- An operation publishes ready before returning to its dialog. Let that
+		-- dialog finish and report verified success instead of cancelling it here.
+		if credentialGate and not credentialGate.closed and not credentialGate.operationPending then credentialGate.close() end
+		credentialGate = nil
+		if wasGated then
+			if M.launcher then M.launcher.Visible = not M.suppressInitialShow end
+			if M.window and not M.suppressInitialShow then M.window.show() end
+		end
+		accessSyncing = false
+		return true
+	end
 
 	local KOFI_URL = "https://ko-fi.com/davidkreutzer"
 	local DONATION_PLACE_ID = 80876331264594
 
 	function M.joinDiscord()
+		if not M.syncCredentialAccess() then return end
 		return env.require("ui/community").open()
 	end
 
@@ -62,6 +105,7 @@ return function(env)
 	end
 
 	function M.donate()
+		if not M.syncCredentialAccess() then return end
 		local modal = overlay.modal({
 			title = "Support Project Ptolemy",
 			description = "Optional donations help keep the project and shared free access running.",
@@ -135,7 +179,7 @@ return function(env)
 
 	function M.mount()
 		if M.disposed or dispose.draining then return M end
-		if M.screen and M.screen.Parent then return M end
+		if M.screen and M.screen.Parent then M.syncCredentialAccess(); return M end
 
 		local container = parentGui()
 		if not container then
@@ -170,6 +214,10 @@ return function(env)
 
 		M.buildLauncher()
 		M.buildWindow()
+		dispose.add(config.changed:connect(function(path)
+			if path == nil or path == "security" or path == "security.vault" then M.syncCredentialAccess() end
+		end), "app.credentialAccess")
+		M.syncCredentialAccess()
 
 		-- Layout switches retain the original panes. Theme changes (accent,
 		-- density, text scale, either font, the code palette, the reading width)
@@ -267,7 +315,7 @@ return function(env)
 				if oldest.toast then oldest.toast.close(true) end
 			end
 			M.setLauncherBadge(#M.notifications)
-			if config.get("ui.notifications", true) ~= false then
+			if config.get("ui.notifications", true) ~= false and not credentialAccessRequired() and not M.suppressInitialShow then
 				local heading = ({ turn = "Reply ready", error = "Task failed", stop = "Task stopped" })[kind] or "Project UAI"
 				entry.toast = overlay.toast(text, tone, 6, {
 					title = heading .. (session and session.title and ("  ·  " .. session.title) or ""),
@@ -339,6 +387,7 @@ return function(env)
 
 		local button = Instance.new("TextButton", M.screen)
 		button.Name = "Launcher"
+		button.Visible = not credentialAccessRequired() and not M.suppressInitialShow
 		button.Text = ""
 		button.AutoButtonColor = false
 		button.BackgroundColor3 = theme.color.surfaceRaised
@@ -644,6 +693,7 @@ return function(env)
 		-- the user was at the bottom when they minimized, so they are at the
 		-- bottom when they come back.
 		M.window.onShow = function()
+			if credentialAccessRequired() then M.syncCredentialAccess(); return end
 			local panel = M.panels and M.panels[M.panel]; if panel and panel.setVisible then panel.setVisible(true) end
 			if responsive.isMobile() and M.launcher then M.launcher.Visible = false end
 			M.setLauncherBusy(false)
@@ -655,7 +705,7 @@ return function(env)
 		M.window.onHide = function()
 			local panel = M.panels and M.panels[M.panel]; if panel and panel.setVisible then panel.setVisible(false) end
 			if responsive.isMobile() then
-				if M.launcher then M.launcher.Visible = true end
+				if M.launcher then M.launcher.Visible = not credentialAccessRequired() and not M.suppressInitialShow end
 				pcall(function()
 					local field = env.uis:GetFocusedTextBox()
 					if field and field:IsDescendantOf(M.window.root) then field:ReleaseFocus() end
@@ -1058,7 +1108,10 @@ return function(env)
 
 	function M.show(id)
 		if M.disposed or dispose.draining then return end
+		M.suppressInitialShow = false
 		if not M.screen then M.mount() end
+		if not M.syncCredentialAccess() or not M.window then return end
+		if M.launcher then M.launcher.Visible = not responsive.isMobile() end
 		M.showPanel(id or M.panel)
 		M.window.show()
 		M.setLauncherBusy(false)
@@ -1077,6 +1130,8 @@ return function(env)
 	-- lands on the chat panel. This is what a row in the sidebar does, and it is the
 	-- thing those rows used to fake by typing their own label into the composer.
 	function M.openSession(id)
+		M.suppressInitialShow = false
+		if not M.syncCredentialAccess() then return false end
 		if id and sessions.activeId ~= id then
 			if not sessions.switch(id) then return false end
 		end
@@ -1191,24 +1246,29 @@ return function(env)
 	-- Menus and dialogs -------------------------------------------------------
 
 	function M.newConversation(folderId)
+		if not M.syncCredentialAccess() then return end
 		return env.require("ui/conversations").choose(M, nil, folderId)
 	end
 
 	function M.moveConversation(session)
+		if not M.syncCredentialAccess() then return end
 		return env.require("ui/conversations").choose(M, session)
 	end
 
 	function M.manageFolders()
+		if not M.syncCredentialAccess() then return end
 		return env.require("ui/conversations").manage(M)
 	end
 
 	function M.showSettingsDialog(category)
+		if not M.syncCredentialAccess() then return end
 		return env.require("ui/panels/settingsdialog").open(category)
 	end
 
 	-- The hamburger. Every panel, plus the two things that are not panels: a new
 	-- conversation and the search.
 	function M.showAppMenu(target)
+		if not M.syncCredentialAccess() then return end
 		local options = {}
 		for _, entry in ipairs(PANELS) do
 			options[#options + 1] = {
@@ -1319,8 +1379,10 @@ return function(env)
 							local globals = (type(getgenv) == "function") and getgenv() or nil
 							local live = globals and globals.UAI
 							if live and live.destroy then
-								live.destroy()
+								local finished, why = live.destroy()
+								if finished == false then overlay.toast(why or "UAI could not finish unloading. Try again.", "warn", 5) end
 							else
+								if config.vaultStatus().busy then overlay.toast("Finish or cancel credential storage before unloading UAI.", "warn", 5); return end
 								dispose.drain()
 								pcall(function() M.screen:Destroy() end)
 							end
@@ -1344,6 +1406,7 @@ return function(env)
 	end
 
 	function M.showProfileMenu(target, onClose)
+		if not M.syncCredentialAccess() then return end
 		local menu = overlay.menu({
 			target = target,
 			width = theme.size.menuWide,
@@ -1394,8 +1457,10 @@ return function(env)
 							local globals = (type(getgenv) == "function") and getgenv() or nil
 							local live = globals and globals.UAI
 							if live and live.destroy then
-								live.destroy()
+								local finished, why = live.destroy()
+								if finished == false then overlay.toast(why or "UAI could not finish unloading. Try again.", "warn", 5) end
 							else
+								if config.vaultStatus().busy then overlay.toast("Finish or cancel credential storage before unloading UAI.", "warn", 5); return end
 								dispose.drain()
 								pcall(function() M.screen:Destroy() end)
 							end
@@ -1412,6 +1477,7 @@ return function(env)
 	-- What this build actually is. Read rather than written: the version, the identity
 	-- that goes on the wire, what the host can do, and where it is running.
 	function M.showAbout()
+		if not M.syncCredentialAccess() then return end
 		local ua = env.require("net/ua")
 		local registry = env.require("agent/registry")
 		local modal = overlay.modal({
@@ -1477,6 +1543,7 @@ return function(env)
 	-- read the moment it opens -- the marker on the menu row is what brought
 	-- the reader here, and leaving it after the fact would be a stale flag.
 	function M.showChangelog()
+		if not M.syncCredentialAccess() then return end
 		return env.require("ui/changelog").show()
 	end
 
@@ -1484,6 +1551,7 @@ return function(env)
 	-- results are rows that open the conversation, which is the only thing a search
 	-- result can usefully be.
 	function M.showSearch()
+		if not M.syncCredentialAccess() then return end
 		local modal = overlay.modal({
 			title = "Search conversations",
 			description = "Matches a title, a message or a reply. " ..
@@ -1696,7 +1764,7 @@ return function(env)
 		M.panel = panel
 		M.buildLauncher()
 		M.buildWindow()
-		if wasVisible then M.window.show() end
+		if M.syncCredentialAccess() and wasVisible then M.window.show() end
 		M.setLauncherBusy(not wasVisible and sessions.busyCount() > 0)
 		log.debug("app", "rebuilt for " .. tostring(reason) .. " as " .. responsive.mode)
 	end

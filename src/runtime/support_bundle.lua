@@ -7,6 +7,7 @@ return function(env)
 	local log = env.require("runtime/log")
 	local clock = env.require("runtime/clock")
 	local config = env.require("runtime/config")
+	local credentials = env.require("runtime/credentials")
 
 	local M = { format = "uai-support", version = 1 }
 	local caps
@@ -52,7 +53,7 @@ return function(env)
 	local function providerSummary(record)
 		local health = record.health or {}
 		return {
-			id = record.id, label = record.label, baseUrl = log.redact(tostring(record.baseUrl or "")),
+			id = record.id, label = record.label, baseUrl = log.redact(credentials.cleanUrl(record.baseUrl)),
 			model = record.model, api = record.api, enabled = record.enabled ~= false, order = record.order,
 			health = { ok = health.ok or 0, fail = health.fail or 0, streak = health.streak or 0,
 				lastMs = health.lastMs or 0, cooldownUntil = health.cooldownUntil or 0,
@@ -93,7 +94,7 @@ return function(env)
 		local first = math.max(1, #http.history - 29)
 		for index = first, #http.history do
 			local entry = http.history[index]
-			out[#out + 1] = { at = entry.at, method = entry.method, url = entry.url, status = entry.status,
+			out[#out + 1] = { at = entry.at, method = entry.method, url = credentials.cleanUrl(entry.url), status = entry.status,
 				ms = entry.ms, bytes = entry.bytes, via = entry.via, identity = entry.identity,
 				uaSent = entry.uaSent, error = entry.error, server = entry.server, trace = entry.trace,
 				mitigated = entry.mitigated, tag = entry.tag }
@@ -120,14 +121,17 @@ return function(env)
 
 	function M.build()
 		caps = safely(function() return env.require("runtime/caps") end, nil)
+		-- Use the same credential projection as ordinary exports. Header names and
+		-- key shapes cannot identify every custom secret; entire authentication
+		-- maps and key-indexed cooldown state must be excluded before redaction.
+		local safeConfig = redactTree(credentials.sanitise(config.data or {}), 0)
 		local providerList = {}
-		for _, record in ipairs(safely(function() return config.get("providers.list", {}) end, {})) do
+		for _, record in ipairs(util.get(safeConfig, "providers.list", {})) do
 			if type(record) == "table" then providerList[#providerList + 1] = providerSummary(record) end
 		end
 		local permissions = safely(function() return env.require("agent/permissions") end, nil)
 		local httpSection = httpSummary()
 		local logs = safely(function() return log.tail(120) end, {})
-		local safeConfig = redactTree(config.data or {}, 0)
 		if type(safeConfig.agent) == "table" then safeConfig.agent.customInstructions = "<omitted>" end
 		if type(safeConfig.memory) == "table" then safeConfig.memory.entries = "<omitted>" end
 		if type(safeConfig.identity) == "table" and type(safeConfig.identity.extraHeaders) == "table" then

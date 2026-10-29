@@ -7,6 +7,7 @@
 -- than per call site.
 return function(env)
 	local util = env.require("runtime/util")
+	local config = env.require("runtime/config")
 	local caps = env.require("runtime/caps")
 	local clock = env.require("runtime/clock")
 	local guard = env.require("runtime/capture_guard")
@@ -43,11 +44,19 @@ return function(env)
 		if not spec.aborted then return false end
 		local ok, value = pcall(spec.aborted); return not ok or value == true
 	end
+	local function accessProblem(spec)
+		-- Provider calls opt in at the boundary, including retries and discovery.
+		-- Recheck only before native dispatch; an accepted exchange keeps its result.
+		if spec.requiresAccess ~= true then return nil end
+		local problem = config.accessProblem()
+		return problem and ("vault_required: " .. problem) or nil
+	end
 	local function terminal(err)
 		local value = tostring(err or ""):lower()
 		return value == "aborted" or value:find("deadline", 1, true) ~= nil or value:find("timed out", 1, true) ~= nil
 			or value:find("timeout", 1, true) ~= nil or value:find("response_limit:", 1, true) ~= nil or value:find("malformed:", 1, true) ~= nil
 			or value:find("malformed_stream:", 1, true) ~= nil or value:find("capacity:", 1, true) ~= nil
+			or value:find("vault_required:", 1, true) ~= nil
 	end
 
 	-- A browser agent for the public web: search engines and CDNs answer 403 to
@@ -274,6 +283,8 @@ return function(env)
 	-- a fixed failure kind. Only a completed native throw is a transport failure;
 	-- received/invalid responses and terminal waits cannot authorize alias fallback.
 	function M.request(spec)
+		local access = accessProblem(spec)
+		if access then return nil, access, 0, "terminal" end
 		local url = tostring(spec.url or "")
 		if url == "" then return nil, "no url", nil, "terminal" end
 		if tunnelRoute.reserved(url) then
@@ -334,8 +345,10 @@ return function(env)
 			-- subsequent exchanges for that relay job behind the unfinished call.
 			-- Otherwise an unlimited job can fill every slot with abandoned polls.
 			while ((owner and owner.pending) or (lane and nativeLanes[lane]) or (spec.waitForSlot and workers >= MAX_WORKERS))
-				and clock.ms() < deadline and not aborted(spec) do clock.wait(0.05) end
+				and clock.ms() < deadline and not aborted(spec) and not accessProblem(spec) do clock.wait(0.05) end
 			if aborted(spec) then return nil, "aborted", clock.since(started), "terminal" end
+			access = accessProblem(spec)
+			if access then return nil, access, clock.since(started), "terminal" end
 			if owner and owner.pending then
 				return nil, "capacity: previous native relay exchange is still running; this call was not dispatched", clock.since(started), "terminal"
 			end
@@ -358,6 +371,8 @@ return function(env)
 				-- Scheduling can outlive the caller. Recheck before dispatch while
 				-- leaving the reserved slot owned until this worker actually settles.
 				if not pending.accepting or aborted(spec) then return nil, "aborted", "terminal" end
+				local access = accessProblem(spec)
+				if access then return nil, access, "terminal" end
 				local remaining = deadline - clock.ms()
 				if remaining <= 0 then return nil, "deadline: request budget expired before dispatch", "terminal" end
 				if spec.relay then
@@ -547,6 +562,8 @@ return function(env)
 		local lastRes, lastErr
 		for attempt = 1, attempts do
 			if aborted(spec) then return nil, "aborted" end
+			local access = accessProblem(spec)
+			if access then return nil, access end
 			local copy = util.copy(spec)
 			copy.attempt, copy.deadlineMs = attempt, deadline
 			copy.relayUnlimited = relayUnlimited
@@ -590,6 +607,8 @@ return function(env)
 			while slept < wait do
 				if clock.ms() >= deadline then return nil, "deadline: request budget expired during backoff" end
 				if aborted(spec) then return nil, "aborted" end
+				local access = accessProblem(spec)
+				if access then return nil, access end
 				local step = math.min(0.25, wait - slept)
 				clock.wait(step)
 				slept = slept + step

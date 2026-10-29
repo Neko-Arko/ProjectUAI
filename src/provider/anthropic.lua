@@ -542,6 +542,7 @@ return function(env)
 			if clock.ms() >= deadline then return nil, "deadline: request budget expired" end
 			local requestStarted = clock.ms()
 			local res, err = http.send({
+				requiresAccess = true,
 				onDispatch = function() accounting.dispatch(currentKey, headers) end,
 				relay = env.require("net/transport").shouldRelay(env.require("runtime/images").hasReferences(request.messages)),
 				relayUnlimited = relayUnlimited,
