@@ -7,8 +7,7 @@
 
 ## 汉化与文档
 
-- **DeepSeek** —— 界面文案与文档翻译，包括词条校对、术语统一，以及
-  `README.md`、`L10N.md`、`loader/README.md` 的中文版本。
+- **DeepSeek** —— 界面文案与 README 翻译，包括词条校对与术语统一。
 
 ## 说明
 
