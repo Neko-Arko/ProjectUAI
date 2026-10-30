@@ -1,140 +1,66 @@
-# Project UAI 3.6.5 verification
+# Project UAI 3.6.5 验证
 
-Prepared October 21, 2026. Client, bridge, Windows desktop and Android companion
-share version 3.6.5; Android version code is 6. UI LIB remains 1.3.0 and SDK 1.0.0.
-This unified release includes the OpenCode native execution guard, mobile native
-transport ownership and response limits, bounded expanded thinking presentation,
-Relay Always routing, and the refreshed desktop connection dashboard with grouped
-settings.
+编制于 2026 年 10 月 21 日。客户端、桥接、Windows 桌面端与 Android 配套应用共用版本 3.6.5；Android version code 为 6。UI LIB 保持 1.3.0，SDK 保持 1.0.0。本次统一发布包含 OpenCode 原生执行防护、移动端原生传输归属与响应限制、有界展开思考呈现、Relay Always 路由，以及刷新后的桌面连接仪表板与分组设置。
 
-Changed source, documentation, tests and build inputs were manually audited
-before building or verification. Generated artifacts were inspected before their
-applicable checks. The results below establish behavior in the listed fixtures;
-they do not establish native Roblox rendering or a fix for the reported phone
-crash. See the [investigation](INVESTIGATION_MOBILE_CRASHES.md) and
-[changelog](../CHANGELOG.md).
+变更的源代码、文档、测试与构建输入在构建或验证之前均经人工审计。生成的产物在其适用的检查之前均经检查。下文结果确立的是所列夹具中的行为；它们不确立 Roblox 原生渲染，也不确立对所报告手机崩溃的修复。参见[调查报告](INVESTIGATION_MOBILE_CRASHES.md)与[变更日志](../CHANGELOG.md)。
 
-## Mobile client
+## 移动客户端
 
-| Check | Result |
+| 检查 | 结果 |
 | --- | --- |
-| Native HTTP ownership | 6 cases, 16 assertions passed; discovery, jobs and aliases share an unfinished mobile exchange, unload/reload retains ownership, Stop has one separate lane, desktop parallelism remains available |
-| Expanded reasoning | 4 cases, 22 assertions passed; touch-only excerpts precede formatting and measurement, RichText has a plain-text fallback, original reasoning persists |
-| Relay response and ownership | 8 cases, 35 assertions passed; oversized and malformed received replies stop unlimited polling, cancellation keeps the original job, late results cannot replay inference |
-| Mobile relay routing | 38 checks passed; Always requires a relay during absence and failed health checks, Auto keeps direct fallback, a fresh successful scan restores routing |
-| Companion deadlines | 15 cases, 54 assertions passed |
-| Companion discovery | 50 cases, 207 assertions passed |
-| HTTP diagnostics | 10 cases, 50 assertions passed |
-| Mobile scrolling | 3 cases, 16 assertions passed |
-| Chat reading position | 2 cases, 9 assertions passed |
-| Mobile layout | 22 checks passed |
-| Provider compatibility | 56 cases, 906 assertions passed |
-| Bridge lifecycle | 54 checks passed |
-| Bridge concurrency | 13 checks passed |
-| Bridge previews | 7 cases, 25 assertions passed |
-| Native static audit | 217 files, zero errors |
-| Official Luau compiler | Changed source and the native bundle compiled successfully |
+| 原生 HTTP 归属 | 6 个用例、16 项断言通过；发现、作业与别名共用同一个未完成的移动端交换，卸载/重载后仍保持归属，Stop 拥有单独一条通道，桌面端并行性仍然可用 |
+| 展开推理 | 4 个用例、22 项断言通过；仅触摸的摘录先于格式化与测量，RichText 具备纯文本回退，原始推理得以保留 |
+| 中继响应与归属 | 8 个用例、35 项断言通过；超大与畸形的接收回复会停止无限制轮询，取消操作保留原始作业，迟到结果无法重放推理 |
+| 移动端中继路由 | 38 项检查通过；Always 在断开期间与健康检查失败时要求使用中继，Auto 保留直连回退，一次新的成功扫描可恢复路由 |
+| 配套应用截止期限 | 15 个用例、54 项断言通过 |
+| 配套应用发现 | 50 个用例、207 项断言通过 |
+| HTTP 诊断 | 10 个用例、50 项断言通过 |
+| 移动端滚动 | 3 个用例、16 项断言通过 |
+| 聊天阅读位置 | 2 个用例、9 项断言通过 |
+| 移动端布局 | 22 项检查通过 |
+| 提供方兼容性 | 56 个用例、906 项断言通过 |
+| 桥接生命周期 | 54 项检查通过 |
+| 桥接并发 | 13 项检查通过 |
+| 桥接预览 | 7 个用例、25 项断言通过 |
+| 原生静态审计 | 217 个文件、零错误 |
+| 官方 Luau 编译器 | 变更的源代码与原生捆绑包编译成功 |
 
-The client bounds mobile native concurrency and avoidable diagnostic/layout work.
-It does not forcibly close a native HTTP coroutine. Response-size and malformed
-receipt failures remain terminal, while unknown deadlines can recover behind the
-original native owner. The original provider body and reasoning remain available
-within their existing retention/context limits.
+客户端对移动端原生并发与可避免的诊断/布局工作加以限界。它不会强制关闭原生 HTTP 协程。响应大小与畸形回执失败保持终止态，而未知截止期限可在原始原生持有者之后恢复。原始提供方正文与推理在其既有保留/上下文限制内仍然可用。
 
-## Android companion
+## Android 配套应用
 
-All 80 JVM tests across 11 suites passed with zero failures or errors. The focused
-server suite passed 19 tests, including exact UTF-8 sizing against the serializer
-for escaping, metadata, Unicode and unpaired surrogates, the complete 8 MiB
-boundary and one byte beyond it, and repeated oversized receipt reads with one
-provider submission. Direct and executor responses retain their protocol-2 and
-schema-1 shapes. An oversized reply returns HTTP 413 or executor status 413 before
-allocating the expanded provider-body response; its original receipt is retained.
+11 个套件中的全部 80 项 JVM 测试通过，零失败、零错误。聚焦的服务器套件通过 19 项测试，包括针对转义、元数据、Unicode 与不成对代理项的序列化器精确 UTF-8 尺寸、完整的 8 MiB 边界及其超出 1 字节的情形，以及在单次提供方提交下重复的超大回执读取。直接与执行器响应保留其 protocol-2 与 schema-1 形态。超大回复会在分配展开的提供方正文响应之前返回 HTTP 413 或执行器状态 413；其原始回执被保留。
 
-`:app:lintRelease` passed with zero errors, 24 warnings and two informational
-items. Findings concern established battery/wake-lock behavior, dependency
-versions, resources/labels/icons and Kotlin style; none points to the changed
-response preflight or server code. The final signed `:app:assembleRelease` and
-its release lint checks passed after the version metadata changed to 3.6.5.
+`:app:lintRelease` 通过，零错误、24 个警告与 2 项提示信息。发现项涉及既有的电池/唤醒锁行为、依赖版本、资源/标签/图标与 Kotlin 风格；无一项指向变更的响应预检或服务器代码。版本元数据变更为 3.6.5 后，最终签名的 `:app:assembleRelease` 及其发布 lint 检查通过。
 
-APK inspection confirmed application ID `dev.projectuai.relay`, version 3.6.5,
-version code 6, minimum Android API 26, target API 36 and a non-debuggable release.
-APK v2 verification passed with one RSA-3072 production signer matching the
-committed certificate pin:
+APK 检查确认应用 ID `dev.projectuai.relay`、版本 3.6.5、version code 6、最低 Android API 26、目标 API 36，且为不可调试的发布版。APK v2 验证通过，具有一个 RSA-3072 生产签名者，与已提交的证书固定值一致：
 
 `ad7d215b8ad67ce70ae2ce89ad3ea959b68202b5c38e72141a68f7d54331f4b5`
 
-The signed APK is 9,655,526 bytes with SHA-256
-`eebaaac1aa94f2018acccafd54d2f765c9a5cd618e07e3b3537f1eae05463cac`.
-Signing credentials stayed in the release machine's secret store and process
-environment; they are absent from source, artifacts and test output.
+签名后的 APK 为 9,655,526 字节，SHA-256 为 `eebaaac1aa94f2018acccafd54d2f765c9a5cd618e07e3b3537f1eae05463cac`。签名凭据仅存于发布机器的密钥存储与进程环境中；它们不出现在源代码、产物与测试输出中。
 
-## Bridge, website and packaging
+## 桥接、网站与打包
 
-The bridge suite passed 113 tests with three skips and zero failures (116 total).
-Image suites were excluded with the existing `--skip-images` option. The first
-run passed the static junction security assertions but failed during Windows
-fixture removal with `EPERM`. Exact-root validation and bounded asynchronous
-cleanup retries corrected that test race; the focused junction test and full
-suite then passed. Production static serving policy was unchanged.
+桥接套件通过 113 项测试，含 3 项跳过、零失败（共 116 项）。图像套件以既有的 `--skip-images` 选项排除。首次运行通过了静态联结安全断言，但在 Windows 夹具移除阶段以 `EPERM` 失败。精确根校验与有界异步清理重试修正了该测试竞态；聚焦的联结测试与完整套件随后通过。生产静态服务策略未变。
 
-Client desktop discovery passed 40 checks and bridge installation passed 70.
-Android release packaging passed 10 tests and deterministic freshness checks.
-Client bundle/manifest and bridge package freshness passed. The public website
-passed 8,447 static checks; its root and publishing mirror are synchronized at
-3.6.5. The version/download link changes received manual review before generation.
+客户端桌面端发现通过 40 项检查，桥接安装通过 70 项。Android 发布打包通过 10 项测试与确定性新鲜度检查。客户端捆绑包/清单与桥接包新鲜度通过。公共网站通过 8,447 项静态检查；其根目录与发布镜像在 3.6.5 上同步。版本/下载链接变更在生成之前经人工审阅。
 
-The client build is `3.6.5-e8b508cfe71324ad`, 3,429,852 bytes. The bridge package
-contains 21 verified files, 1,245,134 bytes, SHA-256
-`a878c2cf1d359f2d8a9ef551ad1d751765c59bee8c5399008cd2cd36b9e8e306`.
-Windows and Android release binaries are generated locally and uploaded as
-release assets; their private signing/build inputs are excluded from Git.
+客户端构建为 `3.6.5-e8b508cfe71324ad`，3,429,852 字节。桥接包包含 21 个已验证文件、1,245,134 字节，SHA-256 为 `a878c2cf1d359f2d8a9ef551ad1d751765c59bee8c5399008cd2cd36b9e8e306`。Windows 与 Android 发布二进制在本地生成并作为发布资产上传；其私有签名/构建输入不纳入 Git。
 
-The final production OpenCode path was also checked with installed CLI 2.1.2
-and the designated handover test key held only in memory. DeepSeek text returned
-`PONG` (HTTP 200, 3.198 seconds); continuation from an actual blocked `execute`
-receipt returned the declared lookup tool (HTTP 200, 12.280 seconds); its result
-replay returned the exact fixture game name (HTTP 200, 6.178 seconds). Duplicate
-submissions retained their original job. The CLI remained isolated from the key
-and no host action executed. These Windows live checks complement the earlier
-direct keyed Zen checks in [the 3.6.2 record](TESTING_3.6.2.md).
+最终生产 OpenCode 路径亦以已安装的 CLI 2.1.2 与仅存于内存的指定交接测试密钥加以检查。DeepSeek 文本返回 `PONG`（HTTP 200，3.198 秒）；从实际被阻断的 `execute` 回执继续，返回了所声明的查询工具（HTTP 200，12.280 秒）；其结果重放返回了夹具中精确的游戏名称（HTTP 200，6.178 秒）。重复提交保留其原始作业。CLI 与密钥保持隔离，未执行任何宿主操作。这些 Windows 实机检查补充了先前在[3.6.2 记录](TESTING_3.6.2.md)中的直接带密钥 Zen 检查。
 
-## Windows desktop
+## Windows 桌面端
 
-The original 3.6.0 standalone executable reproduced the two-launch defect: an
-existing unowned named mutex caused the first process to exit without a window;
-after that handle closed, a second launch opened. The corrected implementation
-acquires the mutex and handles abandoned ownership instead of using kernel-object
-existence as proof of a running window. Restore signals received before `Shown`
-are retained until the native window can process them.
+原始 3.6.0 独立可执行文件复现了双启动缺陷：已存在且无归属的命名互斥体使首个进程在无窗口情况下退出；该句柄关闭后，第二次启动得以打开窗口。修正后的实现会获取互斥体并处理被放弃的归属，而非以内核对象是否存在作为运行窗口的证明。在 `Shown` 之前收到的还原信号会被保留，直至原生窗口能够处理它们。
 
-The final standalone 3.6.5 executable passed 57 checks: 36 self-test, nine
-process startup, five live bridge smoke and seven native window checks. They
-cover unowned/abandoned mutexes, duplicate launch restoration, narrow-to-wide
-resize with all settings/actions reachable by scrolling, minimize/restore,
-owned process shutdown and retained staged updates. The resize test exposed a
-real stale native scrollbar range; a deferred refresh after WinForms' resize
-pass corrected it. All four final native previews were visually inspected:
-normal, compact, narrow top and narrow bottom.
+最终 3.6.5 独立可执行文件通过 57 项检查：36 项自检、9 项进程启动检查、5 项实机桥接冒烟检查与 7 项原生窗口检查。它们覆盖无归属/被放弃的互斥体、重复启动还原、由窄变宽的调整尺寸且所有设置/操作均可通过滚动到达、最小化/还原、所属进程关闭与保留的分阶段更新。调整尺寸测试暴露了一个真实的过期原生滚动条范围；在 WinForms 的调整尺寸过程之后延迟刷新予以修正。最终四张原生预览均经目视检查：正常、紧凑、窄屏顶部与窄屏底部。
 
-The executable has 30 verified embedded bridge, client and license files, matching
-the final source inputs and client bundle. It works as one file without adjacent
-runtime or bridge folders. Final size: 53,992,774 bytes; SHA-256:
+该可执行文件包含 30 个已验证的内嵌桥接、客户端与许可文件，与最终源输入及客户端捆绑包一致。它以单文件形式工作，无需相邻的运行时或桥接目录。最终大小：53,992,774 字节；SHA-256：
 
 `4094b92f34fd98334453298cffd38a9676eead6ff1a79e5f51c8fe3a0b6d8107`
 
-## Native-device limits
+## 原生设备限制
 
-The reporter supplied an Android arm64 Roblox build 74100 `SIGSEGV` summary with
-fault address `0x148` and last operation `EXECUTE SCRIPT`. Its timestamp predates
-the October 20 fixes. It identifies a native process crash, but supplies no
-module or stack frames that attribute the fault to HTTP, UI, Roblox or executor
-code. It does not establish the installed version during a later recurrence.
+报告者提供了 Android arm64 Roblox 构建 74100 的 `SIGSEGV` 摘要，故障地址 `0x148`，最后操作 `EXECUTE SCRIPT`。其时间戳早于 10 月 20 日的修复。它表明发生了原生进程崩溃，但未提供任何模块或栈帧，无法将故障归因于 HTTP、UI、Roblox 或执行器代码。它不确立后续复现时已安装的版本。
 
-No physical Android device was connected, and no usable emulator was available.
-These checks do not verify native installation/upgrades, executor loopback
-networking, host touch input, background survival or a complete phone inference
-and tool-result replay. A native tombstone and correlated activity/memory records
-are still needed to attribute the reported crash. The bounded transport and
-presentation changes address demonstrated code defects independently of that
-attribution.
+未连接任何实体 Android 设备，也无可用模拟器。这些检查不验证原生安装/升级、执行器回环网络、宿主触摸输入、后台存活，或完整的手机推理与工具结果重放。仍需原生 tombstone 与相关联的活动/内存记录，才能对报告的崩溃作出归因。有界传输与呈现变更所处理的，是已证明的代码缺陷，与上述归因无关。

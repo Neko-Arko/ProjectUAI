@@ -1,117 +1,42 @@
-# Project UAI 3.3.5 verification
+# Project UAI 3.3.5 验证
 
-Scope: system and worker prompts, provider tool catalogs, native and browser
-queued messages, bridge assistant/tool presentation, installed OpenCode CLI,
-desktop lifecycle/preferences, and stable release/update artifacts.
+范围：系统与工作器提示、提供方工具目录、原生与浏览器排队消息、桥接助手/工具呈现、已安装 OpenCode CLI、桌面端生命周期/偏好设置，以及稳定发布/更新产物。
 
-All changed inputs are reviewed before builds; generated outputs are inspected
-before focused verification. The mobile companion is excluded, and the entire
-native suite is not run. Verification results are recorded below as completed.
+所有变更输入在构建之前经审阅；生成的输出在聚焦验证之前经检查。移动配套应用不在范围内，完整的原生套件未运行。验证结果如下按已完成状态记录。
 
-## Investigation of fbd093a
+## fbd093a 的调查
 
-Commit `fbd093a0378dbcb554c51d382e7747b86123caae` clamps Chat and Responses tool
-declarations to 128, reserving compatibility tools for OpenCode. This prevents
-the provider's declaration-limit error, but silently removes later registered
-tools. Its regression test checks counts and first declarations, not whether the
-omitted tools remain usable. Release 3.3.5 addresses that loss of functionality.
-The regression now proves all 163 original tools remain reachable and exercises
-schema discovery, execution, permissions and replay through both real adapter
-paths and the agent loop. It also covers forced choices, name collisions, smaller
-learned limits, malformed arguments and bounded schema pages.
+提交 `fbd093a0378dbcb554c51d382e7747b86123caae` 将 Chat 与 Responses 工具声明钳制为 128，为 OpenCode 保留兼容工具。这避免了提供方的声明上限错误，但静默移除了后续注册的工具。其回归测试检查数量与首批声明，而非被省略的工具是否仍可用。3.3.5 发布处理了这一功能损失。该回归现在证明全部 163 个原始工具仍可达，并通过两条真实适配器路径与代理循环演练 schema 发现、执行、权限与重放。它还覆盖强制选择、名称冲突、更小的学习上限、畸形参数与有界 schema 分页。
 
-## Installed OpenCode evidence
+## 已安装 OpenCode 的证据
 
-The installed official `opencode-cli.exe` reports `opencode v2.0.32`. A live
-baseline probe on October 18 discovered ten zero-price models through its
-authenticated local API. `deepseek-v4.1-flash-free` called a synthetic
-`bridge_probe_echo` tool with the requested `native-335` argument. The bridge
-returned the call without executing desktop tools. A second isolated request
-received the synthetic tool receipt in conversation history and returned it as
-the final answer. Both temporary sessions and the owned CLI were shut down.
+已安装的官方 `opencode-cli.exe` 报告 `opencode v2.0.32`。10 月 18 日的一次实机基线探测通过其带认证的本地 API 发现了十个零价格模型。`deepseek-v4.1-flash-free` 以所请求的 `native-335` 参数调用了合成的 `bridge_probe_echo` 工具。桥接返回了该调用，未执行桌面工具。第二个隔离请求在会话历史中收到了合成工具回执，并将其作为最终答案返回。两个临时会话与所属 CLI 均已关闭。
 
-The live OpenAPI document also confirms every session, interrupt, permission,
-message, model and MCP route used by this adapter. Fixtures alone are not the
-evidence for native API compatibility. This diagnostic does not claim every
-model's quality or native Roblox rendering.
+实机 OpenAPI 文档亦确认了本适配器使用的每个会话、中断、权限、消息、模型与 MCP 路由。仅凭夹具不足以作为原生 API 兼容性的证据。本诊断不声称每个模型的质量或原生 Roblox 渲染。
 
-The revised backend passed a second live probe with 121 directly offered UAI
-tools (the OpenCode 128-declaration ceiling minus its seven compatibility names).
-It selected tool 121 with the exact requested argument in 9.5 seconds.
+修订后的后端以 121 个直接提供的 UAI 工具通过了第二次实机探测（OpenCode 128 条声明上限减去其七个兼容名称）。它在 9.5 秒内以精确的请求参数选择了第 121 个工具。
 
-A final live probe used the actual Lua adapter and current prompt to build 128
-wire declarations from 163 synthetic tools. The model called `uai_tool_catalog`
-to describe `synthetic_tool_163` in 6.7 seconds, received the real Lua-generated
-schema receipt in replay, then called that tool with `overflow-335-verified` in
-4.5 seconds. The real Lua resolver preserved its original name, arguments and
-call ID. No host or Roblox action executed. This proves the repaired overflow
-path works through the installed CLI, beyond the deterministic fixtures.
+最终实机探测使用实际 Lua 适配器与当前提示，从 163 个合成工具构建了 128 条线上声明。模型在 6.7 秒内调用 `uai_tool_catalog` 描述 `synthetic_tool_163`，在重放中收到真实的 Lua 生成 schema 回执，随后在 4.5 秒内以 `overflow-335-verified` 调用该工具。真实 Lua 解析器保留了其原始名称、参数与调用 ID。未执行任何宿主或 Roblox 操作。这证明修复后的溢流路径在已安装 CLI 上有效，超出确定性夹具的范围。
 
-## Build and focused verification
+## 构建与聚焦验证
 
-- Seven prompt/provider/loop checks pass: `prompt_context` (123 assertions),
-  `tool_count` (733), `provider_compatibility` (906), `structured_results` (63),
-  `agent_efficiency` (32), `subagent_tools` (34), `scripting_harness` (15).
-- Queue behavior: `queued_messages` passes 15 cases / 115 assertions;
-  `queued_composer` passes 27 checks, including bridge command delivery.
-- Bridge backend: 39 focused tests pass across native OpenCode, desktop
-  discovery/switches, MCP and updater suites. The shipped 3.1 updater accepts the
-  generated 3.3.5 package and retains its token/idle/rollback contracts.
-- Native static checks parse 216 files with zero failures/warnings. The official
-  Luau 0.742 compiler compiles all 12 changed source/bootstrap files plus the
-  complete generated bundle (74 KLOC) successfully.
-- Native bundle: `3.3.5-82ab1a052c6a9d3e`, 220 modules, 3,394,235 bytes.
-  Bridge: 21 files, 1,189,254 package bytes. Generated module entries, package
-  hashes, embedded switches, queue controls and safe Markdown links inspected.
+- 七项提示/提供方/循环检查通过：`prompt_context`（123 项断言）、`tool_count`（733 项）、`provider_compatibility`（906 项）、`structured_results`（63 项）、`agent_efficiency`（32 项）、`subagent_tools`（34 项）、`scripting_harness`（15 项）。
+- 队列行为：`queued_messages` 通过 15 个用例 / 115 项断言；`queued_composer` 通过 27 项检查，包括桥接命令投递。
+- 桥接后端：39 项聚焦测试在原生 OpenCode、桌面端发现/开关、MCP 与更新器套件中通过。已发布的 3.1 更新器接受生成的 3.3.5 包，并保持其令牌/空闲/回滚契约。
+- 原生静态检查解析 216 个文件，零失败/警告。官方 Luau 0.742 编译器成功编译全部 12 个变更的源/引导文件以及完整的生成捆绑包（74 KLOC）。
+- 原生捆绑包：`3.3.5-82ab1a052c6a9d3e`、220 个模块、3,394,235 字节。桥接：21 个文件、包体 1,189,254 字节。已检查生成的模块条目、包哈希、内嵌开关、队列控件与安全 Markdown 链接。
 
-- Final desktop package: `desktop/verify.ps1` passes 46 checks: 36 preference,
-  runtime and updater self-tests; five packaged bridge startup/discovery/restart
-  checks; and five native window/integration checks. Minimize retains the taskbar
-  window, restore returns it, closing waits for the owned bridge to stop, and
-  closing with an update staged exits while retaining the pending update.
-- Desktop executable: `UAI-Bridge-3.3.5-win-x64.exe`, 53,954,886 bytes,
-  SHA-256 `b9e704f33e4d93e80e2426e4fe904d4f8a0d7f7b9824736980e163d0cb3a5b6c`.
-  Its manifest and adjacent checksum agree. All 30 payload entries match their
-  archive hashes; embedded bridge/browser/client sources match the final inputs.
-  The executable works without neighboring support files or bundled Node/OpenCode.
-- Final native full-size and compact previews were inspected at
-  `desktop/.build/verification/launcher.png` and `launcher-compact.png`. The compact
-  window keeps the title and connection controls visible and scrolls vertically.
-- A live-update probe using the exact `v3.3.1` desktop updater and download code
-  passes against the published release. Starting with an empty isolated cache,
-  it discovers, downloads, verifies and stages 3.3.5, then verifies the staged
-  file again. The result is `verified=true`, `state=Ready`; the staged executable
-  matches the final byte count and SHA-256 above. No downloaded app is launched
-  or installed by this probe.
+- 最终桌面端包：`desktop/verify.ps1` 通过 46 项检查：36 项偏好设置、运行时与更新器自检；5 项打包桥接启动/发现/重启检查；以及 5 项原生窗口/集成检查。最小化保留任务栏窗口，还原使其返回，关闭会等待所属桥接停止，而在有分阶段更新时关闭会在退出时保留待处理更新。
+- 桌面端可执行文件：`UAI-Bridge-3.3.5-win-x64.exe`、53,954,886 字节、SHA-256 `b9e704f33e4d93e80e2426e4fe904d4f8a0d7f7b9824736980e163d0cb3a5b6c`。其清单与相邻校验文件一致。全部 30 个载荷条目与其归档哈希一致；内嵌桥接/浏览器/客户端源代码与最终输入一致。该可执行文件无需相邻支持文件或捆绑的 Node/OpenCode 即可工作。
+- 最终原生全尺寸与紧凑预览在 `desktop/.build/verification/launcher.png` 与 `launcher-compact.png` 处经检查。紧凑窗口保持标题与连接控件可见，并可垂直滚动。
+- 一项使用精确 `v3.3.1` 桌面更新器与下载代码的实机更新探测针对已发布版本通过。从空的隔离缓存开始，它发现、下载、验证并分阶段 3.3.5，随后再次验证分阶段文件。结果为 `verified=true`、`state=Ready`；分阶段可执行文件与上述最终字节数与 SHA-256 一致。该探测不启动或安装任何已下载应用。
 
-- Browser verification passes `browser.js`, `browser-tool-cards.js`,
-  `browser-queue.js`, `browser-desktop-redesign.js` and `browser-workflows.js`.
-  Coverage includes exact tool input/result copying, scoped progress, readable
-  errors, safe Markdown links, streaming reconciliation, retained drafts,
-  attachment failures, edit conflicts, stable queue ordering, reviewed-identity
-  clearing, older-client controls and the desktop's authenticated MCP setup link.
-  The separate Markdown suite passes both escaping and URL-scheme checks.
-- Dark/light desktop and narrow browser screenshots were inspected. Queue
-  controls remain reachable at 390×844, 320×480 and 844×390, including actual
-  pointer targeting after scrolling a short queue panel. The short-window header
-  fix was reviewed, rebuilt and verified before repeating affected checks.
-  Chromium and LuaJIT fixtures do not establish native Roblox rendering or input.
-- Site static verification passes 8,361 checks. Final browser reruns were
-  sequential after Windows process startup slowed under concurrent load; all
-  final suites completed with exit code zero.
+- 浏览器验证通过 `browser.js`、`browser-tool-cards.js`、`browser-queue.js`、`browser-desktop-redesign.js` 与 `browser-workflows.js`。覆盖包括精确的工具输入/结果复制、作用域进度、可读错误、安全 Markdown 链接、流式协调、保留草稿、附件失败、编辑冲突、稳定队列顺序、已审阅标识清除、较旧客户端控件与桌面端带认证的 MCP 设置链接。单独的 Markdown 套件通过转义与 URL scheme 检查。
+- 深色/浅色桌面端与窄屏浏览器截图经检查。队列控件在 390×844、320×480 与 844×390 下仍可到达，包括滚动较短队列面板后的实际指针定位。短窗口头部修复在重复受影响检查之前经审阅、重建与验证。Chromium 与 LuaJIT 夹具不确立 Roblox 原生渲染或输入。
+- 站点静态验证通过 8,361 项检查。最终浏览器重跑在并发负载下 Windows 进程启动变慢后改为串行；全部最终套件以退出码零完成。
 
-## Publication
+## 发布
 
-The annotated `v3.3.5` tag points to release commit
-`49cc1b3877b88b4069260b89d4cffad6d4012780`, pushed to `main` with the tag.
-The [GitHub release](https://github.com/Project-Ptolemy/ProjectUAI/releases/tag/v3.3.5)
-is published as stable and latest, with all seven assets: both updater manifests,
-the bridge package, the desktop executable and checksum, and the native bundle
-and manifest.
+带注释的 `v3.3.5` 标签指向发布提交 `49cc1b3877b88b4069260b89d4cffad6d4012780`，随标签推送至 `main`。[GitHub 发布](https://github.com/Project-Ptolemy/ProjectUAI/releases/tag/v3.3.5)已作为稳定版与最新版发布，含全部七个资产：两个更新器清单、桥接包、桌面端可执行文件与校验和，以及原生捆绑包与清单。
 
-Post-publication verification passes on October 18, 2026. All seven assets were
-downloaded anonymously from their public release URLs and matched the reviewed
-local byte counts and SHA-256 hashes. The exact 3.3.1 desktop updater independently
-downloaded and staged this release from an empty cache, reaching `Ready` with
-verified executable bytes. Desktop 1.0 predates the updater and still needs one
-manual download.
+发布后验证于 2026 年 10 月 18 日通过。全部七个资产均从公共发布 URL 匿名下载，并与已审阅的本地字节数与 SHA-256 哈希一致。精确的 3.3.1 桌面更新器独立从空缓存下载并分阶段了本次发布，达到 `Ready` 且可执行文件字节经校验。桌面端 1.0 早于更新器，仍需一次手动下载。

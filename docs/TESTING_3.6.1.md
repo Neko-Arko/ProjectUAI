@@ -1,37 +1,19 @@
-# Project UAI 3.6.1 verification
+# Project UAI 3.6.1 验证
 
-Prepared October 20, 2026. Client and bridge 3.6.1 fix the OpenCode tunnel's
-fatal desktop-tool-choice error. Desktop and Android app downloads remain 3.6.0.
+编制于 2026 年 10 月 20 日。客户端与桥接 3.6.1 修复 OpenCode 隧道的致命桌面工具选择错误。桌面端与 Android 应用下载保持 3.6.0。
 
-All changed source, documentation and test inputs were manually reviewed before
-building. Client, bridge package and website outputs were inspected before
-verification. The full native suite was not run.
+所有变更的源代码、文档与测试输入在构建之前均经人工审阅。客户端、桥接包与网站输出在验证之前经检查。完整的原生套件未运行。
 
-Focused checks passed:
+聚焦检查通过：
 
-- OpenCode native adapter: 16 tests, covering blocked-action receipts, normal
-  subsequent Roblox tool handoff, Chat/Responses, mixed call order, malformed and
-  unmatched arguments, permission identity, interruption failures and cancellation.
-- OpenCode discovery, authenticated bridge transport and updater: 25 passed,
-  one platform-specific test skipped. Updater checks include compatibility with
-  the shipped 3.1 updater, verified staging, idle activation and retained tokens.
-- Actual scripting loop: 7 cases, 29 assertions, including a refused native
-  choice followed by a managed Roblox script result and normal completion.
-- Targeted source checker and official Luau compiler for the changed client
-  modules; client, bridge and website build freshness checks.
-- Website: 8,447 static checks and focused Chromium behavior checks, including
-  component-specific desktop/Android download versions.
+- OpenCode 原生适配器：16 项测试，覆盖被阻断操作回执、随后正常的 Roblox 工具交接、Chat/Responses、混合调用顺序、畸形与不匹配的参数、权限标识、中断失败与取消。
+- OpenCode 发现、带认证的桥接传输与更新器：25 项通过，1 项平台特定测试跳过。更新器检查包括与已发布 3.1 更新器的兼容性、经校验的分阶段、空闲激活与令牌保留。
+- 实际脚本循环：7 个用例、29 项断言，包括一次被拒绝的原生选择，随后产生受管理的 Roblox 脚本结果并正常完成。
+- 针对变更客户端模块的定向源代码检查器与官方 Luau 编译器；客户端、桥接与网站构建新鲜度检查。
+- 网站：8,447 项静态检查与聚焦的 Chromium 行为检查，包括按组件区分的桌面端/Android 下载版本。
 
-The initial native fixture confused configured permission rules with pending
-permission requests. It was corrected and manually reviewed before rerunning the
-affected adapter tests; all 16 then passed.
+初始原生夹具将已配置的权限规则与待处理权限请求相混淆。该问题经修正，并在重跑受影响的适配器测试之前经人工审阅；随后 16 项全部通过。
 
-The installed official OpenCode CLI 2.0.32 API was inspected in isolation to
-verify tool-state and permission-source shapes. No live upstream inference or
-native desktop action was used for this patch's verification. Offline fixtures
-establish the handoff behavior; they do not verify every live model's tool choice.
+已安装的官方 OpenCode CLI 2.0.32 API 在隔离环境中接受检查，以验证工具状态与权限来源形态。本补丁的验证未使用实机上游推理或原生桌面操作。离线夹具确立交接行为；它们不验证每个实机模型的工具选择。
 
-Existing desktop 3.6.0 downloads the bridge and web package automatically and
-activates it when idle. Refresh the browser for changed web files and reload the
-published Roblox client for the new refusal feedback. The desktop's Copy client
-script action retains its embedded client version.
+既有桌面端 3.6.0 会自动下载桥接与 Web 包，并在空闲时激活。变更的 Web 文件需刷新浏览器，新的拒绝反馈需重载已发布的 Roblox 客户端。桌面端的 Copy client script 操作保留其内嵌客户端版本。

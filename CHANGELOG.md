@@ -1,1283 +1,636 @@
-# Changelog
+# 变更日志
 
-## 3.7.2 - October 29, 2026 - Password vault and scheduled free access
+## 3.7.2 - October 29, 2026 - 密码保险库与定时免费访问
 
-- Offer password protection by default and a red **Continue without encryption**
-  choice. The explicit alternative verifies reversible byte-encoded storage,
-  preserves key pools, leaves saved API keys unprotected, and skips future password
-  prompts. Existing encrypted vaults must unlock or reset before opting out.
-  Legacy session-only preferences alone cannot make this choice.
-- Use AES-256-SIV and PBKDF2-HMAC-SHA256 entirely in bundled Luau. Existing
-  byte-encoded and plaintext keys migrate with their exact pool metadata after an
-  encrypted save is staged and verified. Cancellation and failed saves preserve
-  current keys. Password changes and locking are available in Privacy.
-  New vaults and explicit password changes use **100,000 iterations** for less
-  derivation work. Existing 600,000-iteration vaults keep their recorded count;
-  using Change master password, including the same password, rewrites at 100,000.
-  Password entry remains required on each execution while a vault is enabled.
-- Show encryption/unlock progress as a compact percentage with Cancel and Exit
-  at the screen edge. The password dialog and backdrop hide during the wait;
-  access remains gated, and failure or cancellation restores entry.
-- Encrypt custom authentication fields alongside key pools and omit temporary
-  key-rotation maps, which can contain duplicate keys.
-- Exclude credentials from normal settings copies and diagnostics. Keep a separate
-  clearly labelled private copy that retains encryption when enabled or reversible
-  encoding otherwise. Encrypted imports request their source password before
-  review; imports retain this device's storage choice and vault password.
-  Older byte-encoded imports remain supported for migration.
-  Preserve unreadable encoded records and reject unsafe imports instead of silently
-  discarding credentials. Existing exported files and backups are not automatically erased.
-- Replace the included community credential, migrate exact retired included keys
-  on the official endpoint and store only a community reference in config/exports.
-  Encode its bundle representation to deter literal searches; it remains recoverable
-  by scripts with equivalent executor access. Personal keys are not rotated remotely.
-- Admit included Project UAI Free requests daily from **20:00 to 06:00 UTC+8**
-  (Beijing/Singapore), with UI guidance and paused off-hours background probes.
-  Accepted replies continue across closing; personal HCNSEC keys are unaffected.
-- Explain that dashboard key replacement/revocation differs from UAI's request
-  rotation. Bridge, desktop and companion implementations remain unchanged.
-- Keep reasoning levels visible when enabling reasoning support in a short model
-  picker. Compact provider details and the effort caption first; only extremely
-  limited keyboard space uses the existing Options fallback.
-- Rename the Claude Code Settings tab to **Project UAI**.
+- 默认提供密码保护，并提供红色的 **不加密继续** 选项。这一显式替代方案会验证可逆的字节编码存储，保留密钥池，使已保存的 API 密钥保持未受保护状态，并跳过后续的密码提示。已有的加密保险库必须先解锁或重置，才能选择退出。仅凭旧版仅会话的偏好设置无法做出这一选择。
+- 完全在随附的 Luau 中使用 AES-256-SIV 与 PBKDF2-HMAC-SHA256。在暂存并验证加密保存之后，现有的字节编码密钥与明文密钥会连同其精确的池元数据一起迁移。取消操作和保存失败都会保留当前密钥。密码更改与锁定可在“隐私”中完成。新建保险库和显式密码更改使用 **100,000 次迭代**，以减少派生工作量。现有的 600,000 次迭代保险库会保留其记录的次数；使用“更改主密码”（包括相同的密码）会以 100,000 次重写。保险库启用期间，每次执行仍需输入密码。
+- 以紧凑的百分比显示加密/解锁进度，并在屏幕边缘提供“取消”和“退出”。等待期间隐藏密码对话框与背景；访问仍然受限，失败或取消会恢复输入。
+- 将自定义身份验证字段与密钥池一同加密，并省略可能包含重复密钥的临时密钥轮换映射。
+- 从常规设置副本和诊断信息中排除凭据。另存一份标注清晰的私有副本，在启用时保留加密，否则采用可逆编码。加密导入会在审阅前请求其源密码；导入会保留此设备的存储选择和保险库密码。仍支持较旧的字节编码导入以进行迁移。保留无法读取的编码记录，并拒绝不安全的导入，而不是静默丢弃凭据。已有的导出文件和备份不会被自动擦除。
+- 替换内置的社区凭据，在官方端点上迁移已退役的内置密钥的精确副本，并在配置/导出中仅存储社区引用。对其捆绑表示进行编码，以阻止字面搜索；具有同等执行器访问权限的脚本仍可恢复它。个人密钥不会远程轮换。
+- 每日在 **UTC+8 的 20:00 至 06:00**（北京/新加坡）受理内置 Project UAI Free 请求，并提供界面指引，在非服务时段暂停后台探测。已受理的回复会在关闭后继续；个人 HCNSEC 密钥不受影响。
+- 说明仪表板的密钥替换/吊销与 UAI 的请求轮换并不相同。桥接、桌面端和伴侣端实现保持不变。
+- 在简短的模型选择器中启用推理支持时，保持推理级别可见。先压缩提供商详情和力度说明；只有当键盘空间极为有限时才使用现有的“选项”回退。
+- 将“Claude Code 设置”选项卡重命名为 **Project UAI**。
 
-## 3.7.1 - October 25, 2026 - UI polish, individual API keys and Kilo free routes
+## 3.7.1 - October 25, 2026 - 界面打磨、独立 API 密钥与 Kilo 免费路由
 
-- The Roblox client joins the bridge, web UI and Android companion (version
-  code 8) at 3.7.1. The Windows desktop remains 3.7.0. Installed bridges and
-  companion apps pick the patch up automatically from the `v3.7.1` GitHub
-  release; the companion APK keeps the existing production signing identity.
-- Manage provider credentials in a dedicated modal with named, masked entries.
-  Add, rename, replace or remove one entry without overwriting the others.
-  Rotation is the default; choose one specific key for inference and discovery.
-  Removing the selected key restores rotation. Apply/Cancel keeps edits isolated,
-  and configuration transfers retain key names and request preferences.
-  Preserve existing key pools, automatic rotation and unsaved provider drafts;
-  saved credentials stay masked, including keys shorter than five characters.
-- Pause and resume individual keys without deleting their names or local usage.
-  Show requests and input/output tokens per key, with estimates marked. Keep a
-  paused selected key pinned until the user resumes it or changes the selection.
-- Show each conversation's AI request count in its header and context breakdown.
-  Count retries, tool follow-ups, summaries and subagents; retain local counters
-  across reloads. Earlier untracked requests are not reconstructed.
-- Finish the provider gallery and configuration polish with clearer sections,
-  model controls and validation. Keep the setup guide expanded by default.
-- Fit log details and context breakdown to their contents, retaining scrolling
-  when space is limited. Give shared modal bodies consistent padding and improve
-  the Discord invitation, tutorial and donation dialogs.
-- Keep model search, provider selection and footer controls fixed while the model
-  list scrolls. Show names and metadata on separate lines, preserve focused fields
-  through compact layouts, and keep reasoning options reachable on small screens.
-- Group related settings, reveal the selected category, wrap long answer choices
-  and improve tool, conversation and subagent rows. Keep larger text readable in
-  compact controls, captions and forms.
-- Keep long Code documents and previews visible while selecting text, with bounded
-  syntax and selection layers aligned to native line spacing. Improve comparison
-  contrast, document tabs, status details and resize gesture cleanup.
-- Accept Kilo free routes whose model id ends in `free` behind any separator:
-  `:free`, `/free` or `-free`. `reflection/beam-free` — the only free route
-  spelled with a dash in the October 25 catalog — and the `openrouter/free`
-  router previously failed the tunnel's model check, bypassed quota recovery
-  and returned the anonymous refusal directly. Verified live: with the local
-  address limited, the same `reflection/beam-free` request completed HTTP 200
-  through a fresh Tor exit. See [Kilo quota recovery](docs/KILO_TUNNEL.md) and
-  the [3.7.1 verification](docs/TESTING_3.7.1.md).
+- Roblox 客户端在 3.7.1 加入桥接、Web UI 和 Android 伴侣（版本代码 8）。Windows 桌面端仍为 3.7.0。已安装的桥接和伴侣应用会从 `v3.7.1` GitHub 发布中自动获取该补丁；伴侣 APK 保持现有的生产签名身份。
+- 在专用模态框中管理提供商凭据，条目可命名并遮蔽显示。可添加、重命名、替换或删除单个条目，而不会覆盖其他条目。默认采用轮换；也可选择一个特定密钥用于推理和发现。删除所选密钥会恢复轮换。“应用/取消”使编辑保持隔离，配置传输会保留密钥名称和请求偏好。保留现有的密钥池、自动轮换和未保存的提供商草稿；已保存的凭据保持遮蔽，包括长度不足五个字符的密钥。
+- 暂停和恢复单个密钥，而不删除其名称或本地用量。按密钥显示请求数以及输入/输出 token 数，估算值会作标记。暂停的已选密钥会保持固定，直到用户恢复它或更改选择。
+- 在每个会话的标题和上下文明细中显示其 AI 请求数。计入重试、工具跟进、摘要和子代理；跨重载保留本地计数器。早前未被跟踪的请求不会被重建。
+- 完成提供商图库与配置打磨，提供更清晰的分区、模型控件和验证。设置指南默认展开。
+- 使日志详情和上下文明细适应其内容，在空间有限时保留滚动。为共享模态框主体提供一致的内边距，并改进 Discord 邀请、教程和捐赠对话框。
+- 在模型列表滚动时保持模型搜索、提供商选择和页脚控件固定。将名称和元数据分行显示，在紧凑布局中保留聚焦字段，并在小屏幕上保持推理选项可达。
+- 对相关设置分组，显示所选类别，换行显示较长的答案选项，并改进工具、会话和子代理行。在紧凑控件、说明文字和表单中保持较大字号可读。
+- 在选择文本时保持较长的 Code 文档和预览可见，语法层和选择层按原生行距对齐并设有边界。改进对比度、文档选项卡、状态详情，以及调整大小手势的清理。
+- 接受模型 ID 以任意分隔符后紧跟 `free` 结尾的 Kilo 免费路由：`:free`、`/free` 或 `-free`。`reflection/beam-free`——10 月 25 日目录中唯一以连字符拼写的免费路由——以及 `openrouter/free` 路由器此前未能通过隧道的模型检查，绕过了配额恢复，并直接返回匿名拒绝。经实际验证：在本地地址受限的情况下，同一 `reflection/beam-free` 请求通过新的 Tor 出口完成了 HTTP 200。参见 [Kilo 配额恢复](docs/KILO_TUNNEL.md) 以及
+  [3.7.1 验证](docs/TESTING_3.7.1.md)。
 
-## 3.7.0 - October 25, 2026 - Models, tunnels and faster workflows
+## 3.7.0 - October 25, 2026 - 模型、隧道与更快的工作流
 
-- Align the Roblox client, bridge/web UI, Windows desktop and Android companion
-  at 3.7.0; Android advances to version code 7 with its existing production signer.
-- Use native Responses for AgentRouter GPT models, with the selected reasoning
-  effort, stateless requests and optional tool fields preserved. Verify an actual
-  UAI tool batch and result replay with `gpt-6.1-sol`. See [AgentRouter](docs/AGENTROUTER.md).
-- Add Vercel AI Gateway, Friendli, Venice, Nscale, Arcee, AI/ML API and Perplexity
-  Orchestrator presets with documented access labels and [setup guides](docs/providers/README.md).
-  Filter explicitly incompatible catalog entries and add searchable model menus.
-- Add a Tunnels page to the Windows bridge and Cowork for OpenCode, Kilo and
-  Cline. Cline uses the separately installed, signed-in CLI and its live free
-  model catalog. The new Cline (Bridge) provider requires the local bridge;
-  Roblox keeps tool execution, approvals and Stop. See [setup](docs/CLINE_TUNNEL.md).
-- Detect installed OpenCode and Cline apps before Cowork starts. Keep installation,
-  enablement and connection readiness separate, with an independent refresh.
-- Refresh the Roblox model picker with searchable saved providers, clearer model
-  details and connection health, and larger controls on touch devices. Cancel
-  stale catalog refreshes when closing the picker or switching providers.
-- Keep the Remotes Following action readable on narrow screens with larger text;
-  the toolbar scrolls instead of compressing the action label.
-- Refresh prices and context/reply limits from five catalog sources on October 25:
-  1,760 entries across 15 providers, including 401 Kilo entries and five exact
-  Cline free promotions. Preserve unknown prices and provider-specific rates.
-- Add multiword Tools and Logs searches, ranked tool discovery and useful schema
-  page sizes. Avoid building hidden parameter controls and cloning every schema
-  during discovery. Bound retained logs after redaction.
-- Reject invalid token counters, retain cache-write totals and persist unknown-cost
-  request counts in usage history. Show incomplete cost coverage on Home.
-- Keep Cowork catalogs current after provider changes while preserving focus and
-  scroll. Cancel closed catalog dialogs and discard late results; unrelated state
-  snapshots no longer rebuild large model lists.
-- Recover completed anonymous Kilo quota refusals through a private Tor tunnel,
-  enabled by default and started only when needed. Limit circuit retry to one,
-  suppress repeated terminal refusals for 60 seconds, preserve deadlines and
-  cancellation, and exclude signed-in requests and other providers.
-- Add switches and live connection status in the apps, Cowork web UI and Roblox.
-  Honor upstream `x-should-retry: false` instead of repeating terminal refusals.
-- Ship the Windows helper by pinned, verified download and native Tor in the
-  Android APK. Retain old bridge updater compatibility by embedding new modules
-  in its existing release package filenames.
-- Correct stale Kilo quota claims and document the observed IP-scoped recovery,
-  account limits, shared-exit limitations and [setup](docs/KILO_TUNNEL.md).
-  Recovery does not guarantee unlimited requests.
-- Include the 3.6.7 WPF desktop, reliable bridge payload packaging, manual update
-  checks and cache cleanup. See [verification](docs/TESTING_3.7.0.md).
-- Fix tunnel shutdown races, retained-request memory accounting and stale
-  browser connection status after disconnect or bridge replacement. Update the
-  Android build toolchain for the current Tor library's compile API requirement.
+- 将 Roblox 客户端、桥接/Web UI、Windows 桌面端和 Android 伴侣统一到 3.7.0；Android 使用其现有生产签名者升级到版本代码 7。
+- 对 AgentRouter GPT 模型使用原生 Responses，保留所选的推理力度、无状态请求和可选工具字段。使用 `gpt-6.1-sol` 验证真实的 UAI 工具批次和结果重放。参见 [AgentRouter](docs/AGENTROUTER.md)。
+- 添加 Vercel AI Gateway、Friendli、Venice、Nscale、Arcee、AI/ML API 和 Perplexity Orchestrator 预设，附带访问标签说明和 [设置指南](docs/providers/README.md)。显式过滤不兼容的目录条目，并添加可搜索的模型菜单。
+- 为 Windows 桥接和 Cowork 添加“隧道”页面，支持 OpenCode、Kilo 和 Cline。Cline 使用单独安装并已登录的 CLI 及其实时免费模型目录。新的 Cline（Bridge）提供商需要本地桥接；Roblox 保留工具执行、审批和停止。参见 [设置](docs/CLINE_TUNNEL.md)。
+- 在 Cowork 启动前检测已安装的 OpenCode 和 Cline 应用。将安装、启用和连接就绪状态彼此分开，并提供独立刷新。
+- 刷新 Roblox 模型选择器，提供可搜索的已保存提供商、更清晰的模型详情和连接健康状态，并在触摸设备上使用更大的控件。关闭选择器或切换提供商时取消过期的目录刷新。
+- 使用更大的文字，使“Remotes Following”操作在窄屏幕上保持可读；工具栏会滚动，而不是压缩操作标签。
+- 于 10 月 25 日从五个目录来源刷新价格和上下文/回复限制：覆盖 15 个提供商的 1,760 个条目，包括 401 个 Kilo 条目和五个精确的 Cline 免费促销。保留未知价格和提供商特定费率。
+- 为“工具”和“日志”添加多词搜索、排序的工具发现以及实用的架构页面大小。避免在发现过程中构建隐藏的参数控件，也避免为每个架构创建副本。在脱敏后限制保留的日志。
+- 拒绝无效的 token 计数器，保留缓存写入总计，并在使用历史中持久化未知成本的请求数。在主页上显示不完整的成本覆盖情况。
+- 在提供商变更后保持 Cowork 目录为最新，同时保留焦点和滚动。取消已关闭的目录对话框并丢弃迟到的结果；无关的状态快照不再重建大型模型列表。
+- 通过私有 Tor 隧道恢复已完成的匿名 Kilo 配额拒绝，默认启用且仅在需要时启动。将线路重试限制为一次，在 60 秒内抑制重复的终端拒绝，保留截止时间和取消操作，并排除已登录请求和其他提供商。
+- 在各应用、Cowork Web UI 和 Roblox 中添加开关和实时连接状态。遵循上游的 `x-should-retry: false`，而不是重复终端拒绝。
+- 通过固定的、已验证的下载方式交付 Windows 辅助程序，并在 Android APK 中内置原生 Tor。通过将新模块嵌入其现有发布包文件名，保持旧桥接更新程序的兼容性。
+- 更正过时的 Kilo 配额说法，并记录观察到的按 IP 范围的恢复、账户限制、共享出口限制以及 [设置](docs/KILO_TUNNEL.md)。恢复并不保证无限请求。
+- 包含 3.6.7 WPF 桌面端、可靠的桥接载荷打包、手动更新检查和缓存清理。参见 [验证](docs/TESTING_3.7.0.md)。
+- 修复隧道关闭竞态、保留请求的内存核算，以及断开连接或更换桥接后过期的浏览器连接状态。为当前 Tor 库的编译 API 要求更新 Android 构建工具链。
 
-## 3.6.6 — October 23, 2026 — A provider gallery and a clearer queue
+## 3.6.6 — October 23, 2026 — 提供商图库与更清晰的队列
 
-- Rebuild the add-provider flow as a gallery. Add a provider opens three tiers --
-  Recommended, Paid and Local -- with a search field that spans them, a result
-  count, and one card per provider carrying a description, an access line and an
-  access label. The custom-endpoint card closes every tier. Choosing a card seeds
-  the editor with that preset; nothing is written until Save.
-- Grow the catalog to 66 presets: 16 recommended, 38 paid, 11 local and the custom
-  endpoint. Recommended now reads Project UAI Free (Included), AgentRouter (Free
-  tier), OpenCode Zen (Free models), OpenRouter (Free models), OpenCode Go (Free
-  CLI), then Kilo, OVHcloud, Gemini, Groq, Cerebras, Mistral, ModelScope, Z.ai,
-  NVIDIA NIM, Cloudflare Workers AI and Aion Labs.
-- Label access honestly. Hybrid services are recommended and named by their free
-  half, so OpenCode Zen, OpenRouter and OpenCode Go are never labelled Paid.
-  Highlighting is carried by the catalog, so the accent border stays on Project
-  UAI Free, AgentRouter and OpenCode Zen wherever they sit in the list.
-- Keep the catalog free of routes this client cannot serve. LLM7 is removed;
-  GitHub Models was retired on 30 July 2026; Perplexity's root-path API and
-  Databricks' invocations route would be misrouted by the base-URL normaliser and
-  remain reachable only through a custom endpoint. Kilo and OVHcloud no longer
-  send the Claude Code identity.
-- Rebuild the queued-messages surface as Up next: a state line with a dot,
-  numbered cards with the next message marked, edit, reorder and remove on a quiet
-  row, an empty state, and a live byte counter in the editor. The composer's queue
-  strip is tinted and shows the held state as a dot.
-- Open the settings modal from the sidebar's Settings row (formerly Customize) on
-  the General pane, and remove the duplicate Settings entry under More. Give the
-  profile menu's Tutorial row its icon.
-- Document the gallery in [SPEC.md](SPEC.md) and
-  [provider compatibility](docs/PROVIDER_COMPATIBILITY.md), and record the focused
-  verification in [3.6.6 testing](docs/TESTING_3.6.6.md).
-- Ship the client as 3.6.6. The bridge already ships as `bridge-v3.6.6`; the
-  Windows and Android downloads remain 3.6.5 until their own builds.
+- 将添加提供商的流程重建为图库。“添加提供商”会打开三个层级——推荐、付费和本地——搜索框横跨全部层级，并显示结果计数，每个提供商一张卡片，卡片包含描述、访问行和访问标签。自定义端点卡片位于各层级之后。选择卡片会用该预设填充编辑器；在保存之前不会写入任何内容。
+- 将目录扩充到 66 个预设：16 个推荐、38 个付费、11 个本地，外加自定义端点。推荐现在依次为 Project UAI Free（内置）、AgentRouter（免费层）、OpenCode Zen（免费模型）、OpenRouter（免费模型）、OpenCode Go（免费 CLI），然后是 Kilo、OVHcloud、Gemini、Groq、Cerebras、Mistral、ModelScope、Z.ai、NVIDIA NIM、Cloudflare Workers AI 和 Aion Labs。
+- 如实标注访问级别。混合服务按推荐处理，并以其免费的那一半命名，因此 OpenCode Zen、OpenRouter 和 OpenCode Go 绝不会被标为付费。高亮由目录承载，因此强调色边框始终落在 Project UAI Free、AgentRouter 和 OpenCode Zen 上，无论它们位于列表何处。
+- 让目录不含此客户端无法服务的路由。LLM7 已移除；GitHub Models 已于 2026 年 7 月 30 日退役；Perplexity 的根路径 API 和 Databricks 的 invocations 路由会被基础 URL 规范化器错误路由，只能通过自定义端点访问。Kilo 和 OVHcloud 不再发送 Claude Code 身份。
+- 将排队消息界面重建为“下一项”：带圆点的状态行、标记出下一条消息的编号卡片、位于安静行上的编辑/重排/移除、空状态，以及编辑器中的实时字节计数器。编辑器的队列条带带有浅色底，并以圆点显示保持状态。
+- 从侧边栏的“设置”行（原“自定义”）在“常规”面板打开设置模态框，并移除“更多”下的重复设置入口。为个人资料菜单的“教程”行补上图标。
+- 在 [SPEC.md](SPEC.md) 与
+  [提供商兼容性](docs/PROVIDER_COMPATIBILITY.md) 中记录该图库，并在
+  [3.6.6 测试](docs/TESTING_3.6.6.md) 中记录针对性验证。
+- 将客户端作为 3.6.6 发布。桥接已作为 `bridge-v3.6.6` 发布；Windows 和 Android 下载在其自身构建完成前仍为 3.6.5。
 
-## Bridge 3.6.6 — October 22, 2026 — Runtime context for MCP harnesses
+## Bridge 3.6.6 — October 22, 2026 — 面向 MCP 执行框架的运行时上下文
 
-- Tell external MCP harnesses what they are actually connected to. The
-  `initialize` instructions and every tool description now state that tools act on
-  one live Roblox client, that Roblox Studio is never involved, that reads observe
-  this client's replicated DataModel, and that writes stay local and remain subject
-  to the game server. A harness model previously received only its own system
-  prompt, so it could answer as if UAI were a Studio project.
-- Apply the same statement to the OpenCode tunnel, which sent no instructions at
-  all and passed tool descriptions through unchanged.
-- Refresh the conversation reading surface. Transcript, composer, tables and code
-  share one 720px measure; headings use a 28/22/18/15 ladder with balanced wrapping;
-  each answer is separated by a hairline and introduced by a monogram byline with a
-  model chip; the activity drawer is a quiet footnote row instead of a card; and
-  tables, code headers, inline code, links and the floating jump control were
-  restyled. No markup or class contract changed.
-- Publish the bridge package as `bridge-v3.6.6`. Existing installs receive it
-  automatically while idle. Client, desktop and Android downloads stay 3.6.5.
+- 告知外部 MCP 执行框架它们实际连接的是什么。`initialize` 指令和每个工具描述现在都说明：工具作用于一个实时 Roblox 客户端，Roblox Studio 从不参与，读取观察的是此客户端的复制 DataModel，写入保持在本地并仍受游戏服务器约束。执行框架模型此前只收到自己的系统提示，因此它可能会把 UAI 当作 Studio 项目来回答。
+- 对 OpenCode 隧道应用同样的说明，该隧道此前完全不发送指令，并原样传递工具描述。
+- 刷新会话阅读界面。转录、编辑器、表格和代码共用 720px 的行宽；标题采用 28/22/18/15 的层级并平衡换行；每个回答以细线分隔，并由带模型标签的字母组合署名引出；活动抽屉改为安静的脚注行而非卡片；表格、代码头、行内代码、链接和浮动跳转控件均已重新设计样式。标记或类名约定未作改动。
+- 将桥接包发布为 `bridge-v3.6.6`。现有安装在空闲时会自动收到它。客户端、桌面端和 Android 下载仍为 3.6.5。
 
-## 3.6.5 — October 21, 2026 — Reliable connections and a refreshed desktop
+## 3.6.5 — October 21, 2026 — 可靠的连接与焕新的桌面端
 
-- Release the client, bridge, Windows app and signed Android companion together
-  as 3.6.5. Preserve verified updates and the Android production signing identity.
-- Refresh the Windows launcher with clearer connection status, setup, runtime
-  and update controls. Correct single-instance startup so an unowned existing
-  mutex does not silently discard the first launch; retain early restore requests.
-- Share unfinished native HTTP ownership on touch-only devices across discovery,
-  new requests, Stop and supported client reloads. Keep one independent bounded
-  cancellation lane, and retain desktop parallel capacity.
-- Enforce Always use relay after failed discovery. Stop oversized or malformed
-  relay replies once without polling the same unusable response indefinitely.
-- Check the complete UTF-8 companion response, including both JSON escaping
-  layers, before expanding large provider bodies. Return a small 413 error above
-  8 MiB, preserving the exact receipt and original provider submission.
-- Bound expanded mobile reasoning before Markdown formatting and native layout.
-  Label the excerpt and preserve full reasoning in model context and persistence.
-- Add read-only network and payload capture (`net_capture`). Fixed forwarding
-  hooks observe executor and game HTTP, `HttpService` methods, `loadstring`,
-  `load`, `require` and queued code without rewriting arguments or results.
-  Bounded records redact credentials, link responses to compiled chunks by hash
-  or thread, flag code-like responses that never compile, exclude UAI's own
-  requests and compiles, and restore hooks on Stop. See
-  [the capture guide](docs/NET_CAPTURE.md).
-- Add opt-in tool profiles and a `tool_search` toolbox. **All tools** stays the
-  default; leaner profiles declare a core set, while hidden tools remain callable
-  with the same permissions, groups and conversation scope. See
-  [the tool context guide](docs/TOOL_CONTEXT.md).
-- Retain large tool results in a durable per-conversation evidence ledger without
-  changing the inline receipt. The default 8 KiB threshold skips small results and
-  tools with their own persistent home, and identical results are deduplicated.
-  Writes are queued and batched off the tool path with a 64-result / 4 MiB bound,
-  so a fast model cannot grow the queue or block every call on disk. Settings →
-  Agent → Tool evidence can switch to all, large or off. `evidence`
-  lists, searches and pages full text or structured data after compaction, while
-  `evidence_clear` removes a conversation's ledger. Other conversations remain
-  unreadable.
-- Add a local, redacted support bundle for bug reports. It collects capabilities,
-  provider health, permissions, enabled tools, session metadata, recent HTTP
-  failures and logs, while excluding API keys, memory, custom instructions,
-  conversation text, file contents and captured payloads.
-- Include bridge 3.6.2's verified OpenCode execution permission gate. The reported
-  Android SIGSEGV has no native backtrace; these fixes remove reproduced defects
-  without claiming to identify or reproduce that device crash.
+- 将客户端、桥接、Windows 应用和已签名 Android 伴侣作为 3.6.5 一同发布。保留已验证的更新和 Android 生产签名身份。
+- 刷新 Windows 启动器，提供更清晰的连接状态、设置、运行时和更新控件。修正单实例启动，使无主的现有互斥量不会静默丢弃首次启动；保留早期恢复请求。
+- 在仅触摸设备上，跨发现、新请求、停止和受支持的客户端重载共享未完成的原生 HTTP 所有权。保留一条独立的、有界的取消通道，并保留桌面端并行能力。
+- 在发现失败后强制执行“始终使用中继”。停止过大或格式错误的中继回复一次，而不是无限轮询同一个不可用的响应。
+- 在展开大型提供商响应体之前，检查完整的 UTF-8 伴侣响应，包括两层 JSON 转义。超过 8 MiB 时返回一个小的 413 错误，保留精确回执和原始提供商提交内容。
+- 在 Markdown 格式化和原生布局之前，约束展开的移动端推理内容。为摘录加标签，并在模型上下文和持久化中保留完整推理。
+- 添加只读的网络与载荷捕获（`net_capture`）。固定的转发钩子观察执行器和游戏的 HTTP、`HttpService` 方法、`loadstring`、`load`、`require` 以及排队代码，而不重写参数或结果。有界记录会对凭据脱敏，按哈希或线程将响应关联到已编译块，标记从未成功编译的类代码响应，排除 UAI 自身的请求和编译，并在停止时恢复钩子。参见
+  [捕获指南](docs/NET_CAPTURE.md)。
+- 添加可选的工具配置文件和 `tool_search` 工具箱。**所有工具**仍为默认；更精简的配置文件会声明一个核心集合，而隐藏的工具仍可在相同权限、分组和会话范围内调用。参见
+  [工具上下文指南](docs/TOOL_CONTEXT.md)。
+- 将大型工具结果保留在持久的每会话证据台账中，而不改变内联回执。默认 8 KiB 阈值会跳过小结果和已有自持久化位置的工具，相同结果会被去重。写入在工具路径之外排队并批量处理，上限为 64 个结果 / 4 MiB，因此快速模型无法撑大队列或让每次调用都阻塞在磁盘上。设置 → Agent → 工具证据可切换为全部、大型或关闭。`evidence` 在压缩后列出、搜索并分页显示全文或结构化数据，而 `evidence_clear` 会移除某个会话的台账。其他会话保持不可读。
+- 为错误报告添加本地、已脱敏的支持包。它会收集能力、提供商健康状况、权限、已启用工具、会话元数据、最近的 HTTP 失败和日志，同时排除 API 密钥、记忆、自定义指令、会话文本、文件内容和已捕获的载荷。
+- 包含桥接 3.6.2 中已验证的 OpenCode 执行权限门。所报告的 Android SIGSEGV 没有原生回溯；这些修复消除了已复现的缺陷，但并未声称识别或复现该设备崩溃。
 
-## Bridge 3.6.2 — October 21, 2026 — OpenCode execution permission gate
+## Bridge 3.6.2 — October 21, 2026 — OpenCode 执行权限门
 
-- Fix the remaining `OpenCode could not verify that a desktop tool was blocked`
-  failure after 3.6.1. OpenCode's native execution wrapper did not always ask for
-  permission, and a tool could appear before its pending permission request.
-- Install a private execution gate in the isolated OpenCode server, preserving
-  the native schemas required by free models. Host tool execution must ask for
-  permission; exact UAI calls on the private remote tool server remain available.
-  Wait for the matching permission and confirmed interruption before returning
-  blocked-action feedback to the Roblox conversation.
-- Publish the bridge package as `bridge-v3.6.2`. Existing desktop 3.6.0 installs
-  receive it automatically when idle. Client stays 3.6.1; desktop and Android
-  downloads stay 3.6.0.
+- 修复 3.6.1 之后仍存在的 `OpenCode could not verify that a desktop tool was blocked` 失败。OpenCode 的原生执行包装器并不总是请求权限，工具可能在其待处理的权限请求之前出现。
+- 在隔离的 OpenCode 服务器中安装一个私有执行门，保留免费模型所需的原生架构。宿主工具执行必须请求权限；针对私有远程工具服务器的精确 UAI 调用仍可使用。在将受阻操作反馈返回给 Roblox 会话之前，等待匹配的权限和已确认的中断。
+- 将桥接包发布为 `bridge-v3.6.2`。现有桌面端 3.6.0 安装在空闲时会自动收到它。客户端保持 3.6.1；桌面端和 Android 下载保持 3.6.0。
 
-## 3.6.1 — October 20, 2026 — OpenCode tunnel tool recovery
+## 3.6.1 — October 20, 2026 — OpenCode 隧道工具恢复
 
-- Keep OpenCode conversations running when the model selects a desktop tool.
-  Verify that its permission is blocked, interrupt the native session, and return
-  a non-executable receipt so the Roblox agent can select a real available tool.
-- Preserve provider order for mixed desktop/Roblox tool batches, including MCP
-  calls that arrive out of order. Stop, invalid handoffs and provider errors remain
-  terminal; desktop actions are never approved and native prompts are not replayed.
-- Release client and bridge 3.6.1. Existing desktop 3.6.0 fetches the bridge and
-  web files automatically while idle; refresh the browser and reload the published
-  Roblox client. Desktop and Android app downloads remain 3.6.0.
+- 当模型选择桌面工具时，保持 OpenCode 会话继续运行。验证其权限已被阻止，中断原生会话，并返回一个不可执行的回执，使 Roblox 代理可以选择真正可用的工具。
+- 对混合的桌面/Roblox 工具批次保持提供商顺序，包括乱序到达的 MCP 调用。停止、无效交接和提供商错误仍为终止状态；桌面操作永远不会被批准，原生提示也不会被重放。
+- 发布客户端和桥接 3.6.1。现有桌面端 3.6.0 会在空闲时自动获取桥接和 Web 文件；刷新浏览器并重新加载已发布的 Roblox 客户端。桌面端和 Android 应用下载仍为 3.6.0。
 
-## 3.6.0 — October 19, 2026 — Clearer conversations and reliable connections
+## 3.6.0 — October 19, 2026 — 更清晰的会话与可靠的连接
 
-- Rebuild the public Project UAI page with a white monochrome palette, responsive
-  layouts, an interactive animated 3D centerpiece and SVG motion. Keep installation,
-  downloads and the searchable tool catalog close at hand, with pause and
-  reduced-motion support.
-- Rebuild bridge conversations around the assistant's answer. Each turn has one
-  heading and a collapsed activity drawer for tools, thinking and delegated work.
-  Expand details when needed; approvals and failures remain visible.
-- Give reasoning a readable formatted view with its own Copy action. Present
-  errors with a clear explanation and recovery actions, keeping original
-  technical diagnostics available in a separate disclosure.
-- Find installed OpenCode CLI binaries behind npm and Bun launchers, in common
-  Windows user/system folders, active nvm paths and macOS app resources. Handle
-  quoted PATH entries and show detected versions with actionable setup guidance.
-- Decode compressed companion POST requests before JSON parsing. Previously,
-  gzip message bodies produced `invalid executor request` before inference could
-  start even when pairing succeeded. Bound both wire and expanded request sizes,
-  preserve authentication and same-job retries, and report malformed encodings
-  without logging credentials or message contents. The reported Delta failure
-  occurs at this decoding stage; its device-specific encoding remains unobserved.
-- Redesign UAI Relay around clear connection status, one Start/Stop action,
-  short setup steps and compact request activity. Keep advanced settings and
-  diagnostics out of the main setup flow while retaining update recovery controls.
-- Release client, bridge, Windows desktop and signed Android companion 3.6.0.
-  Existing production Android installs keep their signing identity and pairing.
-- Keep bridge update status tied to the version actually serving requests during
-  an automatic worker replacement.
+- 以白色单色调色板、响应式布局、可交互的动态 3D 主体和 SVG 动效重建公开的 Project UAI 页面。让安装、下载和可搜索的工具目录触手可及，并支持暂停和减少动效。
+- 围绕助手的回答重建桥接会话。每个回合有一个标题和一个折叠的活动抽屉，用于收纳工具、思考与委派工作。需要时可展开细节；审批和失败仍然可见。
+- 为推理内容提供可读的格式化视图，并带有独立的“复制”操作。以清晰的说明和恢复操作呈现错误，同时在单独的展开区中保留原始技术诊断。
+- 在 npm 和 Bun 启动器之后、常见的 Windows 用户/系统文件夹中、活动的 nvm 路径以及 macOS 应用资源中查找已安装的 OpenCode CLI 二进制文件。处理带引号的 PATH 条目，并显示检测到的版本和可操作的设置指引。
+- 在 JSON 解析之前解码压缩的伴侣 POST 请求。此前，gzip 消息体会在推理开始之前产生 `invalid executor request`，即使配对已成功。约束线格式和展开后的请求大小，保留身份验证和同一作业的重试，并在报告格式错误的编码时不记录凭据或消息内容。所报告的 Delta 故障发生在此解码阶段；其设备特定的编码仍未被观察到。
+- 围绕清晰的连接状态、单一的启动/停止操作、简短设置步骤和紧凑的请求活动重新设计 UAI 中继。将高级设置和诊断保持在主设置流程之外，同时保留更新恢复控件。
+- 发布客户端、桥接、Windows 桌面端和已签名 Android 伴侣 3.6.0。现有生产 Android 安装保持其签名身份和配对。
+- 在自动更换工作线程期间，将桥接更新状态绑定到实际正在处理请求的版本。
 
-### Changes since 3.5.6
+### 自 3.5.6 以来的变更
 
-- Correct the mobile OpenCode guidance. OpenCode now works on Android through the
-  UAI Relay app from Discord: install and start the app, then connect it in UAI.
-  A user confirmed OpenCode inference on a Delta Android phone after manually
-  retrying an initial `Relay rejected the request (400)`. Phone tool execution,
-  tool-result replay and background survival remain unverified.
-- Add companion 3.5.7's authenticated POST transport for Delta builds where
-  `request` fails on loopback but `HttpGet` works. The client discovers through
-  `HttpGet` and uses `HttpPost` for pairing and authenticated operations,
-  preserving job IDs, deadlines and cancellation. A companion update is required.
-- Probe companion request compatibility with unauthenticated hello requests.
-  A completed executor exception can try the minimal documented request format
-  and distinct native request aliases. A validated, authenticated selection is
-  retained for local polling and cancellation; provider requests are not replayed
-  to discover a working transport. Diagnostics identify the attempted formats.
-- Keep native HTTP timeouts positive after worker scheduling; fractional remaining
-  budgets no longer become `Timeout = 0`. The original caller deadline still
-  applies and a timed-out native request keeps its slot until it actually ends.
-- Allow five seconds per companion discovery and pairing exchange. Report the
-  actual connection, HTTP or protocol failure instead of treating every failed
-  hello as an absent companion. Discovery remains quiet during background scans.
-  See [discovery verification](docs/TESTING_RELAY_DISCOVERY.md).
+- 更正移动端 OpenCode 指引。OpenCode 现在可通过来自 Discord 的 UAI 中继应用在 Android 上运行：安装并启动该应用，然后在 UAI 中连接它。一位用户在手动重试初始的 `Relay rejected the request (400)` 后，确认在 Delta Android 手机上完成了 OpenCode 推理。手机上的工具执行、工具结果重放和后台存活仍未验证。
+- 为 `request` 在回环上失败但 `HttpGet` 可用的 Delta 构建，添加伴侣 3.5.7 的带身份验证 POST 传输。客户端通过 `HttpGet` 进行发现，并使用 `HttpPost` 进行配对和带身份验证的操作，保留作业 ID、截止时间和取消。需要更新伴侣。
+- 使用未认证的 hello 请求探测伴侣请求兼容性。已完成的执行器异常可尝试最小的文档化请求格式和不同的原生请求别名。经过验证的、带身份验证的选择会被保留，用于本地轮询和取消；不会为了发现可用传输而重放提供商请求。诊断信息会指出尝试过的格式。
+- 在工作线程调度之后保持原生 HTTP 超时为正数；剩余的分数预算不再变成 `Timeout = 0`。原始调用方截止时间仍然生效，超时的原生请求会保留其槽位，直到它真正结束。
+- 允许每次伴侣发现和配对交换使用五秒。报告实际的连接、HTTP 或协议失败，而不是把每次失败的 hello 都当作伴侣不存在。在后台扫描期间发现过程保持安静。参见 [发现验证](docs/TESTING_RELAY_DISCOVERY.md)。
 
-## 3.5.6 — October 18, 2026 — Mobile relay reliability and automatic updates
+## 3.5.6 — October 18, 2026 — 移动中继可靠性与自动更新
 
-- Fix companion request admission by sending finite timeouts as integer seconds,
-  matching the Android protocol instead of submitting rejected fractional values.
-- Negotiate unlimited default inference with updated companions, removing the
-  unintended five-minute client limit while keeping each executor exchange within
-  five seconds. Explicit deadlines and older companions retain finite budgets.
-  Lost polls reuse the original job; Stop, lost receipts and upstream failures
-  stay terminal without replaying inference.
-- Authenticate saved pairing, repair explicitly rejected tokens, and rediscover
-  a newly started companion when sending instead of waiting through idle backoff.
-- Show live client contact separately from saved pairing, plus accepted/active
-  requests, received bytes and safe failure categories. Accepted jobs immediately
-  own foreground activity and a wake lock. A two-minute ownership lease cancels
-  orphaned jobs after Roblox stops polling and releases idle resources.
-- Add automatic Android update checks at startup and every 15 minutes while the
-  app or relay process runs. Download compatible official releases by default,
-  verify size, SHA-256, package/version/SDK and signing certificate, and preserve
-  verified downloads across restart. Manual download remains available.
-- Require Android installation approval and idle work before replacing the app.
-  Persist the owned installer session and admission pause across interruptions;
-  resume the relay only after successful replacement or cancellation of that
-  session. Explicit Stop remains authoritative.
-- Publish the signed Android companion with release metadata and a checksum.
-  Earlier debug-signed installs need a one-time uninstall/reinstall and new
-  pairing; production updates use the same signing key and preserve app data.
-- Add executor loopback/polling/cancellation probes and a controlled delay fixture.
-  OpenCode text, tool calls and tool-result replay passed on Windows using the
-  companion's Java HTTP library and settings. **Native Android, mobile executor
-  behavior and OpenCode acceptance on a phone remain unverified.** OpenCode free
-  models remain unsupported on mobile; use Project UAI Free or another supported
-  provider. See [mobile research](docs/OPENCODE_MOBILE_RESEARCH.md). (Corrected
-  October 18, 2026: mobile OpenCode requires the UAI Relay app from Discord.)
-- Ship client, bridge, Windows desktop and Android companion 3.5.6. UI LIB remains
-  1.3.0 and SDK 1.0.0. See [companion updates](companion/UPDATES.md) for signing and
-  installation details.
+- 通过将有限超时以整数秒发送，修复伴侣请求准入问题，以匹配 Android 协议，而不是提交被拒绝的分数值。
+- 与更新后的伴侣协商默认无限推理，移除意外的五分钟客户端限制，同时保持每次执行器交换在五秒之内。显式截止时间和较旧的伴侣保留有限预算。丢失的轮询复用原始作业；停止、丢失回执和上游失败保持终止状态，且不重放推理。
+- 对已保存的配对进行身份验证，修复被明确拒绝的令牌，并在发送时重新发现新启动的伴侣，而不是等待空闲退避结束。
+- 将实时客户端联系状态与已保存的配对分开显示，并显示已接受/活动请求、接收字节数和安全的失败类别。已接受的作业会立即拥有前台活动和唤醒锁。两分钟的所有权租约会在 Roblox 停止轮询后取消孤立作业并释放空闲资源。
+- 在启动时以及应用或中继进程运行期间每 15 分钟添加自动 Android 更新检查。默认下载兼容的官方发布，验证大小、SHA-256、包/版本/SDK 和签名证书，并在重启后保留已验证的下载。手动下载仍然可用。
+- 在替换应用之前要求 Android 安装批准和空闲状态。在中断期间持久化所拥有的安装程序会话和准入暂停；只有在该会话成功替换或取消后才恢复中继。显式停止仍然具有权威性。
+- 发布带发布元数据和校验和的已签名 Android 伴侣。早前的调试签名安装需要一次性卸载/重装并重新配对；生产更新使用相同的签名密钥并保留应用数据。
+- 添加执行器回环/轮询/取消探测以及受控延迟测试夹具。使用伴侣的 Java HTTP 库和设置，OpenCode 文本、工具调用和工具结果重放在 Windows 上已通过。**原生 Android、移动执行器行为和手机上的 OpenCode 接受度仍未验证。** OpenCode 免费模型在移动端仍不受支持；请使用 Project UAI Free 或其他受支持的提供商。参见 [移动端研究](docs/OPENCODE_MOBILE_RESEARCH.md)。（2026 年 10 月 18 日更正：移动端 OpenCode 需要来自 Discord 的 UAI 中继应用。）
+- 发布客户端、桥接、Windows 桌面端和 Android 伴侣 3.5.6。UI LIB 仍为 1.3.0，SDK 为 1.0.0。签名和安装详情参见 [伴侣更新](companion/UPDATES.md)。
 
-## 3.3.5 — October 18, 2026 — Stronger agents and desktop bridge
+## 3.3.5 — October 18, 2026 — 更强的代理与桌面桥接
 
-- Strengthen main and worker prompts with exact native tool-call rules,
-  schema-aware arguments, observed targets, complete pagination, safe recovery
-  and evidence-based completion. Keep detailed guides on demand.
-- Fix the incomplete 128-tool workaround from `fbd093a`: retain access to tools
-  beyond the provider's declaration ceiling through a bounded catalog adapter.
-  Tool execution still uses the original dispatcher, scope and permissions.
-- Refresh the desktop dashboard with persistent OpenCode tunnel, MCP server,
-  browser-open and automatic desktop-update switches. Minimize stays on the
-  taskbar; closing the app stops its bridge and exits instead of hiding in the tray.
-- Check the installed OpenCode CLI version and required API routes, distinguish
-  disabled/missing/failed states, and report actionable setup details. Verify
-  real native tool handoff and tool-result replay with CLI 2.0.32.
-- Improve queued-message review, editing, ordering and clearing in Roblox and
-  the browser, preserving attachment ownership and rejecting stale edits.
-- Refine bridge assistant responses and tool-call cards with readable outcomes,
-  clear progress, and deliberate access to exact inputs and results.
-- Ship matching client, bridge and Windows desktop 3.3.5 artifacts. UI LIB stays
-  1.3.0 and SDK 1.0.0; the mobile companion is unchanged.
+- 以精确的原生工具调用规则、架构感知参数、已观察目标、完整分页、安全恢复和基于证据的完成来强化主代理和工作线程提示。详细指南按需加载。
+- 修复 `fbd093a` 中不完整的 128 工具变通方案：通过一个有界的目录适配器，保留对超出提供商声明上限的工具的访问。工具执行仍使用原始调度器、范围和权限。
+- 刷新桌面仪表板，提供持久的 OpenCode 隧道、MCP 服务器、浏览器打开和自动桌面更新开关。最小化后停留在任务栏；关闭应用会停止其桥接并退出，而不是隐藏到托盘。
+- 检查已安装的 OpenCode CLI 版本和所需 API 路由，区分禁用/缺失/失败状态，并报告可操作的设置详情。使用 CLI 2.0.32 验证真实的原生工具交接和工具结果重放。
+- 改进 Roblox 和浏览器中的排队消息审阅、编辑、排序和清除，保留附件所有权并拒绝过期编辑。
+- 以可读的结果、清晰的进度，以及对精确输入和结果的审慎访问，改进桥接助手响应和工具调用卡片。
+- 发布相互匹配的客户端、桥接和 Windows 桌面端 3.3.5 制品。UI LIB 仍为 1.3.0，SDK 为 1.0.0；移动伴侣未变。
 
-## 3.3.1 — October 17, 2026 — Live bridge previews and interface fixes
+## 3.3.1 — October 17, 2026 — 实时桥接预览与界面修复
 
-- Move native temperature controls to Models → Options → Temperature so they
-  no longer squeeze the model list. Soften free-model outlines in Roblox.
-- Restore the queued-message count and review action above the native composer.
-- Give bridge tool calls compact summaries, clear status and readable errors,
-  with full inputs and results available on demand.
-- Deliver real bridge text and reasoning previews to Roblox while inference is
-  still running. Keep the completed response authoritative and avoid replaying
-  buffered Gemini responses as live output.
-- Stop counting waiting relay jobs as native HTTP connections. Concurrent bridge
-  agents retain capacity for their short polls without inheriting the executor's
-  inference deadline. Provider errors and Stop still settle the original job.
+- 将原生温度控件移至模型 → 选项 → 温度，使其不再挤压模型列表。柔化 Roblox 中免费模型的轮廓。
+- 恢复原生编辑器上方的排队消息计数和审阅操作。
+- 为桥接工具调用提供紧凑摘要、清晰状态和可读错误，并可按需查看完整输入和结果。
+- 在推理仍在进行时，向 Roblox 交付真实的桥接文本和推理预览。保持已完成的响应具有权威性，并避免将缓冲的 Gemini 响应重放为实时输出。
+- 停止将等待中的中继作业计为原生 HTTP 连接。并发桥接代理可保留其短暂轮询的能力，而不继承执行器的推理截止时间。提供商错误和停止仍会结算原始作业。
 
-## 3.3.0 — October 17, 2026 — MCP, bridge redesign and queued follow-ups
+## 3.3.0 — October 17, 2026 — MCP、桥接重设计与排队跟进
 
-- Connect Claude Code, Codex, Cursor, OpenCode and other MCP clients to UAI's
-  Roblox tools over authenticated Streamable HTTP or stdio. The standalone
-  desktop executable supports `--mcp-stdio` and discovers the running bridge.
-  Tool calls use normal UAI permissions and isolated sessions, with cancellation
-  and receipts that prevent replaying uncertain effects.
-- Copy an agent setup prompt from Settings → MCP, with the detected connection
-  details and instructions to configure and verify the connection.
-- Rebuild the bridge workspace and assistant responses. Open Connection,
-  Settings and the other management screens as modal workspaces. Improve
-  model selection and reasoning controls, show context estimates and compaction
-  limits, and remove superseded styles.
-- Send follow-up messages while the agent works in Roblox or the bridge. Queue
-  them in order for a safe boundary after the current response or tool batch,
-  with visible pending status and a separate Stop action.
-- Adaptively route included HCNSEC access using small verified tool probes and a
-  ten-second request target. Keep provider `auto` when no compatible fast route
-  is known; real user prompts are never raced or replayed to measure speed.
-  Automatic free routing is enabled by default and can be disabled under
-  Settings → Agent → Automatic free routing. A routed request names the selected
-  model and points to that setting; disabling it preserves already active work.
-- Give free models noticeable rounded green outlines in Roblox and the bridge.
-- Support Google's native Gemini protocol, including paginated model discovery,
-  image inputs, tool calls/results, thinking controls and scoped signature replay.
-  Route OpenCode Go Gemini models through the same adapter.
-- Choose Auto, Send or Omit for each model's temperature policy. Honor documented
-  restrictions and remember explicit unsupported-temperature refusals within the
-  provider/model scope without treating ordinary range errors as compatibility.
-- Inspect subagent progress, task, tool activity and results in richer preview
-  modals in Roblox and the bridge, with contextual follow-ups for finished work.
-- Expand the environment guide with capabilities, permissions, native workflows,
-  shared state, cleanup and official sUNC references. Strengthen main and worker
-  instructions while loading detailed guidance on demand.
-- Prevent removed pictures from returning when an in-flight upload completes.
-- Select scripts or actions in Code Library and remove them with one batch
-  confirmation. Preserve hidden selections and reject stale deletion previews.
-- Improve Explorer subtree navigation, search, multi-selection and field-value
-  inspection. Give Remote Spy visible capture duration, scope, filters and call
-  summaries with direct caller and Explorer actions.
-- Use native text and selection together while dragging or selecting code.
-  Calibrate syntax line spacing from native font bounds and stop caret-follow
-  scrolling from shifting the canvas during a drag.
-- Set client, bridge and Windows desktop to 3.3.0. UI LIB and SDK stay at 1.3.0
-  and 1.0.0. See [focused verification](docs/TESTING_3.3.0.md).
+- 通过带身份验证的 Streamable HTTP 或 stdio，将 Claude Code、Codex、Cursor、OpenCode 和其他 MCP 客户端连接到 UAI 的 Roblox 工具。独立的桌面可执行文件支持 `--mcp-stdio` 并可发现正在运行的桥接。工具调用使用常规 UAI 权限和隔离会话，并提供取消和回执，以防止重放不确定的副作用。
+- 从设置 → MCP 复制代理设置提示，其中包含检测到的连接详情以及配置和验证连接的说明。
+- 重建桥接工作区和助手响应。以模态工作区打开连接、设置和其他管理屏幕。改进模型选择和推理控件，显示上下文估算和压缩限制，并移除被取代的样式。
+- 在代理于 Roblox 或桥接中工作时发送跟进消息。按顺序将它们排队到当前响应或工具批次之后的安全边界，并显示可见的待处理状态和单独的停止操作。
+- 使用小型经过验证的工具探测和十秒请求目标，自适应地路由内置 HCNSEC 访问。当没有已知的兼容快速路由时，保留提供商的 `auto`；真实用户提示绝不会被竞速或重放以测量速度。自动免费路由默认启用，可在设置 → Agent → 自动免费路由中禁用。被路由的请求会指明所选模型并指向该设置；禁用它不会影响已在进行的工作。
+- 在 Roblox 和桥接中为免费模型提供明显的圆角绿色轮廓。
+- 支持 Google 的原生 Gemini 协议，包括分页模型发现、图像输入、工具调用/结果、思考控件和限定范围的签名重放。通过同一适配器路由 OpenCode Go 的 Gemini 模型。
+- 为每个模型的温度策略选择自动、发送或省略。遵循文档化的限制，并在提供商/模型范围内记住明确的不支持温度的拒绝，而不将普通范围错误视为兼容性问题。
+- 在 Roblox 和桥接中通过更丰富的预览模态框检查子代理进度、任务、工具活动和结果，并为已完成工作提供上下文相关的跟进。
+- 扩展环境指南，加入能力、权限、原生工作流、共享状态、清理和官方 sUNC 参考。强化主代理和工作线程指令，同时按需加载详细指引。
+- 防止已移除的图片在进行中的上传完成时重新出现。
+- 在代码库中选择脚本或操作，并通过一次批量确认移除它们。保留隐藏的选择，并拒绝过期的删除预览。
+- 改进资源管理器的子树导航、搜索、多选和字段值检查。为 Remote Spy 提供可见的捕获时长、范围、过滤器和调用摘要，并可直接跳转到调用方和执行资源管理器操作。
+- 在拖动或选择代码时同时使用原生文本和选择。根据原生字体边界校准语法行距，并阻止光标跟随滚动在拖动期间移动画布。
+- 将客户端、桥接和 Windows 桌面端设为 3.3.0。UI LIB 和 SDK 保持 1.3.0 和 1.0.0。参见 [针对性验证](docs/TESTING_3.3.0.md)。
 
-## 3.2.0 — October 15, 2026 — Project UAI Free and OpenCode desktop
+## 3.2.0 — October 15, 2026 — Project UAI Free 与 OpenCode 桌面端
 
-- Start empty provider setups with Project UAI Free, using included public HCNSEC
-  access and its verified `auto` router. Preserve existing providers and credentials.
-- Improve the welcome with thanks for continued support, variable capacity/speed,
-  possible future free providers and https://discord.gg/9xYyyYuKap.
-- Strengthen the direct OpenCode desktop workaround with the live-verified desktop
-  identity, retaining compatibility tools and Chat/Responses recovery without a bridge.
-  Add an optional desktop bridge path using a separately installed official CLI
-  server, with live model discovery, owned sessions and tool handoff to Roblox.
-  The CLI binary is not packaged.
-- Remove retired OpenCode proxy targeting/recovery, migrate old URLs to Zen and
-  retain only AgentRouter on the proper proxy domain, without a Workers.dev fallback.
-- Add a separate OpenCode Go preset, catalog and model-specific Chat, Responses
-  and Messages routing. Preserve canonical and legacy Go paths, keep paid Go
-  outside the free CLI backend, and distinguish subscription, privacy-region
-  and retired-proxy refusals. Gemini's native Go protocol is not implemented.
-- Clearly mark OpenCode free models unsupported on mobile, including the Android
-  companion. Add Discord help to provider, conversation, tool and bridge errors.
-  (Corrected October 18, 2026: mobile OpenCode requires the UAI Relay app from Discord.)
-- Refresh provider-specific model prices and context/reply limits. Account for
-  documented cache rates and long-context tiers, keep unknown prices unknown,
-  and show included Project UAI Free usage at zero cost.
-- Set client, bridge and Windows desktop to 3.2.0. UI LIB and SDK versions remain
-  1.3.0 and 1.0.0. See [focused verification](docs/TESTING_3.2.0.md).
+- 以 Project UAI Free 开始空的提供商设置，使用内置的公共 HCNSEC 访问及其经过验证的 `auto` 路由器。保留现有的提供商和凭据。
+- 改进欢迎界面，感谢持续支持，说明容量/速度可能变化、未来可能的免费提供商以及 https://discord.gg/9xYyyYuKap。
+- 以经实时验证的桌面身份强化 OpenCode 桌面端直接变通方案，保留兼容工具和 Chat/Responses 恢复，且无需桥接。添加可选的桌面桥接路径，使用单独安装的官方 CLI 服务器，具备实时模型发现、自有会话和向 Roblox 的工具交接。CLI 二进制文件不随包提供。
+- 移除已退役的 OpenCode 代理定向/恢复，将旧 URL 迁移到 Zen，并仅在正确的代理域上保留 AgentRouter，不设 Workers.dev 回退。
+- 添加独立的 OpenCode Go 预设、目录以及按模型区分的 Chat、Responses 和 Messages 路由。保留规范路径和旧版 Go 路径，将付费 Go 置于免费 CLI 后端之外，并区分订阅、隐私区域和已退役代理的拒绝。Gemini 的原生 Go 协议尚未实现。
+- 明确标记 OpenCode 免费模型在移动端不受支持，包括 Android 伴侣。为提供商、会话、工具和桥接错误添加 Discord 帮助。（2026 年 10 月 18 日更正：移动端 OpenCode 需要来自 Discord 的 UAI 中继应用。）
+- 刷新提供商特定模型价格和上下文/回复限制。考虑文档化的缓存费率和长上下文层级，让未知价格保持未知，并以零成本显示内置 Project UAI Free 用量。
+- 将客户端、桥接和 Windows 桌面端设为 3.2.0。UI LIB 和 SDK 版本保持 1.3.0 和 1.0.0。参见 [针对性验证](docs/TESTING_3.2.0.md)。
 
 
-## 3.1.0 — October 14, 2026 — Bridge improvements
+## 3.1.0 — October 14, 2026 — 桥接改进
 
-- Replace the bridge's UAI logo with a text-only Cowork identity and redesign the
-  full workspace: navigation, conversations, connection, providers, tools, agents,
-  loops, activity and settings. Rebuild dialogs with stable headers and actions, scrollable content,
-  mobile layouts, focus restoration, and protected asynchronous actions. Improve
-  provider, model, tool, conversation, import and composer-option workflows.
-- Keep mobile navigation compact when conversation text is enlarged. Refine
-  dialog, drawer and page transitions while respecting browser system motion
-  preferences.
-- Reduce sidebar navigation and profile text in the Roblox mobile client, keeping
-  touch targets and the text-scale preference intact.
-- Select Web runtime on authenticated bridge connection and restore Game runtime
-  on disconnect. Show the connection-driven runtime in both Cowork interfaces.
-- Quiet routine companion discovery, back off unavailable probes, reject stale
-  pairing results, and bound mobile command polls to short waits.
-- Remove the overall Cowork request deadline and its setting. Bridge jobs wait
-  for completion, Stop or a real failure; short polling calls recover a stalled
-  executor request without resubmitting inference.
-- Carry OpenCode Responses inference through the bridge, including streamed text,
-  reasoning, tool events and image input. Preserve the four October 13 OpenCode
-  fixes and selected keys across protocol recovery. Direct requests retain their
-  original deadline; Cowork requests have no overall duration limit.
-- Keep provider stream errors terminal even when a later completion marker arrives.
-- Permanently enable client animations and remove the motion configuration from
-  settings, browser controls, commands and saved/imported preferences.
-- Highlight deadline errors with a link to the official Discord tutorial help.
-- Automatically verify and stage new GitHub bridge releases, activate them only
-  after work is idle, retain the pairing token and restore a working version if
-  the update cannot start.
-- Redesign the Windows desktop app with connection, runtime and update status.
-  Detect installed Node.js or download a verified LTS runtime inside the app;
-  keep Node.js separate from the app and retain a manual installation link.
-- Ship one independent Windows executable with embedded bridge, browser, client
-  and license files. Prepare verified files in a private cache automatically;
-  no ZIP extraction or adjacent support folder is needed.
-- Fetch desktop app updates from GitHub releases automatically, apply on restart,
-  and retain the previous installation for rollback.
+- 将桥接的 UAI 徽标替换为纯文本的 Cowork 标识，并重新设计整个工作区：导航、会话、连接、提供商、工具、代理、循环、活动和设置。以稳定的页眉和操作、可滚动内容、移动端布局、焦点恢复和受保护的异步操作重建对话框。改进提供商、模型、工具、会话、导入和编辑器选项的工作流。
+- 在会话文本放大时保持移动端导航紧凑。改进对话框、抽屉和页面过渡，同时遵循浏览器的系统动效偏好。
+- 减少 Roblox 移动客户端中的侧边栏导航和资料文本，同时保持触摸目标和文字缩放偏好不变。
+- 在带身份验证的桥接连接上选择 Web 运行时，并在断开连接时恢复游戏运行时。在 Cowork 的两个界面中显示由连接驱动的运行时。
+- 让常规的伴侣发现保持安静，对不可用的探测进行退避，拒绝过期的配对结果，并将移动端命令轮询限制为短暂等待。
+- 移除 Cowork 的整体请求截止时间及其设置。桥接作业会一直等待完成、停止或真实失败；短暂的轮询调用可恢复停滞的执行器请求，而无需重新提交推理。
+- 通过桥接承载 OpenCode Responses 推理，包括流式文本、推理、工具事件和图像输入。在协议恢复过程中保留 10 月 13 日的四项 OpenCode 修复和已选密钥。直接请求保留其原始截止时间；Cowork 请求没有整体时长限制。
+- 即使稍后到达完成标记，也保持提供商流错误为终止状态。
+- 永久启用客户端动画，并从设置、浏览器控件、命令和已保存/导入的偏好中移除动效配置。
+- 以指向官方 Discord 教程帮助的链接高亮显示截止时间错误。
+- 自动验证并暂存新的 GitHub 桥接发布，仅在工作空闲后激活它们，保留配对令牌，并在更新无法启动时恢复可用版本。
+- 以连接、运行时和更新状态重新设计 Windows 桌面应用。检测已安装的 Node.js，或在应用内下载经过验证的 LTS 运行时；将 Node.js 与应用分开，并保留手动安装链接。
+- 交付一个独立的 Windows 可执行文件，内嵌桥接、浏览器、客户端和许可证文件。自动在私有缓存中准备已验证的文件；无需解压 ZIP，也不需要相邻的支持文件夹。
+- 自动从 GitHub 发布获取桌面应用更新，在重启时应用，并保留先前的安装以便回滚。
 
-See [focused verification and limitations](docs/TESTING_3.1.0.md).
-UI LIB remains 1.3.0; the embedding SDK remains 1.0.0.
+参见 [针对性验证与限制](docs/TESTING_3.1.0.md)。
+UI LIB 保持 1.3.0；嵌入 SDK 保持 1.0.0。
 
 ## 3.0.0 — October 13, 2026
 
-Less repeated work when agents inspect, edit and verify scripts, with more
-precise tool outcomes and bounded runtime work.
+当代理检查、编辑和验证脚本时减少重复工作，提供更精确的工具结果和有界的运行时工作。
 
-### Script authoring and inspection
+### 脚本编写与检查
 
-- Cache lexical outlines and syntax outcomes by exact source and compiler
-  identity. Recheck saved bytes and dependencies; compile execution wrappers
-  fresh. Read Code line ranges without splitting the complete source.
-- Add `file_find` for filename-only discovery and `script_test` module/case
-  selectors for focused verification. Zero matching cases is a failure.
-- Verify exact file edits after writing, reuse staged patch hashes, page saved
-  actions and templates, and expose typed action/template inputs more clearly.
-- Honor advertised script/Explorer page sizes. Retain HTTP and readable web
-  responses for contiguous continuation without refetching. Hidden GUI ancestors,
-  skipped source files and unavailable retained details remain explicit.
+- 按精确的源内容和编译器身份缓存词法大纲和语法结果。重新检查已保存的字节和依赖；重新编译执行包装器。读取 Code 行范围时不拆分完整源文件。
+- 添加 `file_find` 用于仅按文件名发现，添加 `script_test` 模块/用例选择器用于针对性验证。零匹配用例即为失败。
+- 在写入后验证精确的文件编辑，复用暂存的补丁哈希，分页显示已保存的操作和模板，并更清晰地暴露带类型的操作/模板输入。
+- 遵循所公布的脚本/资源管理器页面大小。保留 HTTP 和可读的 Web 响应，以便连续续读而无需重新获取。隐藏的 GUI 祖先、被跳过的源文件和不可用的保留详情保持显式可见。
 
-### Agents and runtime
+### 代理与运行时
 
-- Rotate ready API keys across successful requests, including model discovery
-  and request snapshots. Preserve the selected key during proxy recovery and
-  skip rate-limited keys without advancing twice.
-- Avoid repeated growing-string copies in fragmented SSE parsing and repeated
-  batch rescans during tool-result repair. Prose previews skip tool arguments.
-  Responses assembly unifies call identities and enforces call/argument limits.
-- Bound recursive schema validation, preserve valid union values, and return
-  useful small result receipts immediately. Conversation search adds explicit
-  scopes and bounded traversal; product metadata uses a short refreshable cache.
-- Include all Anthropic prompt-token categories in context accounting and
-  restore persisted lifetime model/hour statistics.
-- Coalesce debounce bursts into one scheduled wakeup, skip ASCII runs during
-  UTF-8 processing, chunk bytecode encoding, and evict captured calls through a
-  private queue. Summary reads avoid copying unrequested argument graphs.
+- 在成功请求之间轮换就绪的 API 密钥，包括模型发现和请求快照。在代理恢复期间保留已选密钥，并跳过受速率限制的密钥而不重复推进。
+- 避免在碎片化 SSE 解析中重复进行不断增长的字符串复制，也避免在工具结果修复期间重复重新扫描批次。散文预览会跳过工具参数。Responses 组装会统一调用身份并强制调用/参数限制。
+- 约束递归架构验证，保留有效的联合值，并立即返回有用的小型结果回执。会话搜索添加显式作用域和有界遍历；产品元数据使用短时可刷新缓存。
+- 在上下文核算中包含所有 Anthropic 提示 token 类别，并恢复持久化的生命周期模型/小时统计。
+- 将防抖突发合并为一次计划唤醒，在 UTF-8 处理期间跳过 ASCII 段，分块进行字节码编码，并通过私有队列逐出已捕获的调用。摘要读取避免复制未请求的参数图。
 
-### Tool outcomes and lifecycle
+### 工具结果与生命周期
 
-- Report observed clamped/partial property writes. Validate camera batches
-  before writing and resolve exact player usernames before display-name matches.
-- Own held input until release succeeds; Stop, revocation and unload attempt
-  cleanup without claiming to undo native effects. Performance samples and
-  temporary interaction listeners release their resources.
-- Page IY discovery, accept saved plugin source paths, verify installations,
-  and reuse bounded official Gravity source snapshots. Chat history uses stable
-  backward cursors and channel filters.
-- Cancel unavailable confirmation dialogs, verify embedded icon files
-  individually, and reject stale mascot animation callbacks.
-- Continue queued questions after cancelling one conversation's prompt, and
-  release the composer's parent-size listener when its shell is destroyed.
-- Cancel provider connection tests when their editor closes or connection/model
-  changes. Ignore stale model discovery after provider selection or lifetime changes.
+- 报告观察到的被钳制/部分属性写入。在写入前验证相机批次，并在显示名称匹配之前解析精确的玩家用户名。
+- 拥有被保持的输入直到释放成功；停止、撤销和卸载会尝试清理，但不声称撤销原生效果。性能采样和临时交互监听器会释放其资源。
+- 分页显示 IY 发现，接受已保存的插件源路径，验证安装，并复用有界的官方 Gravity 源快照。聊天历史使用稳定的向后游标和频道过滤器。
+- 取消不可用的确认对话框，逐个验证内嵌图标文件，并拒绝过期的吉祥物动画回调。
+- 在取消某个会话的提示后继续处理已排队的问题，并在编辑器外壳被销毁时释放其父级尺寸监听器。
+- 当提供商的编辑器关闭或连接/模型变化时取消提供商连接测试。在提供商选择或生命周期变化后忽略过期的模型发现。
 
-UI LIB remains 1.3.0 and the embedding SDK remains 1.0.0. Bridge, desktop and
-companion changes are outside this release workstream. The site build refreshes
-published version metadata, the tool catalog and the documentation mirror.
-See [focused verification](docs/TESTING_3.0.0.md) and the
-[agent](docs/AUDIT_3.0.0_AGENT.md), [runtime](docs/AUDIT_3.0.0_RUNTIME.md) and
-[scripting](docs/AUDIT_3.0.0_SCRIPTING.md) audit records. Work counters and offline
-fixtures are evidence of avoided work, not native performance benchmarks.
+UI LIB 保持 1.3.0，嵌入 SDK 保持 1.0.0。桥接、桌面端和伴侣端的变更不在此发布工作流范围内。站点构建会刷新已发布的版本元数据、工具目录和文档镜像。
+参见 [针对性验证](docs/TESTING_3.0.0.md) 以及
+[agent](docs/AUDIT_3.0.0_AGENT.md)、[runtime](docs/AUDIT_3.0.0_RUNTIME.md) 和
+[scripting](docs/AUDIT_3.0.0_SCRIPTING.md) 审计记录。工作计数器和离线夹具是省去工作的证据，而非原生性能基准。
 
 ## 2.8.0 — October 12, 2026
 
-Reliable scripting, clearer failures, larger attachments, and focused audit fixes.
+可靠的脚本编写、更清晰的失败、更大的附件，以及针对性的审计修复。
 
-### Script execution and projects
+### 脚本执行与项目
 
-- Distinguish source, compilation, wrapper and stale-revision failures in
-  structured tool results. Preserve canonical source paths and reject oversized
-  sources before instrumentation. Capture managed-task arguments and multiple
-  returns on hosts that expose `table.unpack` without the legacy global.
-- Preserve runtime errors and disclose omitted output. Ordinary script errors
-  no longer receive a blanket do-not-retry warning when no work remains pending;
-  native calls and unmanaged continuations retain their cooperative limits.
-- Report project test discovery failures per module and retain completed results
-  when the case limit is reached. Invalid test exports no longer erase earlier
-  results or prevent unrelated modules from reporting their failures.
-- Validate template values, quote string data, clean up temporary monitoring
-  connections, and preserve the dispatched tool's success or failure status.
-  Reject stale Code proposals before storing them and isolate action inputs.
+- 在结构化工具结果中区分源、编译、包装器和过期修订失败。保留规范源路径，并在插装之前拒绝过大的源文件。在暴露 `table.unpack` 但没有旧版全局变量的宿主上，捕获托管任务参数和多个返回值。
+- 保留运行时错误并披露被省略的输出。当没有待处理工作时，普通脚本错误不再收到一概而论的“请勿重试”警告；原生调用和非托管续体保留其协作限制。
+- 按模块报告项目测试发现失败，并在达到用例限制时保留已完成的结果。无效的测试导出不再抹除较早的结果，也不再阻止无关模块报告其失败。
+- 验证模板值，为字符串数据加引号，清理临时监控连接，并保留被调度工具的成功或失败状态。在存储之前拒绝过期的代码提案，并隔离操作输入。
 
-### Agent and provider behavior
+### 代理与提供商行为
 
-- Deliver structured tool results to the model, including instance/source IDs,
-  listings, revisions and continuation cursors. Previously, native tools could
-  return those fields successfully while the model saw only a generic sentence.
-  Preserve bounded result delivery and retained-detail access.
-- Add an on-demand scripting reference with a short quickstart, exact tool
-  examples, saved-file and editor workflows, focused debugging, cleanup,
-  source inspection and UI LIB guidance. Main and subagents can read the
-  relevant sections without adding the whole manual to every request.
-- Preserve the required OpenCode compatibility tool declarations and streaming.
-  Add clear guidance explaining which declared names are compatibility
-  placeholders and point failed calls to the available Project UAI tools,
-  without treating them as aliases or expanding a conversation's permissions.
-- Give main and subagents concise Luau and source-path guidance matched to their
-  available tools. Distinguish syntax compilation from API or behavior checks,
-  and stop suggesting memory, naming or task-list tools outside their scope.
-- Restrict the default read subagent preset to read-risk tools. Reject unknown
-  presets, classify conversation/memory/task-list mutations as writes, and keep
-  client diagnostics under `client_status` without replacing `agent_status`.
-- Reject truncated JSON arguments for every tool instead of guessing missing
-  targets or filters. Normalize memory keys consistently when writing, reading
-  and deleting them.
-- Keep token-truncated batches out of the repeated-call streak because they did
-  not execute. A later complete, repaired call can run instead of being blocked
-  as a repeated action.
-- Honor supported sampling settings in the Messages adapter. Limit transient
-  retry classification inside successful HTTP responses to explicit error
-  fields, so ordinary response text cannot accidentally trigger a retry.
-- Support Zen models that only speak the Responses protocol. A request for one
-  switches to that lane automatically on a protocol refusal, carries the
-  standard tool declarations, and is remembered per endpoint and model.
-  Free-tier lockout and unsupported-protocol refusals no longer count toward
-  provider benching.
+- 向模型交付结构化工具结果，包括实例/源 ID、列表、修订和续读游标。此前，原生工具可以成功返回这些字段，而模型只看到一句通用描述。保留有界的结果交付和保留详情访问。
+- 添加按需的脚本编写参考，包含简短快速入门、精确工具示例、已保存文件和编辑器工作流、针对性调试、清理、源检查和 UI LIB 指引。主代理和子代理可以读取相关章节，而无需在每次请求中附加整本手册。
+- 保留所需的 OpenCode 兼容工具声明和流式传输。添加清晰指引，说明哪些声明的名称是兼容性占位符，并将失败的调用指向可用的 Project UAI 工具，而不将它们视为别名或扩大会话权限。
+- 为主代理和子代理提供与其可用工具相匹配的简洁 Luau 和源路径指引。区分语法编译与 API 或行为检查，并停止建议超出其范围的记忆、命名或任务列表工具。
+- 将默认只读子代理预设限制为具有读取风险的工具。拒绝未知预设，将会话/记忆/任务列表变更归类为写入，并将客户端诊断保留在 `client_status` 下而不替换 `agent_status`。
+- 对每个工具拒绝被截断的 JSON 参数，而不是猜测缺失的目标或过滤器。在写入、读取和删除时一致地规范化记忆键。
+- 将因 token 截断的批次排除在重复调用连击之外，因为它们并未执行。之后完整的、已修复的调用可以运行，而不会被当作重复操作阻止。
+- 在 Messages 适配器中遵循受支持的采样设置。将成功 HTTP 响应内的瞬态重试分类限制在显式错误字段上，使普通响应文本不会意外触发重试。
+- 支持仅使用 Responses 协议的 Zen 模型。针对此类模型的请求在遇到协议拒绝时会自动切换到该通道，携带标准工具声明，并按端点和模型记住。免费层锁定和不支持协议的拒绝不再计入提供商封禁。
 
-### Larger attachments
+### 更大的附件
 
-- Raise text and code attachments and browser uploads to 10 MiB per file, with
-  a larger per-draft budget and a matching pending-upload allowance. Large
-  inputs still become verified `pastes/` files read with the file tools, and a
-  failed save never falls back to sending the source inline.
+- 将文本和代码附件以及浏览器上传提升到每个文件 10 MiB，并提高每草稿预算和相应的待上传额度。大型输入仍会变为经核验的 `pastes/` 文件，通过文件工具读取，保存失败时绝不会回退为内联发送源内容。
 
-### Readable results and permission review
+### 可读结果与权限审阅
 
-- Keep Code editing and previews readable when syntax highlighting fails;
-  render run output literally so logs do not depend on the Lua lexer.
-- Show complete permission arguments and source with expandable previews and
-  a full-argument viewer. Allow, Deny and dismissal settle once and release
-  the prompt before presenting the next queued request.
-- Retain complete orphaned tool results, count unread failures in Latest, and
-  provide Show failures to open the relevant result bodies. Existing disclosure
-  and scroll choices remain under the reader's control.
+- 在语法高亮失败时保持代码编辑和预览可读；按字面渲染运行输出，使日志不依赖 Lua 词法分析器。
+- 显示完整的权限参数和源内容，提供可展开预览和完整参数查看器。“允许”、“拒绝”和关闭只结算一次，并在呈现下一个排队请求之前释放提示。
+- 保留完整的孤立工具结果，在“最新”中统计未读失败，并提供“显示失败”以打开相关结果正文。现有的展开和滚动选择仍由阅读者控制。
 
-### Source inspection and decompilation
+### 源检查与反编译
 
-- Validate decompiler output before accepting or caching it. Reject empty or
-  comment-only notices, invalid UTF-8, oversized source and service documents;
-  continue to the next available fallback when native output is unusable.
-- Stop starting fallbacks after a source request expires or all its readers
-  cancel. Bound bytecode requests and retry waits, discard late completions,
-  and keep native operations counted until they actually return.
-- Install luacid in a private environment without replacing executor globals.
-  Remove its unbounded response cache so explicit Refresh can obtain fresh
-  source. Distinguish an unavailable decompiler from a service that was tried
-  and failed, without exposing raw service or host error bodies.
+- 在接受或缓存反编译器输出之前对其进行验证。拒绝空白的或仅含注释的通知、无效的 UTF-8、过大的源文件和服务文档；当原生输出不可用时继续尝试下一个可用的回退方案。
+- 在源请求过期或所有读取者取消后，停止启动回退方案。约束字节码请求和重试等待，丢弃迟到的完成结果，并在原生操作真正返回之前保持其计数。
+- 在私有环境中安装 luacid，而不替换执行器全局变量。移除其无界响应缓存，使显式刷新可以获取最新源。区分不可用的反编译器与已尝试但失败的服务，且不暴露原始服务或宿主错误正文。
 
-### Runtime tools and release maintenance
+### 运行时工具与发布维护
 
-- Correct typed remote prefixes such as `vec3:` and document `string:` for
-  literal prefix text. Parse numeric components as complete finite values,
-  including exponents, without silently accepting extra coordinates.
-- Report failed input adapters accurately, verify hierarchy changes, and restore
-  the previous Gravity selection when an update fails where restoration is possible.
-  Bound fallback world/performance scans and disclose incomplete results.
-- Protect executor capability probes, retain fractional wall-clock deadlines
-  during temporary clock failures, preserve nil callback arguments, and validate
-  calendar keys. Redact more credential formats in logs, including source labels.
-- Add bundle-to-source line ranges to the generated manifest, fix website risk
-  filtering and the bulk-read example, and synchronize animated catalog counts
-  with their generated text. Update active release references to 2.8.0 while
-  preserving historical reports. UI LIB remains 1.3.0 and embedding SDK 1.0.0.
+- 修正带类型的远程前缀，例如 `vec3:`，并为字面前缀文本记录 `string:`。将数值分量解析为完整的有限值（包括指数），而不静默接受多余的坐标。
+- 准确报告失败的输入适配器，验证层级变更，并在可恢复的情况下，于更新失败时恢复先前的 Gravity 选择。约束回退的世界/性能扫描并披露不完整的结果。
+- 保护执行器能力探测，在临时时钟故障期间保留分数挂钟截止时间，保留 nil 回调参数，并验证日历键。在日志中脱敏更多凭据格式，包括源标签。
+- 在生成的清单中添加从包到源的行范围，修复网站风险过滤和批量读取示例，并使动画目录计数与其生成的文本同步。将活动发布引用更新为 2.8.0，同时保留历史报告。UI LIB 保持 1.3.0，嵌入 SDK 为 1.0.0。
 
-Verification scope and recorded results are in
-[the 2.8.0 checklist](docs/TESTING_2.8.0.md).
+验证范围和记录结果见
+[2.8.0 检查清单](docs/TESTING_2.8.0.md)。
 
 ## 2.7.0 — October 9, 2026
 
-Portable files, faster routine work, and clearer reasoning and provider feedback.
+可移植的文件、更快的常规工作，以及更清晰的推理和提供商反馈。
 
-### October 11 update
+### 10 月 11 日更新
 
-- Stop presenting a failed decompile as script source. A decompiler that fails
-  returns a comment notice rather than raising, so the notice is rejected, the
-  bundled luacid fallback is tried, and its own failure is reported with the
-  reason instead of being cached or displayed as code.
-- Install the bundled luacid fallback with the executor's bytecode and HTTP
-  functions pinned behind the host's own globals, and refuse unreadable or empty
-  bytecode before a request. It now works where a host compiles chunks into a
-  narrower environment. `lune run test/luacid_fallback.luau` covers it with the
-  real Luau compiler.
-- Retry an empty success from the decompile service instead of storing it as an
-  empty script, so a transient empty response cannot stick for the session.
-- Add the ByteFall service as a second bundled decompiler fallback, so a host
-  that cannot run the compiled luacid client still has a plain-HTTP path.
+- 停止将失败的反编译结果当作脚本源呈现。失败的反编译器会返回注释通知而不是抛出异常，因此该通知会被拒绝，随附的 luacid 回退方案会被尝试，其自身的失败会连同原因一起报告，而不是被缓存或显示为代码。
+- 安装随附的 luacid 回退方案时，将执行器的字节码和 HTTP 函数固定在宿主自身的全局变量之后，并在请求之前拒绝不可读或空的字节码。它现在可在宿主将块编译到更窄环境的地方工作。`lune run test/luacid_fallback.luau` 用真实的 Luau 编译器覆盖了这一点。
+- 对反编译服务返回的空成功结果进行重试，而不是将其存储为空脚本，使瞬时的空响应不会在整个会话中持续存在。
+- 添加 ByteFall 服务作为第二个随附的反编译回退方案，使无法运行已编译 luacid 客户端的宿主仍有一条纯 HTTP 路径。
 
-### October 10 update
+### 10 月 10 日更新
 
-- Refresh model/provider identity on fallback requests. Isolate request-hook
-  edits from saved conversation history, registered tool schemas and later attempts;
-  honor cancellation and replacement frame callbacks before dispatch.
-- Release tool waiters promptly on Stop or permission/scope revocation without
-  closing native continuations. Discard late progress/results and prevent old
-  invocations from reviving after a new turn or restored permission. Invalid dynamic
-  timeouts use a finite fallback, and fractional deadlines are reported accurately.
-- Shorten and share main/subagent instructions, remove conflicting workflow rules,
-  and include specialized guidance only for the tools offered in that request.
-  Routine work no longer requires a task list, delegation, or repeated planning.
-- Read relevant or explicitly requested skills and reuse unchanged bodies still
-  in context. Bound the enabled skill inventory to 3 KiB with an omission notice;
-  the complete inventory and bodies remain available through paginated reads.
-- Replace injected memory values with a 2 KiB key index. Search saved keys/values
-  or read exact keys with continuation offsets, keeping old workarounds available
-  without treating them as current instructions or reordering stored entries.
-- Give subagents the current model, host instructions, reply language, tool scope
-  and their own task list. Let follow-up requests take precedence over the original
-  assignment while retaining useful evidence.
-- Clarify ordinary Roblox client actions and distinguish local effects from
-  server-confirmed results. Direct agents to inspect available actions and report
-  specific limits; game rules or anticheat alone do not justify blanket refusals
-  of ordinary scripting requests.
-- Make tool discovery match execution permissions, including explicit allow/ask
-  rules in read-only mode. Preserve capability checks and conversation scopes.
-- Distinguish permission rules and user declines from unanswered approval timeouts
-  or cancelled prompts. Late answers cannot execute a settled call or save a rule;
-  agents continue other allowed work without an extra confirmation.
+- 在回退请求上刷新模型/提供商身份。将请求钩子编辑与已保存的会话历史、已注册的工具架构和后续尝试隔离；在调度之前遵循取消和替换帧回调。
+- 在停止或权限/范围撤销时立即释放工具等待者，而不关闭原生续体。丢弃迟到的进度/结果，并防止旧调用在新的回合或权限恢复后复活。无效的动态超时使用有限回退，分数截止时间会被准确报告。
+- 缩短并共享主代理/子代理指令，移除冲突的工作流规则，并且只为该请求中提供的工具包含专门指引。常规工作不再需要任务列表、委派或反复规划。
+- 读取相关或明确请求的技能，并复用仍在上下文中的未变更正文。将已启用技能清单限制在 3 KiB 以内并附省略提示；完整清单和正文仍可通过分页读取获得。
+- 用 2 KiB 的键索引替换注入的记忆值。搜索已保存的键/值，或通过续读偏移读取精确的键，同时保留旧变通方案可用，而不将它们视为当前指令或重排已存储的条目。
+- 为子代理提供当前模型、宿主指令、回复语言、工具范围及其自身的任务列表。让跟进请求优先于原始任务，同时保留有用的证据。
+- 阐明常规 Roblox 客户端操作，并区分本地效果与服务器确认的结果。引导代理检查可用操作并报告具体限制；仅凭游戏规则或反作弊不能成为一概拒绝常规脚本编写请求的理由。
+- 使工具发现与执行权限相匹配，包括只读模式下的显式允许/询问规则。保留能力检查和会话范围。
+- 区分权限规则和用户拒绝与未应答的审批超时或已取消的提示。迟到的回答不能执行已结算的调用或保存规则；代理会在没有额外确认的情况下继续其他允许的工作。
 
-### Earlier 2.7.0 changes
+### 2.7.0 的早期变更
 
-- Use one concise filesystem contract for file tools, search, compilation and
-  execution. Preserve canonical paths and existing nested folders; generate ASCII
-  game folders and recover from inaccessible saved Unicode paths without moving data.
-- Resolve different executor listing bases against actual files. Keep leading
-  spaces, reject ambiguous paths, and retain usable entries from incomplete listings.
-- Preserve damaged or future-format game-folder identity files instead of silently
-  replacing them during prompt construction.
-- Default new configurations to Low reasoning effort. Preserve saved choices,
-  expose Provider default, and explain the real request and output limits.
-- Show the same global effort control in the model modal when Reasoning support
-  is enabled for any model. Preserve documented scales, expose Provider default,
-  and follow external setting changes without leaving subscriptions after close.
-- Default new access settings to Allow everything while preserving saved modes
-  and explicit tool rules. Use the same label in the composer.
-- Label clipped reasoning as an excerpt instead of showing an apparent 5,999-token
-  limit. Retain that label across replay; format folded reasoning only when opened,
-  reuse parsed text during resizing, and keep plain text readable if formatting fails.
-- Keep standing instructions ahead of live metadata for a more reusable prompt
-  prefix, and guide routine work toward focused actions and relevant checks.
-- Add the existing Project UAI brand mark to its profile-menu entry and support modal.
-- Preserve bounded, redacted provider error details from JSON and plain-text SSE
-  failures. Failed streams remain terminal, including after partial output.
-- Keep live answer and reasoning preview limits independent, and probe each
-  unreadable game folder only once during recursive discovery.
-- Repair an output-ceiling refusal that names the field in the gateway's own
-  spelling (for example HCNSEC's `field MaxTokens invalid`): lower the ceiling to
-  the bound it states, retry, and remember it for later turns.
-- Point OpenRouter app attribution, the Cowork bridge download and the published
-  loader and site links at the project's new Project-Ptolemy repository after the
-  move from the personal account. Saved OpenRouter providers are updated on the
-  next start; a referer set by hand is left alone.
+- 为文件工具、搜索、编译和执行使用一份简洁的文件系统约定。保留规范路径和现有的嵌套文件夹；生成 ASCII 游戏文件夹，并在不移动数据的情况下从不可访问的已保存 Unicode 路径中恢复。
+- 针对实际文件解析不同的执行器列表基准。保留前导空格，拒绝有歧义的路径，并从已完成的列表中保留可用的条目。
+- 保留损坏的或未来格式的游戏文件夹标识文件，而不是在构建提示期间静默替换它们。
+- 将新配置默认设为低推理力度。保留已保存的选择，暴露“提供商默认”，并说明真实的请求和输出限制。
+- 当为任何模型启用推理支持时，在模型模态框中显示相同的全局力度控件。保留文档化的刻度，暴露“提供商默认”，并跟随外部设置变化，在关闭后不残留订阅。
+- 将新的访问设置默认设为“允许一切”，同时保留已保存的模式和显式工具规则。在编辑器中使用相同的标签。
+- 将被截断的推理标记为摘录，而不是显示看似 5,999 token 的限制。在重放过程中保留该标记；仅在展开时格式化折叠的推理，在调整大小时复用已解析的文本，并在格式化失败时保持纯文本可读。
+- 将常驻指令置于实时元数据之前，以获得更可复用的提示前缀，并引导常规工作走向有针对性的操作和相关检查。
+- 将现有的 Project UAI 品牌标志添加到其个人资料菜单条目和支持模态框。
+- 保留来自 JSON 和纯文本 SSE 失败的有界、已脱敏的提供商错误详情。失败的流保持终止状态，包括在部分输出之后。
+- 保持实时答案和推理预览限制相互独立，并在递归发现期间对每个不可读的游戏文件夹只探测一次。
+- 修复输出上限拒绝，该拒绝会以网关自己的拼写指出字段名（例如 HCNSEC 的 `field MaxTokens invalid`）：将上限降低到其声明的边界，重试，并为后续回合记住它。
+- 在从个人账户迁出后，将 OpenRouter 应用归属、Cowork 桥接下载以及已发布的加载器和站点链接指向项目新的 Project-Ptolemy 仓库。已保存的 OpenRouter 提供商会在下次启动时更新；手动设置的 referer 保持不变。
 
 ## 2.6.0 — October 4, 2026
 
-Reliable context, consistent game files, and theme controls.
+可靠的上下文、一致的游戏文件以及主题控件。
 
-- Compact older complete tool exchanges within a long task while preserving the
-  current user request and recent full evidence. Bound rolling summaries and
-  reserve space for them; require a smaller context before committing changes.
-- Include tool arguments, exact paths, search cursors, previous summaries, and
-  active-task context in bounded summary input. Preserve history on cancellation
-  or failed manual compaction; explain the result in Compact now. Automatic
-  unavailable summaries retain labelled bounded excerpts instead of only drop notes.
-- Count summary calls in usage, count structured tool arguments in estimates,
-  and retire historical tokenizer-error overhead after context shrinks. Bound
-  replies to remaining known context, enforce temporary caps after provider
-  overrides, and let smaller fallback models attempt compaction once.
-- Keep internal subagent coordination reminders from displacing the actual user
-  task. Recognize equivalent consecutive tool batches despite JSON key order or
-  whitespace, while preserving distinct argument types.
-- Make reads, listings, search, writes, appends, edits, and deletes share reusable
-  `files/...` paths. Remove the inconsistent prefix handling that created extra
-  `files/` directories. Real nested directories and legacy paths remain reachable.
-- Select game workspaces deterministically by PlaceId, reuse existing folders,
-  and keep display names separate from safe filesystem names. Preserve readable
-  Unicode and emoji, use host NFC normalization when available, handle reserved
-  Windows names, and bound long names. Existing folders are not renamed or merged.
-- Verify migration destinations before deleting originals. Preserve conflicting
-  files, failed/partial copies, nested content, and incompletely listed directories.
-- Add bounded pagination to `file_list`; increase default bulk-read slices within
-  the existing shared result budget and reuse equivalent path reads within a batch.
-  Keep existing search cursors and ordered exact-edit validation; add no new tools.
-- Use cached game metadata and exact workspace paths in main/subagent prompts.
-  Guide scoped inspection and related bulk reads without requiring whole-game
-  scans, decompilation, or preparatory file creation.
-- Add a separate ProjectUAI section to the player profile menu, with project
-  information and Star us on GitHub. Open the repository when supported, with
-  clipboard and selectable-link fallbacks. Keep the existing What's New section.
-- UI LIB v1.3.0 builds on its existing Light/Dark palettes and live bindings:
-  add a built-in sun/moon mode icon beside the window controls, `GetTheme`, `ToggleTheme`, optional
-  `ThemeToggle=false`, appearance persistence in existing profiles, and improved
-  custom-accent foreground contrast. Preserve controls, drafts, overlays, and layout.
-- Validate with focused context, filesystem, tool, provider, subagent, and UI
-  checks. The complete native test suite was not run. See the
-  [investigation and validation report](docs/INVESTIGATION_2026_10.md).
+- 在长任务中压缩较早的完整工具交换，同时保留当前用户请求和最近完整证据。约束滚动摘要并为其预留空间；在提交变更之前要求更小的上下文。
+- 在有界摘要输入中包含工具参数、精确路径、搜索游标、先前的摘要和活动任务上下文。在取消或手动压缩失败时保留历史；在“立即压缩”中说明结果。自动摘要不可用时，保留带标签的有界摘录，而不是仅给出丢弃提示。
+- 在用量中计入摘要调用，在估算中计入结构化工具参数，并在上下文收缩后停用历史分词器错误开销。将回复限制在剩余已知上下文内，在提供商覆盖后执行临时上限，并让较小的回退模型尝试压缩一次。
+- 防止内部子代理协调提醒取代实际的用户任务。识别等价的连续工具批次（无论 JSON 键顺序或空白如何），同时保留不同的参数类型。
+- 使读取、列表、搜索、写入、追加、编辑和删除共用可复用的 `files/...` 路径。移除会造成额外 `files/` 目录的不一致前缀处理。真实的嵌套目录和遗留路径仍可访问。
+- 按 PlaceId 确定性地选择游戏工作区，复用现有文件夹，并将显示名称与安全的文件系统名称分开。保留可读的 Unicode 和 emoji，在可用时使用宿主 NFC 规范化，处理 Windows 保留名称，并约束过长的名称。现有文件夹不会被重命名或合并。
+- 在删除原始文件之前验证迁移目标。保留冲突的文件、失败/部分完成的副本、嵌套内容以及未完整列出的目录。
+- 为 `file_list` 添加有界分页；在现有共享结果预算内增加默认批量读取分片，并在一个批次内复用等价的路径读取。保留现有搜索游标和有序的精确编辑验证；不添加新工具。
+- 在主代理/子代理提示中使用缓存的游戏元数据和精确的工作区路径。引导有范围的检查和相关的批量读取，而无需整局扫描、反编译或预备性文件创建。
+- 在玩家个人资料菜单中添加单独的 ProjectUAI 区域，包含项目信息和“在 GitHub 上为我们加星”。在受支持时打开仓库，并提供剪贴板和可选择链接作为回退。保留现有的“新功能”区域。
+- UI LIB v1.3.0 在其现有浅色/深色调色板和实时绑定之上构建：在窗口控件旁添加内置的太阳/月亮模式图标、`GetTheme`、`ToggleTheme`、可选的 `ThemeToggle=false`、在现有配置中持久化外观，并改进自定义强调色的前景对比度。保留控件、草稿、覆盖层和布局。
+- 通过针对性的上下文、文件系统、工具、提供商、子代理和 UI 检查进行验证。未运行完整的原生测试套件。参见
+  [调查与验证报告](docs/INVESTIGATION_2026_10.md)。
 
 ## 2.5.6 — October 3, 2026
 
-Live subagent monitoring and lower client overhead.
+实时子代理监控与更低的客户端开销。
 
-- Start delegated work in the background by default, returning an agent ID
-  immediately. The main agent continues independent work and checks progress
-  periodically with `agent_status`, using bounded waits only when it needs a
-  child's result. Collect reports before the final answer; Stop and terminal
-  parent exits stop unfinished children. Explicit blocking dispatch remains available.
-- Revamp subagent details with the current step, provider/model, tool progress
-  and results, latest delivered text and reasoning, elapsed time, and final
-  report. Keep Stop available while working. Buffered connections show output
-  when the provider response arrives.
-- Update existing subagent cards and detail rows at a bounded rate, preserving
-  reading position and controls. Limit retained activity and previews; release
-  view subscriptions when closed and reset current activity on follow-up runs.
-- Fix modal fitting that could trigger `Maximum re-entrancy depth (80) exceeded
-  calling task.defer`. Coalesce layout events into one pending fit across frames,
-  skip unchanged dimensions, reuse header measurements, and cancel work on close.
-- Remove per-event listener-list copies while preserving nested events,
-  subscription changes and yielding callbacks. Idle code editors and previews
-  blink their caret without rescanning syntax or measuring unchanged text.
-- Refresh the sidebar subagent count only when the count changes. Tighten the
-  spacing between the profile name and provider, including larger text settings.
-- UI LIB remains v1.2.1; the embedding SDK remains v1.0.0.
+- 默认在后台启动委派工作，立即返回代理 ID。主代理继续独立工作，并通过 `agent_status` 定期检查进度，仅在需要子代理结果时使用有界等待。在最终回答之前收集报告；停止和父级终止退出会停止未完成的子代理。显式阻塞式调度仍然可用。
+- 以当前步骤、提供商/模型、工具进度和结果、最新交付的文本和推理、已用时间以及最终报告改造子代理详情。工作时保持停止可用。缓冲连接会在提供商响应到达时显示输出。
+- 以有界频率更新现有的子代理卡片和详情行，保留阅读位置和控件。限制保留的活动和预览；关闭时释放视图订阅，并在后续运行时重置当前活动。
+- 修复可能导致 `Maximum re-entrancy depth (80) exceeded calling task.defer` 的模态框适配问题。跨帧将布局事件合并为一次待处理适配，跳过未变更的尺寸，复用页眉测量，并在关闭时取消工作。
+- 移除每事件的监听器列表副本，同时保留嵌套事件、订阅变更和让出的回调。空闲的代码编辑器和预览会闪烁其光标，而不重新扫描语法或测量未变更的文本。
+- 仅在计数变化时刷新侧边栏的子代理计数。收紧资料名称与提供商之间的间距，包括较大的文字设置。
+- UI LIB 保持 v1.2.1；嵌入 SDK 保持 v1.0.0。
 
 ## 2.5.5 — October 3, 2026
 
-Tighter client spacing and calmer modal transitions.
+更紧凑的客户端间距与更平静的模态框过渡。
 
-- Open modals, Settings and Quick Chat with a short fade at their final size.
-  Remove entrance scaling that repeatedly reflows text and controls. Closing or
-  reopening during a transition settles cleanly, and reduced motion is immediate.
-- Reduce modal header padding and remove unused body space from confirmations
-  that contain only a description. Keep actions and fields reachable above the
-  keyboard.
-- Group settings labels, inputs and help text together, use consistent section
-  spacing, and keep compact rows side by side when their contents fit.
-- Tighten provider form notes, welcome cards and release-note groups; hide empty
-  provider hints. Keep starter actions readable as the available width changes.
-- Remove doubled gaps around fenced code blocks and the empty sidebar space
-  below collapsed navigation. Align conversation headings and folder actions
-  with the other sidebar rows.
-- UI LIB remains v1.2.1; the embedding SDK remains v1.0.0.
+- 以最终尺寸的短淡入打开模态框、设置和快速聊天。移除会反复重排文本和控件的进入缩放。过渡期间的关闭或重新打开会干净地结算，减少动效则立即生效。
+- 减少模态框页眉内边距，并移除仅含描述的确认框中未使用的正文空间。保持操作和字段在键盘上方可达。
+- 将设置标签、输入框和帮助文本归为一组，使用一致的分区间距，并在内容适配时让紧凑行并排显示。
+- 收紧提供商表单说明、欢迎卡片和发布说明分组；隐藏空的提供商提示。在可用宽度变化时保持起始操作可读。
+- 移除围栏代码块周围的双倍间隙，以及折叠导航下方侧边栏中的空白。使会话标题和文件夹操作与其他侧边栏行对齐。
+- UI LIB 保持 v1.2.1；嵌入 SDK 保持 v1.0.0。
 
 ## 2.5.0 — October 2, 2026
 
-The desktop interface on mobile, clearer small text, working layout choices, and
-ten tools for creating modular scripts.
+移动端的桌面界面、更清晰的小号文字、可用的布局选择，以及十个用于创建模块化脚本的工具。
 
-- Use the original desktop interface on mobile with layout dimensions, spacing
-  and radii reduced to 55%. Keep the normal sidebar, header, welcome view,
-  composer, Quick Chat, Settings, Providers and Code tabs. Remove the separate
-  mobile navigation and destination, document, category and provider pickers.
-- Keep the compact layout while raising the text baseline to at least 10px
-  before the user's text scale and standard icons to at least 12px. Give tiny
-  drawn icon strokes whole-pixel bounds and a minimum one-pixel thickness.
-- Make the Layout setting take effect on mobile: Sheet uses the bottom, Panel
-  the right edge, and Window the centre. Each explicit layout remembers its own
-  placement per orientation. Auto retains its compact placement, and desktop
-  window settings remain independent.
-- Preserve live fields, drafts, selections and scroll positions through rotation,
-  keyboard changes and sidebar toggles. Keep Minimize, Maximise and Close in the
-  shared header, with the launcher available after minimizing.
-- Scroll the original Code and inspector composition when height is limited,
-  keeping its normal tabs, action rows and native inputs. Keep shared menus and
-  form actions bounded above the keyboard, and retain Settings category drafts.
-- Add `project_scaffold` and `project_map` to stage a working modular script and
-  inspect saved file hashes, function outlines and literal dependencies.
-- Add `project_patch`, `project_patch_read` and `project_patch_apply` for reviewed,
-  coordinated file changes with version checks and verified writes. Refuse
-  conflicting files and unsaved bound editor drafts before applying.
-- Add `project_patch_restore` and `project_patch_discard` for conditional recovery
-  and checkpoint cleanup. Checkpoints belong to the conversation and expire after
-  ten minutes or unload. Multi-file writes are not atomic; partial results are
-  reported and unknown or externally changed bytes are never blindly restored.
-- Add `script_analyze` for host syntax diagnostics and literal project dependency
-  checks. Report missing compilers explicitly; full Luau type and Roblox API
-  analysis are not included.
-- Add `script_test` for declared behavioral tests with assertions, fixture data,
-  fresh module caches per case and failure reports. Tests use managed client
-  execution and share native game state; they are not an isolated test process.
-- Add `project_build` to compile and export a deterministic standalone `.lua`
-  bundle with source line locations and a recovery checkpoint, without running it.
-- Update the main and subagent prompts for source review, coordinated edits,
-  build inspection and focused testing. Document the manifest, tool API and limits
-  in the [script project guide](docs/SCRIPT_PROJECTS.md).
+- 在移动端使用原始桌面界面，将布局尺寸、间距和圆角缩减至 55%。保留常规的侧边栏、页眉、欢迎视图、编辑器、快速聊天、设置、提供商和代码选项卡。移除单独的移动端导航以及目标、文档、类别和提供商选择器。
+- 保持紧凑布局，同时将文字基线提升到至少 10px（在用户文字缩放之前），并将标准图标提升到至少 12px。为绘制的微小图标笔画提供整像素边界和至少一像素的粗细。
+- 使布局设置在移动端生效：“面板”使用底部，“侧板”使用右边缘，“窗口”使用中心。每个显式布局按方向记住其自身位置。“自动”保留其紧凑位置，桌面窗口设置保持独立。
+- 在旋转、键盘变化和侧边栏切换期间保留实时字段、草稿、选择和滚动位置。在共享页眉中保留最小化、最大化和关闭，并在最小化后提供启动器。
+- 在高度受限时滚动原始代码和检查器组合，保留其常规选项卡、操作行和原生输入。将共享菜单和表单操作约束在键盘上方，并保留设置类别草稿。
+- 添加 `project_scaffold` 和 `project_map`，用于暂存可用的模块化脚本并检查已保存文件的哈希、函数大纲和字面依赖。
+- 添加 `project_patch`、`project_patch_read` 和 `project_patch_apply`，用于经过审阅、协调的文件变更，带版本检查和已验证的写入。在应用之前拒绝冲突文件和未保存的绑定编辑器草稿。
+- 添加 `project_patch_restore` 和 `project_patch_discard`，用于条件恢复和检查点清理。检查点属于会话，并在十分钟后或卸载时过期。多文件写入不是原子的；部分结果会被报告，未知或外部更改的字节绝不会被盲目恢复。
+- 添加 `script_analyze`，用于宿主语法诊断和字面项目依赖检查。显式报告缺失的编译器；不包含完整的 Luau 类型和 Roblox API 分析。
+- 添加 `script_test`，用于声明式行为测试，带断言、夹具数据、每个用例的新模块缓存和失败报告。测试使用托管客户端执行并共享原生游戏状态；它们不是隔离的测试进程。
+- 添加 `project_build`，用于编译并导出带源行位置和恢复检查点的确定性独立 `.lua` 包，且不运行它。
+- 为源审阅、协调编辑、构建检查和针对性测试更新主代理和子代理提示。在 [脚本项目指南](docs/SCRIPT_PROJECTS.md) 中记录清单、工具 API 和限制。
 
 ## 2.4.0 — October 1, 2026
 
-Mobile spacing, touch workflows, provider recovery, and community access.
+移动端间距、触摸工作流、提供商恢复与社区访问。
 
-- Keep ordinary mobile typing in one compact composer row in either orientation;
-  expand explicitly for longer drafts. Reduce nested card, dialog, header and
-  navigation padding while preserving full touch targets. Return more space to
-  history results when a keyboard is open.
-- Keep Quick Chat drafts and selection through rotation; mobile Return inserts
-  a newline. Vertical swipes across sliders scroll the page without changing the
-  setting, and cancelled gestures release their input ownership.
-- Give mobile Code navigation and document selection dedicated pickers, retain
-  editing space above the keyboard, and adapt Find controls to narrow widths.
-  Settings categories retain their forms and scroll positions when revisited.
-- Tighten source-block and reasoning insets. Keep Copy reachable beside long
-  metadata, and resize nested code, table and reasoning viewports above keyboards.
-- Retry explicit unauthorized-client refusals from official OpenCode and
-  AgentRouter endpoints once through `puai-proxy.davidzk.tech`, then retain the
-  new Base URL. Requests and keys pass through the proxy, which has a shared
-  90,000-request daily limit. Invalid keys, unrelated errors and custom endpoints
-  do not cause a switch; cancellation and the request deadline still apply.
-- Offer an optional community HCNSEC key in provider setup, without replacing a
-  user's saved provider. Discover available models or enter an ID manually.
-- Add a Discord invitation after five minutes of use and an idle pause, at most
-  once per client load and every two weeks. It waits for a visible idle chat or
-  home screen, with no draft, keyboard, active request, reading position or other
-  dialog to interrupt. Not now keeps the cooldown; Don't show again or successful
-  Copy invite stops reminders. The menu remains available for manual access.
+- 无论方向如何，都将常规移动端输入保持在一行紧凑的编辑器行中；仅在需要较长草稿时显式展开。减少嵌套卡片、对话框、页眉和导航的内边距，同时保留完整的触摸目标。键盘打开时，为历史结果返还更多空间。
+- 在旋转期间保留快速聊天草稿和选择；移动端回车插入换行。跨滑块垂直滑动会滚动页面而不改变设置，取消的手势会释放其输入所有权。
+- 为移动端代码导航和文档选择提供专用选择器，在键盘上方保留编辑空间，并让查找控件适应较窄宽度。设置类别在再次访问时保留其表单和滚动位置。
+- 收紧源块和推理的内缩。在长元数据旁保持复制可达，并在键盘上方调整嵌套代码、表格和推理视口的大小。
+- 对官方 OpenCode 和 AgentRouter 端点返回的显式未授权客户端拒绝，通过 `puai-proxy.davidzk.tech` 重试一次，然后保留新的 Base URL。请求和密钥会经过该代理，其每日共享限额为 90,000 次请求。无效密钥、无关错误和自定义端点不会触发切换；取消和请求截止时间仍然生效。
+- 在提供商设置中提供可选的社区 HCNSEC 密钥，而不替换用户已保存的提供商。发现可用模型或手动输入 ID。
+- 在使用五分钟且空闲暂停后显示 Discord 邀请，每次客户端加载最多一次，且每两周一次。它会等待可见的空闲聊天或主页，且没有草稿、键盘、活动请求、阅读位置或其他对话框打扰。“暂不”保留冷却时间；“不再显示”或成功复制邀请会停止提醒。菜单仍可手动访问。
 
 ## 2.2.0 — October 1, 2026
 
-Modal polish, workspace cleanup, agent-named conversations, and donations.
+模态框打磨、工作区清理、代理命名会话与捐赠。
 
-- Keep modal and dialog cards rounded at the bottom, and show a description-only
-  confirmation in full instead of clipping it to one line. Opaque footers, the
-  settings navigation bar, and mobile navigation no longer square the card's
-  edge: each inner edge stays straight against the body while the outer corners
-  follow the card's radius.
-- Let the agent name a conversation from the user's request once its subject is
-  clear, so the list reads as topics rather than opening lines. A conversation
-  the user has named keeps its title -- the rename tool is not offered there, a
-  direct call is refused, and subagents have no title to set.
-- Delete files and folders from the Files pane, from the toolbar, the right-click
-  menu, or the row's close control, behind one confirmation. Deleting drops the
-  file's binding, and the workspace root is never deletable.
-- Fall back to the bundled luacid decompiler when the host has none or its
-  decompiler fails, so `script_source` still reaches source through the
-  executor's own bytecode and HTTP functions.
-- Add a Donate entry to the profile menu: Donate with Robux opens the Project
-  Ptolemy donation place after a confirmation, and Ko-fi copies its link.
-- Rebuild model pricing and the model directory from the OpenRouter and LiteLLM
-  datasets, covering current and newly released model ids.
+- 保持模态框和对话框卡片底部为圆角，并完整显示仅含描述的确认框，而不是裁剪为一行。不透明页脚、设置导航栏和移动端导航不再使卡片边缘变方：每个内边缘保持与主体齐平，而外角遵循卡片的圆角。
+- 让代理在主题明确后根据用户请求为会话命名，使列表读起来像主题而不是开头几行。用户已命名的会话保留其标题——在那里不提供重命名工具，直接调用会被拒绝，子代理没有可设置的标题。
+- 从文件面板、工具栏、右键菜单或行的关闭控件删除文件和文件夹，均经过一次确认。删除会解除文件的绑定，工作区根目录永远不可删除。
+- 当宿主没有反编译器或其反编译器失败时，回退到随附的 luacid 反编译器，使 `script_source` 仍能通过执行器自身的字节码和 HTTP 函数获取源。
+- 在个人资料菜单中添加“捐赠”条目：“用 Robux 捐赠”在确认后打开 Project Ptolemy 捐赠场所，Ko-fi 会复制其链接。
+- 从 OpenRouter 和 LiteLLM 数据集重建模型定价和模型目录，覆盖当前和新发布的模型 ID。
 
 ## 2.1.1 — September 30, 2026
 
-Long streaming and Remote Spy reliability.
+长流式传输与 Remote Spy 可靠性。
 
-- Keep long streamed replies: the frame budget no longer discards a valid answer,
-  frames are assembled as they decode, and a long response no longer benches the
-  provider after three attempts.
-- Restore the client's thread identity for deferred work, so a capture-view refresh
-  scheduled from a Remote Spy hook is not refused when an executor drops the
-  injected identity on scheduled threads.
-- Report a failed capture-view refresh once instead of aborting the view and
-  repeating several times a second.
+- 保留长流式回复：帧预算不再丢弃有效答案，帧在解码时即被组装，长响应也不会在三次尝试后封禁提供商。
+- 为延迟工作恢复客户端的线程身份，使从 Remote Spy 钩子调度的捕获视图刷新，在执行器于调度线程上丢弃注入身份时不会被拒绝。
+- 一次性地报告失败的捕获视图刷新，而不是中止视图并每秒重复多次。
 
 ## 2.1.0 — September 30, 2026
 
-Native mobile improvements, conversation folders, UI LIB v1.2.1, and embedding SDK 1.0.0.
+原生移动端改进、会话文件夹、UI LIB v1.2.1 以及嵌入 SDK 1.0.0。
 
-- Add conversation folders: choose a game, Universal, or a custom folder when
-  creating a chat; optionally name the chat, move existing chats, rename folders,
-  and remove folders while keeping their conversations in Universal.
-- Improve the native mobile client in short keyboard layouts: keep form actions
-  scrollable at full touch size, reveal focused fields through clipping and nested
-  scrolling, and filter/search mobile conversation history by folder. Keep New
-  conversation and workspace actions reachable by scroll above a keyboard.
-- Polish UI LIB on mobile with slimmer content padding, wrapped section titles
-  and dialog actions, pinned dropdown search when space permits, and picker
-  targets that reflow while open. Vertical swipes no longer change horizontal
-  sliders or color bars; hide, rotation, and cancellation release scroll ownership.
-- Add embedding SDK 1.0.0 with UI-free boot (`ui = false`), reuse without toggling
-  (`reuse = true`), public hooks/permissions, and explicit native conversation
-  navigation. Existing standalone loading still mounts the application.
-- Add owned integration scopes for cleanup, UAI/Roblox subscriptions, hooks, and
-  custom tools. Unregistering an owned tool releases its pending approvals and
-  invalidates cooperative calls without removing a later replacement.
-- Add structured requests with exactly one success, failure, or cancellation
-  outcome, protected progress/completion callbacks, cooperative Stop, and waiting
-  with optional timeout. Session removal and client unload settle pending requests.
-- Add named conversation lookup/open without implicit selection, duplicate-ID
-  rejection, and creation options for activation and ephemeral history.
-- Validate session options, copy tool filter maps, and preserve conversation tool
-  policy and budgets across persistence. Skip unsupported or invalid saved policy
-  while retaining its file; older histories keep their legacy defaults.
-- Expand the [embedding guide](docs/EMBEDDING.md), add a
-  [UI-free SDK example](examples/embedding/sdk.lua), and migrate workbench lifetime
-  handling to owned scopes. Add focused offline SDK and example coverage.
+- 添加会话文件夹：创建聊天时选择游戏、Universal 或自定义文件夹；可选地为聊天命名、移动现有聊天、重命名文件夹，以及移除文件夹同时将其会话保留在 Universal 中。
+- 在键盘较矮的布局中改进原生移动客户端：以完整触摸尺寸保持表单操作可滚动，通过裁剪和嵌套滚动显示聚焦字段，并按文件夹过滤/搜索移动端会话历史。保持“新建会话”和工作区操作在键盘上方可通过滚动到达。
+- 在移动端打磨 UI LIB，提供更细的内容内边距、换行的分节标题和对话框操作、空间允许时固定的下拉搜索，以及打开时会重排的选择器目标。垂直滑动不再改变水平滑块或颜色栏；隐藏、旋转和取消会释放滚动所有权。
+- 添加嵌入 SDK 1.0.0，支持无 UI 启动（`ui = false`）、无需切换的复用（`reuse = true`）、公开钩子/权限，以及显式的原生会话导航。现有的独立加载仍会挂载应用。
+- 为清理、UAI/Roblox 订阅、钩子和自定义工具添加自有集成作用域。注销自有工具会释放其待处理审批并使协作调用失效，而不会移除后续的替代项。
+- 添加结构化请求，具有恰好一个成功、失败或取消结果，受保护的进度/完成回调，协作式停止，以及带可选超时的等待。会话移除和客户端卸载会结算待处理请求。
+- 添加具名会话查找/打开，且不进行隐式选择，拒绝重复 ID，并提供激活和临时历史的创建选项。
+- 验证会话选项，复制工具过滤器映射，并在持久化过程中保留会话工具策略和预算。跳过不受支持或无效的已保存策略，同时保留其文件；较早的历史保持其遗留默认值。
+- 扩展 [嵌入指南](docs/EMBEDDING.md)，添加
+  [无 UI 的 SDK 示例](examples/embedding/sdk.lua)，并将工作台生命周期
+  处理迁移到自有作用域。添加针对性的离线 SDK 和示例覆盖。
 
 ## 2.0.5 — September 27, 2026
 
-Responsive long chats, real image input, and UI LIB v1.2.0.
+响应式长聊天、真实的图像输入，以及 UI LIB v1.2.0。
 
-- Mount nearby messages and Markdown chunks while measured spacers preserve
-  scroll position. Minimize and navigation suspend rendering and release timers;
-  restoring keeps the measured rows and reconciles retained updates without
-  losing the draft or reading anchor.
-- Batch browser snapshot layout, preserve reading position, and defer
-  streaming preview paints while the browser document is hidden.
-- Send actual PNG/JPEG/WebP content through the bridge to Chat Completions and
-  Anthropic Messages image blocks. Keep compact, conversation-owned references
-  in Lua; preserve retry identity and report expired current attachments explicitly.
-  Reload the updated client and restart the updated bridge. A vision-capable model
-  is required; older clients cannot accept these image sends.
-- Add a pinned UI library sidebar profile with the local player's headshot,
-  display name, username, and game. Keep readable fallbacks during Roblox lookups.
-- Use text for library navigation and action labels, including dropdown selection
-  states and disclosure buttons. The frame-drawn Project UAI mark and the
-  minimize/close/resize window glyphs remain. Legacy tab Icon fields are ignored;
-  the fixed `Project UAI | UI LIB.` attribution stays.
-- Add owned, reversible transitions and reduced-motion support for library
-  entrances, controls, pickers, and notifications. Settle interrupted animations,
-  retain visible focus, and stop remeasuring every control during window dragging.
-- Update the public guide, examples, in-game notes, and regression coverage for
-  viewport lifecycle, provider image payloads, profile layout, and motion cleanup.
-- Add a comprehensive [embedding reference](docs/EMBEDDING.md) and
-  [assistant workbench example](examples/embedding/README.md) for custom host UIs,
-  sessions, tools, hooks, provider setup, state binding, and cleanup. Expand the
-  UI library's embedded agent guide with application and extension patterns.
+- 挂载附近的消息和 Markdown 块，同时由测量后的间隔器保持滚动位置。最小化和导航会挂起渲染并释放定时器；恢复时保留已测量的行并协调保留的更新，而不丢失草稿或阅读锚点。
+- 批量处理浏览器快照布局，保留阅读位置，并在浏览器文档隐藏时推迟流式预览绘制。
+- 通过桥接将实际的 PNG/JPEG/WebP 内容发送到 Chat Completions 和 Anthropic Messages 图像块。在 Lua 中保留紧凑的、归属会话的引用；保留重试身份并显式报告已过期的当前附件。重新加载更新后的客户端并重启更新后的桥接。需要具备视觉能力的模型；较旧的客户端无法接受这些图像发送。
+- 添加固定的 UI 库侧边栏资料，包含本地玩家的头像、显示名称、用户名和游戏。在 Roblox 查询期间保持可读的回退显示。
+- 使用文本作为库导航和操作标签，包括下拉选择状态和展开按钮。帧绘制的 Project UAI 标志以及最小化/关闭/调整大小的窗口字形保持不变。遗留选项卡的 Icon 字段被忽略；固定的 `Project UAI | UI LIB.` 署名保留。
+- 为库的进入、控件、选择器和通知添加自有的、可逆的过渡和减少动效支持。结算被中断的动画，保留可见焦点，并在拖动窗口期间停止重新测量每个控件。
+- 更新公开指南、示例、游戏内说明和回归覆盖，涵盖视口生命周期、提供商图像载荷、资料布局和动效清理。
+- 添加全面的 [嵌入参考](docs/EMBEDDING.md) 和
+  [助手工作台示例](examples/embedding/README.md)，用于自定义宿主 UI、
+  会话、工具、钩子、提供商设置、状态绑定和清理。扩展 UI 库的内嵌代理指南，加入应用和扩展模式。
 
 ## 2.0.0 — September 26, 2026
 
-Project UAI UI LIB and shared script interface guidance.
+Project UAI UI LIB 与共享脚本接口指引。
 
-- Introduce the standalone [UI library](docs/UI_LIBRARY.md), loaded from this
-  repository through `loadstring`. Project UAI is now 2.0.0; the new library's
-  independently versioned API starts at 1.0.0.
-- Provide buttons, toggles, checkboxes, sliders, text and numeric inputs,
-  searchable single/multi-select dropdowns, segmented controls, keybinds, color
-  pickers, labels, paragraphs, dividers, badges, and progress indicators.
-- Include responsive tabs and sections, search, dark/light themes, text scaling,
-  dialogs, notifications, minimize/restore, and desktop resizing. Compact layouts
-  account for safe areas and keyboard obstruction.
-- Guide main agents and subagents to declare controls and write application logic.
-  The bundled `ui_library_docs` reference supplies the exact API offline; starter
-  and showcase scripts demonstrate it without custom GUI construction.
-- Own control state, validated configuration import/export, optional profiles,
-  callback tasks, input listeners, and script cleanup in the library. Reusing a
-  window Id releases its previous window and registered resources.
-- Keep the fixed `Project UAI | UI LIB.` footer without a leading separator and
-  draw the mark and icons from frames, so no uploaded asset is required. Dropdown
-  options accept a player profile image at the start of the row and in the closed
-  field, the minimize/close controls carry no resting fill, and minimize leaves a
-  draggable, branded restore pill. The existing agent client UI is preserved.
-- Publish both bundles and manifests with the 2.0.0 release. The
-  [manual audit and validation record](docs/UI_LIBRARY_AUDIT.md) documents library
-  coverage and the remaining native Roblox rendering/input checks.
+- 引入独立的 [UI 库](docs/UI_LIBRARY.md)，可通过 `loadstring` 从此仓库加载。Project UAI 现为 2.0.0；新库独立版本化的 API 从 1.0.0 开始。
+- 提供按钮、开关、复选框、滑块、文本和数字输入、可搜索的单选/多选下拉、分段控件、按键绑定、颜色选择器、标签、段落、分隔线、徽章和进度指示器。
+- 包含响应式选项卡和分区、搜索、深色/浅色主题、文字缩放、对话框、通知、最小化/恢复和桌面调整大小。紧凑布局会考虑安全区域和键盘遮挡。
+- 引导主代理和子代理声明控件并编写应用逻辑。随附的 `ui_library_docs` 参考可离线提供精确 API；起始和展示脚本无需自定义 GUI 构建即可演示其用法。
+- 在库中管理控件状态、经过验证的配置导入/导出、可选配置、回调任务、输入监听器和脚本清理。复用窗口 Id 会释放其先前的窗口和已注册资源。
+- 保留固定的 `Project UAI | UI LIB.` 页脚且不带前导分隔符，并从帧绘制标志和图标，因此无需上传资源。下拉选项在行首和闭合字段中接受玩家资料图像，最小化/关闭控件没有静止填充，最小化会留下一个可拖动、带品牌的恢复胶囊。现有的代理客户端 UI 保持不变。
+- 随 2.0.0 发布一同发布两个包和清单。
+  [手动审计与验证记录](docs/UI_LIBRARY_AUDIT.md) 记录了库的覆盖范围以及剩余的原生 Roblox 渲染/输入检查。
 
 ## 1.9.0 — September 26, 2026
 
-Cowork browser workspace, executor installation, and UI reliability.
+Cowork 浏览器工作区、执行器安装与 UI 可靠性。
 
-- Rework the browser workspace with quieter surfaces, responsive navigation,
-  clearer setup, local themes, accessible controls, and restrained motion.
-- Download bridge packages with `.txt` extensions for restricted executor
-  filesystems. Verify pinned packages, restore filenames with Node, and preserve
-  the previous launcher after failed downloads or reinstalls.
-- Render incremental responses without rebuilding stable Markdown blocks.
-  Reconcile saved replies, show provider errors and replay gaps, and bound
-  command, response, and preview memory.
-- Add validated PNG/JPEG/WebP previews with upload progress, cancellation, retry,
-  ownership, and reload recovery. The model receives text markers only.
-- Preserve full text/code drafts asynchronously, guard repeated sends, and show
-  delivery recovery when an acknowledgement is lost.
-- Organize bridge tests under `bridge/tests/`; replace obsolete plans and handoff
-  logs with the [bridge guide](bridge/README.md) and lasting native documentation.
-- Keep the composer and task controls reachable on short screens, wrap long
-  provider URLs and dialog titles, and anchor Jump to latest above the composer.
-- Preserve pending answers, permission choices, open tasks, and keyboard focus
-  during live updates. Show each permission request's conversation and refresh
-  provider, model, and permission selections without discarding active edits.
-- Keep errors inside their dialog, recover token entry after authentication
-  failures, and correct light-theme contrast, code hover states, and high-contrast
-  focus and Stop controls.
-- Number this Cowork release consistently in the changelog, in-game notes,
-  client bundle, and generated website.
+- 以更安静的界面、响应式导航、更清晰的设置、本地主题、无障碍控件和克制的动效重做浏览器工作区。
+- 为受限的执行器文件系统下载带 `.txt` 扩展名的桥接包。验证固定包，使用 Node 恢复文件名，并在下载或重装失败后保留先前的启动器。
+- 渲染增量响应而不重建稳定的 Markdown 块。协调已保存的回复，显示提供商错误和重放缺口，并约束命令、响应和预览的内存。
+- 添加经过验证的 PNG/JPEG/WebP 预览，支持上传进度、取消、重试、所有权和重载恢复。模型仅接收文本标记。
+- 异步保留完整的文本/代码草稿，防止重复发送，并在确认丢失时显示投递恢复。
+- 将桥接测试整理到 `bridge/tests/` 下；用 [桥接指南](bridge/README.md) 和持久的原生文档替换过时的计划和交接日志。
+- 在矮屏上保持编辑器和任务控件可达，换行显示较长的提供商 URL 和对话框标题，并将“跳转到最新”锚定在编辑器上方。
+- 在实时更新期间保留待处理答案、权限选择、打开的任务和键盘焦点。显示每个权限请求所属的会话，并刷新提供商、模型和权限选择而不丢弃活动编辑。
+- 将错误保留在其对话框内，在身份验证失败后恢复令牌输入，并修正浅色主题对比度、代码悬停状态以及高对比度焦点和停止控件。
+- 在变更日志、游戏内说明、客户端包和生成的网站中一致地为本次 Cowork 发布编号。
 
 ## 1.8.0 — September 25, 2026
 
-Chat stability, provider compatibility, and native client improvements.
+聊天稳定性、提供商兼容性与原生客户端改进。
 
-Available in game under **App menu → What's new**, also reachable from
-**About → What's new**. Reload the updated native bundle to see the bundled notes.
+可在游戏内通过 **应用菜单 → 新功能** 查看，也可从 **关于 → 新功能** 进入。重新加载更新后的原生包以查看随附说明。
 
-- Correct provider URLs for loopback/LAN hosts, IPv6, custom prefixes and query
-  strings. Scope discovered model lists and learned request repairs to their
-  connection; preserve manual models after discovery/auth failures.
-- Default vLLM to optional auth, add llama.cpp/SGLang presets, avoid unsupported
-  Ollama tool defaults, preserve object-shaped tool arguments and recognize small
-  local context/output limits. Honor bearer auth for Messages gateways.
-- Apply local identity/auth defaults when choosing a preset inside Add Provider.
-  Connection edits discard fetched model choices and cancel obsolete discovery
-  without losing manual ids. Switching presets clears the previous gateway URL.
-- Preserve full paths and identity/auth headers in gateway sockets, accept split
-  and combined SSE events, clean up late connections, and allow HTTP fallback only
-  before dispatch. Document the custom gateway contract and remove obsolete
-  transport-ceiling claims. See [provider compatibility](docs/PROVIDER_COMPATIBILITY.md)
-  and [native release evidence](docs/NATIVE_COMPLETION.md).
-- Preserve dialogue during long tool/subagent runs with independent history
-  budgets. Keep call/result pairs and worker summaries together, save the same
-  retained history, disclose history limits, and recover surviving dialogue from
-  older context-only or activity-only saves.
-- Draw the window directly on every device and maximize it without rebuilding
-  the interface. Preserve reading position across refreshes and layout changes.
-- Replay long conversations in bounded slices while queuing incoming events;
-  cancel stale replay on switch, clear and destruction. Release expired GUI rows,
-  nested code rows, timers and replay buffers as history rolls over.
-- Add **Message options → Refresh conversation** for recovery during live work.
-  Fall back to readable source when Markdown rendering fails, preserve original
-  worker timings/counts, and search retained dialogue after model compaction.
-- Record native behavior and validation in
-  [the implementation report](docs/NATIVE_COMPLETION.md).
-- Include these changes in the in-game notes and restore the unread marker when
-  notes change within the same client version.
-- Remove the 8,192-token executor reply ceiling from both provider adapters,
-  including native HTTP fallback. Keep configured output budgets and model limits.
-  Render buffered replies immediately, forward real socket previews, and request
-  concise progress messages between work steps. Center Add in the horizontal
-  provider list, including after resizing.
-- Repair the token context breakdown's category widths and shared accounting.
-  Estimate prepared system/schema overhead, calibrate against dispatched history,
-  invalidate measurements after provider/endpoint/model changes, and coalesce
-  live refreshes with cleanup on close.
-- Unify source/decompile provenance, explicit errors, deduplicated bounded requests,
-  refresh generations, display pinning and expiry. Inspected Source and decompiled
-  documents are read-only; editable extraction is explicit and never runs source.
-- Guard Explorer hierarchy actions with the displayed selection identity/revision;
-  distinguish primary, focus, anchor and clicked objects. Cancel stale queries,
-  retain canonical pages and show runtime/display limits and incomplete counts.
-- Reuse shifted syntax and line measurements, bound long-line drawing, share UTF-8
-  coordinates, show multiline selection and search matches, and recover source
-  expiry. Improve compact layouts, scoped shortcuts, autosave retry and conflicts.
-- Use one Remote Spy target resolver, selected-target/30-second defaults, neutral
-  hook attribution and explicit retained-wrapper status. Require portable-script
-  review, open caller source outside hooks, and export frozen capture/source
-  provenance. Account for late pinned completions and revoke agent capture promptly.
-- Bound native workers, logs, callbacks and response parsing. Clean up after errors
-  and preserve cancellation. Native timeout/unknown-outcome requests are terminal;
-  this supersedes the historical smaller-request timeout retry described below.
-- Keep transient progress out of retained transcripts, restore the newest saved
-  conversations, and preserve unsaved threads beyond the memory retention target.
-  Reject repeated run dispatch and stale Library removal confirmations.
-- Reset stopped subagents for follow-up, keep queued follow-ups cancellable and
-  reject duplicate dispatch. Honor the displayed concurrency range and prevent
-  unlimited workers from inheriting the disabled finite queue budget.
-- Add a fail-fast native verification command, performance contracts, actual Luau
-  syntax compilation, deterministic module manifests and generated-output checks.
-  Current features/limits: [native contract](docs/NATIVE_CLIENT.md). The bundle,
-  generated site and in-game notes identify this release as **1.8.0**.
+- 修正回环/局域网主机、IPv6、自定义前缀和查询字符串的提供商 URL。将发现的模型列表和学到的请求修复限定在其连接范围内；在发现/身份验证失败后保留手动模型。
+- 将 vLLM 默认设为可选身份验证，添加 llama.cpp/SGLang 预设，避免不受支持的 Ollama 工具默认值，保留对象形状的工具参数，并识别较小的本地上下文/输出限制。为 Messages 网关遵循 bearer 身份验证。
+- 在“添加提供商”中选择预设时应用本地身份/身份验证默认值。连接编辑会丢弃已获取的模型选择并取消过时的发现，而不丢失手动 ID。切换预设会清除先前的网关 URL。
+- 在网关套接字中保留完整路径和身份/身份验证头，接受拆分和合并的 SSE 事件，清理迟到的连接，并仅允许在调度前进行 HTTP 回退。记录自定义网关约定并移除过时的传输上限说法。参见 [提供商兼容性](docs/PROVIDER_COMPATIBILITY.md)
+  和 [原生发布证据](docs/NATIVE_COMPLETION.md)。
+- 在长时间工具/子代理运行期间以独立的历史预算保留对话。将调用/结果对和工作线程摘要保持在一起，保存相同的保留历史，披露历史限制，并从较旧的仅上下文或仅活动保存中恢复存续的对话。
+- 在每个设备上直接绘制窗口，并在不重建界面的情况下最大化它。在刷新和布局变化期间保留阅读位置。
+- 以有界分片重放长会话，同时将传入事件排队；在切换、清除和销毁时取消过时的重放。随着历史滚动更替，释放过期的 GUI 行、嵌套代码行、定时器和重放缓冲区。
+- 添加 **消息选项 → 刷新会话**，用于实时工作期间的恢复。当 Markdown 渲染失败时回退到可读的源，保留原始工作线程时序/计数，并在模型压缩后搜索保留的对话。
+- 在 [实现报告](docs/NATIVE_COMPLETION.md) 中记录原生行为和验证。
+- 将这些变更纳入游戏内说明，并在同一客户端版本内说明发生变化时恢复未读标记。
+- 从两个提供商适配器中移除 8,192 token 的执行器回复上限，包括原生 HTTP 回退。保留配置的输出预算和模型限制。立即渲染缓冲的回复，转发真实的套接字预览，并在工作步骤之间请求简洁的进度消息。在水平提供商列表中将“添加”居中，包括调整大小之后。
+- 修复 token 上下文明细的类别宽度和共享核算。估算准备好的系统/架构开销，对照已调度的历史进行校准，在提供商/端点/模型变化后使测量失效，并将实时刷新与关闭时的清理合并。
+- 统一源/反编译来源、显式错误、去重的有界请求、刷新代数、显示固定和过期。已检查的源和反编译文档为只读；可编辑提取是显式的，且从不运行源。
+- 以显示的所选身份/修订保护资源管理器层级操作；区分主对象、聚焦对象、锚点对象和点击对象。取消过时的查询，保留规范页面，并显示运行时/显示限制和不完整计数。
+- 复用偏移后的语法和行测量，约束长行绘制，共享 UTF-8 坐标，显示多行选择和搜索匹配，并恢复源过期。改进紧凑布局、限定范围的快捷键、自动保存重试和冲突。
+- 使用单一 Remote Spy 目标解析器、所选目标/30 秒默认值、中立的钩子归属和显式的保留包装器状态。要求进行可移植脚本审阅，在钩子之外打开调用方源，并导出冻结的捕获/源来源。考虑迟到的固定完成，并及时撤销代理捕获。
+- 约束原生工作线程、日志、回调和响应解析。在错误后清理并保留取消。原生超时/未知结果的请求为终止状态；这取代下面描述的、历史上针对较小请求的超时重试。
+- 将瞬态进度排除在保留的转录之外，恢复最新的已保存会话，并在内存保留目标之外保留未保存的线程。拒绝重复的运行调度和过期的库移除确认。
+- 为跟进重置已停止的子代理，保持排队的跟进可取消并拒绝重复调度。遵循显示的并发范围，并防止无限工作线程继承已禁用的有限队列预算。
+- 添加快速失败的原生验证命令、性能约定、实际的 Luau 语法编译、确定性模块清单和生成输出检查。当前功能/限制：[原生约定](docs/NATIVE_CLIENT.md)。包、生成的网站和游戏内说明将本次发布标识为 **1.8.0**。
 
-## Workspace organization — September 24, 2026
+## 工作区组织 — September 24, 2026
 
-- Guide the agent to organise game work under `files/<place name> (<PlaceId>)/`, with authored and edited scripts in the game folder root and decompiled or dumped source in its `dump/` subfolder. Reserved path characters in the place name are dropped so the folder stays valid.
-- Keep the per-game layout a default rather than a boundary: the file tools still reach shared utilities, other places' folders, cross-game notes, and `pastes/`, so the agent reads and writes outside the current game's folder whenever the work calls for it or the user names a path.
+- 引导代理将游戏工作组织在 `files/<place name> (<PlaceId>)/` 下，编写的和编辑过的脚本放在游戏文件夹根目录，反编译或转储的源放在其 `dump/` 子文件夹中。地点名称中的保留路径字符会被丢弃，以保持文件夹有效。
+- 将每游戏布局保持为默认而非边界：文件工具仍可访问共享实用程序、其他地点的文件夹、跨游戏笔记和 `pastes/`，因此代理会在工作需要或用户指定路径时，读写当前游戏文件夹之外的位置。
 
 ## 1.7.0 — September 24, 2026
 
-- Rebuild the Coding tab around shared Luau documents, native multiline editing, line numbers, Find/Go to line, indentation, explicit Run/Stop, retained output, a script/action library, and typed action inputs.
-- Add a workspace file browser rooted at `UAI`, with expandable folders, file opening, Save/Save as, and disk-conflict checks that preserve edited drafts.
-- Keep syntax highlighting visible while editing, show the caret and selection, and restore each document's cursor position. Keep Run and Save adjacent, with Stop shown while a run is active.
-- Stabilize Explorer selection and expansion during live refreshes, keep context actions attached to the clicked object, and retain horizontal scrolling for deep trees.
-- Make remote capture available directly from Start/Pause/Stop, expand incoming event discovery, and preserve filtered calls and edited replay drafts as results arrive.
-- Replace History and Game changes with searchable timelines and inline reviews, including before/after values and conflict-aware Restore/Undo actions.
-- Add consistent inner padding and outer spacing to Coding buttons, toolbars, document tabs, search controls, and dialog actions. Crowded toolbars scroll, focused actions stay reachable, and tree rows allow room for larger text and touch targets.
-- Verify Coding layouts at 320, 390, 620, and 960 px with pointer/touch input, comfortable/compact density, and enlarged text. Native game testing remains separate from these source and geometry checks.
-- Add verified Code persistence with two snapshots, preserved legacy/damaged data, explicit save status, revision checks and changed-build protection. Closing a view retains its document; navigation and rebuild retain drafts.
-- Add native Explorer with lazy hierarchy, cancellable search, stable object IDs, desktop/touch multiple selection, typed supported properties/attributes/tags, guarded hierarchy actions, source opening, bookmarks, world picker and metadata export. Recorded property/attribute changes support conflict-aware Undo.
-- Add native Remotes with explicit capture scopes/lifetimes, incoming events, host-dependent outgoing capture, pause/stop, bounded typed values, view/admission filters, traffic rules, reviewed one-shot replay, generated scripts, offline import and verified split exports. Capture state remains visible on the minimized launcher.
-- Converge instance/script/remote tools on shared services, preserve native-call arity, reject stale references/revisions, and paginate source/capture/result details. Direct calls work without a compiler; timed-out calls report outstanding status and are never retried automatically.
-- Add lifecycle cleanup and agent-authorization revocation without changing model tool limits or concurrency. No third-party Dex/SimpleSpy window is downloaded or launched.
-- Document native client workflows and capability limits, including source access, capture backends, and the scope of Game changes Undo.
+- 围绕共享 Luau 文档、原生多行编辑、行号、查找/转到行、缩进、显式的运行/停止、保留输出、脚本/操作库和带类型的操作输入重建代码选项卡。
+- 添加根植于 `UAI` 的工作区文件浏览器，支持可展开的文件夹、文件打开、保存/另存为，以及保留已编辑草稿的磁盘冲突检查。
+- 在编辑时保持语法高亮可见，显示光标和选择，并恢复每个文档的光标位置。让运行和保存相邻，并在运行活动时显示停止。
+- 在实时刷新期间稳定资源管理器选择和展开，使上下文操作附着于被点击的对象，并为深层树保留水平滚动。
+- 使远程捕获可直接从启动/暂停/停止使用，扩展传入事件发现，并在结果到达时保留已过滤的调用和已编辑的重放草稿。
+- 用可搜索的时间线和内联审阅替换历史与游戏变更，包括前后值和冲突感知的恢复/撤销操作。
+- 为代码按钮、工具栏、文档选项卡、搜索控件和对话框操作添加一致的内边距和外间距。拥挤的工具栏会滚动，聚焦操作保持可达，树行留出空间以适应更大的文字和触摸目标。
+- 在 320、390、620 和 960 px 宽度下，使用指针/触摸输入、舒适/紧凑密度和放大的文字验证代码布局。原生游戏测试仍与这些源和几何检查分开。
+- 添加经过验证的代码持久化，具有两个快照、保留的遗留/损坏数据、显式保存状态、修订检查和构建变化保护。关闭视图会保留其文档；导航和重建保留草稿。
+- 添加原生资源管理器，支持惰性层级、可取消搜索、稳定对象 ID、桌面/触摸多选、带类型的受支持属性/特性/标签、受保护的层级操作、源打开、书签、世界选择器和元数据导出。已记录属性/特性变更支持冲突感知的撤销。
+- 添加原生 Remotes，支持显式捕获范围/生命周期、传入事件、依赖宿主的传出捕获、暂停/停止、有界类型化值、视图/准入过滤器、流量规则、经审阅的一次性重放、生成的脚本、离线导入和经过验证的拆分导出。捕获状态在最小化启动器上保持可见。
+- 将实例/脚本/远程工具汇聚到共享服务上，保留原生调用参数个数，拒绝过期的引用/修订，并分页显示源/捕获/结果详情。直接调用无需编译器即可工作；超时的调用报告未完成状态，且绝不自动重试。
+- 添加生命周期清理和代理授权撤销，而不改变模型工具限制或并发。不下载或启动任何第三方 Dex/SimpleSpy 窗口。
+- 记录原生客户端工作流和能力限制，包括源访问、捕获后端以及游戏变更撤销的范围。
 
-## Context and provider improvements — September 23, 2026
+## 上下文与提供商改进 — September 23, 2026
 
-- Learn model context windows from provider refusals, persist them in `agent.forceContext`, and compact then retry the same turn once before provider fallback.
-- Merge previous rolling summaries with newer history, preserving earlier facts if a summary request fails.
-- Add **Message options → Context breakdown** with distinct colors for system prompt and tools, messages, rolling summary, and unused space, plus the model window and compaction point.
-- Show before/after token estimates in compaction notices and align their status dots with the text.
-- Add a delete button for each saved memory while retaining **Forget everything** and live list updates.
-- Feature AgentRouter with its registration requirement highlighted, the Anthropic Messages protocol, and its required Claude Code identity enforced for requests and model discovery.
+- 从提供商的拒绝中学习模型上下文窗口，将其持久化到 `agent.forceContext`，并在提供商回退之前压缩后重试同一回合一次。
+- 将先前的滚动摘要与较新的历史合并，在摘要请求失败时保留较早的事实。
+- 添加 **消息选项 → 上下文明细**，以不同颜色区分系统提示和工具、消息、滚动摘要和未使用空间，并显示模型窗口和压缩点。
+- 在压缩通知中显示前后的 token 估算，并使其状态点与文本对齐。
+- 为每个已保存的记忆添加删除按钮，同时保留 **全部遗忘** 和实时列表更新。
+- 突出 AgentRouter 及其注册要求、Anthropic Messages 协议，并为其请求和模型发现强制要求所需的 Claude Code 身份。
 
-## Documentation — September 23, 2026
+## 文档 — September 23, 2026
 
-- Document the planned native Explorer and Remotes integration, including provenance, shared services, controls, capability fallbacks, and verification. Those features subsequently shipped in 1.7.0; the old plan has been retired in favor of the current native documentation.
+- 记录计划中的原生资源管理器和 Remotes 集成，包括来源、共享服务、控件、能力回退和验证。这些功能随后在 1.7.0 中发布；旧计划已退役，以当前的原生文档取而代之。
 
 ## 1.6.0 — September 23, 2026
 
-- Save inputs over 8,000 bytes intact as verified files in `UAI/pastes/`, up to 2 MiB each. Send a compact file reference instead of copying the source into the conversation. Short inputs remain inline.
-- Upload long browser inputs and code attachments separately in ordered chunks. Native and browser composers support attachment-only sends, preserve surrounding instructions, and keep drafts when saving or sending fails.
-- Read saved pastes in UTF-8-safe slices of at most 6,000 source bytes, including batch reads. `file_search` accepts explicit `pastes/` paths; explicit file scopes cannot be shadowed by similarly named workspace files.
-- Add Project Gravity integration: inspect the live shape catalog and settings, start/stop/pause, target players, configure formations and controls, and invoke real shape buttons through Gravity's native handlers.
-- Complete Gravity controls with paginated held-part inspection and session-scoped IDs; native selection, pin/manual/shape assignments, group movement, rideability, physics overrides, and release actions. Stale IDs, changed selections during shape loading, invalid batches, and unsupported runtimes are rejected before mutation.
-- Add native core/shape keybinding edits with conflict checks, favorites, manual Slingshot launch/charge, and a complete settings reset. Expose interface, FPS, visual performance, core color, ignore tags, and Part Control panel defaults with live effects and refreshed controls on desktop and mobile.
-- Add `gravity_plugin_read` for the module guide, working template, and local/official source. `gravity_plugin_write` accepts saved source paths, verifies files, validates setup once, and registers or reloads custom shapes with cleanup. Desktop and mobile Gravity launchers pass their live context; the integration follows reloads and unloads.
-- Add `gravity_launch` to download and run the official Project Gravity loader from UAI when it is not already present, report the live status, and reload it on `force`. Shape inspection and the plugin guide now cover the `FrameTracking` flag.
-- Keep loaded plugin callbacks usable after setup while respecting explicit task cancellation. Verify restored source after a failed plugin write before reporting recovery.
-- Guide the main agent and subagents toward successive batches of normally 1–4 independent tool calls, instead of emitting dozens at once. Tool-call limits and concurrency settings are unchanged.
-- Size automatic compaction to the model: when a model's context window is known, older turns are summarised starting at `agent.contextFraction` (80% by default) of it, with `agent.contextTokens` as a hard ceiling. Context pressure is calibrated against each provider's reported prompt-token count, so the system prompt and tool schemas are counted rather than estimated. A **Compact now** action in the composer's message-options menu folds older turns on demand, and the **Summarise old turns** switch now gates only the paid summary while the conversation is still trimmed to fit.
-- Show a live context-window counter beside the model in the composer -- the share of the budget the next request will spend. Give the agent a proper way to review earlier conversations: `conversation_list` triages threads with their opening request, `conversation_read` returns a condensed digest by default (or the verbatim transcript with `full=true`), and `conversation_search` now returns each thread's id so it can be opened.
+- 将超过 8,000 字节的输入完整保存为 `UAI/pastes/` 中的已验证文件，每个最大 2 MiB。发送紧凑的文件引用，而不是将源复制到会话中。较短的输入保持内联。
+- 将较长的浏览器输入和代码附件拆分为有序分块单独上传。原生和浏览器编辑器支持仅附件发送，保留周围的指令，并在保存或发送失败时保留草稿。
+- 以最多 6,000 个源字节的 UTF-8 安全分片读取已保存的粘贴内容，包括批量读取。`file_search` 接受显式的 `pastes/` 路径；显式文件作用域不会被同名的工作区文件遮蔽。
+- 添加 Project Gravity 集成：检查实时形状目录和设置，启动/停止/暂停，指定目标玩家，配置阵型和控件，并通过 Gravity 的原生处理器调用真实的形状按钮。
+- 以分页的保持部件检查和会话作用域 ID 完善 Gravity 控件；原生选择、钉住/手动/形状分配、组移动、可骑乘性、物理覆盖和释放操作。过期的 ID、形状加载期间变更的选择、无效批次和不支持的运行时会在变更前被拒绝。
+- 添加原生核心/形状按键绑定编辑，带冲突检查、收藏、手动 Slingshot 发射/蓄力以及完整的设置重置。暴露界面、FPS、视觉性能、核心颜色、忽略标签和部件控制面板默认值，并在桌面和移动端提供实时效果和刷新后的控件。
+- 添加 `gravity_plugin_read`，用于模块指南、工作模板和本地/官方源。`gravity_plugin_write` 接受已保存的源路径，验证文件，一次性验证设置，并注册或重新加载自定义形状及清理。桌面和移动 Gravity 启动器传递其实时上下文；集成会跟随重载和卸载。
+- 添加 `gravity_launch`，在尚未存在官方 Project Gravity 加载器时从 UAI 下载并运行它，报告实时状态，并在 `force` 时重新加载它。形状检查和插件指南现在涵盖 `FrameTracking` 标志。
+- 在设置之后保持已加载的插件回调可用，同时遵循显式的任务取消。在插件写入失败后验证恢复的源，然后再报告恢复。
+- 引导主代理和子代理以通常 1–4 个独立工具调用的连续批次进行，而不是一次发出数十个。工具调用限制和并发设置保持不变。
+- 使自动压缩与模型规模匹配：当模型的上下文窗口已知时，较早的回合会从其 `agent.contextFraction`（默认 80%）处开始汇总，并以 `agent.contextTokens` 作为硬上限。上下文压力会对照每个提供商报告的提示 token 数进行校准，因此系统提示和工具架构会被计入而不是估算。编辑器消息选项菜单中的 **立即压缩** 操作可按需折叠较早的回合，而 **汇总旧回合** 开关现在仅控制付费摘要，会话仍会被裁剪以适应上下文。
+- 在编辑器中的模型旁显示实时上下文窗口计数器——即下一次请求将花费的预算份额。为代理提供审阅较早会话的恰当方式：`conversation_list` 以开头请求对线程进行分诊，`conversation_read` 默认返回精简摘要（或使用 `full=true` 返回逐字转录），`conversation_search` 现在返回每个线程的 ID，以便打开它。
 
-- Replace the temporary mobile dragging fix with a landscape-focused touch layout: compact multiline input, searchable conversation navigation, wider action sheets, and full-width settings forms.
-- Preserve drafts, selections, open forms, and separate landscape/portrait placement through rotation. Keep the keyboard clear of input and focused form fields, and restore the launcher when minimized.
-- Keep attachments in a bounded horizontal strip and retain access to them from Message options when keyboard space is tight. Mobile Enter adds a line; Send submits.
-- Keep desktop styling, layout, and saved placement independent of the mobile changes.
+- 用面向横屏的触摸布局替换临时的移动端拖动修复：紧凑的多行输入、可搜索的会话导航、更宽的操作面板和全宽设置表单。
+- 在旋转期间保留草稿、选择、打开的表单以及单独的横屏/竖屏放置。保持键盘不遮挡输入和聚焦的表单字段，并在最小化时恢复启动器。
+- 将附件保留在有界的水平条带中，并在键盘空间紧张时从消息选项保持对其的访问。移动端回车添加一行；发送提交。
+- 保持桌面样式、布局和已保存的放置独立于移动端变更。
 
 ## 1.5.0 — September 20, 2026
 
-### Added
+### 新增
 
-- `iy_players` resolves IY selectors to live player names before targeting commands, with bounded text and a complete structured name list.
-- `iy_control` manages native IY events, keybinds, aliases, waypoints, settings, and repeat loops. Alias and waypoint inspection includes pagination; waypoint removal and clearing default to the current place, with `all_places=true` for clearing every place.
-- IY settings now include `gui_scale` and `logs_webhook`, applied through native commands with asynchronous dispatch and saving reported explicitly.
-- Add `iy_plugin_read` and `iy_plugin_write` for custom plugins with shared globals, multiple commands, aliases, syntax checks, returned-table validation, and live reloads.
+- `iy_players` 在定向命令之前将 IY 选择器解析为实时玩家名称，文本有界并提供完整的结构化名称列表。
+- `iy_control` 管理原生 IY 事件、按键绑定、别名、路径点、设置和重复循环。别名和路径点检查包含分页；路径点移除和清除默认针对当前地点，使用 `all_places=true` 可清除每个地点。
+- IY 设置现在包含 `gui_scale` 和 `logs_webhook`，通过原生命令异步调度应用，并显式报告保存情况。
+- 添加 `iy_plugin_read` 和 `iy_plugin_write`，用于自定义插件，支持共享全局变量、多条命令、别名、语法检查、返回表验证和实时重载。
 
-### Improved
+### 改进
 
-- The desktop profile control shows your Roblox headshot beside a clearer name and provider hierarchy. Its menu adds a matching identity header, a live provider summary, roomier actions, and visible hover and open states, with an initial fallback while avatars load.
-- `iy_cmds` shows native argument signatures and short descriptions alongside names, aliases, and plugin origins, retaining compatibility with older IY versions.
-- Buffered HTTP uses an 8,192-token default reply ceiling through `agent.executorReplyCeiling`, without changing the saved `agent.maxTokens` setting. Configured WebSocket streams, the enabled web relay, and explicit token overrides bypass this default; set the new option to `0` to disable it.
-- Both provider adapters can retry a request that returns nothing after 20–130 seconds with a smaller reply and reduced reasoning effort when available. A valid completion saves the working ceiling for that provider and model so later turns can start smaller.
-- File-writing guidance favors targeted `file_edit` and `file_edit_many` changes to keep replies within executor request windows.
-- `check_luau` accepts saved scripts by `path`, matching `run_luau` and saved-paste reads. Large-script guidance uses small sequential writes and checks/runs by path to avoid sending source repeatedly.
-- Main and subagent prompts require reading every enabled skill first in every new or resumed conversation. Skill bodies and inventories paginate within the result budget; restricted subagents gain read access without skill mutation tools.
+- 桌面资料控件在更清晰的名称和提供商层级旁显示你的 Roblox 头像。其菜单添加匹配的身份页眉、实时提供商摘要、更宽敞的操作和可见的悬停与打开状态，并在头像加载时提供初始回退显示。
+- `iy_cmds` 在名称、别名和插件来源旁显示原生参数签名和简短描述，同时保持与较旧 IY 版本的兼容性。
+- 缓冲 HTTP 通过 `agent.executorReplyCeiling` 使用 8,192 token 的默认回复上限，而不更改已保存的 `agent.maxTokens` 设置。已配置的 WebSocket 流、已启用的 Web 中继和显式 token 覆盖会绕过此默认值；将新选项设为 `0` 可禁用它。
+- 两个提供商适配器都可以在请求于 20–130 秒后无返回时，以更小的回复和（在可用时）更低的推理力度重试。有效的完成会为该提供商和模型保存可用的上限，使后续回合可以更小地开始。
+- 文件写入指引倾向于有针对性的 `file_edit` 和 `file_edit_many` 变更，使回复保持在执行器请求窗口之内。
+- `check_luau` 可通过 `path` 接受已保存的脚本，与 `run_luau` 和已保存粘贴读取一致。大脚本指引使用小的顺序写入，并按路径检查/运行，以避免重复发送源。
+- 主代理和子代理提示要求在每个新建或恢复的会话中首先读取每个已启用的技能。技能正文和清单在结果预算内分页；受限子代理获得读取访问权，但没有技能变更工具。
 
-### Fixed
+### 修复
 
-- Alias and waypoint edits validate inputs before changing live state, refresh IY's GUI, and clear tables in place. Coordinate waypoints use validated, floored values instead of IY's buggy coordinate command; deletion preserves other places' waypoints.
-- Failed WebSocket connections apply the safer ceiling when falling back to HTTP. Cancellations and already-minimal requests skip recovery retries, and malformed or empty replies do not create learned token caps.
-- `file_write` and `file_append` reject content over 2 MiB per call before writing, preserving existing files.
-- Interrupted write arguments cannot be repaired into partial edits or scripts. Token-limited tool batches run no calls and ask the model for smaller complete requests.
-- Profile headshots explicitly resolve and preload with bounded retries. Images remain renderable while loading; closing a view discards late results while native requests finish on live coroutines.
-- Managed script stopping uses cancellation flags instead of closing native coroutines, removing UAI cancellation paths that can leave Roblox callbacks trying to resume a dead thread. Self-cancellation, finished handles, long delays, and callbacks after a successful run use the same guarded lifecycle. External engine waits retain an explicit cancellation limitation.
-- Failed turns release their busy state and invalidate old tool contexts; starting another main or subagent turn cannot revive failed or stopped workers.
-- The minimize/restore launcher preserves the grab offset, waits for a drag threshold, tracks one pointer, and separates dragging from activation. Focus loss and rebuild clean up listeners; temporary viewport and keyboard changes preserve the preferred placement.
-- Align task markers and notification content across text sizes and input modes. Preserve task disclosure choices, cap long plans, and exclude skipped tasks from completion progress.
-- Add conversation titles and Open chat actions to notifications. Preserve other unread conversations, keep notification stacks within the available viewport, and stop the busy pulse when work finishes.
+- 别名和路径点编辑在更改实时状态之前验证输入，刷新 IY 的 GUI，并就地清空表格。坐标路径点使用经过验证、向下取整的值，而不是 IY 有缺陷的坐标命令；删除会保留其他地点的路径点。
+- 失败的 WebSocket 连接在回退到 HTTP 时应用更安全的上限。取消和已是最小的请求跳过恢复重试，格式错误或空的回复不会生成学到的 token 上限。
+- `file_write` 和 `file_append` 在写入前拒绝每次调用超过 2 MiB 的内容，并保留现有文件。
+- 被中断的写入参数无法被修复为部分编辑或脚本。受 token 限制的工具批次不运行任何调用，并要求模型提供更小的完整请求。
+- 资料头像会显式解析并预加载，带重试上限。图像在加载期间仍可渲染；关闭视图会丢弃迟到的结果，而原生请求在活动协程上完成。
+- 托管脚本停止使用取消标志而不是关闭原生协程，移除了可能让 Roblox 回调尝试恢复已死线程的 UAI 取消路径。自我取消、已完成的句柄、长延迟和成功运行后的回调使用相同的受保护生命周期。外部引擎等待保留显式的取消限制。
+- 失败的回合会释放其忙碌状态并使旧工具上下文失效；启动另一个主代理或子代理回合无法复活失败或已停止的工作线程。
+- 最小化/恢复启动器保留抓取偏移，等待拖动阈值，跟踪单个指针，并将拖动与激活分开。焦点丢失和重建会清理监听器；临时视口和键盘变化会保留首选位置。
+- 在不同文字大小和输入模式下对齐任务标记和通知内容。保留任务展开选择，限制长计划，并将被跳过的任务排除在完成进度之外。
+- 为通知添加会话标题和“打开聊天”操作。保留其他未读会话，使通知堆栈保持在可用视口内，并在工作完成时停止忙碌脉动。
 
 ## 1.4.0 — September 19, 2026
 
-### Added
+### 新增
 
-- `instance_query` combines name, class, and tag filtering with selected property and attribute reads. `instance_get_many` inspects up to 20 known paths, retaining successful results when another path is missing.
-- `file_search` searches literal text across workspace files with filename globs, case selection, line numbers, byte offsets, and resumable cursors.
-- `file_read_many` reads up to 12 workspace files or saved pastes within one shared output budget. `file_edit_many` preflights up to 20 ordered edits to one file before a single write.
-- The public showcase includes copyable starter prompts and a searchable catalog generated from the real bundled tool registry.
+- `instance_query` 将名称、类和标签过滤与选定的属性和特性读取相结合。`instance_get_many` 最多检查 20 个已知路径，在另一路径缺失时保留成功的结果。
+- `file_search` 使用文件名通配符、大小写选项、行号、字节偏移和可续读游标，在工作区文件中搜索字面文本。
+- `file_read_many` 在一个共享输出预算内最多读取 12 个工作区文件或已保存粘贴。`file_edit_many` 在单次写入前对单个文件的最多 20 个有序编辑进行预检。
+- 公开展示包含可复制的起始提示，以及从真实随附工具注册表生成的可搜索目录。
 
-### Improved
+### 改进
 
-- Instance searches traverse incrementally, stop when a page fills, and cooperate with Stop. A one-result query in the regression fixture inspects one node in a 3,000-node subtree without calling `GetDescendants`.
-- File-search cursors can resume directly at a byte offset. Repeated file slices share a bounded cache within a batch; the cache ends with the call.
-- The agent prompt guides combined queries, selected fields, batch reads, exact edits, and continuation handling to reduce unnecessary tool round trips.
-- The public website has a new responsive layout, stronger text contrast, keyboard focus styles, a skip link, reduced-motion support, and video that plays on request.
-- `node tools/build_site.js` generates the public catalog and release counts and synchronizes the root and `docs/` publishing copies. It refuses a stale Lua bundle; `--check` verifies without writing.
+- 实例搜索会增量遍历，在页面填满时停止，并与停止协作。回归夹具中的单结果查询会在 3,000 节点的子树中检查一个节点，而不调用 `GetDescendants`。
+- 文件搜索游标可直接从字节偏移处续读。重复的文件分片在一个批次内共享有界缓存；缓存随调用结束。
+- 代理提示引导组合查询、选定字段、批量读取、精确编辑和续读处理，以减少不必要的工具往返。
+- 公开网站具有新的响应式布局、更强的文本对比度、键盘焦点样式、跳转链接、减少动效支持，以及按需播放的视频。
+- `node tools/build_site.js` 生成公开目录和发布计数，并同步根目录和 `docs/` 的发布副本。它会拒绝过期的 Lua 包；`--check` 进行验证而不写入。
 
-### Fixed
+### 修复
 
-- Parsed, JSON-quoted instance path segments preserve names containing dots, brackets, quotes, control characters, or surrounding whitespace. Known Character, CurrentCamera, and PrimaryPart references resolve as instance links.
-- String property coercion preserves whitespace; scalar numeric conversion rejects nonfinite values. Schema validation enforces batch array limits.
-- Search results expose unreadable files and incomplete inventories. File searches bound directory, file, and line scans and count skipped files toward their whole-file read budget. Stopped edits report cancellation; stale files are preserved and unchanged edits avoid writes.
-- Repeated website copy clicks retain their original labels. Clipboard failures offer text selection and visible feedback. Mobile navigation resets on link clicks, Escape, outside interaction, and viewport changes.
-- Public tool names and counts match the shipped registry. The site no longer describes managed execution as a security sandbox or claims a fixed setup time.
+- 解析后的、JSON 引用的实例路径段会保留包含点、方括号、引号、控制字符或周围空白的名称。已知的 Character、CurrentCamera 和 PrimaryPart 引用会解析为实例链接。
+- 字符串属性强制转换会保留空白；标量数值转换会拒绝非有限值。架构验证强制实施批次数组限制。
+- 搜索结果会暴露不可读的文件和不完整的清单。文件搜索限制目录、文件和行扫描，并将跳过的文件计入其整文件读取预算。已停止的编辑报告取消；过期文件被保留，未变更的编辑避免写入。
+- 重复点击网站复制会保留其原始标签。剪贴板失败会提供文本选择和可见反馈。移动端导航在链接点击、Escape、外部交互和视口变化时重置。
+- 公开工具名称和计数与已发布的注册表一致。站点不再将托管执行描述为安全沙箱，也不声称固定的设置时间。
 
 ## 1.3.0 — September 19, 2026
 
-### Added
+### 新增
 
-- `check_luau` compiles source without executing it.
-- `file_edit` performs exact replacements, including empty replacements and explicit replace-all. It refuses missing, ambiguous, overlapping, or stale matches and bounds edited files to 2 MB.
-- `file_read` and `script_source` return contiguous slices with byte offsets for reading the remainder. Saved-paste references work with bare, `pastes/`, and `UAI/pastes/` paths.
+- `check_luau` 编译源而不执行它。
+- `file_edit` 执行精确替换，包括空替换和显式的全部替换。它拒绝缺失、有歧义、重叠或过期的匹配，并将被编辑文件限制在 2 MB。
+- `file_read` 和 `script_source` 返回带字节偏移的连续分片，以便读取其余内容。已保存粘贴引用适用于裸路径、`pastes/` 和 `UAI/pastes/` 路径。
 
-### Improved
+### 改进
 
-- `run_luau` reports print/warn output, readable tables, cycles, and multiple return values, with bounded UTF-8 output. Loop checkpoints preserve source literals and line numbers.
-- Execution deadlines are configurable from 1 to 60 seconds, defaulting to 10. The call waits for functions scheduled through its `task.spawn`, `task.defer`, and `task.delay` wrappers; Stop, deadlines, errors, and unload cancel managed tasks.
-- Parallel tool results reach the transcript as each finishes while retaining the original order in model context. Progress updates identify their call.
-- Roblox and Cowork show distinct execution states; exact edits have Before/After listings. Cowork includes multiline code fields, typed controls, validation, copyable output, and improved small-screen and keyboard behavior.
+- `run_luau` 报告 print/warn 输出、可读的表格、循环和多个返回值，输出为有界 UTF-8。循环检查点保留源字面量和行号。
+- 执行截止时间可配置为 1 到 60 秒，默认为 10。调用会等待通过其 `task.spawn`、`task.defer` 和 `task.delay` 包装器调度的函数；停止、截止时间、错误和卸载会取消托管任务。
+- 并行工具结果在每个完成时到达转录，同时在模型上下文中保留原始顺序。进度更新会标识其调用。
+- Roblox 和 Cowork 显示不同的执行状态；精确编辑具有“之前/之后”列表。Cowork 包含多行代码字段、带类型的控件、验证、可复制输出，并改进小屏幕和键盘行为。
 
-### Fixed
+### 修复
 
-- Compile/runtime failures now produce failed tool results. JSON repair only changes syntax outside quoted strings and refuses unfinished string arguments.
-- Explicitly canceled Luau tasks stay canceled after their parent succeeds, including on hosts without working native cancellation; self-cancellation stops the current task immediately.
-- Dispatch rechecks tool-group and conversation restrictions after approval and skips stopped calls. Failed and stopped turns return to Ready.
-- Explicit filesystem refusals and listing failures are reported. Append fallback preserves existing contents when reading fails. Windows path suffixes and control characters cannot bypass scope validation.
-- Send acknowledgements preserve newer drafts and attachments, including edits that return to the original text. IME confirmation does not submit; unavailable browser storage does not break chat; asynchronous attachments remain with their original conversation.
-- Tool-only restored transcripts stay visible; missing saved results stop displaying “Running.” Child summaries and scoped progress render correctly.
-- Targeted Lua checks retain canonical module IDs and resolve imports outside the selected subtree.
+- 编译/运行时失败现在会产生失败的工具结果。JSON 修复仅更改引号字符串之外的语法，并拒绝未完成的字符串参数。
+- 被显式取消的 Luau 任务在其父级成功后仍保持取消状态，包括在没有可用原生取消的宿主上；自我取消会立即停止当前任务。
+- 调度会在审批后重新检查工具组和会话限制，并跳过已停止的调用。失败和已停止的回合返回就绪状态。
+- 显式的文件系统拒绝和列表失败会被报告。当读取失败时，追加回退会保留现有内容。Windows 路径后缀和控制字符无法绕过作用域验证。
+- 发送确认会保留较新的草稿和附件，包括回到原始文本的编辑。IME 确认不会提交；不可用的浏览器存储不会中断聊天；异步附件保留在其原始会话中。
+- 仅含工具的已恢复转录保持可见；缺失的已保存结果会停止显示“正在运行”。子代理摘要和限定范围的进度可正确渲染。
+- 针对性的 Lua 检查保留规范模块 ID，并解析所选子树之外的导入。
 
-### Execution limits
+### 执行限制
 
-Managed execution is not a security sandbox or a rollback mechanism. Dynamically loaded code, engine calls, and callbacks registered on engine signals are outside its cancellation guarantee. On hosts without usable `task.cancel`, managed waits cooperate with cancellation and the result explains any remaining uncertainty. Successful scripts may still register persistent engine callbacks; their later work is outside the completed tool call.
+托管执行不是安全沙箱，也不是回滚机制。动态加载的代码、引擎调用和注册在引擎信号上的回调不在其取消保证范围内。在没有可用 `task.cancel` 的宿主上，托管等待会与取消协作，结果会说明任何仍存在的不确定性。成功的脚本仍可能注册持久的引擎回调；其后续工作不在已完成的工具调用范围内。
 
-Earlier release notes remain in `src/runtime/changelog.lua` and the in-app **What's New** view.
+更早的发布说明保留在 `src/runtime/changelog.lua` 和应用内的 **新功能** 视图中。
+

@@ -1,407 +1,401 @@
-# Project UAI 3.7.2 verification
+# Project UAI 3.7.2 验证
 
-The earlier byte-storage and reasoning pass was verified October 29, 2026.
-This client-only update changes credential persistence,
-exports, included-key migration, the daily free-provider schedule and reasoning
-level visibility in compact model pickers. Bridge,
-desktop, web UI and companion implementation files are unchanged.
+更早的字节存储与推理轮次于 2026 年 10 月 29 日完成验证。本次仅客户端的更新
+改动了凭据持久化、导出、内置密钥迁移、每日免费提供商日程，以及紧凑模型
+选择器中的推理等级可见性。桥接、桌面端、Web UI 与伴侣端实现文件均未改动。
 
-For that pass, changed sources, documentation and tests were manually reviewed before the
-client build. The generated bundle and manifest were inspected before verification.
-Test fixture and assertion fixes were reviewed before rerunning the affected checks.
-No production source changed after the inspected build.
+在该轮次中，改动的源码、文档与测试在客户端构建之前经过人工审阅。生成的打包产物
+与清单在验证之前经过检查。测试夹具与断言的修正均在重跑受影响的检查之前完成
+审阅。受检构建之后，未再改动任何生产源码。
 
-## Earlier build and static checks
+## 早期构建与静态检查
 
-- `luajit tools/bundle.lua --native`: passed; 243 bundled modules,
-  3,843,785 bytes. Build ID: `3.7.2-e2e69fe4afa59f86`.
-- `luajit test/check.lua --native`: passed; 239 files parsed, 238 native modules,
-  zero failures and zero warnings.
-- Official `luau-compile.exe --null` over client sources and `init.lua`: passed.
-- `luajit tools/bundle.lua --native --check`: passed; generated artifacts match
-  their inputs.
+- `luajit tools/bundle.lua --native`：通过；打包 243 个模块，
+  3,843,785 字节。构建 ID：`3.7.2-e2e69fe4afa59f86`。
+- `luajit test/check.lua --native`：通过；解析 239 个文件，238 个原生模块，
+  零失败、零警告。
+- 官方 `luau-compile.exe --null` 对客户端源码与 `init.lua` 的检查：通过。
+- `luajit tools/bundle.lua --native --check`：通过；生成的产物与其输入一致。
 
-Outputs: [client bundle](../dist/uai.lua) and [manifest](../dist/uai.manifest.json).
+输出：[客户端打包产物](../dist/uai.lua) 与 [清单](../dist/uai.manifest.json)。
 
-## Focused behavior verification
+## 聚焦行为验证
 
-The initial credential/schedule pass on `3.7.2-b6366b03ccbf2fcd` ran 18 suites,
-reporting **2,205 checks/assertions**. Each named suite runs
-as `luajit test/<suite>.lua`; the final row uses the command shown.
+在 `3.7.2-b6366b03ccbf2fcd` 上进行的首次凭据/日程轮次运行了 18 个套件，
+报告 **2,205 项检查/断言**。每个具名套件以
+`luajit test/<suite>.lua` 运行；最后一行使用表中给出的命令。
 
-| Suite | Checks/assertions | Result |
+| 套件 | 检查数/断言数 | 结果 |
 | --- | ---: | --- |
-| `credential_codec` | 42 | Passed |
-| `credential_storage` | 57 | Passed |
-| `credential_ui` | 42 | Passed |
-| `config_transfer` | 163 | Passed |
-| `build_reload` | 55 | Passed |
-| `support_bundle` | 46 | Passed |
-| `free_provider` | 116 | Passed |
-| `free_routing` | 187 | Passed |
-| `request_accounting` | 44 | Passed |
-| `provider_key_pause` | 43 | Passed |
-| `provider_keys` | 34 | Passed |
-| `provider_key_rotation` | 71 | Passed |
-| `provider_key_snapshots` | 29 | Passed |
-| `provider_transport` | 554 | Passed |
-| `provider_setup` | 38 | Passed |
-| `provider_editor` | 170 | Passed |
-| `provider_keys_ui` | 97 | Passed |
-| `luajit test/run.lua --native boot config changelog` | 417 | Passed |
+| `credential_codec` | 42 | 通过 |
+| `credential_storage` | 57 | 通过 |
+| `credential_ui` | 42 | 通过 |
+| `config_transfer` | 163 | 通过 |
+| `build_reload` | 55 | 通过 |
+| `support_bundle` | 46 | 通过 |
+| `free_provider` | 116 | 通过 |
+| `free_routing` | 187 | 通过 |
+| `request_accounting` | 44 | 通过 |
+| `provider_key_pause` | 43 | 通过 |
+| `provider_keys` | 34 | 通过 |
+| `provider_key_rotation` | 71 | 通过 |
+| `provider_key_snapshots` | 29 | 通过 |
+| `provider_transport` | 554 | 通过 |
+| `provider_setup` | 38 | 通过 |
+| `provider_editor` | 170 | 通过 |
+| `provider_keys_ui` | 97 | 通过 |
+| `luajit test/run.lua --native boot config changelog` | 417 | 通过 |
 
-Coverage includes byte reconstruction, corruption/version/size checks, automatic
-plaintext migration, verified storage changes, optional session-only use, safe
-copies and diagnostics, import policy, included-access references and URL cleaning.
-Malformed envelopes remain recoverable without anonymous dispatch. Storage changes
-preserve live records, key pools, metadata and running-request references.
+覆盖范围包括字节重建、损坏/版本/大小检查、自动明文迁移、经校验的存储
+变更、可选的仅会话使用、安全副本与诊断、导入策略、内置访问引用与 URL
+清理。格式异常的信封仍可恢复，且不会触发匿名派发。存储变更会
+保留活动记录、密钥池、元数据与运行中请求的引用。
 
-An end-to-end offline case saves encoded credentials, cold-loads them, then uses
-the actual provider adapter to construct a synthetic HTTP request. It verifies the
-exact selected unpaused key, custom and identity headers, URL/query/body overrides,
-and a successful simulated response. Build-replacement tests also cover the live
-credential handoff and genuine unload/restart behavior.
+一个端到端离线用例会保存编码后的凭据、冷加载它们，然后使用
+实际的提供商适配器构造一个合成的 HTTP 请求。它验证所选且未被暂停的
+确切密钥、自定义与身份标头、URL/查询/正文覆盖，
+以及一次成功的模拟响应。构建替换测试还覆盖活动
+凭据交接与真实的卸载/重启行为。
 
-Schedule tests cover 20:00 opening, 12:00 closing, midnight, the personal-key
-exemption, background-probe admission and completion of accepted replies across
-closing. UI checks exercise the storage controls, migration notice, private copy
-and provider/key-manager flows in the offline harness.
+日程测试覆盖 20:00 开启、12:00 关闭、午夜、个人密钥
+豁免、后台探测准入，以及已接受回复跨越关闭时刻的完成情况。UI 检查在离线夹具中
+演练了存储控件、迁移提示、私有副本
+与提供商/密钥管理器流程。
 
-## Reasoning levels follow-up
+## 推理等级后续
 
-That pass's final bundle adds only the model-picker fix and its release note to the
-initial credential/schedule build. Module hashes confirm other client modules and bootstrap
-are unchanged. Source, tests and documentation were reviewed before building;
-the generated picker, release note and manifest were inspected before testing.
+该轮次的最终打包产物只在初始凭据/日程构建之上增加了模型选择器修复及其发布
+说明。模块哈希确认其他客户端模块与引导程序
+未改动。源码、测试与文档在构建前经过审阅；
+生成的选择器、发布说明与清单在测试前经过检查。
 
-Four focused suites passed, reporting **370 checks/assertions**:
+四个聚焦套件通过，报告 **370 项检查/断言**：
 
-| Suite | Checks/assertions | Result |
+| 套件 | 检查数/断言数 | 结果 |
 | --- | ---: | --- |
-| `model_effort` | 111 | Passed |
-| `model_picker_layout` | 58 | Passed |
-| `model_picker_touch` | 143 | Passed |
-| `model_temperature_ui` | 58 | Passed |
+| `model_effort` | 111 | 通过 |
+| `model_picker_layout` | 58 | 通过 |
+| `model_picker_touch` | 143 | 通过 |
+| `model_temperature_ui` | 58 | 通过 |
 
-Coverage includes enabling and disabling manual reasoning, documented model
-levels, model switching, short and tall viewports, touch targets, keyboard
-obstruction, shared effort preferences, and retained search and catalogue state.
-Extremely constrained layouts retain the existing Options fallback.
+覆盖范围包括启用与禁用手动推理、文档所述模型等级、模型切换、
+矮视口与高视口、触摸目标、键盘遮挡、共享的强度偏好，
+以及保留的搜索与目录状态。极度受限的布局仍保留
+现有的 Options 回退方案。
 
-Two stale layout expectations were corrected: catalogue-only scrolling already
-replaced whole-body scrolling, and the 777-by-632 fixture fits three complete
-model rows. A comparison against the pre-fix picker confirmed identical row
-geometry at that size. Test corrections were reviewed before rerunning the suite.
-Native static checks and bundle freshness passed again; the official Luau
-compiler accepted the changed source modules and regression tests. No live
-provider requests or native Roblox rendering checks were performed.
+两处过时的布局预期已修正：仅列表滚动早已
+取代整体滚动，且 777×632 的夹具可容纳三行完整
+模型。与修复前选择器的对比确认该尺寸下的行
+几何一致。测试修正在重跑套件之前经过审阅。
+原生静态检查与打包产物新鲜度再次通过；官方 Luau
+编译器接受了改动的源码模块与回归测试。未执行任何实际
+提供商请求或原生 Roblox 渲染检查。
 
-## Local configuration and literal scans
+## 本地配置与字面量扫描
 
-The authorized local configuration was read without modifying its original file.
-Migration and reload ran only in the mock filesystem, covering **8 providers and
-12 key entries**. All **11 personal entries** reconstructed exactly; the included
-community credential followed its replacement/reference policy. No real credential
-was sent over the network or printed in test logs.
+经授权的本地配置在读取时未修改其原始文件。
+迁移与重载仅在模拟文件系统中运行，覆盖
+**8 个提供商与 12 条密钥条目**。全部 **11 条个人条目**均精确重建；内置的
+社区凭据遵循其替换/引用策略。没有任何真实凭据
+经网络发送或在测试日志中打印。
 
-The artifact scan checked **519 files** against **13 credential strings**, including
-the local keys and retired/replacement community credentials. It found no raw key
-values in client source, generated client artifacts, tests or the scanned
-documentation. The replacement community bytes matched the supplied value.
-Detailed logs and read-only audit scripts remain locally under the ignored
-`refer/credential-security-20261029/` directory.
+产物扫描以 **13 个凭据字符串**核对 **519 个文件**，包括
+本地密钥与已停用/替换的社区凭据。它在客户端源码、生成的
+客户端产物、测试或已扫描文档中均未发现原始密钥
+值。替换后的社区字节与所提供值一致。
+详细日志与只读审计脚本保留在本地被忽略的
+`refer/credential-security-20261029/` 目录下。
 
-## Password vault follow-up
+## 密码保险库后续
 
-The follow-up adds optional AES-256-SIV encryption and PBKDF2-HMAC-SHA256 password
-derivation, password entry, legacy migration, locked startup, private encrypted
-transfers and verified storage transitions. The earlier results above describe
-the byte-encoding build and do not establish vault correctness.
+该后续新增了可选的 AES-256-SIV 加密与 PBKDF2-HMAC-SHA256 密码
+派生、密码输入、旧版迁移、锁定启动、私有加密
+传输与经校验的存储转换。上文的早期结果描述的是
+字节编码构建，并不能证明保险库的正确性。
 
-Added integration cases cover the previously live-tested byte envelope, exact
-key-pool metadata and custom authentication, cancellation, wrong passwords,
-failed writes and interrupted-primary recovery, password changes, lock/unlock,
-encrypted imports, session-only disabling and explicit forgotten-password reset.
-The bundle reload fixture covers a private in-memory vault-key handoff and a
-genuine UI-free restart that stays locked. Storage fixtures use synthetic
-credentials and a cheap deterministic derivation stub with the real envelope and
-AES-SIV code; independent KDF/primitive checks exercise the real derivation.
+新增的集成用例覆盖此前已实测的字节信封、确切的
+密钥池元数据与自定义认证、取消、密码错误、
+写入失败与主副本中断恢复、密码变更、锁定/解锁、
+加密导入、仅会话禁用与显式忘记密码重置。
+打包重载夹具覆盖私有内存中的保险库密钥交接，以及
+真正无 UI 的重启后保持锁定。存储夹具使用合成
+凭据与低成本确定性派生桩，同时使用真实信封与
+AES-SIV 代码；独立的 KDF/原语检查演练真实派生。
 
-The reviewed follow-up was built and its bundle/manifest inspected before tests.
-The final artifact is **`3.7.2-0c9606e7a1ffe6ee`**, with **248 modules** and
-**3,915,200 bytes**, generated by `luajit tools/bundle.lua --native`.
-The initial pass used `3.7.2-f63b88cb68e97101`. Subsequent reviewed changes serialize
-storage operations, preserve recovery after failed removal, validate operation
-options, clean up cancelled staging, shorten derivation progress intervals and
-explain the wait in password UI.
+经审阅的后续已完成构建，其打包产物/清单在测试前经过检查。
+最终产物为 **`3.7.2-0c9606e7a1ffe6ee`**，包含 **248 个模块**与
+**3,915,200 字节**，由 `luajit tools/bundle.lua --native` 生成。
+首次轮次使用 `3.7.2-f63b88cb68e97101`。后续经审阅的改动将
+存储操作串行化、在移除失败后保留恢复能力、校验操作
+选项、清理已取消的暂存、缩短派生进度间隔，并
+在密码 UI 中说明等待原因。
 
-Final static verification passed: `test/check.lua --native` parsed 244 files and
-linked 243 native modules with no failures or warnings. The official Luau compiler
-accepted all client sources, bootstrap and the concurrency/storage/UI tests
-(74 KLOC, 3,763 KB bytecode). `tools/bundle.lua --native --check` confirmed the
-final bundle and manifest match their inputs.
+最终静态验证通过：`test/check.lua --native` 解析 244 个文件并
+链接 243 个原生模块，无失败或警告。官方 Luau 编译器
+接受了全部客户端源码、引导程序与并发/存储/UI 测试
+（74 KLOC，3,763 KB 字节码）。`tools/bundle.lua --native --check` 确认
+最终打包产物与清单与其输入一致。
 
-The table records the latest result for each focused suite across this follow-up:
-**23 suites, 3,669 checks/assertions, all passed**. After the final rebuild,
-storage, concurrency, transfer, reload, vault UI, legacy credential UI/storage and
-native boot/config/changelog checks ran again. Each Lua suite below runs as
-`luajit test/<suite>.lua`, unless its full command is shown.
+该表记录本后续中每个聚焦套件的最新结果：
+**23 个套件，3,669 项检查/断言，全部通过**。最终重建之后，
+存储、并发、传输、重载、保险库 UI、旧版凭据 UI/存储与
+原生 bootstrap/config/changelog 检查再次运行。下文每个 Lua 套件以
+`luajit test/<suite>.lua` 运行，除非表中给出完整命令。
 
-| Suite | Checks/assertions | Result |
+| 套件 | 检查数/断言数 | 结果 |
 | --- | ---: | --- |
-| `credential_crypto` | 119 | Passed |
-| `credential_vault` | 58 | Passed |
-| `credential_vault_storage` | 131 | Passed |
-| `credential_vault_concurrency` | 40 | Passed |
-| `credential_vault_ui` | 75 | Passed |
-| `credential_ui` | 42 | Passed |
-| `credential_codec` | 42 | Passed |
-| `credential_storage` | 57 | Passed |
-| `config_transfer` | 163 | Passed |
-| `build_reload` | 63 | Passed |
-| `provider_transport` | 554 | Passed |
-| `request_accounting` | 44 | Passed |
-| `provider_key_pause` | 43 | Passed |
-| `support_bundle` | 46 | Passed |
-| `provider_editor` | 170 | Passed |
-| `provider_keys_ui` | 97 | Passed |
-| `free_provider` | 116 | Passed |
-| `free_routing` | 196 | Passed |
-| `model_picker_layout` | 58 | Passed |
-| `model_effort` | 111 | Passed |
-| `model_picker_touch` | 143 | Passed |
-| `luajit test/run.lua --native boot config changelog` | 418 | Passed |
-| Python `credential_crypto_interop.py` | 883 | Passed |
+| `credential_crypto` | 119 | 通过 |
+| `credential_vault` | 58 | 通过 |
+| `credential_vault_storage` | 131 | 通过 |
+| `credential_vault_concurrency` | 40 | 通过 |
+| `credential_vault_ui` | 75 | 通过 |
+| `credential_ui` | 42 | 通过 |
+| `credential_codec` | 42 | 通过 |
+| `credential_storage` | 57 | 通过 |
+| `config_transfer` | 163 | 通过 |
+| `build_reload` | 63 | 通过 |
+| `provider_transport` | 554 | 通过 |
+| `request_accounting` | 44 | 通过 |
+| `provider_key_pause` | 43 | 通过 |
+| `support_bundle` | 46 | 通过 |
+| `provider_editor` | 170 | 通过 |
+| `provider_keys_ui` | 97 | 通过 |
+| `free_provider` | 116 | 通过 |
+| `free_routing` | 196 | 通过 |
+| `model_picker_layout` | 58 | 通过 |
+| `model_effort` | 111 | 通过 |
+| `model_picker_touch` | 143 | 通过 |
+| `luajit test/run.lua --native boot config changelog` | 418 | 通过 |
+| Python `credential_crypto_interop.py` | 883 | 通过 |
 
-Cryptography checks include FIPS AES/SHA vectors, RFC HMAC/CMAC/PBKDF2/SIV vectors,
-tampering, wrong passwords and envelope/session ownership. Independent Python
-`cryptography` 46.0.7 and `hashlib`/`hmac` checks include 219 authentication
-rejections. The official Luau compiler accepted the four runtime cryptography
-modules and four associated test scripts. A storage fixture initially omitted a
-provider ID; it was corrected to use the normal registry save path and reviewed
-before rerunning. The startup UI fixture was corrected to distinguish the app
-from the fading boot indicator, and the reload fixture now checks the refused
-operation rather than a particular word in its explanation. These fixture failures
-did not require production changes.
+密码学检查包括 FIPS AES/SHA 向量、RFC HMAC/CMAC/PBKDF2/SIV 向量、
+篡改、密码错误与信封/会话所有权。独立的 Python
+`cryptography` 46.0.7 与 `hashlib`/`hmac` 检查包含 219 项认证
+拒绝。官方 Luau 编译器接受了四个运行时密码学
+模块与四个相关测试脚本。一个存储夹具最初遗漏了
+提供商 ID；已修正为使用常规注册表保存路径，并在重跑之前
+经过审阅。启动 UI 夹具已修正，以区分应用
+与渐隐的启动指示器，且重载夹具现在检查被拒绝的
+操作，而非其说明中的某个特定词。这些夹具失败
+无需改动生产代码。
 
-The final native Luau CLI benchmark derived the full 64-byte key at 600,000
-iterations in **80.993 seconds**. Its **9,377 progress calls** had an **8.638 ms
-mean** and **72.375 ms maximum** gap. The 128-iteration progress interval retains
-the full derivation work. This measures CLI computation, omits frame waits and
-does not measure Roblox rendering or executor input. Setup/unlock can take minutes
-on slower hosts; the client explains the wait and reports progress with cooperative
-cancellation. The LuaJIT mock benchmark includes bit32 wrapper overhead and is not
-an executor performance estimate.
+最终原生 Luau CLI 基准在 600,000 次迭代下派生出完整的 64 字节密钥，
+耗时 **80.993 秒**。其 **9,377 次进度调用**的平均间隔为 **8.638 ms**，
+最大间隔为 **72.375 ms**。128 次迭代的进度间隔保留了
+完整派生工作。这测量的是 CLI 计算，省略了帧等待，且
+不测量 Roblox 渲染或执行器输入。在较慢的主机上，设置/解锁可能耗时数分钟；
+客户端会说明等待并提供带协作式
+取消的进度报告。LuaJIT 模拟基准包含 bit32 包装开销，因此
+不是执行器性能估计。
 
-A read-only migration audit of the current local byte-encoded configuration
-covered **8 providers and 11 key entries, all personal**. Every protected connection
-field roundtripped through enable, cold unlock and private import using the full
-production 600,000-iteration derivation. The original executor file was unchanged
-and no credential was sent over the network. The final literal scan checked
-**533 artifacts against 13 distinct credential strings**, found no raw matches,
-and confirmed the original configuration stayed unchanged. The local audit script is retained under the ignored
-`refer/credential-vault-20261029/local_config.lua` path.
+对当前本地字节编码配置的只读迁移审计
+覆盖 **8 个提供商与 11 条密钥条目，全部为个人条目**。每个受保护的连接
+字段均使用完整生产级 600,000 次迭代派生，经由启用、冷解锁与私有导入
+完成往返。原始执行器文件未改动，
+且没有凭据经网络发送。最终字面量扫描以
+**13 个不同凭据字符串**检查 **533 个产物**，未发现原始匹配，
+并确认原始配置保持不变。本地审计脚本保留在被忽略的
+`refer/credential-vault-20261029/local_config.lua` 路径下。
 
-## Required password follow-up
+## 强制密码后续
 
-The current source adds mandatory setup/unlock on every execution, including
-same-build reuse, changed-build replacement and embedding with `ui = false`.
-The Settings entry is **Project UAI**. Earlier optional-vault results above do
-not establish correctness of this new access gate.
+当前源码在每次执行时都要求强制设置/解锁，包括
+同构建复用、构建变更替换以及以 `ui = false` 嵌入。
+设置入口为 **Project UAI**。上文早期可选保险库的结果
+并不能证明这一新访问闸门的正确性。
 
-The required-bootstrap fixture covers retained legacy keys, verified setup,
-wrong passwords, repeat authentication, warm credential edits, cold startup,
-cancelled/failed setup, disabled storage opt-outs, forgotten-password reset,
-missing filesystem support and public no-key routes. Admission coverage checks
-direct provider and tool entry points. Configuration export, import preview,
-import application and direct replacement are rejected during setup and warm
-reauthentication. Reload coverage retains the existing
-busy-work/draft/storage protections and authenticates before ordinary work.
-Synthetic integration fixtures shorten only password derivation; the real
-authenticated envelope remains in use.
+强制引导夹具覆盖保留的旧版密钥、经校验的设置、
+密码错误、重复认证、热态凭据编辑、冷启动、
+取消/失败的设置、禁用的存储退出选项、忘记密码重置、
+缺失的文件系统支持与公开无密钥路由。准入覆盖检查
+直接提供商与工具入口点。配置导出、导入预览、
+导入应用与直接替换在设置期间与热态
+重新认证期间均被拒绝。重载覆盖保留现有的
+忙碌工作/草稿/存储保护，并在常规工作之前完成认证。
+合成集成夹具仅缩短密码派生；真实的
+认证信封仍在使用。
 
-Build inputs were manually reviewed before building, and subsequent test fixture
-updates were reviewed before their runs. The generated bundle and manifest were
-inspected before verification. The final artifact is
-**`3.7.2-c2a73a961be9e7c8`**, with **248 modules** and **3,924,936 bytes**.
-Its immediate predecessor, `3.7.2-83604373825495c5`, differs only in the reviewed
-Exit-refusal toast fix; its bootstrap is unchanged. The table reports the latest
-result for each suite across these two builds. Required startup, password UI and
-the executable embedding examples passed against the final artifact.
+构建输入在构建前经过人工审阅，后续测试夹具
+更新在运行前经过审阅。生成的打包产物与清单在
+验证前经过检查。最终产物为
+**`3.7.2-c2a73a961be9e7c8`**，包含 **248 个模块**与 **3,924,936 字节**。
+其直接前身 `3.7.2-83604373825495c5` 仅在经审阅的
+Exit 拒绝提示修复上不同；其引导程序未改动。该表报告这两个构建中
+每个套件的最新结果。强制启动、密码 UI 与
+可执行文件嵌入示例在最终产物上均通过。
 
-**25 suites, 2,775 checks/assertions, all passed.** Each Lua suite runs as
-`luajit test/<suite>.lua`, except the full command shown.
+**25 个套件，2,775 项检查/断言，全部通过。** 每个 Lua 套件以
+`luajit test/<suite>.lua` 运行，表中给出完整命令的除外。
 
-| Suite | Checks/assertions | Result |
+| 套件 | 检查数/断言数 | 结果 |
 | --- | ---: | --- |
-| `credential_vault_required` | 44 | Passed |
-| `credential_vault_admission` | 40 | Passed |
-| `credential_vault_storage` | 131 | Passed |
-| `credential_vault_concurrency` | 59 | Passed |
-| `credential_vault_ui` | 105 | Passed |
-| `credential_ui` | 38 | Passed |
-| `credential_crypto` | 119 | Passed |
-| `config_transfer` | 163 | Passed |
-| `build_reload` | 64 | Passed |
-| `embedding_boot` | 53 | Passed |
-| `embedding_sdk` | 34 | Passed |
-| `embedding_examples` | 20 | Passed |
-| `provider_transport` | 554 | Passed |
-| `request_accounting` | 44 | Passed |
-| `free_provider` | 116 | Passed |
-| `free_routing` | 196 | Passed |
-| `mcp_bridge` | 28 | Passed |
-| `desktop_bridge` | 43 | Passed |
-| `bridge_lifecycle` | 54 | Passed |
-| `bridge_concurrency` | 13 | Passed |
-| `mobile_relay` | 38 | Passed |
-| `relay_discovery` | 207 | Passed |
-| `relay_poll_ownership` | 35 | Passed |
-| `luajit test/run.lua --native boot config changelog` | 419 | Passed |
-| `ui_library` | 158 | Passed |
+| `credential_vault_required` | 44 | 通过 |
+| `credential_vault_admission` | 40 | 通过 |
+| `credential_vault_storage` | 131 | 通过 |
+| `credential_vault_concurrency` | 59 | 通过 |
+| `credential_vault_ui` | 105 | 通过 |
+| `credential_ui` | 38 | 通过 |
+| `credential_crypto` | 119 | 通过 |
+| `config_transfer` | 163 | 通过 |
+| `build_reload` | 64 | 通过 |
+| `embedding_boot` | 53 | 通过 |
+| `embedding_sdk` | 34 | 通过 |
+| `embedding_examples` | 20 | 通过 |
+| `provider_transport` | 554 | 通过 |
+| `request_accounting` | 44 | 通过 |
+| `free_provider` | 116 | 通过 |
+| `free_routing` | 196 | 通过 |
+| `mcp_bridge` | 28 | 通过 |
+| `desktop_bridge` | 43 | 通过 |
+| `bridge_lifecycle` | 54 | 通过 |
+| `bridge_concurrency` | 13 | 通过 |
+| `mobile_relay` | 38 | 通过 |
+| `relay_discovery` | 207 | 通过 |
+| `relay_poll_ownership` | 35 | 通过 |
+| `luajit test/run.lua --native boot config changelog` | 419 | 通过 |
+| `ui_library` | 158 | 通过 |
 
-Final native static verification parsed **244 files** and linked **243 modules**
-with no failures or warnings. The official Luau compiler accepted client sources,
-bootstrap and the reviewed tests (**77 KLOC**, **3,933 KB bytecode**).
-`luajit tools/bundle.lua --native --check` confirmed artifact freshness.
-The UI-library guide's embedding paragraph was regenerated with
-`node tools/build_ui_lib.js`; its standalone **1.4.0** bundle remained unchanged
-at **13 modules**, **183,395 bytes**. The embedded guide was inspected, and
-`node tools/build_ui_lib.js --check` passed.
+最终原生静态验证解析 **244 个文件**并链接 **243 个模块**，
+无失败或警告。官方 Luau 编译器接受了客户端源码、
+引导程序与经审阅的测试（**77 KLOC**，**3,933 KB 字节码**）。
+`luajit tools/bundle.lua --native --check` 确认产物新鲜度。
+UI 库指南的嵌入段落已用
+`node tools/build_ui_lib.js` 重新生成；其独立的 **1.4.0** 打包产物保持
+**13 个模块**、**183,395 字节**不变。嵌入指南经过检查，且
+`node tools/build_ui_lib.js --check` 通过。
 
-The updated embedding fixtures explicitly authenticate and select their synthetic
-provider. The reload fixture retains an independent provider template because
-encrypted unload clears live credential objects. These fixture corrections were
-reviewed before rerunning; their failures did not require runtime changes.
-Example coverage verifies blocked requests before password entry and an explicitly
-empty provider chain for its missing-provider case.
+更新后的嵌入夹具显式认证并选择其合成
+提供商。重载夹具保留独立的提供商模板，因为
+加密卸载会清除活动凭据对象。这些夹具修正均在重跑之前
+经过审阅；其失败无需改动运行时。示例覆盖在输入密码前验证被阻止的请求，
+并为其缺失提供商用例验证显式清空的提供商链。
 
-A final read-only literal scan checked **536 artifacts against 13 distinct
-credential strings**, found no matches, and confirmed the original executor
-configuration was unchanged. It made no network requests. Logs are retained in
-the ignored `refer/credential-required-20261029/` directory.
+最终只读字面量扫描以 **13 个不同凭据字符串**检查 **536 个产物**，
+未发现匹配，并确认原始执行器
+配置未改动。它未发出任何网络请求。日志保留在
+被忽略的 `refer/credential-required-20261029/` 目录中。
 
-## Setup warning and presentation follow-up
+## 设置警告与呈现后续
 
-The encrypted configuration example and its generation helpers were removed.
-Setup now groups password fields beneath a themed **NO PASSWORD RECOVERY**
-callout. It explains that resetting removes credentials saved in the vault,
-requires re-entry, and does not revoke provider keys or erase existing backups.
-Show/Hide controls sit beside the field labels. Validation errors and initial
-progress scroll into view without moving the user's scroll on later progress ticks.
+加密配置示例及其生成辅助工具已移除。
+设置现在将密码字段归入一个主题化的 **NO PASSWORD RECOVERY**
+提示框下。它说明重置会删除保险库中保存的凭据、
+需要重新输入，且不会吊销提供商密钥或清除现有备份。
+显示/隐藏控件位于字段标签旁。校验错误与初始
+进度会滚动进入视图，而在后续进度跳动时不再移动用户的滚动位置。
 
-Source, documentation and test changes were manually reviewed before rebuilding.
-The inspected final artifact is **`3.7.2-645284708312dc87`**, with **248 modules**
-and **3,928,190 bytes**. Only the `ui/credentialvault` module hash changed from
-the previous required-password build; the bootstrap and runtime modules match.
+源码、文档与测试改动在重建前经过人工审阅。
+经检查的最终产物为 **`3.7.2-645284708312dc87`**，包含 **248 个模块**
+与 **3,928,190 字节**。与上一版强制密码构建相比，仅 `ui/credentialvault` 模块哈希
+发生变化；引导程序与运行时模块一致。
 
-All **203 assertions** passed across the focused suites:
+全部 **203 项断言**在聚焦套件中通过：
 
-| Suite | Assertions | Result |
+| 套件 | 断言数 | 结果 |
 | --- | ---: | --- |
-| `credential_vault_ui` | 121 | Passed |
-| `credential_ui` | 38 | Passed |
-| `credential_vault_required` | 44 | Passed |
+| `credential_vault_ui` | 121 | 通过 |
+| `credential_ui` | 38 | 通过 |
+| `credential_vault_required` | 44 | 通过 |
 
-The native static checker parsed **244 files** and linked **243 modules** with
-no failures or warnings. The official Luau compiler accepted client sources,
-bootstrap and the vault UI test (**74 KLOC**, **3,737 KB bytecode**).
-`luajit tools/bundle.lua --native --check` confirmed artifact freshness.
+原生静态检查器解析 **244 个文件**并链接 **243 个模块**，
+无失败或警告。官方 Luau 编译器接受了客户端源码、
+引导程序与保险库 UI 测试（**74 KLOC**，**3,737 KB 字节码**）。
+`luajit tools/bundle.lua --native --check` 确认产物新鲜度。
 
-Initial layout fixtures incorrectly assumed automatic list geometry in the mock
-and omitted responsive initialization. Reviewed corrections use declared layout
-order and explicit synthetic geometry. The short-keyboard case also guards against
-scrolling past feedback to an inline footer. These checks cover behavior, not native
-text rendering. Image tests were skipped at the user's request. Logs are retained
-in the ignored `refer/vault-setup-20261029/` directory.
+初始布局夹具错误地假定了模拟中的自动列表几何，
+并遗漏了响应式初始化。经审阅的修正使用声明的布局
+顺序与显式的合成几何。短键盘用例还防止滚动越过
+反馈而到达内联页脚。这些检查覆盖行为，而非原生
+文本渲染。图像测试已按用户要求跳过。日志保留在
+被忽略的 `refer/vault-setup-20261029/` 目录中。
 
-## Credential choice and compact progress follow-up
+## 凭据选择与紧凑进度后续
 
-The client now offers the explicit red **Continue without encryption** action.
-Its verified save preserves keys and pool metadata using reversible byte storage,
-remembers the local choice, and skips subsequent password prompts. An existing
-encrypted vault must be authenticated before switching while retaining keys.
-Imports retain the destination's protection choice. Failed saves, cancelled work,
-reentrant password challenges and failed rollback/recovery remain guarded.
+客户端现在提供显式的红色 **Continue without encryption** 操作。
+其经校验的保存使用可逆字节存储保留密钥与池元数据，
+记住本地选择，并跳过后续密码提示。现有
+加密保险库必须先完成认证才能切换，同时保留密钥。
+导入保留目标端的保护选择。保存失败、取消的工作、
+可重入的密码质询与失败的回滚/恢复仍受保护。
 
-Setup and unlock share a compact bottom-right percentage with Cancel and, during
-required startup, Exit. Password work hides its dialog and backdrop and releases
-native text focus. The dialog fits its contents when asking for a password.
-Error or explicit cancellation restores entry; invalidated import sources close
-their stale dialog. Progress updates only when the displayed percentage changes.
+设置与解锁共享一个位于右下角的紧凑百分比，并附有 Cancel，在
+强制启动期间则附有 Exit。密码工作会隐藏其对话框与背景，并释放
+原生文本焦点。密码对话框在请求密码时会适应其内容。
+错误或显式取消会恢复输入；失效的导入源会关闭
+其过时对话框。进度仅在显示的百分比发生变化时更新。
 
-New vaults and explicit password changes use **100,000 PBKDF2 iterations**.
-Existing vaults retain their recorded count during unlock and ordinary saves.
-Unlocking and changing the master password, including to the same password,
-rewrites an older vault at the new work factor without discarding its keys.
+新保险库与显式密码变更使用 **100,000 次 PBKDF2 迭代**。
+现有保险库在解锁与常规保存期间保留其记录的次数。
+解锁与变更主密码，包括变更为同一密码，
+会以新的工作因子重写较旧的保险库，而不丢弃其密钥。
 
-All source, documentation, examples and test inputs were manually audited before
-the build. The regenerated UI-library guide and client output were inspected
-before verification. The final client is **`3.7.2-b6970a6995b16277`**, with
-**248 modules** and **3,937,245 bytes**. Its bootstrap is unchanged from the
-previous setup-presentation build. The standalone UI library remains **1.4.0**,
-**13 modules**, **183,395 bytes**.
+全部源码、文档、示例与测试输入在构建前经过人工审计。
+重新生成的 UI 库指南与客户端输出在验证前
+经过检查。最终客户端为 **`3.7.2-b6970a6995b16277`**，包含
+**248 个模块**与 **3,937,245 字节**。其引导程序与
+上一版设置呈现构建相比未改动。独立 UI 库仍为 **1.4.0**、
+**13 个模块**、**183,395 字节**。
 
-**13 suites, 1,752 checks/assertions, all passed:**
+**13 个套件，1,752 项检查/断言，全部通过：**
 
-| Suite | Checks/assertions | Result |
+| 套件 | 检查数/断言数 | 结果 |
 | --- | ---: | --- |
-| `credential_vault` | 58 | Passed |
-| `credential_vault_storage` | 177 | Passed |
-| `credential_vault_concurrency` | 59 | Passed |
-| `credential_vault_required` | 50 | Passed |
-| `credential_vault_admission` | 40 | Passed |
-| `credential_crypto` | 119 | Passed |
-| `config_transfer` | 163 | Passed |
-| `credential_vault_ui` | 185 | Passed |
-| `credential_ui` | 38 | Passed |
-| `build_reload` | 64 | Passed |
-| `embedding_examples` | 20 | Passed |
-| `luajit test/run.lua --native boot config changelog overlays modal` | 621 | Passed |
-| `ui_library` | 158 | Passed |
+| `credential_vault` | 58 | 通过 |
+| `credential_vault_storage` | 177 | 通过 |
+| `credential_vault_concurrency` | 59 | 通过 |
+| `credential_vault_required` | 50 | 通过 |
+| `credential_vault_admission` | 40 | 通过 |
+| `credential_crypto` | 119 | 通过 |
+| `config_transfer` | 163 | 通过 |
+| `credential_vault_ui` | 185 | 通过 |
+| `credential_ui` | 38 | 通过 |
+| `build_reload` | 64 | 通过 |
+| `embedding_examples` | 20 | 通过 |
+| `luajit test/run.lua --native boot config changelog overlays modal` | 621 | 通过 |
+| `ui_library` | 158 | 通过 |
 
-The native checker parsed **244 files** and linked **243 modules** with no
-failures or warnings. The official Luau compiler accepted client source,
-bootstrap, the changed credential tests, benchmark and embedding example
-(**76 KLOC**, **3,866 KB bytecode**). One new UI assertion initially waited beyond
-the synthetic operation's completion because the key helper advances time.
-The reviewed test-only correction dispatches both key events before checking
-pending work; the final UI suite and compilation passed. No production code
-changed after the inspected build. Both artifact-freshness checks passed.
+原生检查器解析 **244 个文件**并链接 **243 个模块**，无
+失败或警告。官方 Luau 编译器接受了客户端源码、
+引导程序、改动的凭据测试、基准与嵌入示例
+（**76 KLOC**，**3,866 KB 字节码**）。一个新 UI 断言最初在
+合成操作完成之后仍在等待，因为按键辅助函数会推进时间。
+经审阅的仅测试修正在检查待处理工作之前派发两个按键
+事件；最终 UI 套件与编译均通过。受检构建之后
+未改动任何生产代码。两项产物新鲜度检查均通过。
 
-The native Luau benchmark derived the full 64-byte key at 100,000 iterations in
-**15.542 seconds**, with **1,564 callbacks**, a **9.944 ms mean** gap and
-**70.200 ms maximum** gap. It excludes frame waits and does not predict executor
-timing. Image tests were skipped as requested; no native rendering claim is made.
-Logs are retained under `refer/credential-choice-20261029/`.
+原生 Luau 基准在 100,000 次迭代下派生出完整的 64 字节密钥，耗时
+**15.542 秒**，包含 **1,564 次回调**、**9.944 ms 平均**间隔与
+**70.200 ms 最大**间隔。它不含帧等待，也不预测执行器
+时序。图像测试已按要求跳过；不作任何原生渲染声明。
+日志保留在 `refer/credential-choice-20261029/` 下。
 
-## Progress titles follow-up
+## 进度标题后续
 
-The compact progress panel now names its operation above the percentage and
-actions: **Encrypting API keys**, **Decrypting API keys**, **Changing password**
-or **Decrypting config**. Its corner placement and operation lifecycle remain
-the same. Inputs were manually audited, then the rebuilt output was inspected.
-Build **`3.7.2-af495ac48d709df0`** contains **248 modules**, **3,937,904 bytes**;
-only `ui/credentialvault` changed from the previous build.
+紧凑进度面板现在在百分比与操作之上命名其操作：
+**Encrypting API keys**、**Decrypting API keys**、**Changing password**
+或 **Decrypting config**。其角落位置与操作生命周期保持
+不变。输入经过人工审计，随后检查了重建后的输出。
+构建 **`3.7.2-af495ac48d709df0`** 包含 **248 个模块**、**3,937,904 字节**；
+与上一版构建相比仅 `ui/credentialvault` 发生变化。
 
-The vault UI suite passed **23 cases / 185 assertions**. Native static checks
-passed **244 files / 243 modules** without failures or warnings. The official
-Luau compiler accepted the changed UI source and test, and bundle freshness
-passed. Image tests were not run.
+保险库 UI 套件通过 **23 个用例 / 185 项断言**。原生静态检查
+通过 **244 个文件 / 243 个模块**，无失败或警告。官方
+Luau 编译器接受了改动的 UI 源码与测试，且打包产物新鲜度
+通过。未运行图像测试。
 
-## Scope and limits
+## 范围与限制
 
-The real executor configuration and bridge, desktop and companion implementations
-remain unchanged. Migration occurs when the updated client loads an existing
-configuration and the setup prompt verifies either password encryption or the
-explicit unprotected-storage choice. Existing encrypted configurations require
-their password before saved credentials can be used or preserved in another mode.
-These verification results were recorded before publication.
+真实执行器配置以及桥接、桌面端与伴侣端实现
+保持未改动。当更新后的客户端加载现有
+配置且设置提示验证密码加密或显式的无保护存储选择时，
+迁移会发生。现有加密配置需要
+其密码，之后才能在另一模式下使用或保留已保存的凭据。
+这些验证结果在发布之前记录。
 
-Offline verification does not establish native Roblox rendering, executor input
-behavior, acceptance of the replacement key by the upstream service, or server-side
-availability enforcement. No upstream keys were revoked. Local scheduling is
-bypassable, and legacy byte encoding is reversible rather than encryption.
-The vault protects saved credentials but cannot isolate passwords or live keys
-from scripts with equivalent executor access. Lua cannot guarantee memory erasure.
-See [API key security](API_KEY_SECURITY.md) for the storage contract and guidance.
+离线验证不能证明原生 Roblox 渲染、执行器输入
+行为、上游服务对替换密钥的接受，或服务端
+可用性强制。未吊销任何上游密钥。本地日程是
+可绕过的，且旧版字节编码是可逆的，而非加密。
+保险库保护已保存的凭据，但无法将密码或活动密钥
+与具有同等执行器访问权限的脚本隔离。Lua 无法保证内存擦除。
+存储契约与指导参见 [API 密钥安全](API_KEY_SECURITY.md)。

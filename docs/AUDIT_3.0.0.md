@@ -1,57 +1,31 @@
-# Project UAI 3.0.0 audit
+# Project UAI 3.0.0 审计
 
-This release concentrates on less repeated agent work, faster repeated script
-inspection and more accurate tool outcomes. It keeps the LuaJIT-compatible
-factory-module architecture and the established client presentation layer.
-The standalone UI library and bridge/companion implementations are unchanged.
+本次发布着眼于减少重复的代理工作、加快重复的脚本检查，以及更准确的工具结果。它保留 LuaJIT 兼容的工厂模块架构与既有的客户端呈现层。独立 UI 库与桥接/配套应用实现未变。
 
-The source inventory contains 206 modules: 198 reviewed and eight explicitly
-excluded below. All 174 exported tool names are accounted for. Review is recorded
-by module and tool
-in the ledgers below, including implementations retained after review. Generated
-payload literals are not a manual source-logic audit. The final verification
-record gives exact coverage, commands and results after the build gate.
+源代码清单包含 206 个模块：198 个已审阅，8 个在下文明确排除。全部 174 个导出的工具名称均已计入。审阅按下文的台账逐模块、逐工具记录，包括审阅后保留的实现。生成的载荷字面量不构成对源代码逻辑的人工审计。最终验证记录给出构建门禁之后的精确覆盖、命令与结果。
 
-| Area | Inventory | Review record |
+| 领域 | 清单 | 审阅记录 |
 | --- | ---: | --- |
-| Agent | 16 | [Agent ledger](AUDIT_3.0.0_AGENT.md) |
-| Providers | 10 | [Agent ledger](AUDIT_3.0.0_AGENT.md) |
-| Embedding | 2 | [Agent ledger](AUDIT_3.0.0_AGENT.md) |
-| Network | 12 | Six native modules reviewed; six bridge/relay modules excluded below. |
-| Runtime | 58 | [Runtime ledger](AUDIT_3.0.0_RUNTIME.md), [scripting ledger](AUDIT_3.0.0_SCRIPTING.md), supplemental rows below. |
-| Tools | 43 | [Core tool ledger](AUDIT_3.0.0_TOOLS.md) and the agent/runtime/scripting ledgers. |
-| Client UI | 65 | Existing client reviewed across all three workstreams; exact modules listed in their ledgers. |
+| 代理 | 16 | [代理台账](AUDIT_3.0.0_AGENT.md) |
+| 提供方 | 10 | [代理台账](AUDIT_3.0.0_AGENT.md) |
+| 嵌入 | 2 | [代理台账](AUDIT_3.0.0_AGENT.md) |
+| 网络 | 12 | 六个原生模块已审阅；六个桥接/中继模块在下文排除。 |
+| 运行时 | 58 | [运行时台账](AUDIT_3.0.0_RUNTIME.md)、[脚本台账](AUDIT_3.0.0_SCRIPTING.md)，补充行见下文。 |
+| 工具 | 43 | [核心工具台账](AUDIT_3.0.0_TOOLS.md)以及代理/运行时/脚本台账。 |
+| 客户端 UI | 65 | 既有客户端在全部三条工作流中经审阅；精确模块列于各自台账。 |
 
-| Supplemental module | Review |
+| 补充模块 | 审阅 |
 | --- | --- |
-| `runtime/changelog` | New release entry and existing data-driven renderer/marker contract reviewed; historical release data preserved. |
-| `runtime/gravity_docs` | Embedded guide and template reviewed: namespaced state, exact shape contract, bounded settings and explicit cleanup; retained. |
-| `runtime/script_development_docs` | Generated from the reviewed scripting guide; section order, continuation content and generated diff inspected after build. |
+| `runtime/changelog` | 新发布条目与既有数据驱动渲染器/标记契约经审阅；历史发布数据保留。 |
+| `runtime/gravity_docs` | 内嵌指南与模板经审阅：命名空间状态、精确形态契约、有界设置与显式清理；保留。 |
+| `runtime/script_development_docs` | 由已审阅的脚本指南生成；构建后检查了章节顺序、续接内容与生成差异。 |
 
-Eight excluded source modules: `net/bridge`, `net/bridge_commands`,
-`net/bridge_connection`, `net/relay`, `net/relay_link`, `net/transport`,
-`runtime/bridge_install`, and `runtime/ui_library_docs`. External `desktop/`,
-`companion/`, `ui-lib/`, their bundles/manifests, and the UI library guide are
-outside scope. Native bundle generation still embeds existing protected modules;
-their source bytes must remain unchanged. Website generation updates the client
-version/catalogue and its publishing mirror using the reviewed native bundle.
+八个被排除的源模块：`net/bridge`、`net/bridge_commands`、`net/bridge_connection`、`net/relay`、`net/relay_link`、`net/transport`、`runtime/bridge_install`，以及 `runtime/ui_library_docs`。外部 `desktop/`、`companion/`、`ui-lib/`、其捆绑包/清单，以及 UI 库指南均不在范围内。原生捆绑包生成仍会嵌入既有的受保护模块；其源代码字节必须保持不变。网站生成使用已审阅的原生捆绑包更新客户端版本/目录及其发布镜像。
 
-## Evidence and limits
+## 证据与限制
 
-The important improvements are directly observable in focused fixtures: warm
-project analysis avoids additional compiles, filename discovery performs no
-content reads, a debounce burst owns one wakeup, continued web/HTTP pages do not
-refetch, and sorted player pages capture each distance once. Exact-byte checks,
-compiler identity, ownership, cancellation and bounded retention remain part of
-the relevant contract. These are work counters, not claimed wall-clock speedups.
+重要改进在聚焦夹具中可直接观察到：已预热的项目分析避免额外的编译，文件名发现不进行内容读取，防抖突发只拥有一次唤醒，续接的 Web/HTTP 分页不重新抓取，排序后的玩家分页对每个距离只捕获一次。精确字节检查、编译器标识、归属、取消与有界保留仍属相关契约的一部分。这些是工作量计数器，而非所声称的挂钟加速。
 
-New schemas and shared bounded validation improve the catalogue's common call
-boundary. Per-tool ledgers identify domain changes separately from retained
-guarded behavior. The protected `ui_library_docs` definition is unchanged.
+新 schema 与共享的有界校验改善了目录的通用调用边界。逐工具台账将领域变更与保留的受防护行为分别标识。受保护的 `ui_library_docs` 定义未变。
 
-Manual review precedes every build and test. Build outputs are inspected before
-focused verification; fixes are reviewed before rebuilding and retesting. The
-entire native suite is excluded at the user's request. See
-[TESTING_3.0.0.md](TESTING_3.0.0.md) for actual outcomes and native follow-up.
-Synthetic tests do not verify native rendering, real host-input delivery,
-provider quality, server acceptance or native throughput.
+人工审阅先于每次构建与测试。构建输出在聚焦验证之前经检查；修复在重建与重测之前经审阅。完整的原生套件按用户要求排除。实际结果与原生后续事项见 [TESTING_3.0.0.md](TESTING_3.0.0.md)。合成测试不验证原生渲染、真实宿主输入投递、提供方质量、服务器接受度或原生吞吐。

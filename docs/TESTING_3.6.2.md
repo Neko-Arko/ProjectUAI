@@ -1,77 +1,30 @@
-# Project UAI bridge 3.6.2 verification
+# Project UAI 桥接 3.6.2 验证
 
-Prepared October 21, 2026. Bridge 3.6.2 addresses the remaining
-`OpenCode could not verify that a desktop tool was blocked` failure after 3.6.1.
-Client remains 3.6.1; desktop and Android downloads remain 3.6.0.
+编制于 2026 年 10 月 21 日。桥接 3.6.2 处理 3.6.1 之后仍残留的 `OpenCode could not verify that a desktop tool was blocked` 失败。客户端保持 3.6.1；桌面端与 Android 下载保持 3.6.0。
 
-The native execution wrapper could omit its own permission request. A tool state
-could also become visible before its matching pending permission. The fix adds
-an execution gate in the isolated native server and waits for matching permission
-readiness before confirming interruption and returning a blocked-action receipt.
-Exact UAI calls on the private remote MCP server retain the normal Roblox handoff.
-Native tool schemas remain present for free-model compatibility.
+原生执行包装器可能省略其自身的权限请求。工具状态也可能在其对应的待处理权限之前变为可见。修复在隔离的原生服务器中增加执行门，并在确认中断、返回被阻断操作回执之前，等待匹配的权限就绪。私有远程 MCP 服务器上的精确 UAI 调用保留正常的 Roblox 交接。原生工具 schema 为免费模型兼容性而保持存在。
 
-Changed source, tests and documentation were manually audited before building.
-The generated bridge manifest and decoded package were inspected before the
-focused native regressions. The package preserves the original seven root files
-and embeds the adapter and its local plugin generator in `server.js`.
+变更的源代码、测试与文档在构建之前均经人工审计。生成的桥接清单与解码后的包在聚焦原生回归之前经检查。该包保留原有的七个根文件，并将适配器及其本地插件生成器嵌入 `server.js`。
 
-Checks passed:
+检查通过：
 
-- Native adapter: 21 tests. The fixture imports the actual generated execution
-  plugin and exercises blocked `execute`/HTTP code, delayed and partial pending
-  permissions, streamed input transitions, per-location plugin activation,
-  inactive guards, exact session tool scope, interruption and Stop.
-- OpenCode discovery, authenticated bridge transport, security and updater:
-  35 passed, one Unix-only test skipped on Windows. Includes compatibility with
-  the shipped 3.1 updater, idle activation, rollback and pairing-token retention.
-- Existing client OpenCode capability harness: 9 assertions. Actual scoped
-  scripting loop: 7 cases, 29 assertions, including blocked-action recovery.
-- Source/fixture/publication-script syntax and bridge build freshness checks.
+- 原生适配器：21 项测试。夹具导入实际生成的执行插件，并演练被阻断的 `execute`/HTTP 代码、延迟与部分待处理权限、流式输入转换、按位置激活插件、非活动防护、精确的会话工具范围、中断与 Stop。
+- OpenCode 发现、带认证的桥接传输、安全与更新器：35 项通过，1 项仅限 Unix 的测试在 Windows 上跳过。包括与已发布的 3.1 更新器的兼容性、空闲激活、回滚与配对令牌保留。
+- 既有客户端 OpenCode 能力测试框架：9 项断言。实际的作用域脚本循环：7 个用例、29 项断言，包括被阻断操作的恢复。
+- 源代码/夹具/发布脚本语法与桥接构建新鲜度检查。
 
-The installed official OpenCode CLI 2.0.32 was inspected and probed in isolated,
-authenticated loopback servers. Live native `execute` performed internal search
-without a permission request before the guard was installed, reproducing the
-missing evidence behind the previous fatal error. Denying every native tool
-instead caused `FreeTierError`, so the fix preserves those schemas. Fresh request
-locations also initially reported no active plugin for roughly 300 ms; the
-adapter now waits for its guard before submitting any prompt.
+已安装的官方 OpenCode CLI 2.0.32 在隔离、带认证的回环服务器中接受检查与探测。在防护安装之前，实机原生 `execute` 在无权限请求的情况下执行了内部搜索，复现了先前致命错误背后缺失的证据。若改为拒绝所有原生工具，则会导致 `FreeTierError`，因此修复保留这些 schema。新的请求位置在最初约 300 ms 内也报告无活动插件；适配器现在会在提交任何提示之前等待其防护就绪。
 
-Live production adapter checks passed with `deepseek-v4.1-flash-free` and
-`big-pickle`: text, declared Roblox lookup handoff, and supplied tool-result replay.
-Big Pickle selected native `execute`; the adapter returned HTTP 200 with a reserved
-`opencode_host_action` receipt after confirmed interruption. Replaying that actual
-receipt through DeepSeek Chat and Big Pickle Responses produced declared Roblox
-lookup calls. Big Pickle Responses also passed direct tool handoff. No host
-permission was approved and no real Roblox action was executed; these probes
-verify provider transport and continuation with synthetic tool results. The full
-native suite and Roblox rendering/input were not exercised for this bridge patch.
+带 `deepseek-v4.1-flash-free` 与 `big-pickle` 的实机生产适配器检查通过：文本、所声明的 Roblox 查询交接，以及所提供的工具结果重放。Big Pickle 选择了原生 `execute`；适配器在确认中断后返回 HTTP 200 及保留的 `opencode_host_action` 回执。将该实际回执经 DeepSeek Chat 与 Big Pickle Responses 重放，产生了所声明的 Roblox 查询调用。Big Pickle Responses 亦通过直接工具交接。未批准任何宿主权限，也未执行任何真实 Roblox 操作；这些探测验证的是提供方传输与使用合成工具结果的续接。本次桥接补丁未演练完整的原生套件与 Roblox 渲染/输入。
 
-## Follow-up with the handover API key
+## 使用交接 API 密钥的后续检查
 
-The initial native CLI checks above used the official free-model connection
-without supplying a provider API key. A follow-up used the designated secondary
-OpenCode key from the private handover, read only into memory.
+上述初始原生 CLI 检查使用了官方免费模型连接，未提供提供方 API 密钥。后续检查使用了私有交接中的指定次级 OpenCode 密钥，仅读入内存。
 
-Requests carrying that key through the production inference bridge passed
-DeepSeek text, continuation from the actual blocked `execute` receipt, and
-tool-result replay, all HTTP 200. Duplicate submissions retained the same job.
-The native backend intentionally does not forward provider keys into the CLI.
+携带该密钥经生产推理桥接的请求通过了 DeepSeek 文本、从实际被阻断的 `execute` 回执续接，以及工具结果重放，全部为 HTTP 200。重复提交保留同一作业。原生后端有意不将提供方密钥转发进 CLI。
 
-Direct requests to `/zen/v1/chat/completions` sent the same real key upstream
-and used the production Lua adapter's request builder, desktop headers, seven
-compatibility declarations and response parser. DeepSeek passed exact text,
-`uai_lookup` invocation and replay of the returned call ID, arguments and
-reasoning. The complete tool stream ended with `tool_calls`; synthetic results
-were supplied without executing a host or Roblox action.
+直接发往 `/zen/v1/chat/completions` 的请求将同一真实密钥发往上游，并使用生产 Lua 适配器的请求构造器、桌面端请求头、七项兼容性声明与响应解析器。DeepSeek 通过了精确文本、`uai_lookup` 调用，以及对返回调用 ID、参数与推理的重放。完整工具流以 `tool_calls` 结束；合成结果在未执行任何宿主或 Roblox 操作的情况下提供。
 
-The previously verified `muse-spark-1.3-contributor-free` Responses model returned
-HTTP 410 `ModelDeprecated`. The authenticated current model list supplied no
-free Muse/GPT/Grok replacement, so direct keyed Responses inference was not
-verified in this follow-up. Native Responses checks above remain valid for the
-tested CLI catalog. No private key was written to source, artifacts or logs.
+先前已验证的 `muse-spark-1.3-contributor-free` Responses 模型返回 HTTP 410 `ModelDeprecated`。带认证的当前模型列表未提供免费的 Muse/GPT/Grok 替代项，因此本次后续检查未验证直接带密钥的 Responses 推理。上述原生 Responses 检查对已测试的 CLI 目录仍然有效。任何私有密钥均未写入源代码、产物或日志。
 
-The stable release is `bridge-v3.6.2` with `bridge-release.json` and
-`uai-bridge-package.json`. Installed desktop 3.6.0 checks this release through its
-existing bridge updater and activates it when work and retained receipts are idle.
-No desktop executable or client bundle rebuild is required for this bridge fix.
+稳定版本为 `bridge-v3.6.2`，含 `bridge-release.json` 与 `uai-bridge-package.json`。已安装的桌面端 3.6.0 通过其既有桥接更新器检查此版本，并在工作与保留回执空闲时激活它。本次桥接修复无需重建桌面端可执行文件或客户端捆绑包。

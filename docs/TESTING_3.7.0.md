@@ -1,181 +1,180 @@
-# Project UAI 3.7.0 verification
+# Project UAI 3.7.0 验证
 
-Prepared October 25, 2026. The Roblox client, bridge/web UI, Windows desktop
-and Android companion share version 3.7.0; Android uses version code 7 and the
-existing production signer. Cline is bridge-only. Kilo recovery is available in
-the desktop bridge and Android companion.
+编写于 2026 年 10 月 25 日。Roblox 客户端、桥接/Web UI、Windows 桌面端
+与 Android 伴侣端共用版本 3.7.0；Android 使用版本代码 7 与
+现有的生产签名者。Cline 仅限桥接。Kilo 恢复在
+桌面桥接与 Android 伴侣端中可用。
 
-Changed source, documentation, tests and build inputs were manually reviewed
-before builds. Generated outputs were inspected before verification, and fixes
-were reviewed before retesting. The checks below establish the stated fixture
-and Windows behavior; they do not establish native Roblox or Android behavior.
+改动的源码、文档、测试与构建输入在构建前经过人工审阅。
+生成的输出在验证前经过检查，修正在重测前
+经过审阅。以下检查证明了所述夹具
+与 Windows 行为；它们不能证明原生 Roblox 或 Android 行为。
 
-## Bridge and tunnels
+## 桥接与隧道
 
-| Check | Result |
+| 检查 | 结果 |
 | --- | --- |
-| Full bridge suite | 176 tests: 173 passed, 0 failures, 0 cancellations, 3 conditional/platform skips |
-| Kilo focused fixtures | 17 tests covering complete quota refusals, credential exclusions, bounded retry, cooldown, cancellation, TLS and process lifecycle |
-| Cline native fixtures | 12 process/HTTP tests covering authentication, exact free-model selection, host-tool denial, validated handoff, Unicode streaming, cancellation and cleanup |
-| Cline routing fixtures | 3 tests: reserved URLs cannot escape to outbound HTTP, errors stay terminal, Stop prevents late completion |
-| Live Kilo helper | Verified archive/startup, HTTPS catalog response 200 with 401 models, circuit generation 1, owned-process shutdown and private-session removal |
-| Live Cline 3.0.73 text | Existing signed-in account, `reflection/beam-free`, HTTP 200 with the exact requested text |
-| Live Cline tool handoff | HTTP 200 with both `get_workspace_snapshot` and `get_selection` in the completed batch; no Roblox tools executed by this probe |
-| Browser | Existing connection, Tunnels and model-catalog lifecycle fixtures passed, including live SSE status, refresh, exact model-ID copy, malformed catalogs, cost coverage and actual bridge disconnect |
-| Browser layout | Tunnels and model dialogs inspected at 320, 390 and 1440 px; long IDs fit and six screenshots were retained locally |
-| Bridge package | 21 files; embedded tunnel modules inspected; deterministic freshness check passed |
+| 完整桥接套件 | 176 个测试：173 个通过，0 个失败，0 个取消，3 个条件/平台跳过 |
+| Kilo 聚焦夹具 | 17 个测试，覆盖完整配额拒绝、凭据排除、有界重试、冷却、取消、TLS 与进程生命周期 |
+| Cline 原生夹具 | 12 个进程/HTTP 测试，覆盖认证、确切免费模型选择、宿主工具拒绝、经校验的交接、Unicode 流式传输、取消与清理 |
+| Cline 路由夹具 | 3 个测试：保留 URL 无法逃逸到出站 HTTP，错误保持终止态，Stop 阻止延迟完成 |
+| Kilo 实时辅助进程 | 已验证归档/启动、HTTPS 目录响应 200 且含 401 个模型、熔断代次 1、自有进程关闭与私有会话移除 |
+| Cline 3.0.73 实时文本 | 现有已登录账户，`reflection/beam-free`，HTTP 200 且返回确切请求文本 |
+| Cline 实时工具交接 | HTTP 200，完成批次中同时含 `get_workspace_snapshot` 与 `get_selection`；本探测未执行任何 Roblox 工具 |
+| 浏览器 | 现有连接、Tunnels 与模型目录生命周期夹具通过，包括实时 SSE 状态、刷新、精确模型 ID 复制、畸形目录、成本覆盖与真实桥接断开 |
+| 浏览器布局 | 在 320、390 与 1440 px 下检查 Tunnels 与模型对话框；长 ID 可容纳，六张截图保留在本地 |
+| 桥接包 | 21 个文件；已检查嵌入的隧道模块；确定性新鲜度检查通过 |
 
-The final bridge suite ran without concurrent compilation. Earlier loaded runs
-hit two pre-existing fixture timing deadlines; both passed unchanged alone and
-in the final complete run. General bridge fixtures disable installed Cline so
-they cannot consume the user's account. Live probes were separate and cleaned
-up their owned processes and temporary files.
+最终桥接套件在无并发编译的情况下运行。较早的加载运行
+触及两个既有的夹具时序截止；二者在单独运行与
+最终完整运行中均未改动即通过。通用桥接夹具会禁用已安装的 Cline，
+以免消耗用户账户。实时探测相互独立，并清理了
+其自有进程与临时文件。
 
-Cline's official promotion feed is the free-model authority. Its generic ACP
-catalog omits some promotional IDs, so the bridge verifies the exact explicit
-model, provider and permission settings before prompting. Images are rejected:
-CLI 3.0.73's ACP handler drops image blocks despite advertising image support.
-Generic UAI temperature and reasoning-effort settings are not forwarded by this
-adapter; the installed CLI's sampling defaults apply.
+Cline 的官方推广源是免费模型的权威依据。其通用 ACP
+目录遗漏部分推广 ID，因此桥接在提示之前会校验确切的显式
+模型、提供商与权限设置。图像被拒绝：
+CLI 3.0.73 的 ACP 处理器会丢弃图像块，尽管其声称支持图像。
+通用 UAI 温度与推理强度设置不由该
+适配器转发；适用已安装 CLI 的采样默认值。
 
-## AgentRouter and provider selection
+## AgentRouter 与提供商选择
 
-| Check | Result |
+| 检查 | 结果 |
 | --- | --- |
-| AgentRouter affected regressions | 172 cases and 2,969 assertions across protocol, Responses lifecycle, bridge metadata, provider compatibility/proxy/transport, pricing and agent-audit suites; no failures |
-| Live AgentRouter catalog | Authenticated account returned `gpt-5.6-sol`, `gpt-6-astra` and `gpt-6.1-sol` |
-| Live UAI tool round trip | `gpt-6.1-sol` returned the real `instance_tree` and `instance_get` declarations as one batch, consumed simulated Roblox results and completed with `UAI_TOOLS_OK FixtureMap`; no Roblox world writes |
-| Final default-request probe | Both native Responses requests returned HTTP 200 in 4.829 and 3.697 seconds with Low effort, `store: false`, parallel tools and optional arguments preserved; no raw parameter overrides |
-| Other AgentRouter models | `gpt-5.6-sol` exceeded the 45-second deadline and was not replayed; `gpt-6-astra` returned a regional token quota refusal |
-| New provider presets | Vercel, FriendliAI, Venice, Nscale, Arcee, AI/ML API and Perplexity Orchestrator checked against current public documentation and available unauthenticated catalogs |
-| Catalog and setup fixtures | Provider catalog filtering (38 assertions), searchable menus (9), setup (16), gallery (437) and editor (169) passed |
-| Model picker fixtures | Layout (58 assertions), touch controls (136), discovery cancellation (9), modal fit (25), dismissal (166) and motion (31) passed |
+| AgentRouter 受影响回归 | 跨协议、Responses 生命周期、桥接元数据、提供商兼容性/代理/传输、定价与代理审计套件共 172 个用例与 2,969 项断言；无失败 |
+| AgentRouter 实时目录 | 已认证账户返回 `gpt-5.6-sol`、`gpt-6-astra` 与 `gpt-6.1-sol` |
+| UAI 实时工具往返 | `gpt-6.1-sol` 将真实的 `instance_tree` 与 `instance_get` 声明作为一批返回，消费了模拟 Roblox 结果并以 `UAI_TOOLS_OK FixtureMap` 完成；未写入 Roblox 世界 |
+| 最终默认请求探测 | 两个原生 Responses 请求分别在 4.829 与 3.697 秒内返回 HTTP 200，保留 Low 强度、`store: false`、并行工具与可选参数；无原始参数覆盖 |
+| 其他 AgentRouter 模型 | `gpt-5.6-sol` 超出 45 秒截止并未重放；`gpt-6-astra` 返回区域 token 配额拒绝 |
+| 新提供商预设 | Vercel、FriendliAI、Venice、Nscale、Arcee、AI/ML API 与 Perplexity Orchestrator 均已对照当前公开文档与可用的未认证目录检查 |
+| 目录与设置夹具 | 提供商目录筛选（38 项断言）、可搜索菜单（9）、设置（16）、画廊（437）与编辑器（169）通过 |
+| 模型选择器夹具 | 布局（58 项断言）、触摸控件（136）、发现取消（9）、模态框适配（25）、关闭（166）与动效（31）通过 |
 
-The temporary AgentRouter credential was removed after testing and is absent
-from release inputs. These live checks establish the supplied account's observed
-behavior, not access for all users or successful inference on every listed model.
-The first successful tool pair took 2.69 and 2.86 seconds; measured latency varies
-with upstream capacity. See [AgentRouter details](AGENTROUTER.md).
+临时 AgentRouter 凭据在测试后已移除，且不在
+发布输入中。这些实时检查证明了所提供账户的观测
+行为，而非所有用户的访问权限或对每个所列模型的成功推理。
+首个成功的工具对耗时 2.69 与 2.86 秒；实测延迟随
+上游容量而变化。参见 [AgentRouter 详情](AGENTROUTER.md)。
 
-Paid inference on the seven new services was not exercised. Vercel credits apply
-only to eligible free-tier models, and AI/ML API's paused free tier is labelled
-paid. Setup guides keep discovery, authentication, balance and tool support
-separate; see [provider setup](providers/README.md).
+未演练七个新服务的付费推理。Vercel 额度仅
+适用于符合条件的免费层模型，且 AI/ML API 已暂停的免费层被标记为
+付费。设置指南将发现、认证、余额与工具支持
+分开说明；参见 [提供商设置](providers/README.md)。
 
-## Client and website
+## 客户端与网站
 
-| Check | Result |
+| 检查 | 结果 |
 | --- | --- |
-| Desktop bridge client transport | 42 checks passed, including forwarding unknown-cost coverage to Cowork |
-| Additional focused client suites | 87 cases and 411 assertions passed: native improvements (46/174), native workspace (13/76), code workspace (14/79) and coding-tab interactions (14/82) |
-| Final coding layouts | 19 cases and 7,924 assertions passed after preserving the Following button's width at 320 px |
-| Official Luau compiler | 259 inputs passed, including all client source, new modules, UI library, examples and generated bundles |
-| Website static checks | 8,703 checks passed |
-| Corrected main-suite scenarios | All 15 affected scenarios passed: 209 checks, no failures, 29 seconds |
+| 桌面桥接客户端传输 | 42 项检查通过，包括将未知成本覆盖转发给 Cowork |
+| 额外聚焦客户端套件 | 87 个用例与 411 项断言通过：原生改进（46/174）、原生工作区（13/76）、代码工作区（14/79）与编码标签页交互（14/82） |
+| 最终编码布局 | 在 320 px 下保留 Following 按钮宽度后，19 个用例与 7,924 项断言通过 |
+| 官方 Luau 编译器 | 259 个输入通过，包括全部客户端源码、新模块、UI 库、示例与生成的打包产物 |
+| 网站静态检查 | 8,703 项检查通过 |
+| 修正后的主套件场景 | 全部 15 个受影响场景通过：209 项检查，无失败，29 秒 |
 
-The inspected final client bundle is `3.7.0-5bbebc4231380c30`, containing 237
-modules and 3,729,615 bytes. Bundle/manifest freshness passed. Its SHA-256 is:
+经检查的最终客户端打包产物为 `3.7.0-5bbebc4231380c30`，包含 237
+个模块与 3,729,615 字节。打包产物/清单新鲜度通过。其 SHA-256 为：
 
 ```text
 3a8d8bf73c5ccc9b50f5f44cc1179b2a353e8675d6560fda5c7453315b7f4509
 ```
 
-The initial comprehensive native runner stopped after the main suite reported
-137 scenarios, 2,184 passing checks and 38 failures. Running the same suite on
-clean `main` reproduced all 38 failure labels (2,170 passing checks). These were
-obsolete fixtures: first-run provider selection, startup discovery requests
-counted as inference, schema property-map traversal, the old summary budget,
-planning permissions, and outdated result shapes or prompt text.
+初始的完整原生运行器在主套件报告
+137 个场景、2,184 项通过检查与 38 项失败后停止。在
+干净的 `main` 上运行同一套件复现了全部 38 个失败标签（2,170 项通过检查）。这些是
+过时的夹具：首次运行的提供商选择、计入推理的启动发现请求、
+schema 属性映射遍历、旧的摘要预算、
+规划权限，以及过时的结果形状或提示文本。
 
-The fixtures were corrected and manually reviewed, then all 15 affected scenarios
-were rerun successfully. They retain the protocol, permission, schema, replay and
-UI assertions and add explicit history counts and single-key dispatch evidence.
-At the user's request, remaining verification was narrowed to affected behavior
-instead of restarting the complete runner. No fresh full-client-suite pass is
-claimed; the focused results above and elsewhere in this record describe the
-actual coverage.
+夹具已修正并经过人工审阅，随后全部 15 个受影响场景
+均成功重跑。它们保留协议、权限、schema、重放与
+UI 断言，并新增显式历史计数与单密钥派发证据。
+应要求，其余验证被收窄到受影响行为，
+而非重启完整运行器。不声称有新的全客户端套件通过；
+上文及本记录其他位置的聚焦结果描述了
+实际覆盖范围。
 
-## Windows desktop
+## Windows 桌面端
 
-The final standalone executable passed 134 checks: 69 self-tests, 9 startup,
-6 bridge smoke, 11 native-window and 39 updater checks. Installation detection
-and refresh work before Cowork starts. All 11 final WPF previews were manually
-inspected, including normal and narrow Tunnels pages at both scroll positions.
+最终独立可执行文件通过 134 项检查：69 项自检、9 项启动、
+6 项桥接冒烟、11 项原生窗口与 39 项更新器检查。安装检测
+与刷新在 Cowork 启动之前可用。全部 11 个最终 WPF 预览均经人工
+检查，包括两个滚动位置下的常规与窄版 Tunnels 页面。
 
-The executable embeds 40 verified bridge, client and license files. Every
-embedded file matched its reviewed input, including the final client above and
-the Cline reserved-address fix. Startup passed without adjacent bridge or runtime
-folders. Node.js is detected or downloaded; OpenCode and Cline remain separate
-installations.
+该可执行文件嵌入 40 个经校验的桥接、客户端与许可文件。每个
+嵌入文件均与其经审阅的输入一致，包括上述最终客户端与
+Cline 保留地址修复。启动在无相邻桥接或运行时
+文件夹的情况下通过。Node.js 会被检测或下载；OpenCode 与 Cline 仍为独立
+安装。
 
-`UAI-Bridge-3.7.0-win-x64.exe` is 67,379,587 bytes, with SHA-256:
+`UAI-Bridge-3.7.0-win-x64.exe` 为 67,379,587 字节，SHA-256 为：
 
 ```text
 b6b2ae7106dca7c046124ddedee95c9f20695f06d698dc070d036dec37a796e5
 ```
 
-## Android companion
+## Android 伴侣端
 
-| Check | Result |
+| 检查 | 结果 |
 | --- | --- |
-| JVM tests | 89 tests across 12 suites, no failures, errors or skips |
-| Packaging | 10 packager tests and deterministic package verification passed |
-| Release lint | 0 errors, 35 warnings; dependency/policy, battery behavior, UI metadata and Kotlin API suggestions remain recorded |
-| APK identity | `dev.projectuai.relay`, version code 7, non-debuggable, minimum SDK 26, target SDK 36 |
-| Signing | APK Signature Scheme v2 verified with the existing pinned production signer |
-| Native payload | Tor and notices for arm64-v8a, armeabi-v7a, x86 and x86_64; 64-bit ELF and ZIP 16 KiB alignment passed |
+| JVM 测试 | 12 个套件共 89 个测试，无失败、错误或跳过 |
+| 打包 | 10 个打包器测试与确定性包校验通过 |
+| 发布 lint | 0 个错误、35 个警告；依赖/策略、电池行为、UI 元数据与 Kotlin API 建议仍被记录 |
+| APK 标识 | `dev.projectuai.relay`，版本代码 7，不可调试，最低 SDK 26，目标 SDK 36 |
+| 签名 | APK Signature Scheme v2 使用现有固定的生产签名者验证通过 |
+| 原生载荷 | 面向 arm64-v8a、armeabi-v7a、x86 与 x86_64 的 Tor 及声明；64 位 ELF 与 ZIP 16 KiB 对齐通过 |
 
-The Tor AAR requires compile API 37.1. The reviewed build uses AGP 9.4.1,
-Gradle 9.6.0 with its distribution SHA-256 pinned, and Kotlin 2.2.10 plugins;
-minimum and target API requirements remain unchanged. The production APK is
-39,830,460 bytes with SHA-256:
+Tor AAR 要求 compile API 37.1。经审阅的构建使用 AGP 9.4.1、
+Gradle 9.6.0（其分发 SHA-256 已固定）与 Kotlin 2.2.10 插件；
+最低与目标 API 要求保持不变。生产 APK 为
+39,830,460 字节，SHA-256 为：
 
 ```text
 fc6c65cf8bbc27c6d701190a14142152c8ca7788c5727ebbc483006a0a876ad4
 ```
 
-See [companion update verification](../companion/UPDATES.md) for signing and
-device-acceptance details.
+签名与设备验收细节参见 [伴侣端更新验证](../companion/UPDATES.md)。
 
-## Model metadata
+## 模型元数据
 
-The October 25 snapshot contains 1,760 entries across 15 providers. All five
-sources were fetched successfully: models.dev, LiteLLM, OpenRouter, Kilo and
-Cline. Source URLs and SHA-256 hashes are retained in
-`tools/data/model_metadata.json`. The generated Lua catalog was inspected and
-its deterministic freshness check passed; 21 normalization assertions passed.
+10 月 25 日的快照包含 15 个提供商下的 1,760 个条目。五个
+来源均成功获取：models.dev、LiteLLM、OpenRouter、Kilo 与
+Cline。来源 URL 与 SHA-256 哈希保留在
+`tools/data/model_metadata.json` 中。生成的 Lua 目录经过检查，其
+确定性新鲜度检查通过；21 项归一化断言通过。
 
-Spot checks confirmed changed Mistral Large 4 and Together Qwen rates, corrected
-Together and DeepSeek context/reply limits, and exact Kilo/Cline route ownership.
-The current models.dev catalog covers the old OpenCode CLI supplement, so the
-October 15 CLI overlay was removed. The refresh preserves unknown prices,
-rejects unverified zero placeholders and never borrows free pricing across
-endpoints. See [pricing sources and scope](PROVIDER_COMPATIBILITY.md#model-prices-and-limits).
+抽查确认了变更后的 Mistral Large 4 与 Together Qwen 费率、修正后的
+Together 与 DeepSeek 上下文/回复限制，以及确切的 Kilo/Cline 路由归属。
+当前 models.dev 目录已覆盖旧的 OpenCode CLI 补充，因此
+10 月 15 日的 CLI 覆盖层已被移除。刷新保留未知价格、
+拒绝未经验证的零占位值，且绝不在端点之间
+借用免费定价。参见 [定价来源与范围](PROVIDER_COMPATIBILITY.md#model-prices-and-limits)。
 
-## Discovery, diagnostics and usage
+## 发现、诊断与用量
 
-Seven focused suites passed: bounded search (8 assertions), tool discovery (6),
-log storage (8), usage accounting (9), persisted cost coverage (7), lazy tool
-panel (7) and diagnostics search (6). Existing tool-profile checks (14 assertions)
-and model-pricing checks (90) also passed. Tests exercise real dispatch scope and
-permission changes, normalized schemas, explicit page limits, log redaction and
-retention, malformed counters, partial usage, reloads and clipboard refusal.
+七个聚焦套件通过：有界搜索（8 项断言）、工具发现（6）、
+日志存储（8）、用量计费（9）、持久化成本覆盖（7）、惰性工具
+面板（7）与诊断搜索（6）。现有工具配置检查（14 项断言）
+与模型定价检查（90）也通过。测试演练真实派发作用域与
+权限变更、归一化 schema、显式页面限制、日志掩码与
+保留、畸形计数器、部分用量、重载与剪贴板拒绝。
 
-The browser catalog lifecycle fixture used 800 valid models mixed with duplicate
-and malformed IDs. Five unrelated state snapshots caused zero model-row DOM
-mutations and retained focus/scroll. Provider add/rename/removal, metadata/free
-status changes, dialog cancellation, stale results and retry after HTTP 503 passed.
+浏览器目录生命周期夹具使用 800 个有效模型，并混入重复
+与畸形 ID。五个无关联的状态快照造成零次模型行 DOM
+变更，并保留了焦点/滚动。提供商添加/重命名/移除、元数据/免费
+状态变更、对话框取消、过时结果与 HTTP 503 后重试均通过。
 
-## Practical limits
+## 实际限制
 
-- Kilo recovery is bounded. Shared exit addresses retain provider quotas, and
-  switching models does not reset their allowance. Unlimited requests are not
-  guaranteed. Exhausted exits return a visible terminal refusal and cooldown.
-- Cline requires the separately installed, signed-in CLI and a currently free
-  promotion. CLI/service changes and account limits can affect availability.
-- No Android device was attached. Native Tor bootstrap/circuit changes,
-  install/update behavior and mobile executor integration remain unverified.
-- Roblox previews use the existing mock/Lune/Chromium harness. Native rendering,
-  phone keyboards and executor input still require a real-device acceptance run.
-- Windows previews use offscreen WPF rendering at 96 DPI. A second display with
-  different per-monitor scaling was not exercised.
+- Kilo 恢复是有界的。共享出口地址保留提供商配额，且
+  切换模型不会重置其配额。不保证
+  无限请求。耗尽的出口会返回可见的终止拒绝与冷却。
+- Cline 需要单独安装、已登录的 CLI 与当前可用的免费
+  推广。CLI/服务变更与账户限制可能影响可用性。
+- 未连接任何 Android 设备。原生 Tor 引导/熔断变更、
+  安装/更新行为与移动端执行器集成仍未验证。
+- Roblox 预览使用现有的模拟/Lune/Chromium 夹具。原生渲染、
+  手机键盘与执行器输入仍需真机验收运行。
+- Windows 预览使用 96 DPI 下的离屏 WPF 渲染。未演练具有
+  不同每显示器缩放的第二个显示器。

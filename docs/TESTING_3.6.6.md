@@ -1,55 +1,35 @@
-# Project UAI 3.6.6 verification
+# Project UAI 3.6.6 验证
 
-Prepared October 23, 2026. This is a client release: the Roblox client reports
-3.6.6, the bridge remains `bridge-v3.6.6`, and the Windows and Android downloads
-stay 3.6.5 until their own builds. UI LIB remains 1.3.0 and SDK 1.0.0.
+编制于 2026 年 10 月 23 日。本次为客户端发布：Roblox 客户端报告 3.6.6，桥接仍为 `bridge-v3.6.6`，Windows 与 Android 下载在各自完成构建之前仍保持 3.6.5。UI LIB 保持 1.3.0，SDK 保持 1.0.0。
 
-The release replaces the add-provider form with a tiered gallery, grows the
-provider catalog to 66 presets, labels hybrid services by their free half,
-rebuilds the queued-message surface, and moves Settings to one entry point.
+本次发布以分级画廊取代添加提供方表单，将提供方目录扩充至 66 个预设，按免费部分为混合服务打标签，重建排队消息界面，并将设置收敛为单一入口。
 
-Changed source, documentation, tests and build inputs were manually audited
-before the bundle was rebuilt, and the generated bundle was inspected before
-verification. The results below establish behavior in the listed offline
-fixtures. They do not establish native Roblox rendering or host input. See the
-[changelog](../CHANGELOG.md) and
-[provider compatibility](PROVIDER_COMPATIBILITY.md).
+变更的源代码、文档、测试与构建输入在重建捆绑包之前均经人工审计，生成的捆绑包在验证之前亦经检查。下文结果确立的是所列离线夹具中的行为，不确立 Roblox 原生渲染或宿主输入行为。参见[变更日志](../CHANGELOG.md)与[提供方兼容性](PROVIDER_COMPATIBILITY.md)。
 
-## Client
+## 客户端
 
-| Check | Result |
+| 检查 | 结果 |
 | --- | --- |
-| Provider gallery | 7 cases, 396 assertions passed; tier order, hybrid labels, cross-tier search, custom card, seeded editor, reopened gallery |
-| Provider editor | 23 cases, 169 assertions passed |
-| Provider compatibility | 98 cases, 1,832 assertions passed; one matrix row per catalog preset |
-| Queued messages | 27 checks passed |
-| Settings entry | 7 checks passed; one sidebar row, modal on General, no Customize, no duplicate |
-| Mobile Code and forms | 9 cases, 130 assertions passed |
-| Panel layout regressions | 63 checks passed |
-| Provider UI ownership | 4 cases, 12 assertions passed |
-| Project UAI Free | 8 cases, 68 assertions passed |
-| Scenarios: provider | 11 scenarios, 147 checks passed |
-| Scenarios: first run and featured | 2 scenarios, 64 checks passed |
-| Scenarios: profile menu | 2 scenarios, 21 checks passed |
-| Static module check | 232 parsed, 231 modules, 0 failures, 0 warnings |
-| Bundle | 231 modules, 3,591,398 bytes |
+| 提供方画廊 | 7 个用例、396 项断言通过；层级顺序、混合标签、跨层级搜索、自定义卡片、预置编辑器、重新打开画廊 |
+| 提供方编辑器 | 23 个用例、169 项断言通过 |
+| 提供方兼容性 | 98 个用例、1,832 项断言通过；每个目录预设对应一行矩阵 |
+| 排队消息 | 27 项检查通过 |
+| 设置入口 | 7 项检查通过；侧边栏仅一行、模态框位于 General、无 Customize、无重复 |
+| 移动端代码与表单 | 9 个用例、130 项断言通过 |
+| 面板布局回归 | 63 项检查通过 |
+| 提供方 UI 归属 | 4 个用例、12 项断言通过 |
+| Project UAI Free | 8 个用例、68 项断言通过 |
+| 场景：提供方 | 11 个场景、147 项检查通过 |
+| 场景：首次运行与精选 | 2 个场景、64 项检查通过 |
+| 场景：个人资料菜单 | 2 个场景、21 项检查通过 |
+| 静态模块检查 | 解析 232 个、231 个模块、0 失败、0 警告 |
+| 捆绑包 | 231 个模块、3,591,398 字节 |
 
-The catalog matrix asserts a base route, an auth header and both request shapes
-for every preset, and the suite fails when a preset has no row. Gallery order,
-access labels and search results are asserted from the catalog rather than from
-rendered text, so a label change is a test change.
+目录矩阵为每个预设断言基础路由、认证头与两种请求形态，且当某个预设缺少对应行时套件即失败。画廊顺序、访问标签与搜索结果均由目录而非渲染文本断言，因此标签变更即等同于测试变更。
 
-The version reported by the client and the newest changelog entry are the same
-value by construction: `boot mounts the interface` compares them, and the
-`ui.lastSeenVersion` scenario compares the stored marker with the same entry.
+客户端报告的版本与最新变更日志条目在构造上取同一值：`boot mounts the interface` 会比较二者，`ui.lastSeenVersion` 场景则将已存储的标记与同一条目比较。
 
-## Known limits
+## 已知限制
 
-- Two scenarios fail on the parent commit as well and are unrelated to this
-  release: `free_routing.lua` expects a two-pixel green outline on the free model
-  row where the picker draws one, and `boot mounts the interface` expects the
-  "No provider configured" empty state that the included free provider now
-  prevents. Both are left for a separate decision.
-- Card spacing, the accent border and the scroll edge were reviewed in the
-  offline harness. Mock layout does not prove native Roblox rendering; the
-  bundled client is verified in Roblox separately.
+- 两个场景在父提交上同样失败，且与本次发布无关：`free_routing.lua` 期望免费模型行上出现两像素绿色描边，与该处选择器绘制的描边不一致；`boot mounts the interface` 期望出现 "No provider configured" 空状态，而内置的免费提供方现在使该状态不再出现。两项均留待单独决定。
+- 卡片间距、强调色边框与滚动边缘已在离线测试框架中审阅。模拟布局不能证明 Roblox 原生渲染；捆绑客户端另行在 Roblox 中验证。
