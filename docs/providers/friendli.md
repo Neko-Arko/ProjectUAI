@@ -1,30 +1,20 @@
 # FriendliAI Model APIs
 
-Use **Providers > Add a provider > FriendliAI Model APIs**. The preset uses
-`https://api.friendli.ai/serverless/v1`, Chat Completions and Bearer auth.
+使用 **Providers > Add a provider > FriendliAI Model APIs**。该预设使用 `https://api.friendli.ai/serverless/v1`、Chat Completions 与 Bearer 认证。
 
-1. Open Friendli Suite and select the team that will own the usage.
-2. Create a Personal API key and check the team's prepaid balance.
-3. Paste the key into UAI, fetch models and select the exact served ID.
-4. Save and send a short request using a model with tool calling enabled in its
-   documented capabilities.
+1. 打开 Friendli Suite，并选择将承担用量的团队。
+2. 创建一个 Personal API 密钥，并检查该团队的预付余额。
+3. 将密钥粘贴到 UAI，获取模型并选择确切的服务 ID。
+4. 保存，并使用在其文档化能力中启用了工具调用的模型发送一条简短请求。
 
-This is the shared Model APIs service. A Dedicated Endpoint has its own
-deployment and billing configuration; its deployment ID and URL should not be
-copied into the shared preset without following the Dedicated Endpoint docs.
+这里使用的是共享的 Model APIs 服务。Dedicated Endpoint 有其自身的部署与计费配置；未按 Dedicated Endpoint 文档操作时，不应将其部署 ID 与 URL 复制到共享预设中。
 
-The catalog marks chat entries with `mode: chat`. UAI excludes explicitly
-different modes on this exact route. The provider also publishes input/output
-modalities and `functionality.tool_call`; chat compatibility alone does not
-guarantee images or tool calls. Parallel tool calls are model-dependent.
+目录用 `mode: chat` 标记 chat 条目。在此精确路由上，UAI 会排除明确标注为不同 mode 的条目。该提供商还公布输入/输出模态与 `functionality.tool_call`；仅具备 chat 兼容性并不保证支持图像或工具调用。并行工具调用取决于模型。
 
-The catalog can be public, so a successful fetch does not verify your key or
-balance. If an inference request fails, check your key's team, balance and selected
-model. If a required feature is rejected, choose a model advertising that feature
-rather than changing the protocol for the entire provider.
+目录可能是公开的，因此成功获取并不验证你的密钥或余额。若推理请求失败，请检查密钥所属团队、余额与所选模型。若某项所需功能被拒绝，请选择声明支持该功能的模型，而不是为整个提供商更改协议。
 
-Official sources:
+官方来源：
 
-- [Model APIs quickstart](https://friendli.ai/docs/guides/model-apis/quickstart)
-- [OpenAI compatibility](https://friendli.ai/docs/guides/openai-compatibility)
-- [Tool calling](https://friendli.ai/docs/guides/tool-calling)
+- [Model APIs 快速开始](https://friendli.ai/docs/guides/model-apis/quickstart)
+- [OpenAI 兼容性](https://friendli.ai/docs/guides/openai-compatibility)
+- [工具调用](https://friendli.ai/docs/guides/tool-calling)

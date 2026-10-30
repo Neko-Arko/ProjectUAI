@@ -1,147 +1,96 @@
-# v3.0.0 agent, provider and embedding audit
+# v3.0.0 智能体、提供方与嵌入审计
 
-This is a mechanism-oriented manual review of the modules below: request cost,
-bounded work, cancellation, state ownership and tool/result correctness. A retained
-module is not a claim that every possible host/provider behavior was exercised.
-The separate bridge, companion transport and UI library are outside this audit.
-The excluded network module IDs are `net/bridge`, `net/bridge_commands`,
-`net/bridge_connection`, `net/relay`, `net/relay_link` and `net/transport`.
-Their calls from reviewed modules are integration boundaries, not an audit of
-those excluded implementations.
+本文对下列模块进行以机制为导向的人工审查：请求开销、有界工作量、取消、状态归属以及工具/结果正确性。某模块被保留，并不表示已覆盖所有可能的宿主/提供方行为。独立的 bridge、companion 传输与 UI 库不在本次审计范围内。被排除的网络模块 ID 为 `net/bridge`、`net/bridge_commands`、`net/bridge_connection`、`net/relay`、`net/relay_link` 与 `net/transport`。被审模块对它们的调用属于集成边界，而非对被排除实现的审计。
 
-The release removes two quadratic paths: fragmented SSE lines now accumulate
-pieces until a complete line arrives, and tool-result repair indexes the current
-batch once. Prose previews no longer retain a second copy of tool arguments.
-The authoritative stream parser retains its existing byte and call limits.
+本次发布移除了两条平方级路径：分片的 SSE 行现在累积片段直到收到完整行，工具结果修复对当前批次仅索引一次。文本预览不再保留工具参数的第二份副本。权威流解析器保留其既有的字节与调用上限。
 
-Shared tool validation preserves already-valid union types, stops recursive
-schema walks at depth 32 or 8,192 visited values, and retains at most 16 errors.
-Oversized declared arrays fail before member coercion. Invalid concurrency
-settings fall back to eight workers instead of stranding a batch. Small native
-receipts expose useful text, status, revisions and an available detail reference
-immediately; larger receipts keep the exact retained-reader workflow. Superseded
-post-hook references and unavailable readers remain hidden.
+共享工具校验保留已经合法的联合类型，在深度 32 或已访问值 8,192 处停止递归模式遍历，并最多保留 16 条错误。超出声明上限的数组在成员强制转换之前失败。无效的并发设置回退为八个工作线程，而不是让批次搁浅。小型原生回执立即暴露有用的文本、状态、修订与可用的详情引用；较大的回执保留精确的保留读取器工作流。被取代的后置钩子引用与不可用的读取器仍然隐藏。
 
-Anthropic prompt accounting includes uncached, cache-read and cache-creation
-tokens because all occupy context. Cached reads feed the existing common usage
-metrics. Cost remains an approximate list-price calculation, without new cache
-discount billing claims.
+Anthropic 提示词计费包含未缓存、缓存读取与缓存创建的词元，因为三者都占用上下文。缓存读取接入既有的通用用量指标。成本仍为近似的标价计算，不新增缓存折扣计费主张。
 
-Responses tool assembly binds item IDs, call IDs and output positions to one
-slot. Full argument events replace streamed fragments, and nonempty final output
-clears superseded partial calls. Streamed and whole responses enforce the shared
-64-call and 256,000-byte argument limits; exceeding them is a terminal failure.
-Statistics reload now restores lifetime model first/last-use dates and hour totals.
+Responses 工具装配将条目 ID、调用 ID 与输出位置绑定到同一槽位。完整参数事件替换流式片段，非空的最终输出清除被取代的部分调用。流式与整体响应都执行共享的 64 次调用与 256,000 字节参数上限；超出即为终止性失败。统计重载现在恢复生命周期内的模型首次/末次使用日期与小时合计。
 
-`conversation_search` adds `scope=all|conversations|pastes`, avoids constructing
-duplicate message arrays, returns structured IDs/paths, and checks cancellation.
-A pass reads at most 128 pasted files/8 MiB and scans at most 12,000 conversation
-entries/8 MiB. Executor reads and individual retained messages are whole values,
-so the last value may cross the byte budget. A limited or unreadable search is
-explicitly incomplete; use `conversation_list`/`conversation_read` or `file_search`
-on an exact paste path to narrow it. Schema limits prevent silently dropping
-extra todo items, question choices, or oversized memory writes.
+`conversation_search` 新增 `scope=all|conversations|pastes`，避免构造重复的消息数组，返回结构化 ID/路径，并检查取消。单次遍历最多读取 128 个粘贴文件/8 MiB，最多扫描 12,000 条会话条目/8 MiB。执行器读取与单条保留消息都是整值，因此最后一个值可能越过字节预算。受限或不可读的搜索会被明确标记为不完整；请对精确的粘贴路径使用 `conversation_list`/`conversation_read` 或 `file_search` 缩小范围。模式上限可防止静默丢弃额外待办项、问题选项或超限记忆写入。
 
-Metadata tools share a 32-entry, 60-second native product cache with explicit
-`refresh=true`; game counts and uptime remain live. They return structured
-identities, reject missing/ambiguous IDs and unsuccessful/empty API documents,
-and carry cancellation into network phases. Native `place_info` remains usable
-without executor HTTP; its web fallback still reports capability failure.
+元数据工具共享一个 32 条目、60 秒的原生产品缓存，并支持显式 `refresh=true`；游戏计数与运行时长仍然实时。它们返回结构化身份，拒绝缺失/歧义 ID 以及不成功/为空的 API 文档，并把取消传递到网络阶段。原生 `place_info` 在没有执行器 HTTP 的情况下仍可使用；其 Web 回退仍会报告能力失败。
 
-Virtual input tracks up to 32 held keys/buttons by owning conversation and
-provider, with one watcher while cleanup remains eligible. Stop, tool revocation,
-epoch replacement and unload attempt release; native downs that return after an
-early release are released again. Accepted or uncertain downs/clicks never trigger
-a second provider's press. Failed releases retain ownership for explicit `up`
-recovery. Explicit mouse coordinates require a provider that can position the
-cursor; right-button fallback requires the matching right-button release API.
+虚拟输入按所属会话与提供方跟踪最多 32 个按住状态的按键/按钮，并在清理仍可执行期间仅保留一个观察器。停止、工具撤销、世代替换与卸载都会尝试释放；在提前释放之后才返回的原生按下会被再次释放。已接受或结果不确定的按下/点击绝不会触发第二个提供方的按压。释放失败时保留所有权，以便通过显式 `up` 恢复。显式鼠标坐标要求提供方能够定位光标；右键回退要求存在匹配的右键释放 API。
 
-The supplemental review covers all ten `ui/chat` modules in full, including
-virtualized messages, bounded replay, lazy activity details, draft ownership and
-listener cleanup. The composer now disconnects its parent resize listener on
-destruction. Provider editor tests are revoked on close or connection/model edits;
-late test results and model discovery cannot overwrite newer UI state.
+补充审查完整覆盖全部十个 `ui/chat` 模块，包括虚拟化消息、有界重放、惰性活动详情、草稿归属与监听器清理。输入区现在在销毁时断开其父级尺寸变化监听器。提供方编辑器测试在关闭或连接/模型编辑时被撤销；迟到的测试结果与模型发现无法覆盖更新的 UI 状态。
 
-| Module | Reviewed mechanism and disposition |
+| 模块 | 审查的机制与处置 |
 | --- | --- |
-| `agent/context` | Compaction, calibration, pairing and persistence. Replaced sibling/call rescans with linear batch indexing; remove duplicate receipts and fill absent outcomes. |
-| `agent/hooks` | Snapshot iteration, removals during callbacks and protected observers; retained. |
-| `agent/loop` | Stable request catalogue, hook isolation, context recovery, repeat breaker and ordered tool results; retained. |
-| `agent/permissions` | Scoped approvals, late settlement, revocation and rule/mode precedence; retained. |
-| `agent/pricing` | Generated catalogue provenance and lookup paths reviewed; generated data untouched. Unknown-model substring scans remain a possible future optimization. |
-| `agent/prompt` | Stable prefix, offered-tool-specific sections and bounded memory/skill references; retained. |
-| `agent/registry` | Discovery/dispatch agreement, schema boundaries, deadlines and ordered concurrent results. Hardened concurrency settings. |
-| `agent/schema` | JSON repairs preserve string bodies; added union preservation and bounded recursive validation/error output. |
-| `agent/session` | Admission, epoch cancellation, event fanout, preserved policies and bounded restoration candidates; retained. |
-| `agent/state` | Per-session todo ownership, bounded memory values and sorted-copy key inventory; retained. Tool schemas now declare write limits. |
-| `agent/stats` | Event/usage observation, debounce and day retention reviewed. Restore persisted lifetime model/hour maps and reject invalid counter values. |
-| `agent/stream` | Coalesced previews and separate clipping flags; omit tool argument retention in preview assemblers. |
-| `agent/subagent` | Admission reservations, parent epochs, report collection, queue/worker ownership and context release; retained. |
-| `agent/tool_result` | Bounded graph snapshot, post-hook identity and scoped readers. Inline fitting summary/reference receipts to avoid redundant model round trips. |
-| `agent/transcript` | Independent retention lanes, grouped eviction and legacy recovery; retained. |
-| `agent/usage` | Message estimates and recorded/estimated accounting; retained and now receives complete cached Anthropic input counts. |
-| `provider/anthropic` | Wire blocks/signatures, stream limits and retry ownership reviewed. Normalize all prompt-token categories. |
-| `provider/catalog` | Explicit presets, auth defaults and absence of guessed model lists; retained. |
-| `provider/chat` | Protocol selection and common headers; retained. |
-| `provider/community_key` | Official endpoint eligibility and explicit apply boundary; retained. |
-| `provider/models` | Scoped cache, draft isolation, stale-result rejection and reported model IDs; retained. |
-| `provider/openai` | Request ceilings, scoped repairs, response assembly and terminal errors; retained. |
-| `provider/proxy` | Exact-route eligibility, bounded explicit refusal recovery and observer rechecks; retained. |
-| `provider/registry` | Key rotation, URL/auth selection, record validation and fallback health; retained. |
-| `provider/responses` | Input/tool conversion, stream/final assembly and endpoint restrictions reviewed. Bind call/item/output aliases, replace full arguments, discard superseded partial calls and enforce call/argument limits. |
-| `provider/traits` | Longest documented family matching, explicit overrides and effort clamping; retained. |
-| `embedding/scope` | Schema copies, finite JSON validation, owned resources and identity-guarded tool removal; retained. |
-| `embedding/sdk` | Admission rejection, synchronous completion, cancellation epochs and cleanup; retained. |
-| `net/headers` | Case-insensitive merge and later-map precedence; retained. |
-| `net/http` | Native worker ownership, bounded responses, cancellation/deadlines and retry termination; retained. Relay internals excluded. |
-| `net/sse` | BOM/CRLF framing, limits, completion and call assembly. Use fragment lists instead of repeated growing-line copies; optional prose-only assembly. |
-| `net/ua` | Required identity and configurable header precedence; retained. |
-| `net/url` | Parsed host/path/query preservation and local-address handling; retained. |
-| `net/ws` | Native worker/connection limits and pre-/post-send failure classification; retained. |
-| `tools/agentself` | Todo/memory/question contracts, report collection and conversation tools. Bounded cooperative search, explicit scopes and structured search evidence. |
-| `tools/input` | Provider acceptance, partial outcomes, coordinates, ownership and cancellation. Prevent duplicate fallback presses, retain original release routes and clean up pending/persistent holds. |
-| `tools/meta` | Native metadata reuse, response identity, capability discovery and cancellation. Added cache, refresh, semantic failure handling and structured results. |
-| `ui/chat/activity` | Full source read: lazy receipt/detail construction, retained result projection, four-per-slice child mounting and timer cleanup; retained. |
-| `ui/chat/composer` | Full source read: versioned session drafts, yielding send settlement, attachments, context refresh and responsive geometry. Disconnect the parent resize listener on destruction. |
-| `ui/chat/context` | Full source read: coalesced context breakdown refresh and modal subscription cleanup; retained. |
-| `ui/chat/loops` | Full source read: live runtime-job presentation and destruction unsubscribe; retained. |
-| `ui/chat/message` | Full source read: staged Markdown fallback, virtualized chunks, bounded code previews, lazy reasoning formatting and timer cleanup; retained. |
-| `ui/chat/prompts` | Full source read: static shared prompt inventory; retained. |
-| `ui/chat/table` | Full source read: shared measured grid, coalesced reflow and listener cleanup; retained. |
-| `ui/chat/todo` | Full source read: session-owned bounded plans, weak disclosure preferences and parent resize unsubscribe; retained. |
-| `ui/chat/view` | Full source read with runtime reviewer: generation-owned replay, 12-row/6 ms slices, retained-row pruning, visibility suspension and subscription cleanup; retained. |
-| `ui/chat/viewport` | Full source read: cached geometry, 24-item warm band, four-item/6 ms mounts, focus retention, spacer anchors and cleanup; retained. |
-| `ui/panels/providers` | Full source read: draft isolation, preset edits, discovery, health updates, responsive reflow and cleanup. Tests now cancel on close/connection/model change and suppress stale feedback; detail discovery preserves newer provider selection. |
-| `ui/settingspanes` | Full source read: settings bindings, facts subscriptions, import/export boundaries, control ownership and runtime delegation. Retained; excluded transport panes reviewed only at their UI call boundaries. |
+| `agent/context` | 压缩、校准、配对与持久化。以线性批次索引取代兄弟/调用重扫描；移除重复回执并补齐缺失结果。 |
+| `agent/hooks` | 快照迭代、回调期间的移除与受保护的观察者；保留。 |
+| `agent/loop` | 稳定的请求目录、钩子隔离、上下文恢复、重复断路器与有序工具结果；保留。 |
+| `agent/permissions` | 作用域审批、延迟结算、撤销与规则/模式优先级；保留。 |
+| `agent/pricing` | 已审查生成目录的来源与查找路径；生成数据未改动。未知模型的子串扫描仍是可能的后续优化点。 |
+| `agent/prompt` | 稳定前缀、按所提供工具区分的分节与有界记忆/技能引用；保留。 |
+| `agent/registry` | 发现/派发一致性、模式边界、截止时间与有序并发结果。加固了并发设置。 |
+| `agent/schema` | JSON 修复保留字符串主体；新增联合类型保留与有界递归校验/错误输出。 |
+| `agent/session` | 准入、世代取消、事件扇出、保留的策略与有界恢复候选；保留。 |
+| `agent/state` | 按会话的待办归属、有界记忆值与排序副本键清单；保留。工具模式现在声明写入上限。 |
+| `agent/stats` | 已审查事件/用量观测、防抖与按日保留。恢复持久化的生命周期模型/小时映射并拒绝无效计数。 |
+| `agent/stream` | 合并预览与独立的裁剪标志；在预览装配器中省略工具参数保留。 |
+| `agent/subagent` | 准入预留、父世代、报告收集、队列/工作线程归属与上下文释放；保留。 |
+| `agent/tool_result` | 有界图快照、后置钩子身份与作用域读取器。内联适配的摘要/引用回执，以避免多余的模型往返。 |
+| `agent/transcript` | 独立的保留通道、分组淘汰与旧格式恢复；保留。 |
+| `agent/usage` | 消息估算与记录/估算计费；保留，且现在接收完整的 Anthropic 缓存输入计数。 |
+| `provider/anthropic` | 已审查线格式块/签名、流上限与重试归属。归一化所有提示词词元类别。 |
+| `provider/catalog` | 显式预设、认证默认值与不猜测的模型列表；保留。 |
+| `provider/chat` | 协议选择与通用请求头；保留。 |
+| `provider/community_key` | 官方端点资格与显式申请边界；保留。 |
+| `provider/models` | 作用域缓存、草稿隔离、过期结果拒绝与上报的模型 ID；保留。 |
+| `provider/openai` | 请求上限、作用域修复、响应装配与终止性错误；保留。 |
+| `provider/proxy` | 精确路由资格、有界显式拒绝恢复与观察者复查；保留。 |
+| `provider/registry` | 密钥轮换、URL/认证选择、记录校验与回退健康检查；保留。 |
+| `provider/responses` | 已审查输入/工具转换、流式/最终装配与端点限制。绑定调用/条目/输出别名，替换完整参数，丢弃被取代的部分调用，并执行调用/参数上限。 |
+| `provider/traits` | 最长文档化家族匹配、显式覆盖与力度钳制；保留。 |
+| `embedding/scope` | 模式副本、有限 JSON 校验、自有资源与按身份保护的工具移除；保留。 |
+| `embedding/sdk` | 准入拒绝、同步完成、取消世代与清理；保留。 |
+| `net/headers` | 大小写不敏感的合并与后映射优先；保留。 |
+| `net/http` | 原生工作线程归属、有界响应、取消/截止时间与重试终止；保留。中继内部实现排除在外。 |
+| `net/sse` | BOM/CRLF 分帧、上限、完成与调用装配。使用片段列表替代反复增长的整行副本；可选仅文本装配。 |
+| `net/ua` | 必需身份与可配置的请求头优先级；保留。 |
+| `net/url` | 解析后的主机/路径/查询保留与本地地址处理；保留。 |
+| `net/ws` | 原生工作线程/连接上限与发送前/发送后失败分类；保留。 |
+| `tools/agentself` | 待办/记忆/提问契约、报告收集与会话工具。有界协作式搜索、显式作用域与结构化搜索证据。 |
+| `tools/input` | 提供方接受、部分结果、坐标、归属与取消。防止重复回退按压，保留原始释放路径并清理待定/持久按住状态。 |
+| `tools/meta` | 原生元数据复用、响应身份、能力发现与取消。新增缓存、刷新、语义失败处理与结构化结果。 |
+| `ui/chat/activity` | 全量源码阅读：惰性回执/详情构造、保留的结果投影、每切片四个子项的挂载与定时器清理；保留。 |
+| `ui/chat/composer` | 全量源码阅读：带版本的会话草稿、让出式发送结算、附件、上下文刷新与响应式几何。销毁时断开父级尺寸变化监听器。 |
+| `ui/chat/context` | 全量源码阅读：合并的上下文分解刷新与模态订阅清理；保留。 |
+| `ui/chat/loops` | 全量源码阅读：实时运行时任务呈现与销毁时取消订阅；保留。 |
+| `ui/chat/message` | 全量源码阅读：分阶段 Markdown 回退、虚拟化块、有界代码预览、惰性推理格式化与定时器清理；保留。 |
+| `ui/chat/prompts` | 全量源码阅读：静态共享提示词清单；保留。 |
+| `ui/chat/table` | 全量源码阅读：共享测量网格、合并的重新布局与监听器清理；保留。 |
+| `ui/chat/todo` | 全量源码阅读：会话自有的有界计划、弱披露偏好与父级尺寸取消订阅；保留。 |
+| `ui/chat/view` | 结合运行时审查者的全量源码阅读：世代自有的重放、12 行/6 毫秒切片、保留行裁剪、可见性挂起与订阅清理；保留。 |
+| `ui/chat/viewport` | 全量源码阅读：缓存几何、24 项预热带、四项/6 毫秒挂载、焦点保留、占位锚点与清理；保留。 |
+| `ui/panels/providers` | 全量源码阅读：草稿隔离、预设编辑、发现、健康状态更新、响应式重新布局与清理。测试现在会在关闭/连接/模型变更时取消，并抑制过期反馈；详情发现保留更新的提供方选择。 |
+| `ui/settingspanes` | 全量源码阅读：设置绑定、事实订阅、导入/导出边界、控件归属与运行时委托。保留；被排除的传输面板仅在其 UI 调用边界处审查。 |
 
-| Registered tool | Reviewed disposition |
+| 已注册工具 | 审查处置 |
 | --- | --- |
-| `todo_write` | Declare the existing 24-item/160-character limits before execution; retain session ownership. |
-| `todo_read` | Retain scoped plan/count readback. |
-| `conversation_search` | Add scoped bounded cooperative search and structured match identities. |
-| `conversation_list` | Retain exact IDs, bounded list paging and report collection. |
-| `conversation_read` | Retain scoped transcript paging and explicit internal-message filtering. |
-| `conversation_rename` | Retain named-thread validation and write permission. |
-| `ask_user` | Declare 2–4 choices and 160-character choice limits; retain cancellation and answer ownership. |
-| `memory_write` | Declare 120-character key/600-character value limits; retain write permission. |
-| `memory_read` | Retain bounded scoped memory inventory. |
-| `memory_forget` | Retain exact-key removal and write permission. |
-| `dispatch_agent` | Retain admission, parent ownership and bounded status/report handling. |
-| `agent_followup` | Retain owned child routing and bounded result collection. |
-| `agent_status` | Retain session-aware status and child inventory. |
-| `wait` | Retain cooperative waiting, cancellation and newly completed report collection. |
-| `game_info` | Share native product facts while keeping live counts and uptime. |
-| `place_info` | Add cache/refresh, native-first capability behavior and structured identity checks. |
-| `user_lookup` | Reject ambiguous/missing identities and honor cancellation between HTTP phases. |
-| `roblox_version` | Reject HTTP failures and empty release documents; return structured version evidence. |
-| `key_press` | Preserve provider/conversation ownership, classify partial outcomes and clean up pending/persistent holds. |
-| `mouse_click` | Share the input ownership contract; preserve explicit coordinates and correct button cleanup. |
+| `todo_write` | 执行前声明既有的 24 项/160 字符上限；保留会话归属。 |
+| `todo_read` | 保留作用域内的计划/计数读回。 |
+| `conversation_search` | 新增有作用域的有界协作式搜索与结构化匹配身份。 |
+| `conversation_list` | 保留精确 ID、有界列表分页与报告收集。 |
+| `conversation_read` | 保留作用域内的记录分页与显式内部消息过滤。 |
+| `conversation_rename` | 保留命名线程校验与写入权限。 |
+| `ask_user` | 声明 2–4 个选项与 160 字符选项上限；保留取消与答案归属。 |
+| `memory_write` | 声明 120 字符键/600 字符值上限；保留写入权限。 |
+| `memory_read` | 保留有界的作用域记忆清单。 |
+| `memory_forget` | 保留按键精确移除与写入权限。 |
+| `dispatch_agent` | 保留准入、父级归属与有界状态/报告处理。 |
+| `agent_followup` | 保留自有子级路由与有界结果收集。 |
+| `agent_status` | 保留会话感知的状态与子级清单。 |
+| `wait` | 保留协作式等待、取消与新完成报告的收集。 |
+| `game_info` | 共享原生产品事实，同时保留实时计数与运行时长。 |
+| `place_info` | 新增缓存/刷新、原生优先的能力行为与结构化身份校验。 |
+| `user_lookup` | 拒绝歧义/缺失身份，并在 HTTP 阶段之间响应取消。 |
+| `roblox_version` | 拒绝 HTTP 失败与空发布文档；返回结构化版本证据。 |
+| `key_press` | 保留提供方/会话归属，分类部分结果并清理待定/持久按住状态。 |
+| `mouse_click` | 共享输入归属契约；保留显式坐标与正确的按钮清理。 |
 
-Manually reviewed changed source, `test/release_agent.lua`, `test/release_input.lua`,
-`test/release_provider_ui.lua` and affected existing input assertions before automated
-execution. Focused verification after root's reviewed build/output gate:
-`test/release_agent.lua`, `test/release_input.lua`, `test/release_provider_ui.lua`, `test/agent_efficiency.lua`,
-`test/structured_results.lua`, `test/tool_cancellation.lua`,
-`test/provider_compatibility.lua`, and applicable existing conversation/self-tool
-cases. These synthetic tests do not measure native Roblox/executor latency.
-Actual results are recorded by the release coordinator after execution.
+在自动化执行之前，人工审查了变更源码、`test/release_agent.lua`、`test/release_input.lua`、`test/release_provider_ui.lua` 以及受影响的既有输入断言。在根级审查过的构建/输出门禁之后进行聚焦验证：`test/release_agent.lua`、`test/release_input.lua`、`test/release_provider_ui.lua`、`test/agent_efficiency.lua`、`test/structured_results.lua`、`test/tool_cancellation.lua`、`test/provider_compatibility.lua`，以及适用的既有会话/自助工具用例。这些合成测试并不测量原生 Roblox/执行器延迟。实际结果由发布协调者在执行后记录。

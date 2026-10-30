@@ -1,230 +1,171 @@
-# v3.0.0 scripting and Code workspace audit
+# v3.0.0 脚本与 Code 工作区审计
 
-This records the source review of the scripting, filesystem, authoring and web
-tool families, their runtime modules, all 21 `src/ui/code` modules, and five
-application-shell/integration modules. The existing Code application remains
-the presentation layer. No UI Library,
-desktop, companion or bridge implementation was changed in this workstream.
+本文记录对脚本、文件系统、编写与 Web 工具族、其运行时模块、全部 21 个 `src/ui/code` 模块以及五个应用外壳/集成模块的源码审查。既有的 Code 应用仍为呈现层。本工作线未改动任何 UI 库、桌面、companion 或 bridge 实现。
 
-Every module below was read, including retained implementations. “Retained”
-means the existing mechanism was kept after review; it does not mean the file
-received an artificial edit. Tool rows distinguish direct changes from shared
-registry/result handling. The release-wide ledger records those shared changes
-and other tool groups.
+下列每个模块都已阅读，包括保留的实现。“保留”表示审查后沿用既有机制；并不意味着文件被做了人为编辑。工具行区分直接改动与共享的注册表/结果处理。发布级台账记录这些共享改动与其他工具组。
 
-## Efficiency and correctness evidence
+## 效率与正确性证据
 
-- Project outlines are keyed by exact source bytes, bounded to 128 entries and
-  4 MiB of accounted source/outline storage, and copied on publication. Warm
-  outlines avoid another lexer pass. Cancellation precedes reuse. Whitespace
-  runs are consumed without allocating a token string per whitespace byte.
-- Project syntax outcomes are keyed by exact path/source and compiler identity,
-  bounded to 128 records and 2 MiB of source. Successful compiled closures are
-  never retained. Saved bytes and dependency graphs are still checked. The
-  focused fixture expects three cold compiles, zero additional warm compiles,
-  and one additional compile after editing one module.
-- Standalone syntax checks retain only successful exact-source checks, with
-  16 records and 2 MiB of source. `check_luau` followed by `run_luau` skips the
-  duplicate raw compile while compiling the managed execution wrapper fresh.
-- `script_test` selects declared test modules and literal case-name filters.
-  Each executed case receives fresh fixtures and a fresh module cache. Skipped
-  cases are reported; zero matches cannot become a passing result. This avoids
-  running unrelated test cases when focused verification is sufficient.
-- `file_find` searches filename globs through bounded directory inventories and
-  reads no file content. Results use canonical paths, sorted pagination and
-  explicit incomplete coverage. Content search reports skipped binary/oversized
-  files as incomplete coverage.
-- Unique exact edits use their already-known byte offsets. Writes are read back
-  so a host reporting success after writing partial bytes cannot produce a
-  successful edit receipt. Project patch hashes are computed at staging, while
-  full-byte guards remain authoritative at apply/restore.
-- Code line reads locate the requested range without allocating all document
-  lines. Equal-source diff calls return before line splitting. Source-document
-  hash reuse checks the exact current source and uses weak document keys.
-- Bytefall base64 encoding accumulates 1024-entry chunks instead of retaining
-  one small output string for every input triple. Padding and cooperative
-  cancellation are preserved.
-- Web continuations read immutable text snapshots instead of issuing another
-  HTTP request. Four snapshots and 4 MiB are retained for five minutes. The
-  focused fake-HTTP fixture reconstructs UTF-8 pages with exactly one fetch.
-- Native script discovery honors its advertised default 25/maximum 100 page
-  sizes and adds name filtering. Template output sorts numeric player distance;
-  template inputs reject unknown names and incorrect types. Skill discovery
-  filters name, filename and description before paging.
+- 项目大纲以精确源码字节为键，限制为 128 条目与 4 MiB 计入的源码/大纲存储，并在发布时复制。热大纲避免再次执行词法分析。复用之前先检查取消。空白连续段被整体消费，不再为每个空白字节分配词元字符串。
+- 项目语法结果以精确路径/源码与编译器身份为键，限制为 128 条记录与 2 MiB 源码。成功的已编译闭包从不保留。已保存字节与依赖图仍会被检查。聚焦夹具期望三次冷编译、零次额外热编译，以及编辑一个模块后的一次额外编译。
+- 独立语法检查仅保留成功的精确源码检查，共 16 条记录与 2 MiB 源码。先 `check_luau` 后 `run_luau` 会跳过重复的原始编译，同时重新编译受管执行包装层。
+- `script_test` 按声明的测试模块与字面用例名过滤进行选择。每个执行的用例都获得全新夹具与全新模块缓存。被跳过的用例会报告；零匹配不能变成通过结果。当聚焦验证已足够时，这避免运行无关的测试用例。
+- `file_find` 通过有界目录清单搜索文件名通配符，不读取任何文件内容。结果使用规范路径、排序分页与显式的不完整覆盖。内容搜索会把被跳过的二进制/超大文件报告为不完整覆盖。
+- 唯一的精确编辑使用其已知的字节偏移。写入会被读回，因此宿主机在写入部分字节后报告成功也无法产生成功的编辑回执。项目补丁哈希在暂存阶段计算，而整字节保护在应用/恢复时仍为权威。
+- Code 行读取定位请求范围时不分配全部文档行。相同源码的差异调用在切分行之前返回。源码文档哈希复用会检查精确的当前源码，并使用弱文档键。
+- Bytefall base64 编码累积 1024 条目的分块，而不是为每个输入三元组保留一个小输出字符串。填充与协作式取消保持原样。
+- Web 续接读取不可变文本快照，而不是再次发起 HTTP 请求。四个快照与 4 MiB 保留五分钟。聚焦的伪 HTTP 夹具在恰好一次抓取的情况下重建 UTF-8 分页。
+- 原生脚本发现遵守其公布的默认 25/最大 100 分页大小，并新增名称过滤。模板输出按数值玩家距离排序；模板输入拒绝未知名称与错误类型。技能发现在分页之前先按名称、文件名与描述过滤。
 
-These are bounded-work and invocation-counter claims, not native Roblox latency
-measurements. Executor filesystem calls still return whole file/list values;
-HTML extraction is best-effort text extraction, not browser rendering. Native
-rendering and host input require a Roblox/executor check.
+这些是关于有界工作量与调用计数的声明，而非原生 Roblox 延迟测量。执行器文件系统调用仍返回整文件/整列表值；HTML 提取是尽力而为的文本提取，而非浏览器渲染。原生渲染与宿主输入需要 Roblox/执行器检查。
 
-## Runtime module ledger
+## 运行时模块台账
 
-| Module | Reviewed mechanism and disposition |
+| 模块 | 审查的机制与处置 |
 | --- | --- |
-| `runtime/bytefall` | Bytecode extraction, response validation, cancellation and base64 padding reviewed. Chunked encoding bounds the temporary string array. |
-| `runtime/code_actions` | Saved source snapshots, revision guards, typed parameters and execution preparation reviewed; retained. Tool schemas now expose the supported input definition. |
-| `runtime/code_diff` | Prefix/suffix reduction, bounded middle comparison and replacement fallback reviewed. Equal inputs now return before line allocation. |
-| `runtime/code_files` | Canonical bindings, saved-base comparisons, conflicting disk changes, readback and document lifecycle reviewed; retained. |
-| `runtime/code_lexer` | Lexical states, changed-line reuse, comment/string handling and token budgets reviewed; retained. Source-page reads no longer need its whole-source line splitter. |
-| `runtime/code_limits` | Source/history/output limits and their shared callers reviewed; retained. Source-writing tool schemas now declare the 256000-byte limit. |
-| `runtime/code_store` | Revision checks, proposals, histories, active/open documents, persistence and storage-failure reporting reviewed; retained. |
-| `runtime/code_text` | UTF-8 boundaries, byte/column conversion and literal/pattern search reviewed. Added allocation-light line range location. |
-| `runtime/decompile_result` | Native/service result classification, invalid output rejection and provenance reviewed; retained. |
-| `runtime/fsx` | Scoped canonical paths, unsafe path rejection, executor listing variants, ambiguity and migration guards reviewed; retained. |
-| `runtime/luacid` | Wrapper, embedded implementation, bytecode dispatch, protected service calls and output validation read; retained. Generated/embedded compiler source was not rewritten. |
-| `runtime/project_patch` | Conversation ownership, expiration, exact-byte preconditions, verified partial writes and conditional restore reviewed. Precompute before/after hashes and cancel before staging reads. |
-| `runtime/project_source` | Lexical outlines/imports, comments/strings, offsets and scanner bounds reviewed. Added bounded exact-source cache with deep-copy isolation and whole-whitespace-run consumption. |
-| `runtime/script_project` | Manifest validation, saved-source loading, graph diagnostics, bundling and source-current checks reviewed. Added syntax-outcome reuse, compiler invalidation, cooperative analysis and explicit cancellation counters. |
-| `runtime/script_sources` | Instance/document identities, provenance, immutable sources, extraction/decompilation cancellation and unload reviewed. Weak exact-source hash cache avoids repeated document hashing. |
-| `runtime/workspace` | PlaceId-based selection, stable labels, saved mappings, legacy discovery bounds and ambiguous folder preservation reviewed; retained. |
+| `runtime/bytefall` | 已审查字节码提取、响应校验、取消与 base64 填充。分块编码为临时字符串数组设定了上限。 |
+| `runtime/code_actions` | 已审查已保存源码快照、修订保护、类型化参数与执行准备；保留。工具模式现在暴露支持的输入定义。 |
+| `runtime/code_diff` | 已审查前缀/后缀缩减、有界中间比较与替换回退。相同输入现在在分配行之前返回。 |
+| `runtime/code_files` | 已审查规范绑定、已保存基线的比较、磁盘冲突改动、读回与文档生命周期；保留。 |
+| `runtime/code_lexer` | 已审查词法状态、变更行复用、注释/字符串处理与词元预算；保留。源码分页读取不再需要其整源码切分器。 |
+| `runtime/code_limits` | 已审查源码/历史/输出限制及其共享调用方；保留。写源码的工具模式现在声明 256000 字节上限。 |
+| `runtime/code_store` | 已审查修订检查、提案、历史、活动/打开文档、持久化与存储失败报告；保留。 |
+| `runtime/code_text` | 已审查 UTF-8 边界、字节/列转换与字面量/模式搜索。新增低分配的行范围定位。 |
+| `runtime/decompile_result` | 已审查原生/服务结果分类、无效输出拒绝与来源；保留。 |
+| `runtime/fsx` | 已审查作用域规范路径、不安全路径拒绝、执行器列表变体、歧义与迁移保护；保留。 |
+| `runtime/luacid` | 阅读了包装层、嵌入实现、字节码派发、受保护的服务调用与输出校验；保留。生成/嵌入的编译器源码未重写。 |
+| `runtime/project_patch` | 已审查会话归属、到期、精确字节前置条件、校验式部分写入与有条件恢复。在暂存读取前预计算前后哈希并检查取消。 |
+| `runtime/project_source` | 已审查词法大纲/导入、注释/字符串、偏移与扫描器边界。新增有界的精确源码缓存（深拷贝隔离）与空白连续段整体消费。 |
+| `runtime/script_project` | 已审查清单校验、已保存源码加载、图诊断、打包与源码当前性检查。新增语法结果复用、编译器失效、协作式分析与显式取消计数。 |
+| `runtime/script_sources` | 已审查实例/文档身份、来源、不可变源码、提取/反编译取消与卸载。弱引用的精确源码哈希缓存避免重复的文档哈希。 |
+| `runtime/workspace` | 已审查基于 PlaceId 的选择、稳定标签、已保存映射、旧式发现边界与歧义文件夹保留；保留。 |
 
-## Tool module ledger
+## 工具模块台账
 
-| Module | Reviewed mechanism and disposition |
+| 模块 | 审查的机制与处置 |
 | --- | --- |
-| `tools/init` | Group loading, registry registration and native extension order reviewed; retained. |
-| `tools/code_runner` | Approval-bound source snapshots, document/action revisions, task identity, stop/output ownership and disposal reviewed; retained. |
-| `tools/coding` | Shared model access, revision-bound writes/runs, source identity, versions, proposals and action contracts reviewed. Added line-range reads, identity validation, source limits, action input schema and action pagination. |
-| `tools/execution` | Managed wrapper compilation, deadlines, cancellation instrumentation, worker admission and returned values reviewed. Reuse successful raw-source syntax checks without retaining executable closures. |
-| `tools/fs` | File list/read/edit/write/append/delete schemas, canonical routing, permission preparation and confirmations reviewed; retained. Uses improved shared workspace/result handling. |
-| `tools/fs_bulk` | Bounded walk/search, repeated-file guards, snapshots and coordinated exact edits reviewed. Added filename-only discovery and explicit incomplete search coverage. |
-| `tools/project` | Manifest map, staged patch lifecycle, saved-source analysis, testing, scaffolding and build preconditions reviewed. Pass cancellation to analysis, report compile reuse and expose focused test selection. |
-| `tools/project_testing` | Fixture cloning, isolated module caches, assertion helpers, test discovery and bounded reports reviewed. Filter cases before execution and fail explicitly on no matches. |
-| `tools/script` | Embedded guide routing, execution/check entry points and native extension handoff reviewed; retained. Uses updated embedded scripting guide and execution implementation. |
-| `tools/script_native` | Instance/source identity, snapshot provenance and source pagination reviewed. Remove the hidden five-row cap and add script-name filtering. |
-| `tools/skills` | Runtime skill store integration, reads, writes, installation, deletion and discovery bounds reviewed. Add filtered paginated inventory with totals. |
-| `tools/source_documents` | Open/source/caller provenance, source-to-document reuse, request cancellation and focus ownership reviewed; retained. |
-| `tools/templates` | Template expansion, dispatch identity, bounded parameters and operation deadlines reviewed. Sort player distances numerically, page detailed source, validate known typed parameters and forward timeouts. |
-| `tools/web` | Search extraction, safe URL scheme selection, response bounds and cancellation reviewed. Add immutable paged text snapshots, broader HTML attribute parsing, structured results and script/style stripping. |
-| `tools/workspace` | Exact edit matching, canonical preparation, full-byte conflict checks and file writes reviewed. Reconstruct unique matches by offsets and verify edited bytes after host writes. |
+| `tools/init` | 已审查分组加载、注册表登记与原生扩展顺序；保留。 |
+| `tools/code_runner` | 已审查绑定审批的源码快照、文档/操作修订、任务身份、停止/输出归属与释放；保留。 |
+| `tools/coding` | 已审查共享模型访问、绑定修订的写入/运行、源码身份、版本、提案与操作契约。新增行范围读取、身份校验、源码上限、操作输入模式与操作分页。 |
+| `tools/execution` | 已审查受管包装层编译、截止时间、取消插桩、工作线程准入与返回值。复用成功的原始源码语法检查，而不保留可执行闭包。 |
+| `tools/fs` | 已审查文件列表/读取/编辑/写入/追加/删除模式、规范路由、权限准备与确认；保留。使用改进后的共享工作区/结果处理。 |
+| `tools/fs_bulk` | 已审查有界遍历/搜索、重复文件保护、快照与协调的精确编辑。新增仅文件名的发现与显式不完整搜索覆盖。 |
+| `tools/project` | 已审查清单映射、暂存补丁生命周期、已保存源码分析、测试、脚手架与构建前置条件。把取消传递到分析，报告编译复用情况并暴露聚焦测试选择。 |
+| `tools/project_testing` | 已审查夹具克隆、隔离模块缓存、断言助手、测试发现与有界报告。执行前先过滤用例，无匹配时显式失败。 |
+| `tools/script` | 已审查嵌入指南路由、执行/检查入口与原生扩展交接；保留。使用更新的嵌入脚本指南与执行实现。 |
+| `tools/script_native` | 已审查实例/源码身份、快照来源与源码分页。移除隐藏的五条上限并新增脚本名过滤。 |
+| `tools/skills` | 已审查运行时技能库集成、读取、写入、安装、删除与发现上限。新增带合计的过滤分页清单。 |
+| `tools/source_documents` | 已审查打开/源码/调用方来源、源码到文档的复用、请求取消与焦点归属；保留。 |
+| `tools/templates` | 已审查模板展开、派发身份、有界参数与操作截止时间。按数值排序玩家距离、分页详情源码、校验已知类型化参数并转发超时。 |
+| `tools/web` | 已审查搜索提取、安全 URL 方案选择、响应边界与取消。新增不可变分页文本快照、更广的 HTML 属性解析、结构化结果与脚本/样式剥离。 |
+| `tools/workspace` | 已审查精确编辑匹配、规范准备、整字节冲突检查与文件写入。按偏移重建唯一匹配，并在宿主写入后校验已编辑字节。 |
 
-## Individual tool ledger
+## 单个工具台账
 
-Every name in this workstream has an explicit disposition. Retained tool
-contracts also receive shared recursive schema validation and bounded result
-handling reviewed in the release-wide agent ledger; those changes do not imply
-that every tool now caches or batches its domain operation.
+本工作线中的每个名称都有明确处置。保留的工具契约同样获得共享的递归模式校验与有界结果处理（已在发布级智能体台账中审查）；这些改动并不表示每个工具现在都会缓存或批处理其领域操作。
 
-| Tool | Disposition |
+| 工具 | 处置 |
 | --- | --- |
-| `workspace_result_read` | Retained scoped detail reader; receives shared result-budget pagination improvements. |
-| `code_tabs` | Retain lightweight document metadata pages without source retransmission. |
-| `code_read` | Locate requested lines without a full split; reject conflicting source/version/proposal identities; reuse unchanged document hashes. |
-| `code_write` | Retain conditional revision updates and checkpoints; declare the source byte limit in the schema. |
-| `code_edit` | Retain inclusive line edits against an expected revision; declare the source byte limit. |
-| `code_search` | Retain bounded literal-first search with offsets/revisions and explicit pattern opt-in. |
-| `code_select` | Retain explicit user-workspace selection as a separate operation. |
-| `code_run` | Retain approval-bound source revisions; shared execution avoids repeated raw syntax compilation when already checked. |
-| `code_propose` | Retain non-mutating proposals tied to a base revision; declare source bounds. |
-| `code_versions` | Retain source-free history/proposal metadata; larger receipts use retained detail. |
-| `code_action_list` | Add offset/limit pages, default 12 and maximum 25 actions. |
-| `code_action_save` | Expose supported typed input definitions and retain revision guards. |
-| `code_action_read` | Declare definition/source sections explicitly; retain paged saved source. |
-| `code_action_run` | Retain revision-bound snapshots and data-only typed input injection; shares syntax reuse. |
-| `file_list` | Retain bounded canonical inventory without reading file bodies. |
-| `file_read` | Retain resumable UTF-8 byte pages through the shared result budget helper. |
-| `file_edit` | Avoid a redundant replacement scan for a unique literal match and verify host-written bytes. |
-| `file_write` | Retain prepared target and guarded write behavior; shared schema/result validation applies. |
-| `file_append` | Retain append semantics and scoped targets; shared schema/result validation applies. |
-| `file_delete` | Retain prepared scoped identity and deletion result checks; no speculative deletion. |
-| `file_find` | New bounded recursive filename glob inventory with canonical paths, pagination and zero content reads. |
-| `file_search` | Preserve bounded literal content search; mark binary/large-file omissions incomplete. |
-| `file_read_many` | Retain bounded snapshot reads and per-file outcomes to avoid repeated tool setup. |
-| `file_edit_many` | Retain coordinated exact edits, prepared byte snapshots, conditional application and partial-result reporting. |
-| `project_map` | Reuse exact-source outlines while re-reading saved bytes; return hashes/imports without full source. |
-| `project_patch` | Compute staged hashes once; preserve conversation ownership, exact-source guards and reviewable proposals. |
-| `project_patch_read` | Reuse staged hashes; equal-source diff avoids splitting; source and detail remain paged. |
-| `project_patch_apply` | Reuse staged hashes for receipts while full-byte and unsaved-draft guards remain authoritative. |
-| `project_patch_restore` | Reuse staged hashes and preserve conditional recovery with explicit partial outcomes. |
-| `project_patch_discard` | Retain explicit release of bounded staged/recovery state without changing files. |
-| `project_scaffold` | Retain a reviewable create-only multi-file starter proposal; shared staging improvements apply. |
-| `script_analyze` | Reuse syntax outcomes and outlines, expose compiled/reused counts, and report cancellation/incomplete analysis. |
-| `script_test` | Add declared-module and literal case filters; fresh executed-case state; no-match failure; reuse analysis. |
-| `project_build` | Reuse project syntax checks, retain deterministic output and input overwrite guards, and reject cancelled analysis. |
-| `scripting_docs` | Updated embedded guide routes narrow discovery, focused tests and reusable source/page references. |
-| `run_luau` | Reuse a successful exact-source syntax check; always compile a fresh managed execution wrapper. |
-| `check_luau` | Bounded successful-result reuse by exact source/compiler identity, exposing whether work was reused. |
-| `script_list` | Honor default 25/maximum 100 results, add name filtering, preserve snapshot cursors and incomplete scan evidence. |
-| `script_source` | Retain explicit immutable source identity/provenance and bounded byte pages. |
-| `script_result_read` | Retained script-scoped detail reader receives shared result-budget pagination improvements. |
-| `skills_list` | Filter name/file/description before paging; return page and match totals. |
-| `skills_read` | Retain exact skill lookup and bounded source pages; benefits from runtime skill inventory reuse. |
-| `skills_write` | Retain bounded local skill writes and runtime index invalidation. |
-| `skills_install` | Retain explicit URL install and runtime skill validation/index invalidation. |
-| `skills_delete` | Retain exact skill selection, deletion and index invalidation. |
-| `template_list` | Page template details/source while preserving a compact discoverable inventory. |
-| `template_run` | Validate known parameter names/types, sort nearest-player data numerically, and align nested execution deadlines. |
-| `web_search` | Bound query/response work, support HTML attribute-order variations and return structured links/snippets. |
-| `web_read` | Continue immutable UTF-8 text pages by `page_id` with no refetch; bound retention, response inspection and deadline. |
+| `workspace_result_read` | 保留作用域内的详情读取器；获得共享结果预算分页改进。 |
+| `code_tabs` | 保留轻量文档元数据分页，不重传源码。 |
+| `code_read` | 定位请求行而不做完整切分；拒绝冲突的源码/版本/提案身份；复用未变文档的哈希。 |
+| `code_write` | 保留有条件修订更新与检查点；在模式中声明源码字节上限。 |
+| `code_edit` | 保留针对预期修订的闭区间行编辑；声明源码字节上限。 |
+| `code_search` | 保留有界的字面量优先搜索（含偏移/修订）与显式启用模式匹配。 |
+| `code_select` | 保留把显式用户工作区选择作为独立操作。 |
+| `code_run` | 保留绑定审批的源码修订；共享执行在已检查时避免重复的原始语法编译。 |
+| `code_propose` | 保留绑定基线修订的非变更型提案；声明源码边界。 |
+| `code_versions` | 保留不含源码的历史/提案元数据；较大的回执使用保留详情。 |
+| `code_action_list` | 新增偏移/上限分页，默认 12、最多 25 个操作。 |
+| `code_action_save` | 暴露支持的类型化输入定义并保留修订保护。 |
+| `code_action_read` | 显式声明定义/源码分节；保留分页的已保存源码。 |
+| `code_action_run` | 保留绑定修订的快照与仅数据的类型化输入注入；共享语法复用。 |
+| `file_list` | 保留有界的规范清单，不读取文件主体。 |
+| `file_read` | 保留通过共享结果预算助手提供的可续接 UTF-8 字节分页。 |
+| `file_edit` | 对唯一字面量匹配避免多余的替换扫描，并校验宿主写入的字节。 |
+| `file_write` | 保留准备好的目标与受保护的写入行为；共享模式/结果校验适用。 |
+| `file_append` | 保留追加语义与作用域目标；共享模式/结果校验适用。 |
+| `file_delete` | 保留准备好的作用域身份与删除结果检查；不做推测性删除。 |
+| `file_find` | 新增有界递归文件名通配清单，含规范路径、分页与零内容读取。 |
+| `file_search` | 保留有界字面量内容搜索；把二进制/大文件遗漏标记为不完整。 |
+| `file_read_many` | 保留有界快照读取与逐文件结果，以避免重复的工具设置。 |
+| `file_edit_many` | 保留协调的精确编辑、准备好的字节快照、有条件应用与部分结果报告。 |
+| `project_map` | 复用精确源码大纲，同时重读已保存字节；返回哈希/导入而不返回完整源码。 |
+| `project_patch` | 一次性计算暂存哈希；保留会话归属、精确源码保护与可审查提案。 |
+| `project_patch_read` | 复用暂存哈希；相同源码的差异避免切分；源码与详情仍分页。 |
+| `project_patch_apply` | 回执复用暂存哈希，同时整字节与未保存草稿保护仍为权威。 |
+| `project_patch_restore` | 复用暂存哈希并保留有条件恢复，显式给出部分结果。 |
+| `project_patch_discard` | 保留显式释放有界的暂存/恢复状态，不改动文件。 |
+| `project_scaffold` | 保留可审查的仅创建型多文件起始提案；共享暂存改进适用。 |
+| `script_analyze` | 复用语法结果与大纲，暴露编译/复用计数，并报告取消/不完整分析。 |
+| `script_test` | 新增声明模块与字面用例过滤；执行的用例状态全新；无匹配失败；复用分析。 |
+| `project_build` | 复用项目语法检查，保留确定性输出与输入覆盖保护，并拒绝已取消的分析。 |
+| `scripting_docs` | 更新的嵌入指南引导窄化发现、聚焦测试与可复用源码/分页引用。 |
+| `run_luau` | 复用成功的精确源码语法检查；始终编译全新的受管执行包装层。 |
+| `check_luau` | 按精确源码/编译器身份有界复用成功结果，并暴露是否发生了复用。 |
+| `script_list` | 遵守默认 25/最大 100 结果，新增名称过滤，保留快照游标与不完整扫描证据。 |
+| `script_source` | 保留显式的不可变源码身份/来源与有界字节分页。 |
+| `script_result_read` | 保留的脚本作用域详情读取器获得共享结果预算分页改进。 |
+| `skills_list` | 在分页前按名称/文件/描述过滤；返回分页与匹配合计。 |
+| `skills_read` | 保留精确技能查找与有界源码分页；受益于运行时技能清单复用。 |
+| `skills_write` | 保留有界的本地技能写入与运行时索引失效。 |
+| `skills_install` | 保留显式 URL 安装与运行时技能校验/索引失效。 |
+| `skills_delete` | 保留精确技能选择、删除与索引失效。 |
+| `template_list` | 分页模板详情/源码，同时保留紧凑可发现的清单。 |
+| `template_run` | 校验已知参数名/类型，按数值排序最近玩家数据，并对齐嵌套执行截止时间。 |
+| `web_search` | 约束查询/响应工作量，支持 HTML 属性顺序变化，并返回结构化链接/摘要片段。 |
+| `web_read` | 通过 `page_id` 续接不可变 UTF-8 文本分页且不重新抓取；约束保留、响应检查与截止时间。 |
 
-## Code presentation module ledger
+## Code 呈现模块台账
 
-Read-only review preserved the established application's design and its
-separation from runtime state. This ledger covers presentation lifecycle,
-allocation/virtualization, stale asynchronous results and interaction behavior;
-it does not certify native Roblox rendering.
+只读审查保留了既有应用的设计及其与运行时状态的分离。本台账覆盖呈现生命周期、分配/虚拟化、过期的异步结果与交互行为；它并不认证原生 Roblox 渲染。
 
-| Module | Reviewed mechanism and disposition |
+| 模块 | 审查的机制与处置 |
 | --- | --- |
-| `ui/code/common` | Shared controls, virtual-list adapter, protected work callbacks, messages and menus; retained. |
-| `ui/code/compare` | Paired source display, diff selection, responsive layout and owned teardown; retained. |
-| `ui/code/diff_view` | Bounded comparison rows, reusable list rendering and selection behavior; retained. |
-| `ui/code/editor` | Document subscription, guarded edits, selection restoration, debounced syntax and runner integration; retained. |
-| `ui/code/explorer` | Query generations, tree/list pagination, selection identity, properties and pane teardown; retained. |
-| `ui/code/files` | File binding, paged inventory, loaded-file filtering, open/create/delete dialogs and visibility lifecycle; retained. |
-| `ui/code/forms` | Typed fields, reference selection, validation, submit ownership and cleanup; retained. |
-| `ui/code/highlight` | Token-to-rich-text conversion, escaping and bounded highlighted source; retained. |
-| `ui/code/history` | Version/proposal identity, source comparison, conditional restore and selected-document updates; retained. |
-| `ui/code/large_source` | Viewport windows and source offset mapping limit work for large read-only source; retained. |
-| `ui/code/library` | Document/action metadata, filtering, source-independent selection and list lifecycle; retained. |
-| `ui/code/list` | Recycled visible rows, canvas bounds, keyboard/selection state and disposal; retained. |
-| `ui/code/metrics` | Text/line dimensions and display scale calculations; retained. |
-| `ui/code/output` | Bounded retained run output, selected run identity, row display and clear behavior; retained. |
-| `ui/code/preview` | Immutable source preview, scrolling and resize ownership; retained. Full source metrics are recalculated on resize, a possible future optimization rather than a measured bottleneck. |
-| `ui/code/remotes` | Capture/replay separation, generation-bound discovery/caller source work, bounded pages, debounced refresh, hidden-pane cancellation and teardown; retained. |
-| `ui/code/splitter` | Input ownership, drag capture and explicit destroy; retained. Owners destroy splitters during their pane cleanup. |
-| `ui/code/syntax` | Background syntax generation, lexical work bounds and stale-result rejection; retained. |
-| `ui/code/tabs` | Stable IDs, active selection, overflow and control reuse; retained. |
-| `ui/code/value_tree` | Bounded graph display, expanded paths, editable drafts and stable references; retained. |
-| `ui/code/world_picker` | Bounded explorer search, query cancellation, stable selection and modal lifecycle; retained. |
+| `ui/code/common` | 共享控件、虚拟列表适配器、受保护的工作回调、消息与菜单；保留。 |
+| `ui/code/compare` | 成对源码显示、差异选择、响应式布局与自有拆除；保留。 |
+| `ui/code/diff_view` | 有界比较行、可复用列表渲染与选择行为；保留。 |
+| `ui/code/editor` | 文档订阅、受保护的编辑、选择恢复、防抖语法与运行器集成；保留。 |
+| `ui/code/explorer` | 查询世代、树/列表分页、选择身份、属性与面板拆除；保留。 |
+| `ui/code/files` | 文件绑定、分页清单、已加载文件过滤、打开/创建/删除对话框与可见性生命周期；保留。 |
+| `ui/code/forms` | 类型化字段、引用选择、校验、提交归属与清理；保留。 |
+| `ui/code/highlight` | 词元到富文本的转换、转义与有界高亮源码；保留。 |
+| `ui/code/history` | 版本/提案身份、源码比较、有条件恢复与选中文档更新；保留。 |
+| `ui/code/large_source` | 视口窗口与源码偏移映射为大型只读源码限制工作量；保留。 |
+| `ui/code/library` | 文档/操作元数据、过滤、与源码无关的选择与列表生命周期；保留。 |
+| `ui/code/list` | 回收的可见行、画布边界、键盘/选择状态与释放；保留。 |
+| `ui/code/metrics` | 文本/行尺寸与显示比例计算；保留。 |
+| `ui/code/output` | 有界保留的运行输出、选中运行身份、行显示与清除行为；保留。 |
+| `ui/code/preview` | 不可变源码预览、滚动与尺寸变化归属；保留。完整源码度量会在尺寸变化时重新计算，这是可能的后续优化而非已测量的瓶颈。 |
+| `ui/code/remotes` | 捕获/重放分离、绑定世代的发现/调用方源码工作、有界分页、防抖刷新、隐藏面板取消与拆除；保留。 |
+| `ui/code/splitter` | 输入归属、拖拽捕获与显式销毁；保留。所有者在其面板清理期间销毁分隔条。 |
+| `ui/code/syntax` | 后台语法生成、词法工作边界与过期结果拒绝；保留。 |
+| `ui/code/tabs` | 稳定 ID、活动选择、溢出与控件复用；保留。 |
+| `ui/code/value_tree` | 有界图显示、展开路径、可编辑草稿与稳定引用；保留。 |
+| `ui/code/world_picker` | 有界资源管理器搜索、查询取消、稳定选择与模态框生命周期；保留。 |
 
-| Application module | Reviewed mechanism and disposition |
+| 应用模块 | 审查的机制与处置 |
 | --- | --- |
-| `ui/panels/code` | Lazy pane construction, document/source identity, keyboard scope, visibility propagation, generation-bound source refresh and pane/subscription cleanup; retained. |
-| `ui/app` | Mounting, lazy panels, session attachment, bounded navigation/notifications, launcher drag ownership, view rebuilds and native visibility propagation; retained. Conversation search remains synchronous over retained session data and is a possible future optimization. |
-| `ui/boot` | Minimal startup dependencies, real loaded/total progress, protected tween setup, success/failure retirement and fallback destruction; retained. |
-| `ui/sidebar` | Signature-based history/navigation rebuild suppression, folder state, busy indicators, count-change-only agent debounce and subscription teardown; retained. |
-| `ui/conversations` | Folder creation/rename/move flows, live conversation identity checks, error preservation, menu ownership and modal subscription teardown; retained. |
+| `ui/panels/code` | 惰性面板构建、文档/源码身份、键盘作用域、可见性传播、绑定世代的源码刷新与面板/订阅清理；保留。 |
+| `ui/app` | 挂载、惰性面板、会话附加、有界导航/通知、启动器拖拽归属、视图重建与原生可见性传播；保留。会话搜索仍是在保留会话数据上的同步操作，属于可能的后续优化。 |
+| `ui/boot` | 最小启动依赖、真实的已加载/总量进度、受保护的缓动设置、成功/失败退役与回退销毁；保留。 |
+| `ui/sidebar` | 基于签名的历史/导航重建抑制、文件夹状态、忙碌指示、仅在计数变化时的智能体防抖与订阅拆除；保留。 |
+| `ui/conversations` | 文件夹创建/重命名/移动流程、实时会话身份检查、错误保留、菜单归属与模态订阅拆除；保留。 |
 
-## Manual review and focused verification
+## 人工审查与聚焦验证
 
-Changed source, `docs/SCRIPT_DEVELOPMENT.md`, `docs/SCRIPT_PROJECTS.md`, release
-metadata and focused test inputs were manually reviewed before the build gate.
-The release tests use the existing offline workspace fixture, compiler/file-read
-counters and fake HTTP responses. They make no live network calls and no native
-speed claim.
+在构建门禁之前，人工审查了变更源码、`docs/SCRIPT_DEVELOPMENT.md`、`docs/SCRIPT_PROJECTS.md`、发布元数据与聚焦测试输入。发布测试使用既有的离线工作区夹具、编译器/文件读取计数器与伪 HTTP 响应。它们不发起实时网络调用，也不主张原生速度。
 
-The coordinator reviewed generated native/site outputs before focused execution.
-All five assigned checks passed, with exit 0 and no remaining failures:
+协调者在聚焦执行之前审查了生成的原生/站点输出。全部五项分配的检查均通过，退出码为 0 且无遗留失败：
 
-| Check | Final result | Elapsed host test time |
+| 检查 | 最终结果 | 宿主测试耗时 |
 | --- | --- | --- |
-| `test/release_scripting.lua` | 12 cases, 44 assertions | 1.163 seconds |
-| `test/release_tools.lua` | 15 cases, 54 assertions | 1.787 seconds |
-| `test/script_projects.lua` | 17 cases, 58 assertions | 3.898 seconds |
-| `test/execution_tools.lua` | 238 checks | 7.436 seconds |
-| `test/tool_workflows.lua` | 384 checks | 6.792 seconds |
+| `test/release_scripting.lua` | 12 个用例，44 条断言 | 1.163 秒 |
+| `test/release_tools.lua` | 15 个用例，54 条断言 | 1.787 秒 |
+| `test/script_projects.lua` | 17 个用例，58 条断言 | 3.898 秒 |
+| `test/execution_tools.lua` | 238 项检查 | 7.436 秒 |
+| `test/tool_workflows.lua` | 384 项检查 | 6.792 秒 |
 
-These are 778 offline checks/assertions, not native performance measurements.
-Logs are in `refer/release-3.0.0/`. The initial tool pass found that
-`click_detector_fire` incorrectly required executor signal introspection before
-native ProximityPrompt calls. Removed that requirement only from this tool;
-`gui_click` retains its introspection requirement. The fix was manually reviewed,
-rebuilt and inspected before the affected tool check passed. Its initial failed
-log remains as `release_tools.initial.log`. The already-passing scripting test
-was not repeated after this unrelated GUI change. The entire native suite was
-not run. The coordinator owns final artifact identity and verification records.
+这些是 778 项离线检查/断言，而非原生性能测量。日志位于 `refer/release-3.0.0/`。首次工具遍历发现 `click_detector_fire` 在原生 ProximityPrompt 调用之前错误地要求执行器信号内省。仅从该工具移除了这一要求；`gui_click` 保留其内省要求。该修复经人工审查、重新构建与检查后，受影响的工具检查才通过。其首次失败日志保留为 `release_tools.initial.log`。已通过的脚本测试在此次无关 GUI 改动后未重跑。未运行完整原生套件。协调者拥有最终产物身份与验证记录。
 
-Shared-helper cross-review additionally identified short line-read boundaries,
-observed clamped property writes and retention-failure HTTP messaging. Those
-findings were sent to the release coordinator before the build gate.
+共享助手的交叉审查还识别出短行读取边界、观察到的被钳制属性写入与保留失败的 HTTP 消息传递。这些发现项已在构建门禁之前发送给发布协调者。

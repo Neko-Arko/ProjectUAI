@@ -1,108 +1,93 @@
-# v3.0.0 core tool audit
+# v3.0.0 核心工具审计
 
-Manual review covers the following modules in full. The companion/bridge and
-standalone UI library are outside the release scope. The `ui_library_docs` tool
-definition and its embedded reference were preserved. Existing guarded runtime
-implementations were kept when review found no justified domain change.
+人工审查完整覆盖下列模块。companion/bridge 与独立的 UI 库不在发布范围内。`ui_library_docs` 工具定义及其嵌入参考被保留。审查未发现有必要改动领域实现时，保留既有的受保护运行时实现。
 
-Shared validation, dispatch and result improvements apply across the registered
-tool catalogue; a retained tool does not imply a new cache or faster native call.
-Performance evidence is bounded work and synthetic invocation counts, not an
-executor or Roblox latency benchmark.
+共享的校验、派发与结果改进适用于已注册的工具目录；被保留的工具并不意味着新增缓存或更快的原生调用。性能证据为有界工作量与合成调用计数，而非执行器或 Roblox 延迟基准。
 
-| Module | Review and disposition |
+| 模块 | 审查与处置 |
 | --- | --- |
-| `tools/helpers` | Finite limits, byte-budgeted row pages, UTF-8 progress for short reads, optional child counting, observed property batches and owned bounded signal watches. |
-| `tools/native_helpers` | Group-scoped immutable results, retention limits and expiry, result-budget text pages, bounded child projections, invalid path/offset rejection, HTTP reader and unload cleanup. |
-| `tools/net` | Exact JSON selectors and false values, HTTP status failure, deadlines/cancellation, one write attempt, contiguous body pages with retained continuations. |
-| `tools/players` | Exact username priority, ambiguous display names rejected, filtered pages, captured distances and observed teleport writes. |
-| `tools/character` | Movement fields/ranges, dependent health write order, preflight and readback, elapsed-time walking with truthful timeout/respawn outcomes. |
-| `tools/world` | Stable ray identity, capped spatial/fallback scans, cooperative distance capture, selected lighting reads, observed lighting/camera changes. |
-| `tools/gui` | Child-only tree reads, bounded text traversal and effective ancestor visibility, bounded button calls, owned prompt/touch holds, failure cleanup and honest notification/clipboard results. |
-| `tools/perf` | Owned cancellable sample, valid frame deltas, class pagination/completeness and conversation-scoped tool counts. |
-| `tools/screen` | Viewport bounds, requested ray distance/water handling, stable hit identity, explicit no-hit outcome; obsolete screenshot helpers removed. |
-| `tools/instance` | Budget-limited cooperative tree, resumable search, exact identities and paginated tags; unused eager source reader removed. |
-| `tools/instance_bulk` | Lighter optional display-only values, unreadable-filter disclosure and duplicate-target projection reuse within a batch. |
-| `tools/instance_native` | Exact prepared targets, guarded runtime mutation, selectable metadata, field deduplication and explicit source deferral. |
-| `tools/explorer` | Useful page sizes, bounded multi-field pages, immutable cursor selectors, explicit schemas and field-page cleanup. Existing selection/export/Undo guards retained. |
-| `tools/remotes` | Native adapter contracts reviewed; temporary remote/signal observation now shares owned listener cleanup and nil-position preservation. Native capture/replay reviewed in the runtime ledger. |
-| `tools/scan` | Retained compatibility entry point to the shared cooperative instance scanner. |
+| `tools/helpers` | 有限上限、按字节预算的行分页、短读取的 UTF-8 进度、可选子项计数、观测到的属性批次与自有有界信号监视。 |
+| `tools/native_helpers` | 分组作用域的不可变结果、保留上限与到期、结果预算文本分页、有界子项投影、无效路径/偏移拒绝、HTTP 读取器与卸载清理。 |
+| `tools/net` | 精确 JSON 选择器与 false 值、HTTP 状态失败、截止时间/取消、单次写入尝试、带保留续接的连续主体分页。 |
+| `tools/players` | 精确用户名优先、歧义显示名拒绝、过滤分页、捕获的距离与观测到的传送写入。 |
+| `tools/character` | 移动字段/范围、依赖的生命值写入顺序、预检与读回、基于耗时的行走，并如实报告超时/重生结果。 |
+| `tools/world` | 稳定的射线身份、有上限的空间/回退扫描、协作式距离捕获、选定光照读取、观测到的光照/摄像机改动。 |
+| `tools/gui` | 仅子级的树读取、有界文本遍历与有效祖先可见性、有界按钮调用、自有提示/触摸按住、失败清理与如实的通知/剪贴板结果。 |
+| `tools/perf` | 自有可取消采样、有效帧间隔、类分页/完整性与会话作用域的工具计数。 |
+| `tools/screen` | 视口边界、请求的射线距离/水面处理、稳定命中身份、显式未命中结果；移除过时的截屏助手。 |
+| `tools/instance` | 受预算限制的协作式树、可续接搜索、精确身份与分页标签；移除未使用的即时源码读取器。 |
+| `tools/instance_bulk` | 更轻的可选仅显示值、不可读过滤器的披露，以及批次内重复目标的投影复用。 |
+| `tools/instance_native` | 精确的准备目标、受保护的运行时变更、可选元数据、字段去重与显式源码延迟。 |
+| `tools/explorer` | 实用的分页大小、有界多字段分页、不可变游标选择器、显式模式与字段分页清理。保留既有的选择/导出/撤销保护。 |
+| `tools/remotes` | 已审查原生适配器契约；临时远程/信号观测现在共享自有的监听器清理与 nil 位置保留。原生捕获/重放已在运行时台账中审查。 |
+| `tools/scan` | 保留指向共享协作式实例扫描器的兼容入口点。 |
 
-## Tool dispositions
+## 工具处置
 
-| Tool | Result of review |
+| 工具 | 审查结果 |
 | --- | --- |
-| `http_get` | Fail HTTP errors; deadline/cancellation; contiguous retained response pages. |
-| `http_request` | One attempt; accurate status and resumable large responses. |
-| `json_api` | Exact key arrays, false-valued fields, missing-path failure and retained structured data. |
-| `http_result_read` | New group-scoped reader; no second network request. |
-| `players_list` | Filter/page results and capture each distance once before sorting. |
-| `player_info` | Exact username priority and unambiguous display-name fallback. |
-| `teleport_to_player` | Resolve unambiguous identity and report observed movement effects. |
-| `character_state` | Include jump-height mode and hip height. |
-| `character_set` | Validate ranges, apply maximum health before health and report partial/readback outcomes. |
-| `character_walk` | Use elapsed time; report timeout, cancellation and respawn as failure. |
-| `character_teleport` | Preflight and observe the resulting property write. |
-| `raycast` | Include stable instance identity for follow-up operations. |
-| `parts_near` | Bound engine results, cooperate during projection, page sorted captured distances and disclose incomplete scans. |
-| `lighting_get` | Select fields, deduplicate reads and bound optional effect summaries. |
-| `lighting_set` | Report readback rather than assume requested values persisted. |
-| `camera_get` | Report exact camera identity and fail when no camera is available. |
-| `camera_set` | Validate all supplied values before mutation and report observed partial effects. |
-| `gui_tree` | Page direct interface children without allocating all descendants; disclose unreadable roots. |
-| `gui_text` | Traverse cooperatively, include a selected text root, inspect ancestor visibility and expose continuation/coverage. |
-| `gui_click` | Bound handler dispatch, check cancellation/rejections and disclose partial failure. |
-| `click_detector_fire` | Own prompt/touch cleanup before begin dispatch, release after uncertainty/cancellation and preserve exact hold duration. |
-| `highlight` | Validate color before allocation; destroy failed setup and register cleanup. |
-| `notify` | Fail when a toast cannot be mounted. |
-| `clipboard_set` | Treat explicit host rejection as failure; report bytes accurately. |
-| `performance` | Ignore invalid frame deltas, report frame-time range and release the listener on every exit. |
-| `class_counts` | Page classes and disclose incomplete counts. |
-| `client_status` | Distinguish tools offered to this conversation from all registered/missing-capability tools. |
-| `ray_target` | Validate usable viewport, bound ray range and return stable identity/no-hit data. |
-| `instance_tree` | Stop formatting when the result budget fills, yield periodically and disclose omissions. |
-| `instance_find` | Resume at traversal offsets; preserve scan-limit/cancellation evidence. |
-| `instance_get` | Read selected fields; skip source bytes and optional metadata entirely. |
-| `instance_query` | Optional lightweight values; mark unreadable filters incomplete. |
-| `instance_get_many` | Reuse projections for repeated exact objects within one request; preserve per-path outcomes. |
-| `instance_set` | Retain prepared exact identity and expected-value guards; improve typed-value schema guidance. |
-| `instance_create` | Retain detached setup, validated properties and failure cleanup; correct sorted-property-order description. |
-| `instance_clone` | Retain prepared exact source/parent and guarded hierarchy operation; shared schema/result improvements apply. |
-| `instance_destroy` | Retain exact prepared identity and irreversible-action policy; shared validation applies. |
-| `instance_parent` | Retain prepared source/destination and guarded detach/reparent; clearer identity schema. |
-| `instance_attribute` | Retain read/typed write/remove and expected-value guards; clearer schema. |
-| `instance_tagged` | Page tag/instance listings and fail unreadable enumeration. |
-| `instance_result_read` | Shared UTF-8 pages use available result budget, with explicit invalid selectors and unload cleanup. |
-| `explorer_state` | Retain source-free shared selection/capability receipt; shared receipt improvements apply. |
-| `explorer_children` | Honor 1–100 requested children instead of a hidden five-item cap. |
-| `explorer_search` | Honor requested page size, preserving bounded traversal/snapshot selectors. |
-| `explorer_select` | Retain revision-guarded explicit selection; declare modes/revision range. |
-| `explorer_properties` | Return multiple fitting field rows and preserve immutable snapshot cursors. |
-| `instance_edit_many` | Describe ordered typed operations in the public schema; preserve runtime preflight/recovery. |
-| `explorer_export` | Declare actual format/field/depth bounds; retain verified export behavior. |
-| `code_open_source` | Retain exact immutable source opening and guarded modified documents; shared result handling applies. |
-| `code_extract_source` | Retain exclusive source identity and explicit editable extraction; bound positive offsets. |
-| `changes_list` | Retain bounded session history summaries and offsets; shared receipt handling applies. |
-| `changes_read` | Retain bounded recorded-value pages and expiry semantics; shared detail reader improvements apply. |
-| `changes_undo` | Retain full preflight and conditional recovery without overwriting conflicts. |
-| `remotes_list` | Native listing now advertises useful page limits and snapshot continuation. |
-| `remote_fire` | Retain prepared exact target and at-most-once typed dispatch; narrower transport construction reviewed in runtime audit. |
-| `remote_invoke` | Retain outstanding native-call ownership and typed outcomes; shared transport/result changes apply. |
-| `remote_watch` | Own/disconnect listeners, preserve nil argument positions and bound formatting. |
-| `signal_watch` | Same temporary observer lifecycle for ordinary instance signals. |
-| `remote_result_read` | Shared retained-detail improvements; originating group enforced. |
+| `http_get` | 对 HTTP 错误失败；截止时间/取消；连续保留的响应分页。 |
+| `http_request` | 单次尝试；准确状态与可续接的大型响应。 |
+| `json_api` | 精确键数组、false 值字段、缺失路径失败与保留的结构化数据。 |
+| `http_result_read` | 新增分组作用域读取器；不发起第二次网络请求。 |
+| `players_list` | 过滤/分页结果，并在排序前一次性捕获每个距离。 |
+| `player_info` | 精确用户名优先与无歧义的显示名回退。 |
+| `teleport_to_player` | 解析无歧义身份并报告观测到的移动效果。 |
+| `character_state` | 包含跳跃高度模式与髋部高度。 |
+| `character_set` | 校验范围，在设置生命值之前先设置最大生命值，并报告部分/读回结果。 |
+| `character_walk` | 使用耗时；把超时、取消与重生报告为失败。 |
+| `character_teleport` | 预检并观测结果的属性写入。 |
+| `raycast` | 为后续操作包含稳定的实例身份。 |
+| `parts_near` | 限制引擎结果、投影期间协作让出、对排序后的捕获距离分页并披露不完整扫描。 |
+| `lighting_get` | 选择字段、去重读取并限制可选效果摘要。 |
+| `lighting_set` | 报告读回结果，而不假设请求值已生效。 |
+| `camera_get` | 报告精确摄像机身份，并在无可用摄像机时失败。 |
+| `camera_set` | 变更前校验所有提供的值，并报告观测到的部分效果。 |
+| `gui_tree` | 对直接界面子项分页而不分配全部后代；披露不可读根。 |
+| `gui_text` | 协作式遍历、包含选定的文本根、检查祖先可见性并暴露续接/覆盖。 |
+| `gui_click` | 限制处理器派发、检查取消/拒绝并披露部分失败。 |
+| `click_detector_fire` | 在开始派发之前接管提示/触摸清理，在不确定/取消后释放，并保留精确按住时长。 |
+| `highlight` | 分配前校验颜色；销毁失败的设置并登记清理。 |
+| `notify` | 轻提示无法挂载时失败。 |
+| `clipboard_set` | 把显式宿主拒绝视为失败；准确报告字节。 |
+| `performance` | 忽略无效帧间隔、报告帧时间范围并在每次退出时释放监听器。 |
+| `class_counts` | 对类分页并披露不完整计数。 |
+| `client_status` | 区分提供给本会话的工具与所有已注册/缺失能力的工具。 |
+| `ray_target` | 校验可用视口、限制射线范围并返回稳定身份/未命中数据。 |
+| `instance_tree` | 结果预算用尽时停止格式化、定期让出并披露遗漏。 |
+| `instance_find` | 在遍历偏移处续接；保留扫描上限/取消证据。 |
+| `instance_get` | 读取选定字段；完全跳过源码字节与可选元数据。 |
+| `instance_query` | 可选的轻量值；把不可读过滤器标记为不完整。 |
+| `instance_get_many` | 在单次请求内复用重复精确对象的投影；保留逐路径结果。 |
+| `instance_set` | 保留准备好的精确身份与期望值保护；改进类型化值模式指引。 |
+| `instance_create` | 保留分离的设置、校验后的属性与失败清理；修正按属性排序的描述。 |
+| `instance_clone` | 保留准备的精确来源/父级与受保护的层级操作；共享模式/结果改进适用。 |
+| `instance_destroy` | 保留精确的准备身份与不可逆操作策略；共享校验适用。 |
+| `instance_parent` | 保留准备的来源/目标与受保护的分离/重新设置父级；更清晰的身份模式。 |
+| `instance_attribute` | 保留读取/类型化写入/移除与期望值保护；更清晰的模式。 |
+| `instance_tagged` | 对标签/实例列表分页，并在枚举不可读时失败。 |
+| `instance_result_read` | 共享 UTF-8 分页使用可用结果预算，并显式处理无效选择器与卸载清理。 |
+| `explorer_state` | 保留不含源码的共享选择/能力回执；共享回执改进适用。 |
+| `explorer_children` | 遵守请求的 1–100 个子项，而非隐藏的五项上限。 |
+| `explorer_search` | 遵守请求的分页大小，同时保留有界遍历/快照选择器。 |
+| `explorer_select` | 保留受修订保护的显式选择；声明模式/修订范围。 |
+| `explorer_properties` | 返回多个适配的字段行并保留不可变快照游标。 |
+| `instance_edit_many` | 在公开模式中描述有序类型化操作；保留运行时预检/恢复。 |
+| `explorer_export` | 声明实际的格式/字段/深度边界；保留校验式导出行为。 |
+| `code_open_source` | 保留精确的不可变源码打开与受保护的已修改文档；共享结果处理适用。 |
+| `code_extract_source` | 保留独占的源码身份与显式可编辑提取；限制正偏移。 |
+| `changes_list` | 保留有界的会话历史摘要与偏移；共享回执处理适用。 |
+| `changes_read` | 保留有界的记录值分页与到期语义；共享详情读取器改进适用。 |
+| `changes_undo` | 保留完整预检与有条件恢复，且不覆盖冲突。 |
+| `remotes_list` | 原生列表现在公布实用的分页上限与快照续接。 |
+| `remote_fire` | 保留准备的精确目标与至多一次的类型化派发；更窄的传输构造已在运行时审计中审查。 |
+| `remote_invoke` | 保留未完成原生调用的归属与类型化结果；共享传输/结果改动适用。 |
+| `remote_watch` | 接管/断开监听器、保留 nil 参数位置并限制格式化。 |
+| `signal_watch` | 对普通实例信号使用相同的临时观察者生命周期。 |
+| `remote_result_read` | 共享的保留详情改进；强制遵循来源分组。 |
 
-`ui_library_docs` is explicitly excluded from direct change. Scripting/Code/file/
-web/skill tools are covered by [the scripting ledger](AUDIT_3.0.0_SCRIPTING.md).
-Agent/input/metadata tools are covered by [the agent ledger](AUDIT_3.0.0_AGENT.md).
-Gravity, IY, chat and remote capture/replay tools are covered by
-[the runtime ledger](AUDIT_3.0.0_RUNTIME.md).
+`ui_library_docs` 被明确排除在直接改动之外。脚本/Code/文件/Web/技能工具由[脚本台账](AUDIT_3.0.0_SCRIPTING.md)覆盖。智能体/输入/元数据工具由[智能体台账](AUDIT_3.0.0_AGENT.md)覆盖。Gravity、IY、聊天与远程捕获/重放工具由[运行时台账](AUDIT_3.0.0_RUNTIME.md)覆盖。
 
-## Verification boundary
+## 验证边界
 
-All root-owned source changes and `test/release_tools.lua` were manually read
-before building. The release requires generated-output inspection before focused
-verification. See [the test record](TESTING_3.0.0.md) for commands/results.
-The full native behavioral suite is deliberately excluded by user instruction.
-Mock observations do not certify Roblox rendering, live native input or server
-acceptance of local mutations.
+所有根级所有的源码改动与 `test/release_tools.lua` 在构建前均经人工阅读。发布要求在聚焦验证之前检查生成输出。命令/结果见[测试记录](TESTING_3.0.0.md)。完整原生行为套件按用户指示有意排除。模拟观测并不认证 Roblox 渲染、实时原生输入或服务端对本地变更的接受。

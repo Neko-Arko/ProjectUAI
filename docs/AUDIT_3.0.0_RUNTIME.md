@@ -1,255 +1,187 @@
-# Runtime and integration audit for 3.0.0
+# 3.0.0 的运行时与集成审计
 
-This audit covers the 37 runtime modules assigned to the runtime workstream,
-ten integration tool modules, ten shared UI modules and seventeen additional UI
-modules listed below, plus the targeted composer listener cleanup. Source was read before selecting
-changes. The bridge, companion, desktop launcher and UI LIB are excluded. Generated
-source references and embedded assets are not edited. A retained disposition means
-the existing implementation was examined and no change was justified by this
-efficiency pass; it is not a claim of native Roblox or executor validation.
+本审计覆盖分配给运行时工作线的 37 个运行时模块、十个集成工具模块、十个共享 UI 模块与下列十七个附加 UI 模块，以及针对输入区监听器的定向清理。在选定改动之前已阅读源码。bridge、companion、桌面启动器与 UI LIB 被排除在外。生成的源码引用与嵌入资源不做编辑。处置为“保留”表示已检查既有实现，且本轮效率优化未能证明有必要改动；它并不代表已完成原生 Roblox 或执行器验证。
 
-## Implemented changes
+## 已实施的改动
 
-- Debounced work retains one scheduled wakeup and the latest packed arguments.
-  Burst events no longer allocate one waiting callback per update. Cancellation
-  releases arguments immediately; a handler can yield and schedule another call.
-- Prompt skill inventories reuse at most 3 KiB of rendered text for five seconds.
-  Explicit listing/body reads stay fresh. Saves, removals, enable changes and
-  configuration replacement invalidate the cache. Skill bodies are not cached.
-- UTF-8 validation skips ASCII runs in the native string matcher. Repair copies
-  contiguous valid spans, preserving the same invalid-byte positions and one
-  replacement character per malformed byte.
-- Remote capture retention uses a private queue with amortized constant-time
-  eviction. Public ordering, limits, pins, completion updates and cursor gaps are
-  unchanged. Summary/byte reads avoid copying unrequested typed graphs; returned
-  mutable sections remain detached from storage.
-- IY command and plugin discovery expose result-budgeted continuation offsets.
-  Plugin search includes store IDs. Plugin authoring accepts saved source paths.
-  Store installation validates plain filenames, rechecks destinations after a
-  download and verifies written bytes before registration. Removal validates its
-  filename before touching IY or disk. Store output distinguishes saved files,
-  registration requests and already-existing files.
-- Gravity receipts carry concise text and structured evidence once. Official
-  source reads reuse two immutable snapshots for five minutes (at most 4 MiB),
-  with explicit refresh. Local source is always fresh and capped at 2 MiB.
-- Remote capture schemas state supported actions, sections, methods and page
-  bounds. Chat history supports stable backward sequence cursors and channel
-  filtering within the tool budget. Background loop receipts include lifetime,
-  channel and count, and input schemas advertise byte/character bounds.
-- Unavailable confirmation dialogs complete cancellation instead of executing
-  the pending action. Icons verify each requested embedded file independently
-  before loading it, reuse mapped aliases and fall back to frames after refused
-  or unverified writes. Mascot blink callbacks cannot alter stopped, replaced or
-  destroyed animation state.
-- Sweeping one conversation's active question presents the next retained question
-  from another conversation. The composer disconnects its parent-size listener
-  when its own shell is destroyed.
+- 防抖工作只保留一个已排定的唤醒与最新的打包参数。突发事件不再为每次更新分配一个等待回调。取消会立即释放参数；处理器可以让出并再排定一次调用。
+- 提示词技能清单在五秒内最多复用 3 KiB 渲染文本。显式列目录/正文读取仍保持最新。保存、移除、启用状态变更与配置替换会使缓存失效。技能正文不被缓存。
+- UTF-8 校验在原生字符串匹配器中跳过 ASCII 连续段。修复会复制连续的有效片段，保持相同的无效字节位置，并为每个畸形字节产生一个替换字符。
+- 远程捕获保留使用私有队列，淘汰为摊还常数时间。公开排序、上限、固定项、完成更新与游标间隙保持不变。摘要/字节读取避免复制未请求的类型化图；返回的可变片段仍与存储分离。
+- IY 命令与插件发现会暴露受结果预算约束的续接偏移。插件搜索包含商店 ID。插件编写接受已保存的源码路径。商店安装会校验纯文件名、在下载后复查目标位置，并在注册前校验已写入字节。移除在触碰 IY 或磁盘之前先校验其文件名。商店输出区分已保存文件、注册请求与已存在的文件。
+- Gravity 回执一次性携带简洁文本与结构化证据。官方源码读取在五分钟内复用两个不可变快照（至多 4 MiB），并支持显式刷新。本地源码始终最新，且上限为 2 MiB。
+- 远程捕获模式说明支持的操作、分节、方法与分页边界。聊天历史在工具预算内支持稳定的向后序列游标与频道过滤。后台循环回执包含生命周期、频道与计数，输入模式则公布字节/字符边界。
+- 不可用的确认对话框会完成取消，而不是执行待定操作。图标在加载前独立校验每个请求的嵌入文件，复用已映射的别名，并在写入被拒绝或未通过校验时回退为帧。吉祥物眨眼回调无法改变已停止、已替换或已销毁的动画状态。
+- 清扫某个会话的活动提问时，会呈现另一会话中下一个保留的提问。输入区在自身外壳被销毁时断开其父级尺寸监听器。
 
-## Runtime dispositions
+## 运行时处置
 
-| Module | Disposition and evidence reviewed |
+| 模块 | 处置与审查证据 |
 | --- | --- |
-| `attachments` | Retained: verified writes, exact inserted bytes, ordered/idempotent uploads, owner checks, 10 MiB file and 32 MiB pending budgets. |
-| `caps` | Retained: one-time optional function probes, protected environment access, explicit unavailable capabilities and dynamic Gravity check. |
-| `changes` | Retained: 30-batch/300-field history, pinned identities, complete Undo preflight and conditional partial recovery. |
-| `chatbot` | Retained: isolated text-only inference, bounded 20-message queue/memory, 2,000 input IDs, duplicate suppression and live ownership checks. |
-| `chatloops` | Retained: three active loops, 20 recent jobs, serial sends, minimum interval and round-robin dispatch, stop/revocation cleanup. |
-| `clock` | Changed: debounce burst scheduling. Reviewed precise/fallback clocks, identity restoration, intervals, deadlines and cooperative native continuations. |
-| `community` | Retained: constant-cost persistent invitation cadence and malformed timestamp handling. |
-| `config` | Retained: merged defaults, debounced saves and complete replacement events; benefits from the shared debounce change. |
-| `config_transfer` | Retained: 8 MiB input cap, bounded recursive validation, version/type checks and private transfer semantics. |
-| `conversation_folders` | Retained: 64-folder limit, alternating verified snapshots, future/unreadable format protection and stable IDs. |
-| `dispose` | Retained: reverse-order cleanup, unregister-on-release, reentrant drain guard and error containment. |
-| `explorer` | Retained: bounded branches/query snapshots/rows, cursor signatures and TTL, selection revisions and property observation ownership. |
-| `gamechat` | Retained: 100-entry history, message-ID/echo deduplication, code-point limits and modern/legacy routing. |
-| `gravity` | Retained: resolves live context per action, validates setting batches, guarded native effects, actual control ranges and pagination. |
-| `images` | Retained: eight image references, per-image/message byte limits, session ownership and protocol-only expansion. |
-| `instance_edits` | Retained: bounded preflighted field batches, observed write results, conditional recovery, exact hierarchy selection/parent guards. |
-| `instance_fields` | Retained: protected reads/writes and field/type validation; actual engine access remains authoritative. |
-| `instance_paths` | Retained: nonexecuting bracket parser, duplicate-name rejection and bounded diagnostic ancestor traversal. |
-| `instance_refs` | Retained: weak epoch-scoped identities, bounded 2,048 observers, explicit pins and unload release. |
-| `instance_scan` | Retained: incremental child traversal, early page stop, cooperative checks, duplicate detection and 20,000-node ceiling. |
-| `instance_schema` | Retained: curated property metadata and per-class cache; returned name arrays do not expose the cache. |
-| `iy` | Retained: ambient/internal engine selection, serialized load attempts, live environment lookup and owned GUI guard. |
-| `iy_control` | Retained: native event/alias/waypoint/settings validation, paginated inspection and in-place tables. |
-| `iy_plugins` | Retained: bounded authored plugins, per-filename writer ownership, syntax/table checks and single setup evaluation. Tool path loading now feeds this same implementation. |
-| `iy_store` | Changed: filename boundaries, destination recheck and verified installation. Reviewed ten-minute catalog cache, ranked matching and existing-file behavior. |
-| `legacy_values` | Retained: compatibility coercions and diagnostics; scalar/text coordinate paths reject nonfinite numbers, typed replay uses `values`. |
-| `log` | Retained: 400-entry history with block eviction and centralized secret redaction. |
-| `native_exports` | Retained: bounded frozen capture exports, verified unique destinations, multipart completion manifest and selected metadata limits. |
-| `place` | Retained: one in-flight background metadata request; prompt readers reuse known identity/name. |
-| `remote_capture` | Retained: explicit lifecycle, owned hooks/connections, incoming cap, scope/admission checks, duration and agent revocation. |
-| `remote_hooks` | Retained: inert import, reusable forwarding cells, detached routing probes and explicit unverified native Invoke coverage. |
-| `remote_store` | Changed: private queue and selective copying. Reviewed pending/pin budgets, late outcomes, frozen exports, imports and generation invalidation. |
-| `remote_targets` | Retained: centralized exact selection/scope resolution and remote class checks. |
-| `signal` | Retained: no per-fire handler snapshot allocation, stable captured boundaries, disconnect/clear behavior, error isolation and recursion cap. |
-| `skills` | Changed: bounded prompt-only cache and invalidation. Reviewed frontmatter, enabled policy, explicit fresh reads and UTF-8 tool continuations. |
-| `util` | Changed: ASCII-run validation and span repair. Table/JSON semantics and UTF-8 truncation contracts remain unchanged. |
-| `values` | Retained: exact nil arity, typed bounded graphs, cycle/alias inspection, replay validation and exact-path portable source. |
+| `attachments` | 保留：写入经过校验、插入字节精确、上传有序且幂等、所有者检查、10 MiB 文件与 32 MiB 待定预算。 |
+| `caps` | 保留：一次性可选函数探测、受保护的环境访问、显式不可用能力与动态 Gravity 检查。 |
+| `changes` | 保留：30 批次/300 字段历史、固定身份、完整的撤销预检与有条件部分恢复。 |
+| `chatbot` | 保留：隔离的仅文本推理、有界的 20 条消息队列/记忆、2,000 个输入 ID、重复抑制与实时归属检查。 |
+| `chatloops` | 保留：三个活动循环、20 个近期任务、串行发送、最小间隔与轮询派发、停止/撤销清理。 |
+| `clock` | 改动：防抖突发排定。已审查精确/回退时钟、身份恢复、间隔、截止时间与协作式原生续接。 |
+| `community` | 保留：常数开销的持久邀请节奏与畸形时间戳处理。 |
+| `config` | 保留：合并默认值、防抖保存与完整替换事件；受益于共享防抖改动。 |
+| `config_transfer` | 保留：8 MiB 输入上限、有界递归校验、版本/类型检查与私有传输语义。 |
+| `conversation_folders` | 保留：64 文件夹上限、交替校验快照、未来/不可读格式保护与稳定 ID。 |
+| `dispose` | 保留：逆序清理、释放时注销、可重入排空保护与错误隔离。 |
+| `explorer` | 保留：有界分支/查询快照/行、游标签名与 TTL、选择修订与属性观察归属。 |
+| `gamechat` | 保留：100 条历史、消息 ID/回声去重、码点上限与现代/旧式路由。 |
+| `gravity` | 保留：按操作解析实时上下文、校验设置批次、受保护的原生副作用、实际控件范围与分页。 |
+| `images` | 保留：八个图像引用、每图像/消息字节上限、会话归属与仅协议扩展。 |
+| `instance_edits` | 保留：有界预检字段批次、观察到的写入结果、有条件恢复、精确的层级选择/父级保护。 |
+| `instance_fields` | 保留：受保护的读写与字段/类型校验；实际引擎访问仍为权威。 |
+| `instance_paths` | 保留：不执行的括号解析器、重名拒绝与有界诊断性祖先遍历。 |
+| `instance_refs` | 保留：弱引用的世代作用域身份、有界的 2,048 个观察者、显式固定与卸载释放。 |
+| `instance_scan` | 保留：增量子级遍历、提前分页停止、协作式检查、重复检测与 20,000 节点上限。 |
+| `instance_schema` | 保留：精选属性元数据与按类缓存；返回的名称数组不会暴露该缓存。 |
+| `iy` | 保留：环境/内部引擎选择、串行化加载尝试、实时环境查找与自有 GUI 保护。 |
+| `iy_control` | 保留：原生事件/别名/航点/设置校验、分页检查与原地表格。 |
+| `iy_plugins` | 保留：有界编写插件、按文件名的写入者归属、语法/表格检查与单次安装求值。工具路径加载现在接入同一实现。 |
+| `iy_store` | 改动：文件名边界、目标复查与校验式安装。已审查十分钟目录缓存、排序匹配与既有文件行为。 |
+| `legacy_values` | 保留：兼容性强制转换与诊断；标量/文本坐标路径拒绝非有限数字，类型化重放使用 `values`。 |
+| `log` | 保留：400 条历史、按块淘汰与集中式密钥脱敏。 |
+| `native_exports` | 保留：有界冻结捕获导出、校验的唯一目标、多部分完成清单与选定元数据上限。 |
+| `place` | 保留：单次在途后台元数据请求；提示词读取器复用已知身份/名称。 |
+| `remote_capture` | 保留：显式生命周期、自有钩子/连接、入口上限、作用域/准入检查、时长与智能体撤销。 |
+| `remote_hooks` | 保留：惰性导入、可复用转发单元、分离的路由探测，以及对未经校验的原生 Invoke 覆盖的明确说明。 |
+| `remote_store` | 改动：私有队列与选择性复制。已审查待定/固定预算、迟到结果、冻结导出、导入与世代失效。 |
+| `remote_targets` | 保留：集中的精确选择/作用域解析与远程类检查。 |
+| `signal` | 保留：每次触发不分配处理器快照、稳定的捕获边界、断开/清除行为、错误隔离与递归上限。 |
+| `skills` | 改动：有界的仅提示词缓存与失效。已审查前置元数据、启用策略、显式最新读取与 UTF-8 工具续接。 |
+| `util` | 改动：ASCII 连续段校验与片段修复。表格/JSON 语义与 UTF-8 截断契约保持不变。 |
+| `values` | 保留：精确的 nil 元数、类型化有界图、循环/别名检查、重放校验与精确路径的可移植源码。 |
 
-## Integration tool dispositions
+## 集成工具处置
 
-| Module | Disposition and exported tools reviewed |
+| 模块 | 处置与审查的导出工具 |
 | --- | --- |
-| `chat` | Changed `chat_history` pagination/filter/budget and `chat_send` input contract; bot channel ownership remains authoritative. |
-| `chatloops` | Changed `chat_bot`, `auto_chat`, `quiz_bot`, `auto_reply` lifecycle receipts/input schemas and status/stop ID guidance. Existing bounded job lifecycle remains shared. |
-| `gravity` | Changed shared receipts for status, launch, shapes, control, configure, shape, target, keybind, favorite, parts/control and plugin writes; plugin source reads advertise refresh. Existing per-action validation and risk/capability scopes reviewed. |
-| `gravity_parts` | Changed repeated query normalization to once per listing and detached returned physics settings. Held-ID ordering, selection ceilings and guarded native changes retained. |
-| `gravity_plugins` | Changed official source pagination cache and local read cap. Reviewed per-name write locks, setup deadline, staleness checks and registration cleanup. |
-| `iy` | Changed command/plugin pagination, saved-path authoring, concise control receipts, bounded command schema and honest install output. Reviewed status, selectors, configuration, source reads and removal. |
-| `remote_capture` | Changed schemas for lifecycle, call listings, graph/byte reads, filters, replay preparation and rules. Reviewed export/import, caller/source review/export and authorization ownership. |
-| `remote_native` | Changed listing continuation/page-size contract; removed unused dependencies. Exact prepared targets and typed call dispatch retained. |
-| `remote_replay` | Retained: bounded expiring immutable plans/source reviews, source/rule revision guards and at-most-once dispatch. |
-| `remote_transport` | Changed legacy argument coercion to construct only the requested Roblox value type. Typed validation, nil arity, observation correlation and outstanding native calls retained. |
+| `chat` | 改动 `chat_history` 的分页/过滤/预算与 `chat_send` 输入契约；机器人频道归属仍为权威。 |
+| `chatloops` | 改动 `chat_bot`、`auto_chat`、`quiz_bot`、`auto_reply` 的生命周期回执/输入模式与状态/停止 ID 指引。既有的有界任务生命周期仍为共享。 |
+| `gravity` | 改动状态、启动、形状列表、控制、配置、单个形状、目标、按键绑定、收藏、部件/控制与插件写入的共享回执；插件源码读取公布刷新支持。已审查既有的按操作校验与风险/能力作用域。 |
+| `gravity_parts` | 改动：重复查询归一化改为每次列表一次，并分离返回的物理设置。保留按住 ID 排序、选择上限与受保护的原生改动。 |
+| `gravity_plugins` | 改动：官方源码分页缓存与本地读取上限。已审查按名称的写入锁、安装截止时间、过期检查与注册清理。 |
+| `iy` | 改动：命令/插件分页、已保存路径编写、简洁控制回执、有界命令模式与如实安装输出。已审查状态、选择器、配置、源码读取与移除。 |
+| `remote_capture` | 改动：生命周期、调用列表、图/字节读取、过滤器、重放准备与规则的模式。已审查导出/导入、调用方/源码审查/导出与授权归属。 |
+| `remote_native` | 改动列表续接/分页大小契约；移除未使用的依赖。保留精确的准备目标与类型化调用派发。 |
+| `remote_replay` | 保留：有界且会过期的不可变方案/源码审查、源码/规则修订保护与至多一次派发。 |
+| `remote_transport` | 改动：旧式参数强制转换仅构造所请求的 Roblox 值类型。保留类型化校验、nil 元数、观测关联与未完成的原生调用。 |
 
-## Exact integration tool ledger
+## 精确集成工具台账
 
-Names were checked against the JSON exported by `tools/site_catalog.lua` from the
-3.0.0 bundle (174 tools). This table accounts for eight chat tools, thirteen
-Gravity tools, ten IY tools and fourteen capture/replay/source tools: 45 exact
-names. The release owner's ledger covers the remaining direct remote/signal
-tools. Protected `ui_library_docs` is explicitly excluded from modification.
+名称已对照 `tools/site_catalog.lua` 从 3.0.0 打包产物导出的 JSON（174 个工具）进行核对。本表涵盖八个聊天工具、十三个 Gravity 工具、十个 IY 工具与十四个捕获/重放/源码工具：45 个精确名称。发布负责人的台账涵盖其余直接的远程/信号工具。受保护的 `ui_library_docs` 被明确排除在改动之外。
 
-| Tool | Disposition |
+| 工具 | 处置 |
 | --- | --- |
-| `auto_chat` | Changed: bounded message schema and explicit channel/count/interval/expiry receipt; shared loop lifecycle retained. |
-| `auto_reply` | Changed: bounded trigger/response schema and lifetime receipt; serial reply ownership retained. |
-| `chat_bot` | Changed: explicit bot lifetime/channel/count receipt; independent inference, deduplication and bounded memory retained. |
-| `chat_history` | Changed: channel filtering, stable backward sequence cursors and result-budgeted chronological pages. |
-| `chat_loop_status` | Changed: exact-ID/history schema guidance; bounded retained jobs and score snapshots retained. |
-| `chat_loop_stop` | Changed: exact-ID/all schema guidance; shared immediate stop and submitted-message semantics retained. |
-| `chat_send` | Changed: advertised UTF-8 byte bounds; native code-point limits, channel routing and bot ownership retained. |
-| `quiz_bot` | Changed: bounded questions/answers/aliases and explicit lifetime receipt; first-answer scoring and round limits retained. |
-| `gravity_configure` | Changed: concise receipt with structured evidence once; whole-batch validation and native setting effects retained. |
-| `gravity_control` | Changed: concise receipt with structured evidence once; native lifecycle handlers and cancellation retained. |
-| `gravity_favorite` | Changed: concise receipt with structured evidence once; native favorite table and persistence retained. |
-| `gravity_keybind` | Changed: concise receipt with structured evidence once; live key validation/conflict detection retained. |
-| `gravity_launch` | Changed: concise live-status receipt; existing connection reuse and explicit forced reload retained. |
-| `gravity_part_control` | Changed: concise receipt and detached returned physics settings; exact selection and native action guards retained. |
-| `gravity_parts` | Changed: query normalization once per listing and concise count/continuation receipt; stable claim-ID ordering retained. |
-| `gravity_plugin_read` | Changed: two-entry/4 MiB/five-minute official-source cache, explicit refresh and fresh bounded local reads. |
-| `gravity_plugin_write` | Changed: concise validation/registration receipt; verified source writes, writer locks and one setup evaluation retained. |
-| `gravity_shape` | Changed: concise receipt with structured evidence once; real control units, selected-shape button checks and cleanup retained. |
-| `gravity_shapes` | Changed: concise count/continuation receipt with structured catalog once; live shape/control inspection retained. |
-| `gravity_status` | Changed: concise status receipt with structured state once; current engine/context lookup retained. |
-| `gravity_target` | Changed: concise receipt with structured evidence once; ambiguous-player rejection and native target table retained. |
-| `iy_cmd` | Changed: bounded command schema and clearer direct invocation guidance; native dispatch behavior retained. |
-| `iy_cmds` | Changed: result-budgeted continuation, bounded signatures/descriptions and malformed alias filtering. |
-| `iy_control` | Changed: concise receipt with structured evidence once; native aliases/events/waypoints/settings validation retained. |
-| `iy_players` | Retained: IY's live selector resolution, bounded readable results and available-selector guidance. |
-| `iy_plugin_install` | Changed: safe plain filename, bounded download, cancellation/destination recheck, verified bytes and honest registration request receipt. |
-| `iy_plugin_read` | Retained: bounded guide/template/source slices with continuation and live plugin source lookup. |
-| `iy_plugin_search` | Changed: full ranked search, result-budgeted pages, continuation offsets and installable store IDs. |
-| `iy_plugin_uninstall` | Changed: canonical plain filename validation before IY removal or disk deletion. |
-| `iy_plugin_write` | Changed: saved source-path input and concise receipt; existing locked validation/setup/write lifecycle retained. |
-| `iy_status` | Retained: live ambient/internal IY status and availability reporting. |
-| `remote_caller_source` | Retained wrapper: read-only caller source/decompile provenance through the shared source-document runtime. |
-| `remote_capture_bytes` | Changed: explicit graph/byte selector bounds and storage lookup without full graph copies; exact byte continuation retained. |
-| `remote_capture_read` | Changed: exact section/node/page schema and copying only requested sections; mutable results stay detached. |
-| `remote_replay` | Retained: immutable plan/digest checks, at-most-once dispatch and outstanding InvokeServer handling. |
-| `remote_replay_prepare` | Changed: method/revision schema contract; bounded expiring plan preparation remains non-dispatching. |
-| `remote_rule` | Changed: action/method/policy/revision schema contract; exact-target rules and stop/revocation disarming retained. |
-| `remote_script_export` | Retained: current review ID/digest validation and verified export of the exact reviewed portable source. |
-| `remote_script_prepare` | Changed: method/revision schema contract; exact-path typed source review and expiry retained. |
-| `remotes_calls` | Changed: explicit filters/page bounds; queue-backed ordered paging avoids FIFO shifts while preserving gaps and pins. |
-| `remotes_capture` | Changed: exact lifecycle/mode/backend/duration schema; capture ownership, scope and revocation retained. |
-| `remotes_export` | Retained: frozen bounded capture selection, verified output parts and completion manifest. |
-| `remotes_filter` | Changed: exact method schema; future admission filtering remains separate from traffic blocking. |
-| `remotes_import` | Retained: validated offline-only import, stale identity isolation and no implicit capture/replay. |
-| `remotes_state` | Improved shared queue storage without changing state/coverage semantics; inspection remains inert. |
+| `auto_chat` | 改动：有界消息模式与显式频道/计数/间隔/到期回执；保留共享循环生命周期。 |
+| `auto_reply` | 改动：有界触发/响应模式与生命周期回执；保留串行回复归属。 |
+| `chat_bot` | 改动：显式机器人生命周期/频道/计数回执；保留独立推理、去重与有界记忆。 |
+| `chat_history` | 改动：频道过滤、稳定的向后序列游标与受结果预算约束的时间顺序分页。 |
+| `chat_loop_status` | 改动：精确 ID/历史模式指引；保留有界保留任务与得分快照。 |
+| `chat_loop_stop` | 改动：精确 ID/全部模式指引；保留共享的立即停止与已提交消息语义。 |
+| `chat_send` | 改动：公布 UTF-8 字节边界；保留原生码点上限、频道路由与机器人归属。 |
+| `quiz_bot` | 改动：有界问题/答案/别名与显式生命周期回执；保留首答计分与回合上限。 |
+| `gravity_configure` | 改动：一次性携带结构化证据的简洁回执；保留整批校验与原生设置副作用。 |
+| `gravity_control` | 改动：一次性携带结构化证据的简洁回执；保留原生生命周期处理器与取消。 |
+| `gravity_favorite` | 改动：一次性携带结构化证据的简洁回执；保留原生收藏表与持久化。 |
+| `gravity_keybind` | 改动：一次性携带结构化证据的简洁回执；保留实时按键校验/冲突检测。 |
+| `gravity_launch` | 改动：简洁的实时状态回执；保留既有连接复用与显式强制重载。 |
+| `gravity_part_control` | 改动：简洁回执与分离返回的物理设置；保留精确选择与原生操作保护。 |
+| `gravity_parts` | 改动：每次列表仅归一化查询一次，并给出简洁的计数/续接回执；保留稳定的认领 ID 排序。 |
+| `gravity_plugin_read` | 改动：两条目/4 MiB/五分钟的官方源码缓存、显式刷新与保持最新的有界本地读取。 |
+| `gravity_plugin_write` | 改动：简洁的校验/注册回执；保留校验式源码写入、写入者锁与单次安装求值。 |
+| `gravity_shape` | 改动：一次性携带结构化证据的简洁回执；保留真实控制单位、所选形状按钮检查与清理。 |
+| `gravity_shapes` | 改动：简洁的计数/续接回执并一次性携带结构化目录；保留实时形状/控制检查。 |
+| `gravity_status` | 改动：简洁状态回执并一次性携带结构化状态；保留当前引擎/上下文查找。 |
+| `gravity_target` | 改动：一次性携带结构化证据的简洁回执；保留歧义玩家拒绝与原生目标表。 |
+| `iy_cmd` | 改动：有界命令模式与更清晰的直接调用指引；保留原生派发行为。 |
+| `iy_cmds` | 改动：受结果预算约束的续接、有界签名/描述与畸形别名过滤。 |
+| `iy_control` | 改动：一次性携带结构化证据的简洁回执；保留原生别名/事件/航点/设置校验。 |
+| `iy_players` | 保留：IY 的实时选择器解析、有界可读结果与可用选择器指引。 |
+| `iy_plugin_install` | 改动：安全的纯文件名、有界下载、取消/目标复查、校验字节与如实的注册请求回执。 |
+| `iy_plugin_read` | 保留：带续接的有界指南/模板/源码切片，以及实时插件源码查找。 |
+| `iy_plugin_search` | 改动：完整排序搜索、受结果预算约束的分页、续接偏移与可安装商店 ID。 |
+| `iy_plugin_uninstall` | 改动：在 IY 移除或磁盘删除之前校验规范的纯文件名。 |
+| `iy_plugin_write` | 改动：已保存源码路径输入与简洁回执；保留既有加锁校验/安装/写入生命周期。 |
+| `iy_status` | 保留：实时环境/内部 IY 状态与可用性报告。 |
+| `remote_caller_source` | 保留为包装器：通过共享源码文档运行时进行只读的调用方源码/反编译来源查询。 |
+| `remote_capture_bytes` | 改动：显式的图/字节选择器边界与无需整图复制的存储查找；保留精确字节续接。 |
+| `remote_capture_read` | 改动：精确的分节/节点/分页模式且仅复制所请求的分节；可变结果保持分离。 |
+| `remote_replay` | 保留：不可变方案/摘要检查、至多一次派发与未完成的 InvokeServer 处理。 |
+| `remote_replay_prepare` | 改动：方法/修订模式契约；有界且会过期的方案准备仍不执行派发。 |
+| `remote_rule` | 改动：操作/方法/策略/修订模式契约；保留精确目标规则与停止/撤销时的解除武装。 |
+| `remote_script_export` | 保留：当前审查 ID/摘要校验，以及精确导出已审查的可移植源码。 |
+| `remote_script_prepare` | 改动：方法/修订模式契约；保留精确路径的类型化源码审查与到期。 |
+| `remotes_calls` | 改动：显式过滤/分页边界；队列支撑的有序分页避免 FIFO 位移，同时保留间隙与固定项。 |
+| `remotes_capture` | 改动：精确的生命周期/模式/后端/时长模式；保留捕获归属、作用域与撤销。 |
+| `remotes_export` | 保留：冻结的有界捕获选择、校验的输出分段与完成清单。 |
+| `remotes_filter` | 改动：精确方法模式；未来准入过滤仍与流量阻断相互独立。 |
+| `remotes_import` | 保留：校验的仅离线导入、过期身份隔离与无隐式捕获/重放。 |
+| `remotes_state` | 改进共享队列存储而未改变状态/覆盖语义；检查操作仍然无副作用。 |
 
-## Shared UI dispositions
+## 共享 UI 处置
 
-| Module | Disposition and evidence reviewed |
+| 模块 | 处置与审查证据 |
 | --- | --- |
-| `assets` | Retained generated payloads; read decoder and module structure. Encoded image literals were excluded from the source logic audit; bundling reproduced unchanged bytes. |
-| `brand` | Retained: bounded eleven-ray frame geometry, whole-pixel small-size coordinates and no asynchronous ownership. |
-| `controls` | Retained: spinner cancellation, instance-owned switch signals, touch-scroll-aware slider drag/release/focus cleanup, measured segment widths and responsive key/value layout. |
-| `icons` | Changed: per-file embedded-byte verification, alias asset reuse and mascot generation/lifetime guards. Read every fallback glyph and custom asset path; embedded assets remain unchanged. |
-| `instance_icons` | Retained: generated class map, constant-time tile addressing, service/placeholder fallback and image assignment only on change. |
-| `overlay` | Changed: unavailable confirmation dialogs cancel. Reviewed bounded toast count/height, timed pause ownership, modal fit coalescing, surface retirement, focus release and anchored menu subscriptions. |
-| `primitives` | Retained: one current tween per element, destroy cleanup, measured text sizing, input callbacks, icon state collection and scroll/fade ownership. |
-| `responsive` | Retained: generation-guarded delayed work, viewport and input sampling, scoped connection releases, safe rectangles and focused-field ancestor scrolling. |
-| `theme` | Retained: one-time font probing, density/text bounds, native font fallback, reduced-motion durations and token-key-only rebuilding. |
-| `window` | Retained: gesture release on focus/hide/layout/destroy, geometry limits, scoped subscriptions, whole-pixel placement and quiet persistence. |
+| `assets` | 保留生成的载荷；阅读了解码器与模块结构。编码图像字面量被排除在源码逻辑审计之外；打包重现后字节保持不变。 |
+| `brand` | 保留：有界的十一射线帧几何、小尺寸的整像素坐标与无异步归属。 |
+| `controls` | 保留：加载器取消、实例自有的开关信号、感知触摸滚动的滑块拖动/释放/焦点清理、测量分段宽度与响应式键/值布局。 |
+| `icons` | 改动：逐文件嵌入字节校验、别名资源复用与吉祥物生成/生命周期保护。阅读了每个回退字形与自定义资源路径；嵌入资源保持不变。 |
+| `instance_icons` | 保留：生成的类映射、常数时间磁贴寻址、服务/占位回退与仅在变化时赋值的图像。 |
+| `overlay` | 改动：不可用的确认对话框会取消。已审查有界轻提示数量/高度、定时暂停归属、模态适配合并、表面退役、焦点释放与锚定菜单订阅。 |
+| `primitives` | 保留：每个元素一个当前缓动、销毁清理、测量文本尺寸、输入回调、图标状态收集与滚动/淡入淡出归属。 |
+| `responsive` | 保留：世代保护的延迟工作、视口与输入采样、作用域连接释放、安全矩形与聚焦字段的祖先滚动。 |
+| `theme` | 保留：一次性字体探测、密度/文本边界、原生字体回退、减弱动效时长与仅按词元键重建。 |
+| `window` | 保留：焦点/隐藏/布局/销毁时的拖拽释放、几何限制、作用域订阅、整像素定位与静默持久化。 |
 
-## Additional UI dispositions
+## 附加 UI 处置
 
-These seventeen modules were read in full. Retained here means no further change
-was selected by this pass, including where another release workstream already
-improved the current source. The bridge-related Cowork surface was reviewed as
-existing client presentation only; bridge/relay implementations remain excluded.
+这十七个模块已完整阅读。此处的“保留”表示本轮未选定进一步改动，包括其他发布工作线已改进当前源码的情形。与 bridge 相关的 Cowork 界面仅作为既有客户端呈现进行审查；bridge/relay 实现仍被排除。
 
-| Module | Disposition and evidence reviewed |
+| 模块 | 处置与审查证据 |
 | --- | --- |
-| `changelog` | Retained: shared release data, read-marker update only after a modal exists, bounded modal viewport and wrapped release text. |
-| `community` | Retained: optional invitation, quiet-period eligibility, active-view/draft checks, bounded cadence and connection/timer cleanup. |
-| `markdown` | Retained: escaped RichText, matching backtick indexes, protected inline spans, fence preservation, table cell retention and bounded syntax highlighting. |
-| `profile` | Retained: UTF-8 initial fallback, three thumbnail/preload attempts, late-result lifetime checks and provider-label subscription cleanup. |
-| `project` | Retained: single open modal, browser-request feedback and selectable/copyable repository fallback. |
-| `quickchat` | Retained: generation-guarded focus/hide, shared-session sends, failed-send draft retention, scoped theme/mode subscriptions and key-capture cancellation. |
-| `settingsrows` | Retained: shared config-bound controls, commit/blur writes, field draft attributes, measured/reflowing control widths and action-label limits. |
-| `panels/agents` | Retained current release implementation: keyed record/monitor rows, bounded refresh frequency, hidden-view work gating, identity checks and heartbeat/subscription cleanup. |
-| `panels/ask` | Changed: session-scoped sweep now drains retained questions. Reviewed one-shot resolution, unavailable modal dismissal and direct/queued answers. |
-| `panels/cowork` | Retained presentation: shared live status rows, guarded late download updates, capability feedback and status/config subscription cleanup. |
-| `panels/home` | Retained: observed usage only, measured tiles/starters, fixed 26-week heatmap, debounced statistics refresh and destroyed-view guard. |
-| `panels/logs` | Retained: sanitized selected detail fields, credential-aware URL display, bounded details, debounced history refresh and modal/subscription cleanup. |
-| `panels/modelpicker` | Retained: single modal, signature-based row reuse, filtering, compact scroll ownership, late discovery guard and subscription cleanup. |
-| `panels/permission` | Retained: queued one-shot allow/deny resolution, unavailable modal denial, argument review and headless duplicate suppression. |
-| `panels/settings` | Retained: delegates every category to the shared pane renderer and owns no external listeners or background work. |
-| `panels/settingsdialog` | Retained: category view caching, config-bound draft preservation, dirty invalidation, geometry reflow and observe-change cleanup. |
-| `panels/tools` | Retained: registry-driven groups, capability/risk display, permission controls, preserved list position and permission subscription cleanup. |
+| `changelog` | 保留：共享发布数据、仅在模态框存在后更新已读标记、有界模态视口与换行的发布文本。 |
+| `community` | 保留：可选邀请、静默期资格、活动视图/草稿检查、有界节奏与连接/定时器清理。 |
+| `markdown` | 保留：转义 RichText、匹配的反引号索引、受保护的跨行片段、围栏保留、表格单元格保留与有界语法高亮。 |
+| `profile` | 保留：UTF-8 首字母回退、三次缩略图/预加载尝试、迟到结果的生命周期检查与提供方标签订阅清理。 |
+| `project` | 保留：单一打开的模态框、浏览器请求反馈与可选/可复制的仓库回退。 |
+| `quickchat` | 保留：世代保护的聚焦/隐藏、共享会话发送、发送失败草稿保留、作用域主题/模式订阅与按键捕获取消。 |
+| `settingsrows` | 保留：共享的配置绑定控件、提交/失焦写入、字段草稿属性、测量/重排控件宽度与操作标签上限。 |
+| `panels/agents` | 保留当前发布实现：带键的记录/监控行、有界刷新频率、隐藏视图的工作门控、身份检查与心跳/订阅清理。 |
+| `panels/ask` | 改动：会话作用域清扫现在会排空保留的提问。已审查一次性解析、不可用模态框关闭与直接/排队答案。 |
+| `panels/cowork` | 保留呈现：共享实时状态行、受保护的迟到下载更新、能力反馈与状态/配置订阅清理。 |
+| `panels/home` | 保留：仅观测用量、测量的磁贴/起始项、固定的 26 周热力图、防抖统计刷新与已销毁视图保护。 |
+| `panels/logs` | 保留：脱敏的选中详情字段、感知凭据的 URL 显示、有界详情、防抖历史刷新与模态框/订阅清理。 |
+| `panels/modelpicker` | 保留：单一模态框、基于签名的行复用、过滤、紧凑滚动归属、迟到发现保护与订阅清理。 |
+| `panels/permission` | 保留：排队的一次性允许/拒绝解析、不可用模态框拒绝、参数审查与无头重复抑制。 |
+| `panels/settings` | 保留：将每个类别委托给共享面板渲染器，自身不持有外部监听器或后台工作。 |
+| `panels/settingsdialog` | 保留：类别视图缓存、配置绑定的草稿保留、脏失效、几何重排与观察变更清理。 |
+| `panels/tools` | 保留：注册表驱动的分组、能力/风险展示、权限控件、保留的列表位置与权限订阅清理。 |
 
-`chat/composer` received a targeted lifecycle correction: retain the parent's
-`AbsoluteSize` connection and disconnect it in the shell's `Destroying` handler.
-The full chat module audit belongs to the agent efficiency workstream. The
-application shell, sidebar, conversations, boot and Code panel are covered by the
-scripting workstream; provider/settings pane coverage belongs to agent efficiency.
+`chat/composer` 接受了针对性的生命周期修正：保留父级的 `AbsoluteSize` 连接，并在外壳的 `Destroying` 处理器中断开它。完整的聊天模块审计属于智能体效率工作线。应用外壳、侧边栏、会话、启动与 Code 面板由脚本工作线覆盖；提供方/设置面板的覆盖属于智能体效率。
 
-Targeted cross-review also covered the release changes in `tools/world`,
-`tools/instance_bulk`, the owned-input release state machine and Responses tool
-argument assembly. Overlapping native input down/up findings were repaired by
-agent efficiency and reviewed again. The shared GUI hold cleanup now dispatches
-its end callback asynchronously during unload so a yielding native end cannot
-block unrelated disposers; ordinary completion still awaits release evidence.
+定向交叉审查还覆盖了 `tools/world`、`tools/instance_bulk`、自有输入释放状态机与 Responses 工具参数装配中的发布改动。重叠的原生输入按下/抬起发现项已由智能体效率修复并再次审查。共享 GUI 按住清理现在在卸载期间异步派发其结束回调，使让出执行的原生结束无法阻塞无关的清理器；常规完成仍等待释放证据。
 
-## Focused verification
+## 聚焦验证
 
-`test/release_runtime.lua` covers burst scheduling/argument release, yielded
-callbacks, UTF-8 boundary/error cases and ASCII work counts, inventory freshness,
-capture queue ordering/gaps/pins/clear/export, selective reader copying, official
-source cache bounds, IY pagination/path authoring and store filename/destination
-guards, and chat backward cursors. These checks use the existing offline harness.
-`test/release_ui.lua` checks unavailable/explicit confirmations, upgrading multiple
-old icon files, alias reuse, refused/silent writes, extraction retry and mascot
-callbacks after stop/destruction, and question queue progress after a session
-sweep. These are lifecycle/data checks, not native
-rendering or host input verification.
-The added `test/release_tools.lua` prompt timeline checks exercise cancellation
-and unload while begin/end overlap, including an independent disposer completing
-before the native end returns.
+`test/release_runtime.lua` 覆盖突发排定/参数释放、让出式回调、UTF-8 边界/错误用例与 ASCII 工作量计数、清单新鲜度、捕获队列排序/间隙/固定/清除/导出、选择性读取器复制、官方源码缓存边界、IY 分页/路径编写与商店文件名/目标保护，以及聊天向后游标。这些检查使用既有的离线测试框架。`test/release_ui.lua` 检查不可用/显式确认、升级多个旧图标文件、别名复用、被拒绝/静默写入、提取重试与停止/销毁后的吉祥物回调，以及会话清扫后的问题队列进度。这些是生命周期/数据检查，而非原生渲染或宿主输入验证。新增的 `test/release_tools.lua` 提示词时间线检查在开始/结束重叠期间演练取消与卸载，包括一个独立清理器在原生结束返回之前完成。
 
-Applicable existing focused suites are `test/execution_tools.lua`,
-`test/tool_workflows.lua`, `test/native_workspace.lua`, `test/gravity.lua`,
-`test/iy_control.lua`, `test/chat_loops.lua` and `test/chat_bot.lua`. The release owner controls the
-manual input review, build, generated-output inspection and focused test gate.
-No full native suite or Roblox/executor verification is claimed by this document.
+适用的既有聚焦套件为 `test/execution_tools.lua`、`test/tool_workflows.lua`、`test/native_workspace.lua`、`test/gravity.lua`、`test/iy_control.lua`、`test/chat_loops.lua` 与 `test/chat_bot.lua`。发布负责人掌控人工输入审查、构建、生成输出检查与聚焦测试门禁。本文档不主张已完成完整原生套件或 Roblox/执行器验证。
 
-## Executed focused verification
+## 已执行的聚焦验证
 
-After the release owner reviewed build `3.0.0-e4d76a37659fdec8` and its generated
-outputs, the following assigned suites ran serially. All final exits were zero;
-logs are retained under `refer/release-3.0.0/`.
+在发布负责人审查构建 `3.0.0-e4d76a37659fdec8` 及其生成输出之后，下列分配的套件串行运行。所有最终退出码均为零；日志保留在 `refer/release-3.0.0/` 下。
 
-| Suite | Passing checks/assertions | Measured seconds |
+| 套件 | 通过的检查/断言 | 实测秒数 |
 | --- | ---: | ---: |
 | `release_runtime.lua` | 108 | 1.588 |
 | `release_ui.lua` | 22 | 0.192 |
-| `native_workspace.lua` | 76 across 13 cases | 0.911 |
+| `native_workspace.lua` | 76，跨 13 个用例 | 0.911 |
 | `gravity.lua` | 116 | 3.927 |
 | `iy_control.lua` | 176 | 1.643 |
 
-The initial UI run stopped at a test-only mock callback signature error (exit 1,
-0.358 seconds). The fixture was corrected and manually reviewed before the
-successful retry; its initial log remains `release_ui.initial-failure.log`.
-No client source changed during this verification pass.
+首次 UI 运行停在仅用于测试的模拟回调签名错误（退出码 1，0.358 秒）。夹具已修正并在成功重试前经人工审查；其初始日志保留为 `release_ui.initial-failure.log`。本次验证过程中没有客户端源码变更。
