@@ -1095,8 +1095,7 @@ any substantial portion of it. See [LICENSE](LICENSE).
 
 ## Contributors
 
-- **CarlDV / Project Ptolemy** — author and maintainer of upstream Project UAI
-- **Neko-Arko** — maintainer of this Simplified Chinese build
-- **DeepSeek** — localization help for the interface and documentation
+- **Neko-Arko** — project maintenance, requirements and review
+- **DeepSeek** — localization of the interface and documentation
 
 See [`CONTRIBUTORS.md`](CONTRIBUTORS.md) for details.

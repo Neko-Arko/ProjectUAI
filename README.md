@@ -448,8 +448,7 @@ MIT。你可以随意使用，包括商业用途和闭源使用 —— 唯一条
 
 ## 贡献者
 
-- **CarlDV / Project Ptolemy** —— 上游 Project UAI 的作者与维护者
-- **Neko-Arko** —— 简体中文版的维护者
-- **DeepSeek** —— 界面文案与文档的汉化协助
+- **Neko-Arko** —— 项目维护、需求与验收
+- **DeepSeek** —— 界面文案与文档的汉化
 
 完整说明见 [`CONTRIBUTORS.md`](CONTRIBUTORS.md)。
