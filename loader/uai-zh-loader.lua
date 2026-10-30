@@ -19,10 +19,10 @@ local REF = "e1e1a74"
 local MIN_BYTES = 1000000 -- 完整包约 3.6 MB；小于这个数一定是坏了
 
 local SOURCES = {
-	"https://testingcf.jsdelivr.net/gh/Neko-Arko/ProjectUAI@" .. REF .. "/dist/uai.lua",
-	"https://ghfast.top/https://raw.githubusercontent.com/Neko-Arko/ProjectUAI/" .. REF .. "/dist/uai.lua",
-	"https://fastly.jsdelivr.net/gh/Neko-Arko/ProjectUAI@" .. REF .. "/dist/uai.lua",
-	"https://raw.githubusercontent.com/Neko-Arko/ProjectUAI/" .. REF .. "/dist/uai.lua",
+	"https://testingcf.jsdelivr.net/gh/Neko-Arko/ProjectUAI-zh-CN@" .. REF .. "/dist/uai.lua",
+	"https://ghfast.top/https://raw.githubusercontent.com/Neko-Arko/ProjectUAI-zh-CN/" .. REF .. "/dist/uai.lua",
+	"https://fastly.jsdelivr.net/gh/Neko-Arko/ProjectUAI-zh-CN@" .. REF .. "/dist/uai.lua",
+	"https://raw.githubusercontent.com/Neko-Arko/ProjectUAI-zh-CN/" .. REF .. "/dist/uai.lua",
 }
 
 local function log(message)

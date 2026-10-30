@@ -8,17 +8,17 @@ GitHub 的 `raw.githubusercontent.com` 在国内经常被阻断，加载器会�
 把 GitHub 域名换掉即可，其余不用动：
 
 ```lua
-loadstring(game:HttpGet("https://testingcf.jsdelivr.net/gh/Neko-Arko/ProjectUAI@14330e3/dist/uai.lua"))()
+loadstring(game:HttpGet("https://testingcf.jsdelivr.net/gh/Neko-Arko/ProjectUAI-zh-CN@14330e3/dist/uai.lua"))()
 ```
 
 备用地址（前一个不通就换下一个）：
 
 ```lua
 -- ghfast.top 的 raw 代理
-loadstring(game:HttpGet("https://ghfast.top/https://raw.githubusercontent.com/Neko-Arko/ProjectUAI/14330e3/dist/uai.lua"))()
+loadstring(game:HttpGet("https://ghfast.top/https://raw.githubusercontent.com/Neko-Arko/ProjectUAI-zh-CN/14330e3/dist/uai.lua"))()
 
 -- 想永远取 main 上的最新版（jsDelivr 对分支有约 12 小时缓存）
-loadstring(game:HttpGet("https://testingcf.jsdelivr.net/gh/Neko-Arko/ProjectUAI@main/dist/uai.lua"))()
+loadstring(game:HttpGet("https://testingcf.jsdelivr.net/gh/Neko-Arko/ProjectUAI-zh-CN@main/dist/uai.lua"))()
 ```
 
 `@14330e3` 是提交号，内容固定、不会被缓存串味；`@main` 永远取最新，但可能有延迟。
@@ -45,7 +45,7 @@ loadstring(readfile("UAI/uai-loader.lua"))()
 
 ## 方式三：手动下载，完全离线
 
-1. 浏览器打开 `https://testingcf.jsdelivr.net/gh/Neko-Arko/ProjectUAI@14330e3/dist/uai.lua`
+1. 浏览器打开 `https://testingcf.jsdelivr.net/gh/Neko-Arko/ProjectUAI-zh-CN@14330e3/dist/uai.lua`
 2. 另存为 `uai-zh.lua`，放进执行器工作区的 `UAI/` 目录
 3. 游戏内执行：
 

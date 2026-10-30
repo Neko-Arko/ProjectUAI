@@ -136,7 +136,7 @@ The [3.3.5 verification record](docs/TESTING_3.3.5.md) retains earlier bridge ch
 and the [3.0.0 audit ledger](docs/AUDIT_3.0.0.md) retains its module and tool coverage.
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Project-Ptolemy/ProjectUAI/main/dist/uai.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Neko-Arko/ProjectUAI-zh-CN/main/dist/uai.lua"))()
 ```
 
 Nothing about a specific game, gateway or host script is assumed. Under an
@@ -929,7 +929,7 @@ connect your controls to its sessions and tools. Read the comprehensive
 
 ```lua
 local uai = loadstring(game:HttpGet(
-	"https://raw.githubusercontent.com/Project-Ptolemy/ProjectUAI/main/dist/uai.lua"
+	"https://raw.githubusercontent.com/Neko-Arko/ProjectUAI-zh-CN/main/dist/uai.lua"
 ))({
 	prompt = "This host provides workbench_status and workbench_configure for its local settings.",
 })
@@ -1095,4 +1095,8 @@ any substantial portion of it. See [LICENSE](LICENSE).
 
 ## Contributors
 
-The upstream authors, this branch's maintainer and the localization help are listed in [`CONTRIBUTORS.md`](CONTRIBUTORS.md).
+- **CarlDV / Project Ptolemy** — author and maintainer of upstream Project UAI
+- **Neko-Arko** — maintainer of this Simplified Chinese build
+- **DeepSeek** — localization help for the interface and documentation
+
+See [`CONTRIBUTORS.md`](CONTRIBUTORS.md) for details.

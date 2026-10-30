@@ -81,7 +81,7 @@ UI LIB 仍为 1.4.0，SDK 为 1.0.0。
 [3.3.5 验证记录](docs/TESTING_3.3.5.md) 保留了更早的桥接检查，[3.0.0 审计账本](docs/AUDIT_3.0.0.md) 保留了其模块与工具覆盖情况。
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Project-Ptolemy/ProjectUAI/main/dist/uai.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Neko-Arko/ProjectUAI-zh-CN/main/dist/uai.lua"))()
 ```
 
 它不假设任何特定游戏、网关或宿主脚本。在执行器下它会使用执行器提供的 HTTP 函数；在普通客户端中则回退到 `HttpService`，并说明因此失去了哪些能力。嵌入宿主脚本时，它接受一个上下文表，并叠加该脚本自己的指令与钩子。
@@ -385,7 +385,7 @@ Roblox 仍然掌控工具、权限、记忆、核算与已保存的对话历史�
 
 ```lua
 local uai = loadstring(game:HttpGet(
-	"https://raw.githubusercontent.com/Project-Ptolemy/ProjectUAI/main/dist/uai.lua"
+	"https://raw.githubusercontent.com/Neko-Arko/ProjectUAI-zh-CN/main/dist/uai.lua"
 ))({
 	prompt = "This host provides workbench_status and workbench_configure for its local settings.",
 })
@@ -448,4 +448,8 @@ MIT。你可以随意使用，包括商业用途和闭源使用 —— 唯一条
 
 ## 贡献者
 
-上游作者、本分支维护者与汉化协助的完整名单，见 [`CONTRIBUTORS.md`](CONTRIBUTORS.md)。
+- **CarlDV / Project Ptolemy** —— 上游 Project UAI 的作者与维护者
+- **Neko-Arko** —— 简体中文版的维护者
+- **DeepSeek** —— 界面文案与文档的汉化协助
+
+完整说明见 [`CONTRIBUTORS.md`](CONTRIBUTORS.md)。
