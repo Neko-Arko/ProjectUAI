@@ -1092,3 +1092,7 @@ settings are flushed before the tree goes.
 MIT. Do whatever you like with it, including commercially and in closed source --
 the only condition is that the copyright notice and permission notice travel with
 any substantial portion of it. See [LICENSE](LICENSE).
+
+## Contributors
+
+The upstream authors, this branch's maintainer and the localization help are listed in [`CONTRIBUTORS.md`](CONTRIBUTORS.md).

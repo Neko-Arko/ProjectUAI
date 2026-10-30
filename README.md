@@ -446,4 +446,6 @@ getgenv().UAI.destroy()
 
 MIT。你可以随意使用，包括商业用途和闭源使用 —— 唯一条件是版权声明与许可声明需随其实质性部分一同分发。参见 [LICENSE](LICENSE)。
 
+## 贡献者
 
+上游作者、本分支维护者与汉化协助的完整名单，见 [`CONTRIBUTORS.md`](CONTRIBUTORS.md)。
