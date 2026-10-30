@@ -448,7 +448,7 @@ MIT。你可以随意使用，包括商业用途和闭源使用 —— 唯一条
 
 ## 贡献者
 
-- **Neko-Arko** —— 项目维护、需求与验收
+- **Neko-Arko** —— 负责指挥DeepSeek干活
 - **DeepSeek** —— 界面文案与文档的汉化
 
 完整说明见 [`CONTRIBUTORS.md`](CONTRIBUTORS.md)。
