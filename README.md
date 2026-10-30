@@ -1,535 +1,214 @@
-[English](README.md) · [简体中文](README.zh-CN.md)
+[English](README.en.md) · [简体中文](README.md)
 
 # Project UAI
 
-A universal AI agent that runs inside a Roblox client. It works in any game,
-with Chat Completions, OpenAI Responses and Anthropic Messages endpoints,
-including compatible local servers and relays.
+一个运行在 Roblox 客户端内的通用 AI 代理。它可在任何游戏中工作，支持 Chat Completions、
+OpenAI Responses 与 Anthropic Messages 端点，包括兼容的本地服务器与中继服务。
 
-**Project UAI 3.7.2 - October 29, 2026: password vault and scheduled free access.**
-Startup offers password protection and a red **Continue without encryption**
-option. Existing keys and their pool metadata carry over after the chosen save is
-verified. Without encryption, keys are saved using reversible byte encoding and
-future password prompts are skipped. With a vault, each execution requires its
-password. New vaults use 100,000 derivation iterations; existing 600,000-iteration
-vaults stay unchanged until an explicit password change. Normal configuration
-copies exclude credentials; private copies retain the chosen protection.
-See [API key security, migration and rotation](docs/API_KEY_SECURITY.md).
+**Project UAI 3.7.2 — 2026 年 10 月 29 日：密码保险库与定时免费访问。**
+启动时会提供密码保护，以及一个红色的 **不加密继续** 选项。选定并校验保存后，现有密钥及其
+密钥池元数据会保留。不加密时，密钥以可逆字节编码保存，之后的密码提示会被跳过。启用保险库时，
+每次执行都需要输入密码。新保险库使用 100,000 次派生迭代；已有的 600,000 次迭代保险库在显式
+改密前保持不变。普通配置副本不含凭据；私有副本保留所选保护方式。
+见 [API 密钥的安全、迁移与轮换](docs/API_KEY_SECURITY.md)。
 
-**Project UAI Free is available daily from 8 PM to 6 AM, GMT+8 / Beijing / Singapore.**
-The closing time is the following morning. Capacity and upstream limits still apply.
-The Roblox client is 3.7.2; bridge, web UI and Android remain 3.7.1, and Windows
-desktop remains 3.7.0. **Manage API keys** opens a dedicated modal with named,
-masked entries. Add, rename, replace or remove a key without losing the others.
-**Rotate keys** is the default; choose **Use one key** to pin requests to a
-specific entry. Existing key pools are preserved. The setup guide opens expanded
-by default.
+**Project UAI Free 每日 20:00 至次日 06:00（GMT+8 / 北京 / 新加坡）可用。**
+关闭时间是次日清晨。容量与上游限制仍然生效。
+Roblox 客户端为 3.7.2；桥接、Web UI 与 Android 仍为 3.7.1，Windows 桌面端仍为 3.7.0。
+**管理 API 密钥** 会打开独立弹窗，条目带名称与掩码。新增、重命名、替换或删除某把密钥时，
+其他条目不受影响。默认 **轮换密钥**；选择 **使用单把密钥** 可把请求固定到某一条。
+现有密钥池会保留。配置指南默认展开。
 
-The former **Claude Code** Settings tab is now named **Project UAI**.
+原 **Claude Code** 设置页现在名为 **Project UAI**。
 
-Pause individual keys while keeping them saved, and see their locally recorded
-requests and input/output tokens. Each conversation also shows its AI request
-count, including retries, tool follow-ups, summaries and subagents.
+可以暂停单把密钥而保留它，并查看其在本机记录的请求数与输入/输出 token。每个对话还会显示其
+AI 请求次数，包含重试、工具跟进、摘要与子代理。
 
-Log details and context breakdown fit their contents, and shared modals have
-consistent inner padding. The Discord invitation, tutorial and donation dialogs
-are cleaner, settings group related controls, and Code keeps long selections
-visible with improved tabs, captions and comparison contrast.
+日志详情与上下文分解会按内容自适应，共享弹窗的内边距保持一致。Discord 邀请、新手指引与
+捐赠弹窗更整洁，设置把相关控件分组，代码工作区改进了标签页、说明文字与对比度，
+长选区在滚动时仍然可见。
 
-The bridge and Android patch extends Kilo quota recovery to every free-model
-spelling (`:free`, `/free`, `-free`). Anonymous Kilo free requests start directly;
-an explicit address-quota refusal can start a private Tor connection and one
-bounded circuit retry. The connection is enabled by default, starts only when needed, and has
-status and off switches in the apps. Shared exits still have quotas: this is
-recovery from one address allowance, not guaranteed unlimited access.
-See [Kilo setup, evidence and limitations](docs/KILO_TUNNEL.md).
+桥接与 Android 补丁把 Kilo 配额恢复扩展到所有免费模型写法（`:free`、`/free`、`-free`）。
+匿名 Kilo 免费请求会直接开始；遇到明确的地址配额拒绝时，可启动一条私有 Tor 连接并做一次
+有界线路重试。该连接默认启用、按需启动，并在应用中提供状态与关闭开关。共享出口仍有配额：
+这是从单一地址额度中恢复，并不保证无限访问。
+见 [Kilo 的配置、证据与限制](docs/KILO_TUNNEL.md)。
 
-The bridge's **Tunnels** tab groups OpenCode, Kilo and Cline. Install and sign in
-to Cline to use its current free CLI models from the
-**Cline (Bridge)** provider in Roblox or Cowork. The bridge handles CLI work;
-Roblox retains tools, approvals and Stop. See [Cline setup](docs/CLINE_TUNNEL.md).
-The Windows app checks whether OpenCode and Cline are installed before Cowork
-starts, with a separate refresh after installation. Sign-in and model readiness
-remain separate from installation status.
+桥接的 **隧道** 页把 OpenCode、Kilo 与 Cline 归在一起。安装并登录 Cline 后，即可在 Roblox
+或 Cowork 中通过 **Cline (Bridge)** 提供商使用它当前的免费 CLI 模型。CLI 工作由桥接处理；
+工具、审批与「停止」仍留在 Roblox。见 [Cline 配置](docs/CLINE_TUNNEL.md)。
+Windows 应用会在 Cowork 启动前检查 OpenCode 与 Cline 是否已安装，安装后可单独刷新。
+登录与模型就绪状态与安装状态分开显示。
 
-AgentRouter GPT models now use native Responses with the selected reasoning
-effort and UAI tools. A complete `gpt-6.1-sol` tool round trip was verified;
-account quotas and availability still apply. See [AgentRouter setup](docs/AGENTROUTER.md).
-Seven additional services join the gallery with explicit access labels and
-[individual setup guides](docs/providers/README.md).
+AgentRouter 的 GPT 模型现在使用原生 Responses，并保留所选的推理强度与 UAI 工具。
+已完成一次 `gpt-6.1-sol` 的完整工具往返验证；账号配额与可用性仍然适用。
+见 [AgentRouter 配置](docs/AGENTROUTER.md)。另有七项服务以明确的访问标签和
+[各自的配置指南](docs/providers/README.md)加入画廊。
 
-The Roblox model picker includes a searchable saved-provider switcher, model
-names and metadata on separate lines, and current connection status. The model
-list scrolls while search, provider selection and footer controls stay fixed.
-Compact layouts preserve focused fields and keep reasoning options and custom
-models reachable. Closing or switching providers cancels an outdated model refresh.
+Roblox 的模型选择器加入了可搜索的已保存提供商切换器，模型名称与元数据分行显示，并显示当前
+连接状态。目录滚动时，搜索、提供商选择与底部控件保持固定。紧凑布局保留聚焦字段，
+并让推理选项与自定义模型保持可达。关闭或切换提供商时会取消过期的模型刷新。
 
-Tools and Logs now support multiword searches. Tool details are built when
-opened, keeping the full catalog lighter to browse. Usage history preserves
-unknown-cost counts and cache writes, and invalid provider counters cannot
-corrupt totals. See [tool discovery](docs/TOOL_DISCOVERY.md),
-[diagnostics](docs/DIAGNOSTICS.md) and [usage accounting](docs/USAGE_ACCOUNTING.md).
+工具与日志现在支持多词搜索。工具详情在打开时才构建，让完整目录浏览更轻快。用量历史保留
+未知成本计数与缓存写入，非法的提供商计数不会污染合计。见[工具发现](docs/TOOL_DISCOVERY.md)、
+[诊断](docs/DIAGNOSTICS.md)与[用量核算](docs/USAGE_ACCOUNTING.md)。
 
-The apps retain verified automatic downloads and updates.
-The public page has a responsive white monochrome design with an interactive 3D
-centerpiece and animated SVGs, with pause controls and reduced-motion support.
-Bridge responses put the answer first, with tools and thinking grouped into
-expandable activity. OpenCode discovery covers more installed CLI layouts and
-reports useful setup guidance. The redesigned Android companion makes starting
-and checking the connection simpler, and accepts compressed message submissions
-that previously failed JSON decoding after pairing. Both apps retain verified
-automatic updates, and Android installation still requires confirmation.
+两个应用保持经过验证的自动下载与更新。
+公开页面采用响应式白色单色设计，配有一个可交互的 3D 主体元素与动画 SVG，并提供暂停控件和减弱动效支持。
+桥接响应把答案放在最前，工具调用与思考内容归入可展开的活动区。OpenCode 探测覆盖更多已安装的 CLI 布局，并给出有用的配置指引。重新设计的 Android 伴生端让启动和检查连接更简单，并能接受此前在配对后会因 JSON 解码失败而报错的压缩消息提交。两个应用都保留经过验证的自动更新，Android 安装仍需确认。
 
-During its daily **20:00–12:00 UTC+8** window, use **Project UAI Free** without
-supplying an API key. It is the default when no provider is configured.
-Its adaptive router measures small tool
-requests and prefers verified fast HCNSEC models when compatible; otherwise it
-keeps the provider's `auto` route. Free models have rounded green outlines.
-Thank you for continuing to use and support Project UAI. Capacity and response
-speed vary; more free providers may become available soon. Join
-[our Discord](https://discord.gg/9xYyyYuKap) for help, provider news and updates.
+在每日 **20:00–12:00（UTC+8）** 时段内，无需提供 API 密钥即可用 **Project UAI Free** 对话。未配置提供商时它是默认项。其自适应路由器会测量小型工具请求，在兼容时优先使用经过验证的高速 HCNSEC 模型，否则沿用提供商的 `auto` 路由。免费模型带圆角绿色描边。感谢你继续使用并支持 Project UAI。容量和响应速度会波动；之后可能会有更多免费提供商上线。加入[我们的 Discord](https://discord.gg/9xYyyYuKap) 获取帮助、提供商动态和更新。
 
-OpenCode's direct desktop workaround uses the verified desktop identity and keeps
-its required compatibility tool declarations, without requiring the bridge. The Windows
-bridge adds an optional path through an installed OpenCode CLI server; the CLI
-binary is not packaged. **Mobile OpenCode requires the UAI Relay app from Discord**;
-install and start the app, then connect it in UAI. The retired OpenCode proxy is
-removed; only AgentRouter uses the proxy's proper domain. Saved OpenCode proxy URLs
-migrate back to Zen.
+OpenCode 的桌面直连变通方案使用经过验证的桌面身份，并保留其必需的兼容性工具声明，无需桥接。Windows 桥接增加了一条经由已安装 OpenCode CLI 服务器的可选路径；CLI 二进制文件不随包分发。**移动端 OpenCode 需要来自 Discord 的 UAI Relay 应用**；安装并启动该应用，然后在 UAI 中连接它。已退役的 OpenCode 代理被移除；只有 AgentRouter 使用该代理的正式域名。已保存的 OpenCode 代理 URL 会迁移回 Zen。
 
-Go subscribers choose the separate **OpenCode Go** preset at
-`https://opencode.ai/inference/go/v1` and a key from their subscribed OpenCode
-workspace. Go keeps its own catalog and routes; the optional free CLI backend
-does not intercept it. Subscription and workspace region refusals identify the
-setting to check. See [provider setup](docs/PROVIDER_COMPATIBILITY.md).
+Go 订阅用户选择独立的 **OpenCode Go** 预设，地址为 `https://opencode.ai/inference/go/v1`，并使用其已订阅 OpenCode 工作区中的密钥。Go 保留自己的目录和路由；可选的免费 CLI 后端不会拦截它。订阅与工作区地区受限的拒绝信息会指明需要检查的设置。参见[提供商设置](docs/PROVIDER_COMPATIBILITY.md)。
 
-The client is 3.7.2; bridge, web UI and Android companion remain 3.7.1; Windows desktop is 3.7.0.
-UI LIB remains 1.4.0 and SDK 1.0.0.
-Model pricing and context/reply limits use an October 25 catalog with 1,760
-entries across 15 providers, including exact Kilo and Cline routes. Unknown
-prices stay unknown; included Project UAI Free access is counted at zero cost.
-See the [release notes](CHANGELOG.md), [script development manual](docs/SCRIPT_DEVELOPMENT.md)
-and [UI library guide](docs/UI_LIBRARY.md). The client exposes the scripting
-manual through `scripting_docs`: start with `quickstart`, then read only the
-sections relevant to the task. It covers exact tool calls, writing and checking
-saved scripts, debugging, cleanup and decompilation.
+客户端为 3.7.2；桥接、Web UI 与 Android 伴生端仍为 3.7.1；Windows 桌面端为 3.7.0。
+UI LIB 仍为 1.4.0，SDK 为 1.0.0。
+模型定价与上下文/回复上限使用 10 月 25 日的目录，覆盖 15 个提供商的 1,760 条条目，
+包含精确的 Kilo 与 Cline 路由。未知价格保持未知；内置 Project UAI Free 访问按零成本计。
+参见[发布说明](CHANGELOG.md)、[脚本开发手册](docs/SCRIPT_DEVELOPMENT.md) 与 [UI 库指南](docs/UI_LIBRARY.md)。客户端通过 `scripting_docs` 暴露脚本手册：先从 `quickstart` 开始，然后只读与任务相关的章节。手册涵盖精确的工具调用、编写与检查已保存脚本、调试、清理与反编译。
 
-New configurations default to **Low** reasoning effort for faster responses. Existing
-saved effort stays unchanged; choose **Settings → Agent → Effort → Low** to lower
-it. The model modal edits the same global effort setting, including for other
-models when **Options → Reasoning support** is enabled. The Thinking row estimates
-visible text only. A long retained trace is labelled
-**Excerpt**, not a 5,999-token model limit. See [provider behavior](docs/PROVIDER_COMPATIBILITY.md).
-See [3.7.2 verification](docs/TESTING_3.7.2.md), [3.7.1 verification](docs/TESTING_3.7.1.md),
-[3.7.0 verification](docs/TESTING_3.7.0.md),
-[3.6.6 verification](docs/TESTING_3.6.6.md),
-[3.6.5 verification](docs/TESTING_3.6.5.md),
-[bridge 3.6.2 verification](docs/TESTING_3.6.2.md),
-[3.6.1 verification](docs/TESTING_3.6.1.md), [3.6.0 verification](docs/TESTING_3.6.0.md),
-[mobile research](docs/OPENCODE_MOBILE_RESEARCH.md) and
-[companion update checks](companion/UPDATES.md). Native Android, mobile executor
-behavior, phone tool execution/replay and background survival remain unverified;
-the successful OpenCode text/tool/replay probes used the companion's Java HTTP
-library on Windows. A user later confirmed OpenCode inference on a Delta Android
-phone through the UAI Relay app, so mobile OpenCode now requires that app from Discord.
-The [3.3.5 verification record](docs/TESTING_3.3.5.md) retains earlier bridge checks,
-and the [3.0.0 audit ledger](docs/AUDIT_3.0.0.md) retains its module and tool coverage.
+新配置默认使用 **低（Low）** 推理强度以加快响应。已保存的推理强度保持不变；选择 **设置 → 代理 → 推理强度 → 低** 可将其调低。模型弹窗编辑的是同一个全局推理强度设置，启用 **选项 → 推理支持** 后对其他模型也生效。思考（Thinking）一行只估算可见文本。保留较长的思考轨迹会标注为 **节选**，而不是模型 5,999 token 的上限。参见[提供商行为](docs/PROVIDER_COMPATIBILITY.md)。
+参见 [3.7.2 验证](docs/TESTING_3.7.2.md)、[3.7.1 验证](docs/TESTING_3.7.1.md)、
+[3.7.0 验证](docs/TESTING_3.7.0.md)、
+[3.6.6 验证](docs/TESTING_3.6.6.md)、
+[3.6.5 验证](docs/TESTING_3.6.5.md)、
+[桥接 3.6.2 验证](docs/TESTING_3.6.2.md)、
+[3.6.1 验证](docs/TESTING_3.6.1.md)、[3.6.0 验证](docs/TESTING_3.6.0.md)、
+[移动端研究](docs/OPENCODE_MOBILE_RESEARCH.md) 与
+[伴生端更新检查](companion/UPDATES.md)。原生 Android、移动端执行器行为、手机上的工具执行/重放以及后台存活仍未经验证；成功的 OpenCode 文本/工具/重放探测使用的是伴生端在 Windows 上的 Java HTTP 库。后来有用户确认通过 UAI Relay 应用在一台 Delta Android 手机上完成了 OpenCode 推理，因此移动端 OpenCode 现在需要来自 Discord 的该应用。
+[3.3.5 验证记录](docs/TESTING_3.3.5.md) 保留了更早的桥接检查，[3.0.0 审计账本](docs/AUDIT_3.0.0.md) 保留了其模块与工具覆盖情况。
 
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Project-Ptolemy/ProjectUAI/main/dist/uai.lua"))()
 ```
 
-Nothing about a specific game, gateway or host script is assumed. Under an
-executor it uses the executor's HTTP function; in a plain client it falls back to
-`HttpService` and says which capabilities it lost. Embedded in a host script it
-takes a context table and adds that script's own instructions and hooks.
+它不假设任何特定游戏、网关或宿主脚本。在执行器下它会使用执行器提供的 HTTP 函数；在普通客户端中则回退到 `HttpService`，并说明因此失去了哪些能力。嵌入宿主脚本时，它接受一个上下文表，并叠加该脚本自己的指令与钩子。
 
-Running the same bundle again reuses the existing client. An enabled vault asks
-for its password; a saved unprotected-storage choice skips that prompt.
-It requests showing the normal app afterward; embedding hosts can pass
-`{ reuse = true }` to retain the existing display preference. A changed bundle
-reloads an idle client after saving its settings and conversations. If work, an
-unsent draft, or an isolated conversation would be lost, the current instance stays
-open with a notice; finish that work before running the updated loader again.
+再次运行同一个包会复用现有客户端。启用保险库时会要求输入密码；已保存「不加密」选择时跳过该提示。之后会请求显示正常应用；嵌入宿主可传入 `{ reuse = true }` 以保留现有显示偏好。变更后的包会在保存设置与对话之后重载处于空闲的客户端。如果还有未完成的工作、未发送的草稿或一个隔离对话会丢失，当前实例会保持打开并给出提示；请先完成这些工作，再运行更新后的加载器。
 
-In **Settings → Import & export → Configuration transfer**, the normal copy excludes
-provider and connection credentials. Choose the separately labelled private copy
-only when you need to transfer personal keys and custom authentication fields.
-On the other device, paste the JSON, select **Review**, enter its master password
-if encrypted, then **Apply**. Import replaces provider settings and keeps that
-device's storage choice and vault password; a copy without credentials requires
-re-entry. Memory and other personal settings still
-need review before sharing. Conversations, activity history, workspace files and
-skill files are separate from configuration.
+在 **设置 → 导入与导出 → 配置迁移** 中，普通副本不含提供商与连接凭据。只有需要迁移个人密钥与自定义认证字段时，才选择单独标注的私有副本。在另一台设备上粘贴 JSON，点 **检查**，如已加密则输入主密码，再点 **应用**。导入会替换提供商设置，并保留该设备的存储选择与保险库密码；不含凭据的副本需要重新输入。记忆与其他个人设置在分享前仍需检查。对话、活动历史、工作区文件与技能文件与配置分开保存。
 
-## What it is
+## 它是什么
 
-**Our own script UI library.** [Project UAI UI LIB](docs/UI_LIBRARY.md) provides
-standalone, responsive windows and a complete set of script controls using UAI's
-visual language. Agents read its bundled `ui_library_docs` reference and write
-declarative controls plus application logic. The library handles layout, input,
-configuration, cleanup, and the fixed `Project UAI | UI LIB.` footer.
-The existing agent client interface is unchanged.
+**自研的脚本 UI 库。** [Project UAI UI LIB](docs/UI_LIBRARY.md) 提供独立、可自适应的窗口，以及一整套使用 UAI 视觉语言的脚本控件。代理会读取随附的 `ui_library_docs` 参考，编写声明式控件加上应用逻辑。该库负责布局、输入、配置、清理，以及固定的 `Project UAI | UI LIB.` 页脚。
+现有代理客户端界面保持不变。
 
 ```lua
 local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Project-Ptolemy/ProjectUAI/main/dist/uai-ui.lua"))()
 ```
 
-See the [starter](ui-lib/examples/starter.lua), [component showcase](ui-lib/examples/showcase.lua),
-[full API and application guide](docs/UI_LIBRARY.md), and
-[complete assistant workbench](examples/embedding/README.md).
-The [embedding reference](docs/EMBEDDING.md) covers host scripts, custom UIs,
-sessions, tools, hooks, providers, state binding, and cleanup.
+参见[入门示例](ui-lib/examples/starter.lua)、[组件展示](ui-lib/examples/showcase.lua)、
+[完整 API 与应用指南](docs/UI_LIBRARY.md)，以及
+[完整的助手工作台](examples/embedding/README.md)。
+[嵌入参考](docs/EMBEDDING.md) 涵盖宿主脚本、自定义 UI、会话、工具、钩子、提供商、状态绑定与清理。
 
-**Embedding SDK 1.0.0.** Load the client with `{ ui = false, reuse = true }` to
-keep the normal app hidden after choosing storage or unlocking a vault. The saved
-unprotected-storage choice skips future prompts; an enabled vault asks each time.
-`uai.sdk` provides owned integration scopes and requests with structured results, cancellation,
-completion callbacks, and optional waiting. Open named conversations without
-changing the user's selection, and explicitly show the app when needed with
-`uai.show(...)` or `uai.openSession(id)`. Start with the
-[SDK example](examples/embedding/sdk.lua) and
-[SDK quickstart](docs/EMBEDDING.md#sdk-quickstart). Providers and permissions remain
-shared client settings; runtime capabilities still depend on the host.
+**嵌入 SDK 1.0.0。** 用 `{ ui = false, reuse = true }` 加载客户端，即可在选择存储或解锁保险库之后保持正常应用隐藏。已保存「不加密」选择会跳过后续提示；启用保险库则每次都询问。`uai.sdk` 提供归属明确的集成作用域与请求，支持结构化结果、取消、完成回调与可选等待。可以在不改变用户当前选择的情况下打开具名对话，需要时用 `uai.show(...)` 或 `uai.openSession(id)` 显式显示应用。从 [SDK 示例](examples/embedding/sdk.lua) 与 [SDK 快速开始](docs/EMBEDDING.md#sdk-quickstart) 入手。提供商与权限仍是共享的客户端设置；运行时能力仍取决于宿主。
 
-**A real agent loop.** Streaming, parallel tool calls, retry with backoff that
-honours `Retry-After`, provider fallback, automatic context compaction with a
-summary, permission gating, hooks, a task list, persistent memory, subagents that
-run several at a time, token and cost accounting, abort, and a request log. Every
-stage emits an event, and the interface is a subscriber -- the loop never touches a
-GUI.
+**真正的代理循环。** 流式输出、并行工具调用、支持 `Retry-After` 的退避重试、提供商回退、带摘要的自动上下文压缩、权限门控、钩子、任务清单、持久记忆、可同时运行多个的子代理、token 与成本核算、中止以及请求日志。每个阶段都会发出事件，界面只是一个订阅者 —— 循环本身从不直接操作 GUI。
 
-Context windows are learned automatically from provider context-length errors and
-saved per model. A rejected turn compacts older history and retries once before
-falling back. Repeated compactions merge the previous summary, and a failed summary
-request preserves earlier facts. Open **Message options → Context breakdown** for a
-colored usage bar, category totals, model window, and compaction point. Compaction
-notices show the estimated token reduction. Individual saved facts can be deleted
-in **Settings → Skills → Memory**. Prompts include a bounded index of saved memory
-keys; `memory_read` retrieves relevant values by exact key or search, with
-continuation offsets for longer results. Old workaround notes stay available
-without being injected as instructions into every request.
+上下文窗口会从提供商返回的上下文长度错误中自动学习，并按模型保存。被拒绝的一轮会压缩较早的历史并重试一次，然后才回退。重复压缩会合并上一份摘要，摘要请求失败时会保留先前的事实。打开 **消息选项 → 上下文构成** 可以看到带颜色的用量条、各类别合计、模型窗口和压缩点。压缩提示会显示估算的 token 减少量。单条已保存的事实可以在 **设置 → 技能 → 记忆** 中删除。提示词中包含一个有数量上限的已保存记忆键索引；`memory_read` 可通过精确的键或搜索取回相关值，较长结果带续读偏移。旧的变通笔记仍然可用，但不会再作为指令注入到每次请求中。
 
-The shared prompt favors direct action and focused verification. Specialized
-workflow sections follow each conversation's available tools; routine work needs
-no mandatory task list or delegation. This reduces prompt overhead without
-lowering the configured model context window or changing permissions.
+共享提示词偏向直接行动与聚焦的验证。专门的工作流章节依据每个对话可用的工具附加；常规工作不需要强制任务清单或委派。这减少了提示词开销，同时不降低已配置的模型上下文窗口，也不改变权限。
 
-A turn stops after twenty-four tool rounds by default, which is there to catch a
-runaway rather than to end the work; **Unlimited tool calls** in Settings removes
-that ceiling and the fifteen-minute turn deadline with it, leaving the repeat
-breaker, each tool's own timeout and Stop as what bounds a turn. A subagent keeps its
-own step and time budget under that switch -- it is the one session nobody is
-watching -- and **Unlimited subagents** is the separate switch that lifts a child's
-too, so a delegated job runs until it answers instead of coming back with "I reached
-this session's step limit before finishing".
+默认情况下，一轮在 24 次工具调用后停止，这个限制用于拦住失控，而非结束工作；设置中的 **不限工具调用** 会移除这个上限，同时一并移除 15 分钟的单轮时限，此时约束一轮的只剩重复检测器、各工具自身的超时和 Stop。在该开关下，子代理仍保留自己的步数与时间预算 —— 它是唯一没有人在旁观察的会话 —— 而 **不限子代理** 是另一个独立开关，可同时解除子代理的限制，让被委派的任务一直运行到给出答案，而不是回来说“我在完成前就撞上了本会话的步数上限”。
 
-**Any provider.** A provider is a base URL, an auth style, a key and a model.
-**Add a provider** opens a gallery of 67 presets with three tiers -- Recommended,
-Paid and Local -- and a search field that spans them. Recommended leads with
-Project UAI Free, AgentRouter, OpenCode Zen, OpenRouter and OpenCode Go; hybrid
-services are labelled by their free half rather than as paid, and "Custom endpoint"
-takes anything that speaks `/v1/chat/completions` -- a relay, a self-hosted vLLM,
-Ollama on localhost. Model lists are never guessed: they come from
-`GET /v1/models` or from you typing one in.
+**任意提供商。** 一个提供商就是一个 Base URL、一种认证方式、一个密钥和一个模型。**添加提供商** 会打开一个含 67 个预设的画廊，分三个层级 —— 推荐、付费与本地 —— 并有一个覆盖全部层级的搜索框。推荐层级以 Project UAI Free、AgentRouter、OpenCode Zen、OpenRouter 与 OpenCode Go 打头；混合型服务按其免费的那半边标注而不是标为付费；“Custom endpoint” 接受任何会说 `/v1/chat/completions` 的服务 —— 中继、自建的 vLLM、本地 localhost 上的 Ollama。模型列表从不猜测：它们来自 `GET /v1/models`，或者由你手动输入。
 
-**Project UAI Free** is configured when no provider exists and opens daily during
-**20:00–12:00 UTC+8**. Add it later from the
-Recommended tier, or from the start card's Project UAI Free row; existing providers
-and personal keys stay as configured. AgentRouter can recover from explicit
-unauthorized-client errors using the
-[Project UAI proxy](docs/PROVIDER_COMPATIBILITY.md#automatic-unauthorized-client-recovery).
-The proxy receives the provider key and request and has a shared limit of 90,000
-requests per day; the resulting Base URL remains editable.
+**Project UAI Free** 在没有任何提供商时即已配置，并在每日 **20:00–12:00（UTC+8）** 开放。之后也可以从推荐层级、或起始卡片上的 Project UAI Free 一行添加；现有提供商与个人密钥保持原样。AgentRouter 可以借助 [Project UAI 代理](docs/PROVIDER_COMPATIBILITY.md#automatic-unauthorized-client-recovery)从明确的未授权客户端错误中恢复。该代理会接收提供商密钥与请求，共享上限为每天 90,000 次请求；由此得到的 Base URL 仍可编辑。
 
-AgentRouter uses the Anthropic Messages API and always sends its required Claude
-Code identity. Registration requires a GitHub account at least one year old.
+AgentRouter 使用 Anthropic Messages API，并且总会发送其所需的 Claude Code 身份。注册要求 GitHub 账号注册满一年以上。
 
-**The Claude Code identity.** Providers that enable this compatibility identity carry
-`User-Agent: claude-cli/<version> (external, cli)`, `x-app: cli` and the
-`X-Stainless-*` client-metadata set, applied inside the transport so no call site
-can omit it accidentally. OpenCode Zen retains its OpenCode compatibility headers. Its free-tier access is
-provider-controlled, so compatibility headers do not guarantee availability.
-`HttpService:RequestAsync` refuses to send a custom `User-Agent`, so
-on a host with no executor HTTP function the client says the identity did not
-reach the wire rather than pretending it did.
+**Claude Code 身份。** 启用该兼容身份的提供商会带上 `User-Agent: claude-cli/<version> (external, cli)`、`x-app: cli` 以及 `X-Stainless-*` 客户端元数据集，这些都在传输层内部应用，因此任何调用点都无法意外遗漏。OpenCode Zen 保留其 OpenCode 兼容请求头。其免费层级是否可用由提供商控制，因此兼容性请求头并不保证可用性。`HttpService:RequestAsync` 拒绝发送自定义 `User-Agent`，所以在没有执行器 HTTP 函数的宿主上，客户端会说明该身份并未真正到达线上，而不是假装已经发送。
 
-**Native tools for any game**: the instance tree,
-properties with type-aware conversion, bounded Luau execution, files, HTTP, web
-search and page reading, players, your character, raycasts and lighting and the
-camera, remotes (discover, fire, watch), on-screen interfaces, diagnostics, place
-and account metadata, plus the agent's own task list, memory, searching and
-reading its earlier conversations, and subagent dispatch.
+**适用于任何游戏的原生工具**：实例树、带类型感知转换的属性、有边界的 Luau 执行、文件、HTTP、网页搜索与页面读取、玩家、你的角色、射线检测、光照与相机、远程调用（发现、触发、监听）、屏幕界面、诊断信息、场所与账号元数据，以及代理自己的任务清单、记忆、搜索与读取其早前的对话、子代理派发。
 
-**Network and payload capture.** `net_capture` observes a loader's executor and
-game HTTP, `HttpService` calls, `loadstring`/`load`/`require` chunks and queued
-code with fixed forwarding hooks. It records bounded request/response bodies,
-redacts credentials, links a response to the chunk it produced, flags code-like
-responses that never compile, and excludes UAI's own traffic. Stop restores the
-hooks; nothing is rewritten, replayed or executed by the capture. See
-[the capture guide](docs/NET_CAPTURE.md).
+**网络与载荷捕获。** `net_capture` 通过固定的转发钩子观察加载器的执行器与游戏 HTTP、`HttpService` 调用、`loadstring`/`load`/`require` 代码块以及排队执行的代码。它会记录有边界的请求/响应体、抹除凭证、把响应与其产生的代码块关联、标记那些从未成功编译的疑似代码响应，并排除 UAI 自身的流量。停止时会恢复钩子；捕获过程不会重写、重放或执行任何内容。参见[捕获指南](docs/NET_CAPTURE.md)。
 
-**Tool profiles, evidence and support.** The default **All tools** profile keeps
-the complete catalogue. Leaner profiles declare a core set for a smaller request,
-while `tool_search` lists, describes and calls every hidden tool with the same
-permissions and conversation scope. Large tool results (8 KiB+ by default) are
-retained in a per-conversation evidence ledger (`evidence` list/search/read) so
-compaction does not lose the full receipt. `support_bundle` writes a local, redacted diagnostic
-file for bug reports, excluding keys, memory, conversation text, file contents
-and captured payloads. See [the tool context guide](docs/TOOL_CONTEXT.md).
+**工具配置档、证据与支持。** 默认的 **全部工具** 配置档保留完整目录。更精简的配置档声明一个核心集合以缩小请求，而 `tool_search` 可以在相同的权限与对话范围内列出、描述并调用每一个被隐藏的工具。较大的工具结果（默认 8 KiB 以上）会保存在按对话隔离的证据账本中（`evidence` list/search/read），这样压缩时不会丢失完整凭据。`support_bundle` 会为缺陷报告写出一份本地、已脱敏的诊断文件，其中排除密钥、记忆、对话文本、文件内容和捕获的载荷。参见[工具上下文指南](docs/TOOL_CONTEXT.md)。
 
-**Code workspace — v1.7.0, September 24, 2026.** Open **Code** and
-choose Editor, Files, Explorer, Remotes, Output, History, Library, or Game changes.
-The user and agent share live Luau documents and revisions. Source highlighting,
-line numbers, Find, Go to line, indentation, explicit Run/Stop, retained output,
-versions, comparison/proposals and typed reusable actions use the same model.
-Focused editing uses the native TextBox for input, selection and IME, with visible
-syntax colors and a caret while typing. Closing a view preserves its script in the
-library. Source documents use two verified snapshots under `UAI/code/`.
+**代码工作区 —— v1.7.0，2026 年 9 月 24 日。** 打开 **Code**，选择编辑器（Editor）、文件（Files）、资源管理器（Explorer）、远程（Remotes）、输出（Output）、历史（History）、库（Library）或游戏变更（Game changes）。用户与代理共享实时的 Luau 文档与修订记录。语法高亮、行号、查找、跳转到行、缩进、显式的运行/停止、保留的输出、版本、对比/提案以及可复用的带类型动作都使用同一套模型。聚焦编辑时使用原生 TextBox 处理输入、选区与输入法，打字时显示语法配色和光标。关闭视图会将其脚本保留在库中。源文档在 `UAI/code/` 下使用两份经过验证的快照。
 
-Inspected Source and decompiled text are read-only snapshots. **Extract editable
-copy** creates a separate document; opening source never runs it or writes back to
-the live script. Source requests share bounded workers and a cache, with explicit
-provenance, refresh, cancellation and expiry. Search/selection use UTF-8 byte
-boundaries; displayed columns count Unicode code points.
+被检视的源码和反编译文本是只读快照。**提取可编辑副本** 会创建一个独立文档；打开源码永远不会运行它，也不会写回运行中的脚本。源码请求共享有界的工作线程与缓存，并带有明确来源、刷新、取消和过期机制。搜索/选区使用 UTF-8 字节边界；显示的列数按 Unicode 码点计算。
 
-Files browses the `UAI` workspace through expandable folders. Open a file in the
-editor, then use Save or Save as; disk-conflict checks protect edited drafts.
-Run and Save stay adjacent. Buttons and tabs retain padding across narrow layouts,
-touch input and larger text, with horizontal scrolling for crowded action strips.
+Files 通过可展开的文件夹浏览 `UAI` 工作区。在编辑器中打开文件，然后使用 Save 或 Save as；磁盘冲突检查保护已编辑的草稿。Run 与 Save 始终相邻。按钮和标签页在窄布局、触摸输入和更大字号下仍保持内边距，拥挤的操作条会横向滚动。
 
-Explorer provides lazy child pages, name/class/tag search, multiple selection,
-supported properties, typed attributes/tags, guarded edits, hierarchy operations,
-bookmarks, world picking, source opening and selected metadata export. Stable
-object references survive renaming and moving. **Game changes → Undo** covers
-recorded property and attribute changes with conflict checks. Tags, hierarchy,
-remote effects and arbitrary Luau side effects are outside that Undo coverage.
-Inspector actions carry the displayed selection's IDs, primary object and revision.
-Search and branch pages show partial results and limits: 20,000 runtime children or
-scanned nodes, 4,000 displayed rows, and a 64-level reveal path.
+Explorer 提供懒加载的子页面、按名称/类别/标签搜索、多选、受支持的属性、带类型的特性/标签、有防护的编辑、层级操作、书签、世界拾取、打开源码以及所选元数据导出。稳定的对象引用在重命名和移动后依然有效。**游戏内变更 → 撤销** 覆盖已记录的属性与特性变更，并带冲突检查。标签、层级结构、远程影响以及任意的 Luau 副作用不在该撤销范围内。Inspector 的操作携带当前显示选区的 ID、主对象与修订号。搜索与分支页面会显示部分结果与限制：20,000 个运行时子节点或扫描节点、4,000 行显示、64 层展开路径。
 
-Remotes starts only through an explicit scoped **Start**. It supports UAI calls,
-incoming events and host-dependent outgoing interception, with bounded capture
-lists, typed values, filters, replay drafts, reviewed one-shot replay, generated
-source and offline export/import. Excluding logs and blocking traffic are separate
-controls. Stop disarms traffic rules; capture stays visible on the minimized
-launcher. A timed-out InvokeServer may remain outstanding and must not be retried
-automatically. **More → Capture coverage** explains the actual backend and limits;
-intercepted Invoke outcomes remain unverified and incoming function callbacks are
-unavailable.
+Remotes 只能通过明确限定作用域的 **Start** 启动。它支持 UAI 调用、入站事件以及依赖宿主的出站拦截，提供有界捕获列表、带类型的值、过滤器、重放草稿、经审核的一次性重放、生成的源码以及离线导出/导入。排除日志与阻断流量是两个独立控件。停止会解除流量规则；捕获内容在最小化的启动器上仍然可见。一次超时的 InvokeServer 可能仍在挂起，不得自动重试。**更多 → 捕获范围** 会说明实际的后端与限制；被拦截的 Invoke 结果仍未经验证，入站的函数回调不可用。
 
-The default capture lasts 30 seconds and requires a selected target. Game-wide
-capture and continuous capture are explicit choices. Caller actions resolve the
-captured script identity after capture and can open read-only source with likely
-remote name/path matches. Generated portable scripts require current review before
-copy/export. Hooked traffic is labelled `hooked_unknown` unless attribution has
-been verified; routing probes do not invoke the predecessor, but network behavior
-depends on the host. Stop can retain an inert forwarding wrapper.
+默认捕获持续 30 秒，且需要先选择目标。全游戏捕获与持续捕获是需要明确选择的选项。调用方操作会在捕获后解析被捕获脚本的身份，并可在远程名称/路径可能匹配时打开只读源码。生成的可移植脚本在复制/导出前需要重新审核。除非归属已验证，被挂钩的流量会标记为 `hooked_unknown`；路由探测不会调用前一级处理器，但网络行为取决于宿主。停止后可能留下一个惰性转发包装。
 
-See [the native feature contract](docs/NATIVE_CLIENT.md) for current features and
-limits and [the native testing guide](docs/CODE_WORKSPACE_TESTING.md) for
-desktop/mobile/gamepad scenarios. Native input, hook forwarding and performance
-require Roblox client validation.
+关于当前功能与限制，参见[原生功能契约](docs/NATIVE_CLIENT.md)；关于桌面/移动/手柄场景，参见[原生测试指南](docs/CODE_WORKSPACE_TESTING.md)。原生输入、钩子转发与性能仍需在 Roblox 客户端中验证。
 
-**Batch inspection and file workflows.** Prefer a combined query or batch when
-the work is independent; this reduces model round trips and unnecessary local
-scanning without changing the inference provider's speed.
-The prompt asks for successive batches of normally 1–4 independent calls, with
-results inspected between batches. Tool-call limits and concurrency stay unchanged.
+**批量检视与文件工作流。** 当工作是相互独立的，优先使用合并查询或批量处理；这会减少模型往返和不必要的本地扫描，同时不改变推理提供商的速度。
+提示词要求连续按批处理，通常每批 1–4 个独立调用，并在批与批之间检查结果。工具调用上限与并发数保持不变。
 
-**Script projects.** Stage modular scripts with `project_scaffold`, inspect their
-file hashes and dependencies with `project_map`, and apply coordinated edits with
-`project_patch`. `script_analyze` reports syntax/dependency diagnostics;
-`project_build` exports one runnable Lua file; `script_test` runs declared cases
-through the managed client engine. Proposals include temporary, conditional
-recovery checkpoints. See [the script project guide](docs/SCRIPT_PROJECTS.md) for
-the manifest, test API and limits. These are native tools, without an LSP or an
-isolated test process.
+**脚本项目。** 用 `project_scaffold` 搭建模块化脚本，用 `project_map` 查看其文件哈希与依赖关系，用 `project_patch` 应用协同编辑。`script_analyze` 报告语法/依赖诊断；`project_build` 导出一个可直接运行的 Lua 文件；`script_test` 通过受管的客户端引擎运行已声明的测试用例。提案会包含临时的、带条件的可恢复检查点。关于清单文件、测试 API 与限制，参见[脚本项目指南](docs/SCRIPT_PROJECTS.md)。这些都是原生工具，没有 LSP，也没有隔离的测试进程。
 
-**Long inputs are files.** Inputs over 8,000 UTF-8 bytes are saved intact under
-`UAI/pastes/`, up to 10 MiB per file. The AI receives a compact path reference and
-reads relevant sections with `file_read`, `file_read_many`, or `file_search`.
-Saved-paste reads return at most 6,000 source bytes per slice with continuation
-offsets. Ordinary messages stay inline. A large paste becomes an attachment while
-keeping the text already around it editable, and an attachment can be sent by
-itself. The browser transfers large files in separate chunks before sending the
-message. Saving must succeed and the Files tools must be available; failures keep
-the draft instead of sending the full source. These are files in the executor's
-workspace, so the workflow works across inference providers without requiring a
-provider-specific file API.
+**长输入就是文件。** 超过 8,000 UTF-8 字节的输入会原样保存在 `UAI/pastes/` 下，单文件上限 10 MiB。AI 收到的是一个紧凑的路径引用，并用 `file_read`、`file_read_many` 或 `file_search` 读取相关片段。读取已保存粘贴内容时，每次最多返回 6,000 源字节，并附带续读偏移。普通消息仍保持内联。大段粘贴会变成附件，同时保持其周围已有文本可编辑，附件也可以单独发送。浏览器会在发送消息前分块传输大文件。保存必须成功且文件工具必须可用；失败时会保留草稿而不是把完整源码发出去。这些是执行器工作区中的文件，因此该工作流可跨不同推理提供商使用，无需提供商特有的文件 API。
 
-**A folder per game.** Game work is organised under `UAI/files/<place name>
-(<PlaceId>)/`: scripts the agent writes or edits sit in that folder's root, and
-decompiled or dumped source lands in its `dump/` subfolder, apart from the code
-being authored. The name is taken from the live place and stripped of any
-path-reserved characters. This is the default home, not a wall -- shared
-utilities, another place's folder, cross-game notes, and `pastes/` all stay
-reachable, so the agent still reads and writes elsewhere under `files/` when the
-task or the user calls for it.
+**每个游戏一个文件夹。** 游戏相关工作组织在 `UAI/files/<场所名> (<PlaceId>)/` 下：代理编写或编辑的脚本放在该文件夹根目录，反编译或导出的源码落在其 `dump/` 子目录中，与正在编写的代码分开。名称取自当前所在的场所，并去掉任何路径保留字符。这是默认位置而非围墙 —— 共享工具、其他场所的文件夹、跨游戏笔记和 `pastes/` 都保持可达，因此当任务或用户需要时，代理仍会在 `files/` 下的其他位置读写。
 
-**Project Gravity.** Run the updated [Project Gravity](https://github.com/Project-Ptolemy/Project-Gravity-02)
-loader and open its **PROJECT UAI** button. Both desktop and mobile pass their live
-context; UAI can also discover Gravity when either application starts first, or run
-the loader itself with `gravity_launch` when Gravity is not already present.
-`gravity_status` and `gravity_shapes` inspect the real engine and shape controls.
-`gravity_control`, `gravity_configure`, `gravity_shape`, and `gravity_target` use
-Gravity's native handlers for physics, settings, shape switching, buttons, and
-player targets. The Project Gravity tool group uses UAI's normal permissions.
+**Project Gravity。** 运行更新后的 [Project Gravity](https://github.com/Project-Ptolemy/Project-Gravity-02) 加载器，并打开其中的 **PROJECT UAI** 按钮。桌面端与移动端都会传入其实时上下文；两个应用中任一先启动时 UAI 也能发现 Gravity，或在 Gravity 尚未存在时用 `gravity_launch` 自行运行其加载器。
+`gravity_status` 与 `gravity_shapes` 检视真实引擎与形状控件。
+`gravity_control`、`gravity_configure`、`gravity_shape` 和 `gravity_target` 使用 Gravity 的原生处理器，处理物理、设置、形状切换、按钮和玩家目标。Project Gravity 工具组使用 UAI 的常规权限。
 
-`gravity_parts` pages through held parts with session-scoped IDs and their current
-selection, targets, and overrides. Use those IDs with `gravity_part_control` to
-select parts, pin them, assign a shape, move a group while preserving its spacing,
-set rideability or physics, and release overrides. `clear` deselects;
-`release_all` clears overrides even on unselected parts. Selection follows
-Gravity's native 512-part ceiling. Read fresh IDs after Gravity reloads.
+`gravity_parts` 分页列出持有的部件，带会话作用域 ID 及其当前选区、目标与覆盖。用这些 ID 配合 `gravity_part_control` 选择部件、固定它们、指定形状、在保持间距的前提下移动一组、设置可乘坐性或物理属性，以及释放覆盖。`clear` 取消选择；`release_all` 即使对未选中的部件也清除覆盖。选择遵循 Gravity 原生的 512 部件上限。Gravity 重载后请重新读取 ID。
 
-`gravity_keybind` sets core or shape shortcuts and rejects conflicting keys;
-an empty key clears a binding. `gravity_favorite` manages the native favorites
-list. `gravity_configure` also exposes interface and visual performance settings,
-FPS (when supported), RGB core color, ignore tags, and Part Control panel defaults.
-`gravity_control` supports `reset_settings` and manual Slingshot `launch`/`charge`.
-The companion Gravity update applies settings to the live world and interface,
-restores reset effects and bindings, and supplies the same shape/hotkey handlers
-on desktop and mobile. Check `gravity_status.capabilities` after reloading it.
+`gravity_keybind` 设置核心或形状快捷键，并拒绝冲突的按键；空键会清除绑定。`gravity_favorite` 管理原生收藏列表。`gravity_configure` 还会暴露界面与视觉性能设置、FPS（在支持时）、RGB 核心颜色、忽略标签以及 Part Control 面板默认值。`gravity_control` 支持 `reset_settings` 以及手动弹弓的 `launch`/`charge`。伴生端应用的 Gravity 更新会把设置应用到实时世界与界面、恢复重置效果与绑定，并在桌面端与移动端提供相同的形状/热键处理器。重载后请检查 `gravity_status.capabilities`。
 
-For custom shapes, read the guide with `gravity_plugin_read`, or request
-`section="template"`. Pass `plugin="My Shape", path="pastes/..."` to
-`gravity_plugin_write` to reuse uploaded source without copying it into tool
-arguments. It verifies the file in `GravityShapes/`, validates setup once, and
-registers it with the running Gravity session. Select an inactive shape explicitly
-with `gravity_shape`; replacing an existing shape requires `overwrite=true`.
-`load=false` checks syntax and saves without executing the source. Gravity's live
-physics and mobile touch behavior still need in-game testing.
+对于自定义形状，用 `gravity_plugin_read` 阅读指南，或请求 `section="template"`。把 `plugin="My Shape", path="pastes/..."` 传给 `gravity_plugin_write`，即可复用已上传的源码而无需将其复制到工具参数中。它会在 `GravityShapes/` 中校验该文件、执行一次设置验证，并注册到正在运行的 Gravity 会话。用 `gravity_shape` 显式选择一个非活动形状；替换现有形状需要 `overwrite=true`。`load=false` 只检查语法并保存，不执行源码。Gravity 的实时物理与移动端触摸行为仍需在游戏中测试。
 
-| Tool | Use |
+| 工具 | 用途 |
 | --- | --- |
-| `instance_query` | Filter by name, class, and tag while reading selected properties and attributes. Pages stop early and include a traversal offset. |
-| `instance_get_many` | Inspect up to 20 known paths with individual errors and a continuation index. |
-| `file_search` | Find literal text across workspace files, with filename globs, case selection, line numbers, byte offsets, and a cursor. |
-| `file_read_many` | Read up to 12 files or saved pastes with a shared output budget, individual failures, and per-file continuation offsets. |
-| `file_edit_many` | Apply up to 20 ordered exact edits to one file after all edits validate, using one write. |
+| `instance_query` | 按名称、类别和标签筛选，并读取选定的属性与特性。分页会提前结束并包含遍历偏移。 |
+| `instance_get_many` | 检视最多 20 个已知路径，带各自的错误与续读索引。 |
+| `file_search` | 在工作区文件中查找字面文本，支持文件名通配、大小写选择、行号、字节偏移与游标。 |
+| `file_read_many` | 读取最多 12 个文件或已保存的粘贴内容，共享输出预算，带各自的失败信息与逐文件续读偏移。 |
+| `file_edit_many` | 在所有编辑通过校验后，用一次写入对单个文件应用最多 20 条有序的精确编辑。 |
 
-Instance projections accept up to 12 property names and 12 attribute names.
-Copy returned instance paths exactly: `Workspace["Map.v2"]["Door[1]"]` refers to
-names that contain punctuation. Query pages inspect at most 20,000 nodes; narrow
-the root if a scan is incomplete. Traversal offsets describe the live tree, so
-restart after it changes.
+实例投影最多接受 12 个属性名和 12 个特性名。请精确复制返回的实例路径：`Workspace["Map.v2"]["Door[1]"]` 指的是名称中含有标点的情况。查询分页最多检视 20,000 个节点；若扫描不完整，请收窄根节点。遍历偏移描述的是实时树，因此树发生变化后应重新开始。
 
-File searches default to `UAI/files/`; pass an explicit `pastes/` path to search
-saved inputs. Both scopes exclude client configuration and conversations.
-Searches skip binary files and files over 2 MB, bound inventories to
-128 directories, 1,000 files, and 6,000 entries, and process at most 8 MB and 50,000
-new lines per page. The read budget counts skipped data too and is checked between
-whole-file reads; the host must read a file before its size is known.
-Follow the returned cursor with the same query and restart
-after editing sources. Batch reads support files up to 2 MB and reuse repeated
-slices within that call. Edits preflight against the original file, refuse stale
-contents, avoid no-op writes, and limit the original and resulting file to 2 MB.
-The existing Files and Instance tree permissions and capability checks apply.
+文件搜索默认在 `UAI/files/` 中进行；要搜索已保存的输入，请显式传入 `pastes/` 路径。两个范围都排除客户端配置与对话。
+搜索会跳过二进制文件和大于 2 MB 的文件，将清单限制在 128 个目录、1,000 个文件和 6,000 个条目，每页最多处理 8 MB 和 50,000 行新内容。读取预算也计入被跳过的数据，并在整文件读取之间检查；宿主必须先读取文件才能知道其大小。
+用同一查询沿返回的游标继续，并在编辑源码后重新开始。批量读取支持最大 2 MB 的文件，并在该次调用内复用重复的切片。编辑会先针对原始文件预检、拒绝过时内容、避免空操作写入，并将原始文件与结果文件都限制在 2 MB。现有的文件与实例树权限及能力检查同样适用。
 
-**An interface built from tokens.** No use site writes a colour or a number. One
-warm neutral ramp and one accent, surfaces separated by two steps of lightness and
-a hairline rather than by shadows, a cream fill for the single loud action per view,
-and the accent kept for meaning -- inline code, a running turn, a risk level. Type
-comes from `FontFace` where the client has it, so a family yields a real
-regular/medium/semibold axis instead of whichever weights the legacy `Enum.Font`
-happened to pair it with; the families on offer are probed against the engine rather
-than declared, so the list is shorter on an older client instead of containing dead
-entries. A reply is the page rather than a bubble on it: the agent's prose sits flat
-on the canvas, tool rows and reasoning are lines of text rather than cards, reasoning
-sits behind a rule as an aside, and sent prompts group their speaker and text inside a quiet bordered surface.
-The compact composer stays pinned to the bottom edge, with context details behind
-its overflow menu. The model stays inline when space permits; model, permission,
-and usage controls are always available from the same menu. The contrast
-of every pair the interface puts together is computed in the test suite, so a retune
-cannot quietly make something unreadable.
+**由设计令牌构建的界面。** 任何使用点都不直接写颜色或数值。一套暖中性色阶加一个强调色，表面之间用两级明度和一条细线分隔而非阴影，每个视图中唯一醒目的主操作用米色填充，强调色只用于表意 —— 行内代码、运行中的一轮、风险等级。字体在客户端支持时来自 `FontFace`，因此一个字族能提供真正的常规/中等/半粗字重轴，而不是取决于旧式 `Enum.Font` 恰好配到的字重；可选字族是针对引擎探测得出而非硬编码声明，所以在较旧客户端上列表更短，而不会包含失效条目。回复本身就是页面，而不是页面上的一个气泡：代理的正文平铺在画布上，工具行与推理内容是文本行而非卡片，推理内容作为旁注放在一条分隔线之后，已发送的提示词把发言者与文本组合在一个安静的带边框表面内。
+紧凑的输入区固定在底边，上下文详情藏在其溢出菜单中。空间允许时模型保持内联；模型、权限和用量控件始终可从同一菜单访问。界面上每一组配色的对比度都在测试套件中计算，因此一次调色调整不可能悄悄让某些内容变得不可读。
 
-**Markdown tables and compact thinking.** Replies support aligned pipe tables with
-formatted cells and horizontal scrolling on narrow screens. Long tables and thinking
-traces have bounded scroll areas without dropping their content. Thinking starts
-collapsed; consecutive trace updates share a disclosure until a tool separates them.
-The model picker keeps search and selection stable, and its provider selector and
-the composer's model chip size to their actual labels.
+**Markdown 表格与紧凑的思考显示。** 回复支持对齐的管道表格，单元格可带格式，窄屏下可横向滚动。长表格和思考轨迹有带边界的滚动区域，且不会丢弃内容。思考默认折叠；连续的多条轨迹更新共享同一个展开区，直到被一次工具调用分隔。模型选择器保持搜索与选择的稳定状态，其提供商选择器和输入区的模型标签按实际文字尺寸自适应。
 
-**Mobile layout.** The desktop header, sidebar, welcome view, composer, Quick Chat
-and Code tabs share one structure at 55% layout dimensions, spacing and radii
-before density settings. Controls have a 15px minimum, text starts at 10px before
-text scaling, and standard icons at 12px. Enter adds a line; the Send button
-submits. Expand the composer for a longer draft, or use Message options for
-models, attachments and context. The sidebar and app menu keep conversation
-search. Settings categories and providers reflow between columns and scrolling
-strips while preserving their mounted forms.
+**移动端布局。** 桌面端的页头、侧边栏、欢迎视图、输入区、Quick Chat 与 Code 标签页在应用密度设置之前，共享一套按 55% 尺寸、间距与圆角缩放的同一结构。控件最小 15px，文本在缩放前从 10px 起，标准图标 12px。Enter 换行；发送按钮提交。展开输入区可写更长的草稿，或通过 Message options 选择模型、附件和上下文。侧边栏与应用菜单保留对话搜索。设置分类与提供商会在列布局和滚动条带之间重排，同时保留已挂载的表单。
 
-Auto keeps a compact placement; Sheet, Panel and Window select bottom, right
-and centred placement, with separate saved positions. Drag the title to move,
-use the corner grip to resize, or expand to fill the available screen. Rotation
-preserves drafts, selections and open forms; the keyboard temporarily lifts the
-window and keeps focused fields in view. The launcher returns when minimized.
+Auto 保持紧凑放置；Sheet、Panel 与 Window 分别选择底部、右侧和居中放置，各自保存位置。拖动标题可移动，用角落把手调整大小，或展开以填满可用屏幕。旋转会保留草稿、选区和已打开的表单；键盘会临时抬起窗口并让聚焦的字段保持可见。最小化后启动器会回来。
 
-**Managed in-game chat loops.** Ask for a quiz, rotating announcements, or keyword
-replies. `quiz_bot`, `auto_chat`, and `auto_reply` return a background job immediately;
-`chat_loop_status` reports progress and quiz scores, and `chat_loop_stop` stops jobs.
-Active jobs also have a Stop all control in chat. Loops have configurable intervals,
-counts, and durations, and stop when their conversation is cleared or removed, chat
-is disabled, or the client unloads.
+**受管的内置聊天循环。** 可以要求出题、轮播公告或关键词回复。`quiz_bot`、`auto_chat` 和 `auto_reply` 会立即返回一个后台任务；`chat_loop_status` 报告进度与答题得分，`chat_loop_stop` 停止任务。运行中的任务在聊天中也有“全部停止”控件。循环的间隔、次数和时长可配置，并会在其对话被清空或移除、聊天被禁用或客户端卸载时停止。
 
-**Infinite Yield control and plugin authoring.** `iy_control` inspects and changes
-IY's native event bindings, keybinds, aliases, waypoints, command prefix, and supported settings. It
-supports `OnExecute`, `OnSpawn`, `OnDied`, `OnDamage`, `OnKilled`, `OnJoin`,
-`OnLeave`, and `OnChatted`, including player/message/health filters, delays, and
-`$1`/`$2` command arguments. Changes refresh IY's editor and request its normal
-save; results say when only live session state is available. Inspect first for
-current binding indexes. `stop_loops` sends IY's `breakloops` command, which stops
-repeat prefixes; event bindings and individual commands' own loops are managed
-separately. The adapter follows the upstream
-[event editor and plugin loader](https://github.com/EdgeIY/infiniteyield/blob/master/source),
-reviewed September 20, 2026.
+**Infinite Yield 控制与插件编写。** `iy_control` 检视并修改 IY 的原生事件绑定、快捷键、别名、路径点、命令前缀以及受支持的设置。它支持 `OnExecute`、`OnSpawn`、`OnDied`、`OnDamage`、`OnKilled`、`OnJoin`、`OnLeave` 和 `OnChatted`，包括玩家/消息/生命值过滤、延迟以及 `$1`/`$2` 命令参数。更改会刷新 IY 的编辑器并请求其正常保存；当仅有实时会话状态可用时，结果会予以说明。请先检视当前绑定索引。`stop_loops` 发送 IY 的 `breakloops` 命令，用于停止重复前缀；事件绑定和各命令自身的循环则另行管理。该适配器遵循上游的[事件编辑器与插件加载器](https://github.com/EdgeIY/infiniteyield/blob/master/source)，审核于 2026 年 9 月 20 日。
 
-`iy_cmds` includes argument signatures and short descriptions when the running IY
-exposes them. `iy_players` resolves selectors such as `others`, `rad50`, and
-`all-me` to live names before a targeting command. It uses IY's own selector
-engine, including comma-separated lists and `@name` username-only prefix matching.
-Its text is bounded by `limit`; structured results retain the complete name list.
+当运行中的 IY 提供相关信息时，`iy_cmds` 会包含参数签名与简短说明。`iy_players` 会在执行定位命令前把 `others`、`rad50` 和 `all-me` 之类的选择器解析为实际玩家名。它使用 IY 自己的选择器引擎，包括逗号分隔列表和 `@name` 仅用户名前缀匹配。其文本受 `limit` 限制；结构化结果保留完整名称列表。
 
-Use `alias_add`, `alias_remove`, or `alias_clear` to manage aliases. An alias
-targets a command name, including an existing command alias; arguments are not
-stored in it. `waypoint_add` accepts `{x,y,z}` coordinates or uses your character's
-current root position, flooring each coordinate to match IY. `waypoint_remove`
-and `waypoint_clear` affect the current place; `waypoint_clear` with
-`all_places=true` also clears saved waypoints in other places. Inspect
-`section="aliases"` or `section="waypoints"` and follow `nextOffset` for more.
-Edits preserve the live table references used by IY's GUI and request its save.
+使用 `alias_add`、`alias_remove` 或 `alias_clear` 管理别名。别名指向一个命令名，包括已有的命令别名；参数不会存入别名。`waypoint_add` 接受 `{x,y,z}` 坐标，或使用你角色当前根位置，并对每个坐标向下取整以与 IY 保持一致。`waypoint_remove` 和 `waypoint_clear` 作用于当前场所；带 `all_places=true` 的 `waypoint_clear` 还会清除其他场所中保存的路径点。检视 `section="aliases"` 或 `section="waypoints"` 并跟随 `nextOffset` 获取更多内容。编辑会保留 IY 的 GUI 所使用的实时表引用，并请求其保存。
 
-`configure` also supports `gui_scale` (0.4–2) and `logs_webhook` (an HTTP(S) URL,
-or an empty string to disable). These dispatch IY's own commands asynchronously;
-inspect settings to confirm the resulting values. Those commands save through
-IY, so they reject `persist=false`; other native edits support session-only changes.
+`configure` 还支持 `gui_scale`（0.4–2）和 `logs_webhook`（一个 HTTP(S) URL，或空字符串以禁用）。这些会异步派发 IY 自己的命令；请检视设置以确认结果值。这些命令经由 IY 保存，因此会拒绝 `persist=false`；其他原生编辑支持仅会话内的更改。
 
-`iy_plugin_read` without a filename returns a multi-command template. Pass a
-filename to read an existing plugin, then use `iy_plugin_write` to create or
-update it. Source can declare globals or shared locals above `local Plugin`,
-and returns the normal IY table with `PluginName`, `PluginDescription`, and
-`Commands`. Every command has `ListName`, `Description`, `Aliases`, and
-`Function(args, speaker)`. The writer checks syntax before saving, executes setup
-once when loading, validates the returned table before replacing commands, and
-reports their actual registered names, including IY's collision suffixes.
-`load=false` saves without executing; replacing a file requires `overwrite=true`.
-Plugin source and commands appear in the tool transcript. Plugin-owned connections
-and loops should have their own cleanup command so reloads do not duplicate them.
+不带文件名的 `iy_plugin_read` 会返回一个多命令模板。传入文件名可读取现有插件，然后用 `iy_plugin_write` 创建或更新它。源码可以在 `local Plugin` 之上声明全局变量或共享局部变量，并返回常规的 IY 表，包含 `PluginName`、`PluginDescription` 和 `Commands`。每条命令都有 `ListName`、`Description`、`Aliases` 和 `Function(args, speaker)`。写入器在保存前检查语法、在加载时执行一次设置、在替换命令前校验返回的表，并报告它们实际注册的名称，包括 IY 的冲突后缀。`load=false` 只保存不执行；替换文件需要 `overwrite=true`。插件源码与命令会出现在工具记录中。插件持有的连接和循环应有自己的清理命令，以免重载时重复创建。
 
-For example, `iy_control` can bind `speed 40` to your next spawn:
+例如，`iy_control` 可以把 `speed 40` 绑定到你的下次出生：
 
 ```json
 {"action":"event_add","event":"OnSpawn","command":"speed 40","conditions":{"player":"me"},"delay":0.5}
 ```
 
-Resolve nearby players with `iy_players`:
+用 `iy_players` 解析附近玩家：
 
 ```json
 {"selector":"rad50-me","limit":20}
 ```
 
-Create an alias or a waypoint with `iy_control`:
+用 `iy_control` 创建别名或路径点：
 
 ```json
 {"action":"alias_add","alias":"quick","command":"speed"}
@@ -539,119 +218,32 @@ Create an alias or a waypoint with `iy_control`:
 {"action":"waypoint_add","name":"Home","position":{"x":100,"y":20,"z":-50}}
 ```
 
-**Task and notification layout.** Task markers share their text's line box at each
-font scale, long plans scroll within a bounded area, and disclosure choices stay
-with their conversation. Skipped steps are reported separately from completion.
-Notifications have a clear outcome, conversation title, and an **Open chat**
-action. Opening a conversation acknowledges its own notifications; other unread
-conversations keep their badge. Long notifications scroll, hover/focus pauses
-expiry, and the stack fits the available screen and keyboard space.
+**任务与通知布局。** 任务标记在每种字号下都与其文本共享同一行框，长计划在有限区域内滚动，展开选择随其对话保存。被跳过的步骤与完成情况分开报告。通知有清晰的结果、对话标题和一个 **打开对话** 操作。打开某个对话会确认其自身的通知；其他未读对话保留其角标。长通知可滚动，悬停/聚焦会暂停过期计时，通知栈会适配可用的屏幕与键盘空间。
 
-**In-game chat agent.** `chat_agent` launches a background subagent that answers
-players with the active provider. It keeps its own conversation context and the
-read-only game tools (instances, players, environment, chat history), so it can look
-something up before answering instead of guessing. Set `instructions` for the job,
-`prefix` (default `[AGENT]`), and optionally `user_ids` to choose players. It
-returns immediately and appears in the chat-loop indicator; `chat_loop_status`
-reports its turns and `chat_loop_stop` stops it. By default it runs for 600 seconds,
-sends at most 20 replies, and waits at least 5 seconds between sends. Rapid messages
-are batched into one turn. Incoming message IDs and short-window repeats are
-deduplicated, self/system/tagged-bot messages are ignored, and repeated reply text
-is suppressed for the entire run.
-Only one managed job owns a channel, and manual `chat_send` calls are blocked there
-while the chat agent runs. A failed or ambiguous chat send stops the loop without retrying.
+**游戏内聊天代理。** `chat_agent` 启动一个后台子代理，用当前提供商回答玩家。它有自己的对话上下文与只读游戏工具（实例、玩家、环境、聊天历史），因此可以先查清楚再回答，而不是猜。用 `instructions` 设定其工作，`prefix`（默认 `[AGENT]`），并可选地用 `user_ids` 指定玩家。它立即返回并出现在聊天循环指示器中；`chat_loop_status` 报告其回合，`chat_loop_stop` 停止它。默认运行 600 秒、最多发送 20 条回复，两次发送之间至少等待 5 秒。短时间内的多条消息会合并为一个回合。入站消息 ID 与短窗口内的重复会被去重，自己/系统/被标记的机器人消息会被忽略，重复的回复文本会在整个运行期间被抑制。同一时间只有一个受管理任务拥有某个频道，代理运行期间该频道的手动 `chat_send` 调用会被阻止。一次失败或结果不明的聊天发送会停止循环而不重试。
 
-**Every listing the model produced, in the transcript.** A tool call that carries
-code -- the Luau it is about to execute, the body it is about to write to a file, the
-property map it is about to apply -- draws it under the row as numbered, horizontally
-scrolled, copyable monospace, outside the fold and on by default. A call's listing
-folds at a dozen lines rather than sixty, because a turn produces several of them and
-the answer they were working towards has to stay on screen. Long blocks fold with a
-control that opens them rather than a sentence saying how much was hidden. The
-remaining arguments and the result sit behind the row's own caret, and a failure opens
-its own. Subagents forward their calls whole, so work delegated to a child is as
-readable as work done in the main conversation.
+**模型产生的每一段内容，都在记录里。** 携带代码的工具调用 —— 即将执行的 Luau、即将写入文件的内容、即将应用的属性映射 —— 会以带编号、可横向滚动、可复制的等宽文本画在该行下方，位于折叠之外且默认展开。一次调用的内容清单在十余行处折叠，而不是六十行，因为一轮会产生好几份，而它们正在努力得出的答案必须留在屏幕上。长代码块用一个可打开的控件折叠，而不是用一句话说明隐藏了多少。其余参数和结果位于该行自身的折叠箭头之后，失败会自动展开。子代理会完整转发它们的调用，因此委派给子代理的工作与主对话中完成的工作同样可读。
 
-**A turn's machinery is one block, not a wall.** The calls, the thinking between them
-and any retry notice go into a single activity block with tight lines inside it and a
-paragraph of air around it -- so a turn that called eight tools reads as one thing
-that happened rather than as eight events with the reply lost at the bottom. The
-header counts the run and its duration, and a finished run of more than four folds
-itself away behind that line; anything still outstanding keeps it open.
+**一轮的机械过程是一个整体，而不是一堵墙。** 调用、调用之间的思考以及任何重试提示会进入同一个活动块，块内行距紧凑、块外留出一段空白 —— 因此一轮调用了八个工具读起来只是一件发生过的事，而不是八个事件、答案被挤到最底部。标题行会计数该次运行及其耗时，超过四次的已结束运行会自动折叠到这一行之后；任何仍未完成的内容都会让它保持展开。
 
-**Conversations run at the same time.** Switching conversation does not stop the one
-you left: its loop is on its own thread, the sidebar spins on it while it works, the
-header says how many are going, and the launcher's dot pulses with the window closed.
-Each conversation keeps its own task list, and a permission prompt raised by one that
-is not on screen still appears -- named with the conversation that is asking, rather
-than timing out three minutes later and reporting to that model that you refused.
+**多个对话同时运行。** 切换对话不会停止你离开的那个：它的循环在自己的线程上，工作期间侧边栏会为它显示转圈，标题栏会说明有多少个正在运行，窗口关闭时启动器的圆点会随之脉动。每个对话保有自己的任务清单，来自当前不在屏幕上的对话的权限询问仍会出现 —— 并且会标明是哪个对话在询问，而不是三分钟后超时、再告知那个模型“你拒绝了”。
 
-**Subagents are managed, not just watched.** The Subagents panel is the register: every
-dispatch this session made, running ones first, with the task, which conversation asked,
-what it is allowed to touch, the tools it has called, how long it has been going, and a
-stop for each one that does not stop the turn that dispatched it. Finished dispatches
-stay with their report. The four ceilings -- budget, how many run at once, steps per
-subagent, and how deep delegation may go -- are on the same panel, and the last two had
-no control anywhere before it.
+**子代理是被管理的，而不只是被观察的。** Subagents 面板就是登记册：本次会话发起的每一次派发，运行中的排在前面，包含任务、是哪个对话发起的、它被允许触碰什么、它调用了哪些工具、已经运行了多久，以及每个子代理的停止按钮 —— 停止它并不会停止发起它的那一轮。已完成的派发连同其报告保留下来。四个上限 —— 预算、同时运行数、每个子代理的步数、委派可深入多少层 —— 都在同一面板上，而其中后两项在此前面板上没有任何可调控件。
 
-**A dispatch is a conversation, not one question.** Every report carries the
-subagent's id, and `agent_followup` sends that same child another message with
-everything it found still in context: carry on where the step limit stopped you, now
-check this too, quote that line exactly. The transcript shows the second turn as a
-follow-up on the same subagent rather than as a new dispatch, and the newest few
-finished dispatches keep their context so there is something to follow up on.
+**一次派发是一个对话，而不是一个问题。** 每份报告都带有子代理的 id，`agent_followup` 会把另一条消息发给同一个子代理，而它此前发现的一切仍在上下文中：从被步数上限打断的地方继续，现在再检查这一点，把那行原样引用出来。记录会把第二轮显示为对同一子代理的追问，而不是一次新的派发；最近几次已完成的派发会保留其上下文，以便仍有东西可以追问。
 
-A sidebar holds the conversations, grouped by the place each happened in, with
-search across their transcripts and two arrows that walk where you have been. It
-collapses from the header and comes back the same way, and a conversation reopened
-after a restart shows what was said in it rather than a greeting -- the transcript is
-written to disk alongside the model's own context, which is the half that used to
-travel alone. An
-empty conversation opens with prompt starters and an expandable activity card: conversations, messages, tokens,
-active days, streaks, the busiest hour, the model that did the most work, and six
-months of daily activity as a grid. Every figure on it is counted from what this
-client observed and kept -- there is no sample data anywhere in the interface, and
-a number with nothing behind it is rendered as a zero and says why.
+侧边栏承载所有对话，按各自发生所在的场所分组，支持跨对话记录的搜索，以及两个在你走过的地方之间前后移动的箭头。它从页头折叠，并以同样方式复原；重启后重新打开的对话会显示其中说过的话，而不是一句问候 —— 对话记录与模型自己的上下文一起写入磁盘，而后者正是过去独自旅行的另一半。
+空对话打开时会显示提示起始项和一张可展开的活动卡片：对话数、消息数、token 数、活跃天数、连续天数、最忙碌的时段、完成工作最多的模型，以及以网格呈现的六个月每日活动。上面的每一个数字都是从本客户端实际观察并保存的数据统计得出 —— 界面中任何地方都没有示例数据，背后没有内容的数字会渲染为零并说明原因。
 
-Long conversations keep dialogue separate from tool activity, so a busy group of
-workers cannot push out your questions and replies. History limits are shown when
-older detail is removed. Resizing and maximizing preserve the live view; layout
-rebuilds remember where you were reading. **Message options → Refresh conversation**
-redraws messages and current activity without restarting the script or losing the
-draft. Older saves recover missing text when it still exists in saved model context.
+长对话把对话内容与工具活动分开，因此一群忙碌的子代理无法把你的提问和回复挤出视野。移除较早细节时会显示历史限制。调整大小和最大化会保留实时视图；布局重建会记住你正在阅读的位置。**消息选项 → 刷新对话** 会重绘消息与当前活动，而不会重启脚本或丢失草稿。较旧的存档在文本仍存在于已保存的模型上下文时能够恢复。
 
-**Providers are a list and a detail pane**, not a card grid and a modal form. The
-detail names the endpoint a request will actually go to, the model-list route, the
-wire protocol, whether a socket is configured (and therefore whether a long reply can
-arrive at all), the health counters, the last observed latency, how long a benched
-provider has left, and the extra headers, body fields and query parameters the record
-sends. **Manage API keys** opens from provider details or connection setup. Name
-each entry and use Add API key, Replace or Remove without changing the others.
-Rotation is on by default. **Use one key** applies only the selected credential
-to this provider's inference and model discovery, including quota retries. The
-ordinary provider fallback setting remains independent. Removing the selected key
-restores rotation; removing another key preserves the selected credential.
-Saved secrets show only a masked suffix, and keys shorter than five characters
-are fully masked. Cancel discards changes. Apply saves directly from provider
-details; during connection setup, it updates the draft for the provider's Save.
-Pause excludes a key from new requests without deleting it. A paused selected key
-stays selected and blocks that provider until resumed or another active key is
-chosen. Calls already in progress retain their original request policy.
+**提供商是一个列表加一个详情面板**，而不是卡片网格加模态表单。详情会写明请求实际会发往的端点、模型列表路由、线路协议、是否配置了套接字（以及长回复能否到达）、健康计数、最近观测到的延迟、被停用的提供商还剩多久，以及该记录发送的额外请求头、请求体字段和查询参数。**管理 API 密钥** 可从提供商详情或连接设置打开：为每个条目命名，用「添加 API 密钥」「替换」「移除」操作且不影响其他条目。默认开启轮换。**使用单把密钥** 只把选定的凭据用于该提供商的推理与模型发现，包括配额重试；普通提供商回退设置保持独立。删除选中的密钥会恢复轮换；删除其他密钥则保留已选凭据。已保存的密钥只显示掩码后缀，少于五个字符的密钥完全掩码。取消会丢弃更改。应用会从提供商详情直接保存；在连接设置中则更新草稿，等该提供商保存。暂停会把密钥排除在新请求之外而不删除它。被选中且暂停的密钥仍保持选中，并阻塞该提供商，直到恢复或另选一把可用密钥。已经在进行的调用保留其原请求策略。
 
-Each key card shows locally recorded request attempts and input/output tokens;
-estimates are labelled. Renaming or pausing retains usage, while replacing a
-credential starts a fresh counter. The conversation header shows that chat's AI
-request attempts; Context breakdown explains what is included. Counts persist on
-this device from this update and do not reconstruct earlier requests. Model
-discovery and relay status polling are excluded.
+每个密钥卡片显示本机记录的请求尝试数与输入/输出 token；估算值会标注。改名或暂停会保留用量，替换凭据则重新计数。对话标题栏显示该对话的 AI 请求尝试数；上下文分解会说明包含哪些内容。计数自本次更新起在本机保留，不会回溯重建更早的请求。模型发现与中继状态轮询不计入。
 
-The layout follows the live viewport: compact desktop controls on handhelds,
-a floating resizable window on a desktop, and a large centred panel on a console.
-It reflows on rotation and resize, lifts above the on-screen keyboard, and
-respects `ReducedMotionEnabled`. Handheld placement follows the selected Auto,
-Sheet, Panel or Window mode.
+布局跟随实时视口：掌上设备上是紧凑的桌面控件，桌面端上是可调整大小的浮动窗口，游戏主机上是居中大面板。它会在旋转和缩放时重排，抬升到屏幕键盘之上，并遵循 `ReducedMotionEnabled`。掌上设备的放置方式遵循所选的 Auto、Sheet、Panel 或 Window 模式。
 
-## Layout
+## 目录结构
 
 ```
 init.lua              bootstrap: builds env, mounts the app
@@ -668,74 +260,37 @@ bridge/               the optional web chat: node server plus its page
 dist/uai.lua          the built single file
 ```
 
-`SPEC.md` is the contract every module is written against: the loader, the `env`
-table, the provider record, the tool handler signature, the event stream, what is
-counted and where it is persisted, and the authoring rules.
+`SPEC.md` 是每个模块编写时所依据的契约：加载器、`env` 表、提供商记录、工具处理函数签名、事件流、统计了什么以及持久化在哪里，还有编写规则。
 
-## Building and testing
+## 构建与测试
 
-Complete all source, test, build-tool and documentation edits before verification.
-The native command runs build, freshness, static checks, the main and every focused
-native suite, performance contracts and the official Luau compiler, in that order.
-It stops at the first failed stage; after any fix, restart the entire command.
+在验证之前，先完成所有源码、测试、构建工具和文档的修改。原生命令会依次运行构建、新鲜度检查、静态检查、主测试套件与所有专项原生测试套件、性能契约以及官方 Luau 编译器。它会在第一个失败的阶段停下；任何修复之后，重新运行整个命令。
 
 ```bash
 node tools/test_native.js
 ```
 
-Prerequisites are Node.js, LuaJIT and the official `luau-compile` executable. Set
-`LUAJIT` or `LUAU_COMPILE` to override paths. Stage logs and a behavioral coverage
-summary are written to ignored `refer/native-verification/`. There is no line
-coverage claim. Sources use a LuaJIT-compatible dialect; the native static checker
-enforces it, and the official compiler checks actual Luau syntax. See the testing
-guide for the exact stages and compiler setup.
+前置条件是 Node.js、LuaJIT 和官方 `luau-compile` 可执行文件。设置 `LUAJIT` 或 `LUAU_COMPILE` 可覆盖路径。阶段日志和行为覆盖摘要会写入被忽略的 `refer/native-verification/`。这里不作行覆盖率声明。源码使用兼容 LuaJIT 的方言；原生静态检查器会强制这一点，而官方编译器检查真实的 Luau 语法。关于具体的阶段与编译器设置，参见测试指南。
 
-Build-only commands, also after implementation is complete:
+仅构建命令，同样在实现完成后执行：
 
 ```bash
 luajit tools/bundle.lua --native
 node tools/build_site.js --bundle-only --check
 ```
 
-The bundle includes a deterministic build ID and per-module hashes in
-`dist/uai.manifest.json`. Freshness is read-only and also detects stale embedded
-icons. These hashes identify content; they are not cryptographic signatures.
+包中包含一个确定性的构建 ID 和按模块的哈希，位于 `dist/uai.manifest.json`。新鲜度检查是只读的，也能发现过期的内嵌图标。这些哈希用于标识内容；它们不是密码学签名。
 
-`test/run.lua` loads `dist/uai.lua` -- the actual artifact -- into a mocked
-client: a virtual clock so nothing sleeps, an in-memory filesystem, a programmable
-HTTP layer that records every request, and an instance mock that resolves absolute
-geometry, type-checks property assignments and reports any unknown property or
-enum. The scenarios cover boot, capability degradation, the identity headers on
-the wire, model discovery, the tool loop, parallel calls, SSE assembly, retry,
-provider fallover, permissions, the repeat breaker, abort, context trimming,
-payload shape, argument repair, path traversal, viewport changes, theme changes,
-markdown, subagents and the parallel dispatch of several at once, a subagent
-resumed with a follow-up in the context it already had, the unlimited step budget
-for a turn and the separate one for a child, persistence, error surfaces, window
-drag and resize, overlay interaction, the layout invariants every surface has to
-hold, and the contrast of every colour pair the interface puts on screen. They
-also cover the two failure
-modes that are invisible from inside a single turn: that the sidebar's collapse
-control actually collapses it and offers a way back, and that no string leaves this
-client without being valid UTF-8 -- a scraped snippet with one Latin-1 byte in it
-used to poison the message history and kill every following request with a
-positionless "Can't convert to JSON".
+`test/run.lua` 会把 `dist/uai.lua` —— 实际产物 —— 加载进一个模拟客户端：一个虚拟时钟使任何东西都不会真正休眠，一个内存文件系统，一个会记录每次请求的可编程 HTTP 层，以及一个能解析绝对几何、对属性赋值做类型检查并报告任何未知属性或枚举的实例模拟。场景覆盖启动、能力降级、线上发送的身份请求头、模型发现、工具循环、并行调用、SSE 组装、重试、提供商故障转移、权限、重复检测器、中止、上下文裁剪、载荷形状、参数修复、路径穿越、视口变化、主题变化、Markdown、子代理与多个子代理的并行派发、带着原有上下文对子代理的追问续跑、一轮的无限步数预算与子代理单独的那一份、持久化、错误呈现、窗口拖动与缩放、浮层交互、每个界面都必须满足的布局不变量，以及界面在屏幕上呈现的每一组颜色的对比度。它们还覆盖两种在单轮内部看不见的失败模式：侧边栏的折叠控件确实折叠了它并提供返回路径；以及没有任何字符串在离开本客户端时不是合法 UTF-8 —— 一段含单个 Latin-1 字节的抓取片段曾污染消息历史，并让之后每次请求都以一句没有位置信息的 "Can't convert to JSON" 失败。
 
-They also pin the interface to real state, which is the part that is easy to fake:
-that the activity card counts only what was recorded and survives a restart, that a
-history from before the counters existed is recovered from the transcripts rather
-than invented, that the conversation list is the threads the client has, that the
-permission chip reads the mode actually in force, that an attached file travels with
-the message, that a tool family switched off leaves the wire, that every settings
-pane builds, and that search finds a conversation by something said inside it.
+它们还把界面固定到真实状态上，而这正是最容易造假的部分：活动卡片只统计被记录的内容并且能在重启后存活；计数器出现之前的历史是从对话记录中恢复的，而不是编造的；对话列表就是客户端实际拥有的线程；权限标签读取的是实际生效的模式；附加的文件随消息一同发送；被关闭的工具族不再出现在线上；每个设置面板都能构建；搜索能通过对话内部说过的话找到它。
 
 ```bash
 luajit test/run.lua --native identity # run one native scenario
 luajit test/mock/selftest.lua     # check the mocks themselves
 ```
 
-Lune can also compile all source modules and the shipped bundle with the real
-Luau compiler, then run a scenario file through the same offline harness:
+Lune 也可以用真实的 Luau 编译器编译所有源码模块与随附的包，然后通过同一套离线测试框架运行场景文件：
 
 ```bash
 lune run test/lune_runner.luau test/mobile_ui.lua
@@ -744,25 +299,16 @@ lune run test/lune_runner.luau test/shared_ui_layout.lua
 lune run test/luacid_fallback.luau
 ```
 
-The last check needs only Lune. It compiles the vendored luacid asset with real
-Luau, which the LuaJIT harness cannot, and verifies the fallback installs
-through its pinned environment and calls the service as the client expects.
+最后一项检查只需要 Lune。它用真实 Luau 编译随附的 luacid 资源（LuaJIT 测试框架无法做到），并验证回退方案能通过其固定环境安装，并如客户端预期那样调用该服务。
 
-These checks use mocked Roblox services. They verify code, geometry and
-interactions, but do not render native Roblox text or GUI layouts.
+这些检查使用模拟的 Roblox 服务。它们验证代码、几何与交互，但不渲染原生 Roblox 文本或 GUI 布局。
 
-For landscape image review, `test/mobile_snapshots.lua` exports UI trees from the
-built bundle under Lune. `node test/render_mobile.js <snapshot directory>` renders
-those trees with Playwright/Chromium; set `PLAYWRIGHT_MODULE` to an external
-Playwright installation if needed. These are approximate layout previews. Passing
-a second snapshot directory compares desktop UI trees with the previous build.
-Native rendering and keyboard behavior should also be checked in the Roblox client.
+对于横屏图像检查，`test/mobile_snapshots.lua` 会在 Lune 下从构建好的包中导出 UI 树。`node test/render_mobile.js <snapshot directory>` 用 Playwright/Chromium 渲染这些树；如有需要，把 `PLAYWRIGHT_MODULE` 指向外部安装的 Playwright。这些是近似的布局预览。传入第二个快照目录会把桌面 UI 树与上一次构建进行比较。原生渲染与键盘行为仍应在 Roblox 客户端中检查。
 
-## Public showcase website
+## 公开展示网站
 
-The public site lives in root `index.html`, `style.css`, and `script.js`. The
-`docs/` copies support GitHub Pages configured to publish from that directory.
-Edit the root files, then regenerate the marked catalog and release regions:
+公开站点位于根目录的 `index.html`、`style.css` 和 `script.js`。`docs/` 下的副本用于支持把该目录配置为 GitHub Pages 的发布源。
+编辑根目录文件后，重新生成带标记的目录与发布区域：
 
 ```bash
 luajit tools/bundle.lua
@@ -772,160 +318,70 @@ node --check script.js
 python test/site_static.py
 ```
 
-The site build uses Node and LuaJIT without npm dependencies. It reads the actual
-bundled registry through the offline client harness and refuses stale bundles.
-The check mode does not write files. Static checks verify HTML structure, local
-links, accessibility references, copy targets, catalog coverage, and publishing
-parity without opening a browser or loading media.
+站点构建使用 Node 与 LuaJIT，不依赖 npm 包。它通过离线客户端测试框架读取实际的打包注册表，并拒绝过期的包。检查模式不写文件。静态检查验证 HTML 结构、本地链接、无障碍引用、复制目标、目录覆盖与发布一致性，且无需打开浏览器或加载媒体。
 
-For focused browser checks, install Playwright and its Chromium browser outside
-this repository. Point `PLAYWRIGHT_MODULE` at that installation's package directory:
+如需专注的浏览器检查，请在本仓库之外安装 Playwright 及其 Chromium 浏览器。把 `PLAYWRIGHT_MODULE` 指向该安装的包目录：
 
 ```powershell
 $env:PLAYWRIGHT_MODULE = 'C:\path\to\node_modules\playwright'
 node test/site_browser.js
 ```
 
-The browser gate checks navigation and focus, exact loader copying and clipboard
-fallback, catalog filters, official release targets, responsive geometry, reduced
-motion, canvas pause/fallback, and usable content without JavaScript. Set
-`UAI_SCREENSHOTS` to a directory to save review images. Downloads are checked as
-links; the test does not fetch release binaries.
+浏览器门禁检查导航与焦点、精确的加载器复制与剪贴板回退、目录过滤、官方发布目标、响应式几何、减弱动效、画布暂停/回退，以及在没有 JavaScript 时的可用内容。把 `UAI_SCREENSHOTS` 设为某个目录可保存审核图像。下载仅以链接形式检查；测试不会获取发布二进制文件。
 
-For manual browser review, check narrow and wide layouts, 200% zoom, keyboard
-navigation and Escape, repeated copying and denied clipboard access, search with
-no results, clearing filters, and video playback. The catalog and navigation
-remain usable without JavaScript; only search and copy controls need it.
+人工浏览器审核时，请检查窄屏与宽屏布局、200% 缩放、键盘导航与 Escape、重复复制与被拒绝的剪贴板访问、无结果的搜索、清除过滤器以及视频播放。在没有 JavaScript 时目录与导航仍然可用；只有搜索和复制控件需要它。
 
-## First run
+## 首次运行
 
-Set a master password or deliberately choose the red **Continue without encryption**
-action at startup. The latter saves recoverable, unprotected keys and skips future
-password prompts. Project UAI Free is configured on a fresh install and opens daily
-during 20:00–12:00 UTC+8. During those hours, open Chat and send a message, or
-add your own connection in Providers: choose a provider in the gallery or enter a
-base URL, then enter its authentication details and fetch or type an exact model
-ID. Shared free capacity and speed can vary; existing provider choices stay
-intact.
+启动时设置主密码，或主动选择红色的 **不加密继续**。后者以可恢复、未加密的方式保存密钥，并跳过之后的密码提示。全新安装时 Project UAI Free 即已配置，并在每日 20:00–12:00（UTC+8）开放。在这些时段内，打开「对话」发一条消息，或在「提供商」中添加你自己的连接：在画廊中选择提供商，或输入 Base URL，然后填写认证信息，并获取或输入确切的模型 ID。共享的免费容量与速度会有波动；现有的提供商选择保持不动。
 
-The introduction opens once when the interface is visible and ready, waiting
-while a dialog, text field or request is active. Its six short pages cover Chat,
-the workspace, providers, permissions and optional community support, with direct
-links to Chat and Providers. Close it any time; **Tutorial** in the profile menu
-reopens it. A dismissed Add provider form keeps your draft for this client session;
-**Start over** clears it.
+介绍会在界面可见且就绪时打开一次，若对话框、文本输入或请求正在进行则会等待。它的六个简短页面涵盖 Chat、工作区、提供商、权限和可选的社区支持，并带有直达 Chat 与 Providers 的链接。随时可以关闭；个人资料菜单中的 **新手指引** 会重新打开它。被关闭的 Add provider 表单会在本次客户端会话内保留你的草稿；**重新开始** 会清除它。
 
-New configurations default to **Allow everything**: reads, writes and execution
-run without approval unless a tool rule says otherwise. Existing saved access
-choices and rules are preserved. Read only, Ask first and Auto remain available;
-the chip under the composer names the active mode. Ask first shows a tool's
-arguments before changes or execution, including the code for `run_luau`.
+新配置默认使用 **全部允许**：读取、写入和执行都无需批准，除非某条工具规则另有规定。已保存的访问选择与规则保持不变。Read only、Ask first 与 Auto 依然可用；输入区下方的标签会显示当前生效的模式。Ask first 会在变更或执行前显示工具的参数，包括 `run_luau` 的代码。
 
-Settings are saved in `config.json`, conversations in `sessions/<id>.json`, and
-activity counters in `stats.json`. A password vault encrypts provider credentials;
-the explicit unprotected option saves them with reversible byte encoding.
-Older plaintext and byte-encoded configurations remain readable for migration.
-A conversation marked isolated from the composer is not saved to its conversation file.
+设置保存在 `config.json`，对话保存在 `sessions/<id>.json`，活动计数器保存在 `stats.json`。密码保险库会加密提供商凭据；显式选择不加密时，则以可逆字节编码保存。更早的明文与字节编码配置仍可读取以便迁移。从输入区标记为隔离的对话不会写入其对话文件。
 
-## Cowork: your browser workspace
+## Cowork：你的浏览器工作区
 
-Cowork gives your Roblox conversation more room in the browser. Keep Roblox and
-its local bridge running on the same computer. The [Windows desktop launcher](desktop/README.md)
-is a single [UAI-Bridge-3.7.0-win-x64.exe](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.7.0/UAI-Bridge-3.7.0-win-x64.exe)
-download. Open it directly,
-complete Node setup if needed using **Get Node.js** or an existing
-installation, click **Start Cowork**, and load the updated UAI script. It discovers the app on dedicated port
-**28791** and reconnects automatically after app restarts. The executable includes
-.NET, the bridge, browser assets and matching client, and prepares its embedded
-files automatically. Node.js is detected or installed separately; no ZIP extraction
-or adjacent supporting files are needed.
+Cowork 让你在浏览器中为 Roblox 对话提供更多空间。请让 Roblox 及其本地桥接在同一台电脑上运行。[Windows 桌面启动器](desktop/README.md) 是一个单独的 [UAI-Bridge-3.7.0-win-x64.exe](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.7.0/UAI-Bridge-3.7.0-win-x64.exe) 下载。直接打开它，如需配置 Node 可用 **Get Node.js** 或使用已有的安装，然后点击 **Start Cowork**，并加载更新后的 UAI 脚本。它会在专用端口 **28791** 上发现应用，并在应用重启后自动重连。该可执行文件包含 .NET、桥接、浏览器资源与匹配的客户端，并会自动准备其内嵌文件。Node.js 单独检测或安装；无需解压 ZIP，也不需要同目录的其他支持文件。
 
-For manual terminal setup, **Node.js 18+** is required; there are no production
-npm dependencies. An enabled manual bridge takes priority over desktop discovery.
+手动终端方式需要 **Node.js 18+**；没有生产环境的 npm 依赖。已启用的手动桥接优先于桌面端发现。
 
-1. In Roblox, open **UAI → Cowork → Download bridge files**. Open a terminal in
-   your executor workspace (the folder containing `UAI`) and run:
+1. 在 Roblox 中打开 **UAI → Cowork → 下载桥接文件**。在你的执行器工作区（包含 `UAI` 的文件夹）打开终端并运行：
 
    ```powershell
    node UAI/bridge/start.txt
    ```
 
-   From a Git checkout, run `node bridge/server.js` from the repository folder.
-2. Paste the terminal's **Token** into **UAI → Cowork**, match the printed
-   **Port**, and turn **Enabled** on.
-3. Open the terminal's browser link, choose a provider and model, and send a
-   message. Keep both Roblox and the terminal open.
+   从 Git 检出运行时，在仓库目录中运行 `node bridge/server.js`。
+2. 把终端显示的 **Token** 粘贴到 **UAI → Cowork**，匹配打印出的 **Port**，然后打开 **Enabled**。
+3. 打开终端给出的浏览器链接，选择一个提供商与模型，发送一条消息。保持 Roblox 和终端都处于打开状态。
 
-The installer saves `.txt` files so executors that block executable extensions
-can download them. Node verifies the package and restores its real filenames.
-No manual renaming is needed. A failed download preserves the previous launcher.
-After restarting the bridge, use its new token and browser link.
+安装程序以 `.txt` 保存文件，以便阻止可执行扩展名的执行器仍能下载。Node 会校验包并恢复其真实文件名。无需手动重命名。下载失败会保留上一个启动器。重启桥接后，使用其新的 token 和浏览器链接。
 
-Cowork selects **Web runtime** automatically on authenticated connection and
-restores **Game runtime** on disconnect. Bridged requests have no overall time
-limit or timeout setting; individual status polls remain short and recoverable.
-Stop cancels the original request without submitting it again.
+Cowork 会在认证连接后自动选择 **Web runtime**，断开时恢复 **Game runtime**。桥接请求没有整体时间限制或超时设置；单次状态轮询仍然短暂且可恢复。Stop 会取消原始请求而不会再次提交。
 
-Bridge releases download automatically from GitHub and apply when work is idle.
-The desktop app also downloads its own updates and applies them on restart.
-Both verify package hashes and keep a working fallback. Existing desktop 1.0
-users need one manual download of the current executable to gain the updater.
+桥接版本会从 GitHub 自动下载并在空闲时应用。桌面应用也会下载自己的更新并在重启时应用。两者都会校验包哈希并保留可用的回退版本。现有的桌面 1.0 用户需要手动下载一次当前可执行文件才能获得更新器。
 
-The browser includes conversations, provider/model controls, code attachments,
-permissions, tool forms, subagents, chat loops, memory, logs, exports and settings.
-Drafts are saved per conversation using asynchronous browser storage. System,
-light, dark, and Match Roblox themes work on desktop and small screens.
+浏览器端包含对话、提供商/模型控件、代码附件、权限、工具表单、子代理、聊天循环、记忆、日志、导出和设置。草稿按对话使用浏览器的异步存储保存。系统、浅色、深色和 Match Roblox 主题在桌面与小屏幕上均可用。
 
-PNG, JPEG and WebP pictures can be pasted, dropped, or attached for models that
-support **image input**. The bridge inserts the actual bytes into Chat Completions
-or Anthropic Messages image blocks, including when Game runtime is selected.
-Reload the updated client and restart the updated bridge for this capability.
-Image bytes remain in bridge memory and expire after 15 idle minutes or restart;
-reattach an expired image when needed. Text/code attachments remain readable files.
+对于支持 **图像输入** 的模型，可以粘贴、拖放或附加 PNG、JPEG 和 WebP 图片。桥接会把实际字节插入 Chat Completions 或 Anthropic Messages 的图像块，包括选择 Game runtime 时。要使用该能力，请重新加载更新后的客户端并重启更新后的桥接。图像字节保留在桥接内存中，并在空闲 15 分钟或重启后过期；需要时请重新附加已过期的图片。文本/代码附件仍为可读文件。
 
-Roblox remains in control of tools, permissions, memory, accounting, and saved
-conversation history. It must stay connected to advance a turn. Refreshing the
-browser reconnects to the conversation; use **Stop** to cancel work. Delivery
-receipts and streamed replies reconcile without creating duplicate messages.
+Roblox 仍然掌控工具、权限、记忆、核算与已保存的对话历史。它必须保持连接才能推进一轮。刷新浏览器会重新连接到该对话；使用 **Stop** 取消工作。投递回执与流式回复会对账，不会产生重复消息。
 
-The bridge binds to loopback, requires a token, checks browser origins, and loads
-local UI assets without a CDN. Full configuration exports include API keys;
-ordinary browser state does not. See the [bridge guide](bridge/README.md) for
-troubleshooting, limits, architecture, and organized Node/Lua/browser tests.
+桥接绑定到回环地址、需要 token、校验浏览器来源，并在没有 CDN 的情况下加载本地 UI 资源。完整配置导出包含 API 密钥；普通浏览器状态则不包含。关于故障排查、限制、架构以及有条理的 Node/Lua/浏览器测试，参见[桥接指南](bridge/README.md)。
 
-## Android companion
+## Android 伴生端
 
-Install [UAI Relay 3.7.0](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.7.0/UAI-Relay-3.7.0.apk)
-on Android 8 or later, start the relay, and load the current UAI script in your
-executor. With Relay mode set to Auto, the client discovers and pairs with the
-companion on the same phone. The relay holds the provider connection while the
-executor makes short result polls. Long requests can continue beyond five minutes
-with the default unlimited setting; provider limits and explicit deadlines still
-apply. Each active request must keep polling: two minutes without its owner's
-polls cancels abandoned work.
+在 Android 8 或更高版本上安装 [UAI Relay 3.7.0](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.7.0/UAI-Relay-3.7.0.apk)，启动中继，并在你的执行器中加载当前的 UAI 脚本。当 Relay 模式设为 Auto 时，客户端会发现并配合同一部手机上的伴生端。中继持有提供商连接，而执行器只做简短的结果轮询。使用默认的无限制设置时，长请求可以持续超过五分钟；提供商限制和显式截止时间仍然生效。每个活动请求必须持续轮询：两分钟内没有其所有者轮询的请求会被视为废弃并取消。
 
-The companion checks official releases at startup and every 15 minutes while its
-process is alive. Compatible updates download automatically and pass package,
-version, size, hash and signing-certificate checks. Choose **Install update** when
-the relay is idle, then approve Android's installation prompt. Manual checks and
-downloads remain available if automatic downloads are disabled. Read
-[companion updates](companion/UPDATES.md) for interrupted-install recovery and the
-one-time transition from an old debug-signed APK.
+伴生端会在启动时以及进程存活期间每 15 分钟检查一次官方发布。兼容的更新会自动下载，并通过包名、版本、大小、哈希与签名证书检查。在中继空闲时选择 **Install update**，然后确认 Android 的安装提示。若禁用自动下载，仍可手动检查与下载。关于安装中断后的恢复以及从旧的 debug 签名 APK 的一次性迁移，请阅读[伴生端更新](companion/UPDATES.md)。
 
-The relay does not provide a mobile executor. Its Android networking, background
-survival, installer and actual executor compatibility still require phone testing.
-OpenCode on mobile requires the **UAI Relay app from Discord**; install and start
-it, then connect it in UAI. **Project UAI Free** remains an alternative, or use
-another supported provider; [executor probes](companion/tools/README.md) can
-measure loopback and delayed-request behavior without provider credentials.
-See the [companion guide](companion/README.md) for setup and diagnostics.
+中继不提供移动端执行器。其 Android 网络、后台存活、安装器以及与实际执行器的兼容性仍需手机测试。移动端 OpenCode 需要**来自 Discord 的 UAI Relay 应用**；安装并启动它，然后在 UAI 中连接。**Project UAI Free** 仍是替代方案，或使用其他受支持的提供商；[执行器探测](companion/tools/README.md)可以在没有提供商凭证的情况下测量回环与延迟请求行为。关于设置与诊断，参见[伴生端指南](companion/README.md)。
 
-## Embedding
+## 嵌入
 
-Use UI LIB by itself for a script-owned interface, or load the full client and
-connect your controls to its sessions and tools. Read the comprehensive
-[embedding guide](docs/EMBEDDING.md) and
-[runnable workbench example](examples/embedding/README.md).
+可以单独使用 UI LIB 构建脚本自有的界面，也可以加载完整客户端并把自己的控件接到它的会话与工具上。请阅读详尽的[嵌入指南](docs/EMBEDDING.md) 与[可运行的工作台示例](examples/embedding/README.md)。
 
 ```lua
 local uai = loadstring(game:HttpGet(
@@ -937,158 +393,57 @@ assert(uai and uai.alive, "UAI did not start; inspect the console error")
 uai.show("providers")
 ```
 
-Register the named host tools through `uai.tools.register` before asking the
-agent to use them; prompt text alone does not install capabilities. The returned
-handle exposes `env`, `app`, `sessions`, `config`, `providers`, `tools`, `caps`,
-`bridge`, and `log`. Runtime methods use dots; UI LIB methods use colons.
+在要求代理使用这些具名的宿主工具之前，先通过 `uai.tools.register` 注册它们；仅靠提示词文本不会安装能力。返回的句柄暴露 `env`、`app`、`sessions`、`config`、`providers`、`tools`、`caps`、`bridge` 和 `log`。运行时方法用点调用；UI LIB 方法用冒号调用。
 
-The full client opens the storage choice when undecided and password entry when
-a vault is enabled. A saved unprotected-storage choice skips these prompts.
-With `context.ui = false`, the normal app stays hidden after access is granted;
-`show`, `toggle`, or `openSession` can show it later. UI LIB is independent and
-mounts nothing until `CreateWindow`.
-A same-build client loader rerun reuses the live instance and follows the saved
-protection choice. It requests showing the app after any required unlock unless
-`context.reuse = true`, and ignores new context; reuse a saved handle or
-`getgenv().UAI` when attaching another view. Changed builds replace the client only after active and
-unsaved work is protected. Pin all bundle/module URLs to one reviewed commit SHA
-for reproducible host releases.
+完整客户端在尚未选择存储时会打开存储选择，启用保险库时打开密码输入。已保存「不加密」选择会跳过这些提示。在设置 `context.ui = false` 时，授权之后正常应用保持隐藏；`show`、`toggle` 或 `openSession` 之后可以显示它。UI LIB 是独立的，在 `CreateWindow` 之前不挂载任何东西。同一构建的客户端加载器重复运行会复用活动实例，并遵循已保存的保护选择。除 `context.reuse = true` 外，它会在任何必要的解锁之后请求显示应用，并忽略新的上下文；在附加另一个视图时，请复用已保存的句柄或 `getgenv().UAI`。变更过的构建只会在活动且未保存的工作受到保护之后替换客户端。请把所有包/模块 URL 固定到同一个经过审核的提交 SHA，以获得可复现的宿主发布。
 
-## Notes on the constraints
+## 关于各项约束的说明
 
-No Roblox HTTP API can read a response body incrementally, so `stream: true` does
-not deliver tokens as they arrive -- the whole SSE body lands at once and is
-replayed through the parser. It is still requested, because the streamed shape is
-where providers put reasoning text and per-request usage. `net/ws.lua` does real
-token streaming for a gateway that implements UAI's `{path, headers, body}`
-envelope, when the executor exposes `WebSocket.connect`, `websocket.connect` or
-`syn.websocket.connect`. It opens one socket per completion. This is a custom
-gateway contract, distinct from OpenAI Responses/Realtime and ordinary local
-HTTP servers; replacing `http://` with `ws://` does not enable it. Leave the socket
-URL empty for normal provider connections. The gateway receives the provider's
-authentication headers. Connect/setup failures before sending can fall back to
-HTTP; once sending begins, an uncertain outcome cannot trigger a second request.
+任何 Roblox HTTP API 都无法增量读取响应体，因此 `stream: true` 不会在 token 到达时逐个交付 —— 整个 SSE 响应体一次性到达，再通过解析器重放。它仍然会被请求，因为流式结构是提供商放置推理文本和按请求用量的地方。`net/ws.lua` 会为实现了 UAI `{path, headers, body}` 信封的网关做真正的 token 流式传输，前提是执行器暴露了 `WebSocket.connect`、`websocket.connect` 或 `syn.websocket.connect`。它为每次补全打开一个套接字。这是自定义的网关契约，与 OpenAI Responses/Realtime 以及普通的本地 HTTP 服务器不同；把 `http://` 换成 `ws://` 不会启用它。普通的提供商连接请把套接字 URL 留空。网关会收到提供商的认证请求头。发送前的连接/设置失败可以回退到 HTTP；一旦开始发送，结果不明就无法触发第二个请求。
 
-See [Provider compatibility and WebSockets](docs/PROVIDER_COMPATIBILITY.md) for
-the protocol contract, local-server setup, provider matrix and offline coverage.
-Ollama, LM Studio, vLLM, llama.cpp and SGLang presets use their Chat Completions
-APIs. Authentication defaults to none for these local servers; select Bearer when
-server authentication is enabled. Tools require a capable model and server
-template/parser. Compatibility fixtures require no models, keys or paid inference.
+关于协议契约、本地服务器设置、提供商矩阵与离线覆盖，参见[提供商兼容性与 WebSockets](docs/PROVIDER_COMPATIBILITY.md)。Ollama、LM Studio、vLLM、llama.cpp 和 SGLang 预设使用它们的 Chat Completions API。这些本地服务器默认不认证；启用服务器认证时选择 Bearer。工具需要能力足够的模型以及服务器的模板/解析器。兼容性测试夹具不需要模型、密钥或付费推理。
 
-Actual socket frames update the transcript immediately, with coalesced live
-previews and one final message. Buffered replies render in full when received;
-there is no simulated typing delay. The assistant is instructed to give brief
-progress messages between work steps. No prompt can expose tokens still buffered
-by the host or force a provider to speak while it is reasoning internally.
+实际的套接字帧会立即更新记录，带有合并的实时预览和一条最终消息。缓冲的回复在收到时完整渲染；没有模拟的打字延迟。助手被要求在工作步骤之间给出简短的进展消息。没有任何提示词能暴露仍被宿主缓冲的 token，也无法强制提供商在其内部推理时开口。
 
-Some executors stop HTTP requests after roughly 30–60 seconds even when given a
-longer timeout. The old 8,192-token executor ceiling has been removed, including
-HTTP fallback. Requests use `agent.maxTokens` (128,000 by default), explicit
-overrides, documented model limits and limits learned from provider refusals.
-Old saved `agent.executorReplyCeiling` values are ignored.
-Native request deadlines and long unanswered
-transport failures are terminal: the client does not resend a smaller request or
-fall back to another provider after an unknown outcome. A dispatched socket
-failure cannot silently send a second HTTP request. Explicit token-limit refusals
-can still teach a smaller ceiling. Large prompts can still spend the request
-window uploading and prefilling; `agent.contextTokens` remains 1,000,000 by
-default and can be lowered when short replies also time out.
+某些执行器即使给了更长的超时，也会在约 30–60 秒后中断 HTTP 请求。旧的 8,192 token 执行器上限已被移除，包括 HTTP 回退的情况。请求使用 `agent.maxTokens`（默认 128,000）、显式覆盖、文档记录的模型限制以及从提供商拒绝中学习到的限制。旧的 `agent.executorReplyCeiling` 保存值会被忽略。
+原生请求截止时间和长时间无响应的传输失败是终结性的：在结果未知之后，客户端不会重发一个更小的请求，也不会回退到另一个提供商。已派发的套接字失败无法悄悄发出第二个 HTTP 请求。明确的 token 上限拒绝仍可教会一个更小的上限。大提示词仍然可能把请求窗口花在上传和预填充上；`agent.contextTokens` 默认仍为 1,000,000，当短回复也开始超时时可以调低。
 
-Automatic compaction writes a full handover -- goal, current state, decisions,
-exact paths and IDs, completed checks, open threads and what not to redo -- before
-a request would cross the budget. The budget adapts to the model: when its context
-window is known, compaction starts at **Compact at** (`agent.contextFraction`,
-80% by default) of that window, with `agent.contextTokens` as the hard ceiling.
-The folded messages are kept in a bounded conversation archive, and a short system
-line names it; `context_archive` lists, searches and pages exact earlier wording
-when the handover is not enough. Pressure includes estimated messages, the rolling
-handover, and the system prompt/tool schemas from the prepared request. Provider
-usage calibrates that overhead against the history actually sent; changing
-providers, endpoints or models does not reuse another measurement. The context
-breakdown shares this calculation, labels estimates, and shows partial totals
-until the first request is prepared.
-**Compact now**, in the composer's message-options menu, folds older turns on
-demand; the **Summarise old turns** switch turns the paid summary off while the
-conversation is still trimmed to fit. The composer shows a live context-window
-counter beside the model -- the share of that budget the next request is expected
-to spend -- so the pressure is visible before a compaction happens.
+自动压缩会在一次请求将要超出预算之前写出一份完整交接 —— 目标、当前状态、决策、精确路径与 ID、已完成的检查、未完结的线索以及不要重做的事。预算会随模型调整：当上下文窗口已知时，压缩从该窗口的 **压缩触发点** 点开始（`agent.contextFraction`，默认 80%），并以 `agent.contextTokens` 作为硬上限。被折叠的消息保存在一个有边界的对话归档中，并由一行简短的系统文本指明；当交接不足时，`context_archive` 可以列出、搜索并分页取出确切的早前措辞。压力估算包括估计的消息、滚动的交接内容，以及来自已准备请求的系统提示词/工具模式。提供商的用量统计会用实际发送的历史来校准这部分开销；更换提供商、端点或模型不会复用另一份测量。上下文明细共享这套计算，标注哪些是估算，并在首次请求准备完成之前显示部分合计。
+输入区消息选项菜单中的 **立即压缩** 会按需折叠较早的轮次；**Summarise old turns** 开关会关闭付费摘要，同时对话仍会被裁剪以适配窗口。输入区在模型旁显示实时的上下文窗口计数 —— 下一次请求预计会花掉该预算的多大比例 —— 因此压力在压缩发生之前就可见。
 
-`check_luau` checks syntax without executing code. Both it and `run_luau` accept
-either inline `code` or a saved file `path`. Use `check_luau` with
-`{"path":"scripts/build.lua"}` to validate a script you edited, then run it by
-the same path. Its source stays on the client instead of being generated and sent again. Saved-paste
-references resolve the same way as `file_read`.
+`check_luau` 检查语法而不执行代码。它和 `run_luau` 都接受内联的 `code` 或已保存的文件 `path`。用 `check_luau` 配合 `{"path":"scripts/build.lua"}` 验证你编辑过的脚本，然后用同一路径运行它。其源码留在客户端，而不必重新生成并再次发送。已保存粘贴内容的引用解析方式与 `file_read` 相同。
 
-`run_luau` captures print/warn, tables, and multiple return values, and inserts
-cooperative checkpoints in loop
-bodies without changing strings or comments. Its `timeout` argument accepts 1–60
-seconds and defaults to 10. It waits for functions started through its
-`task.spawn`, `task.defer`, and `task.delay` wrappers; errors, Stop, deadlines, and
-unload stop those managed tasks cooperatively. An endless spawned task therefore ends at the
-deadline rather than continuing silently after the tool returns.
+`run_luau` 会捕获 print/warn、表和多个返回值，并在循环体中插入协作式检查点，且不改变字符串或注释。它的 `timeout` 参数接受 1–60 秒，默认 10。它会等待通过其 `task.spawn`、`task.defer` 和 `task.delay` 包装器启动的函数；错误、Stop、截止时间和卸载会以协作方式停止这些受管任务。因此一个无限衍生的任务会在截止时间结束，而不是在工具返回后悄悄继续。
 
-This is not a security sandbox. Dynamically compiled code, blocking engine calls,
-and callbacks registered on engine signals can bypass these controls. Later work
-in a persistent engine callback is outside a successfully completed call. UAI leaves
-native coroutines alive so pending Roblox/executor callbacks cannot resume a thread
-it closed. Managed waits and delayed callbacks check cancellation flags, including
-after a successful parent returns; `task.cancel` accepts only this script's task
-handles. Work suspended outside managed waits can still resume before its next
-checkpoint, and the result reports that uncertainty. Changes already made are not
-rolled back.
+这不是安全沙箱。动态编译的代码、阻塞式引擎调用以及在引擎信号上注册的回调都可以绕过这些控制。持久化的引擎回调中后续的工作不在一次成功完成的调用范围之内。UAI 会让原生协程存活，以免挂起的 Roblox/执行器回调恢复一个它已关闭的线程。受管的等待与延迟回调会检查取消标志，包括在父调用成功返回之后；`task.cancel` 只接受本脚本的任务句柄。在受管等待之外挂起的工作仍可能在其下一个检查点之前恢复，结果会报告这种不确定性。已做出的更改不会回滚。
 
-`file_read` and `script_source` return contiguous slices and a continuation
-`offset` when more remains. Offsets count bytes and preserve UTF-8 boundaries.
-After reading a workspace file, use `file_edit` with exact `old_text` and `new_text`
-to change it. The default requires a unique match; `replace_all=true` replaces all
-non-overlapping matches. Empty replacement text deletes the match. The tool refuses
-a file that changed while the edit was being prepared.
-Prefer `file_edit` or `file_edit_many` for targeted changes to large files.
-`file_write` is for new files or replacing most of a file; it and `file_append`
-reject content over 2 MiB per call before writing.
-Build large new scripts in small sections, waiting for each write before the next
-append or edit to that file. Each section must be a complete tool call. Interrupted
-write arguments are rejected instead of repairing them into a partial edit. If a
-provider reports that its tool batch hit the token limit, none of those calls run;
-the model receives results asking it to retry with smaller, complete calls.
+`file_read` 和 `script_source` 返回连续切片，并在还有剩余时给出续读 `offset`。偏移以字节计并保持 UTF-8 边界完整。读取工作区文件后，用 `file_edit` 配合精确的 `old_text` 和 `new_text` 修改它。默认要求唯一匹配；`replace_all=true` 会替换所有不重叠的匹配。替换文本为空则删除该匹配。若文件在编辑准备期间发生变化，工具会拒绝该文件。
+对大文件做针对性修改时，优先使用 `file_edit` 或 `file_edit_many`。
+`file_write` 用于新文件或替换文件的大部分内容；它与 `file_append` 都会在写入前拒绝单次超过 2 MiB 的内容。
+请把大型新脚本分成小段构建，并等待每次写入完成，再对同一文件执行下一次追加或编辑。每一段都必须是一次完整的工具调用。被中断的写入参数会被拒绝，而不是被修复成一次部分编辑。如果提供商报告其工具批次触及 token 上限，这些调用一个都不会执行；模型会收到要求它用更小、更完整的调用重试的结果。
 
-See [CHANGELOG.md](CHANGELOG.md) or **App menu → What's new** (also under **About**)
-for the latest release notes. The in-game notes are bundled with the client;
-reload the updated bundle to see them. Updated notes restore the unread marker
-even when the client version stays the same.
+关于最新发布说明，参见 [CHANGELOG.md](CHANGELOG.md) 或 **应用菜单 → 更新内容**（也在 **About** 下）。游戏内的说明随客户端打包；重新加载更新后的包才能看到。即使客户端版本保持不变，更新过的说明也会恢复未读标记。
 
-## Skills
+## 技能（Skills）
 
-Main and subagents read skills relevant to the task or explicitly requested by the
-user before applying them. Unchanged bodies still in context are reused; unrelated
-skills need no reads. The enabled inventory is bounded to 3 KiB and discloses omitted
-entries. Use `skills_list` for the full inventory and `skills_read` for bodies;
-both paginate within the tool result budget. Restricted subagents retain read-only
-skill access. Disabled skills are skipped; denied or unavailable reads are reported
-once. Needed bodies are reread when changed or removed by compaction.
+主代理与子代理会在应用之前，读取与任务相关或用户明确要求读取的技能。仍在上下文中且未改动的正文会被复用；无关的技能无需读取。已启用的清单限制在 3 KiB 内，并会说明被省略的条目。用 `skills_list` 获取完整清单，用 `skills_read` 获取正文；两者都在工具结果预算内分页。受限的子代理保留只读的技能访问权限。已禁用的技能会被跳过；被拒绝或不可用的读取只报告一次。被压缩移除或发生变化的正文在需要时会重新读取。
 
-## Unloading
+## 卸载
 
-The interface can be removed and everything it started stopped:
+界面可以被移除，它启动的一切也会被停止：
 
 ```lua
 getgenv().UAI.destroy()
 ```
 
-or from Settings, at the bottom: **Unload UAI**. Destroying the ScreenGui on its
-own is not enough -- timers keep ticking, input handlers stay bound to
-`UserInputService`, and a later config write would rebuild a window that is no
-longer on screen -- so anything outliving the instance tree registers a cleanup in
-`runtime/dispose` and the unload drains it. A turn in flight is aborted first and
-settings are flushed before the tree goes.
+或在设置最底部的 **Unload UAI**。仅仅销毁 ScreenGui 是不够的 —— 计时器仍在走动，输入处理器仍绑定在 `UserInputService` 上，而之后一次配置写入会重建一个已不在屏幕上的窗口 —— 因此任何比实例树存活更久的东西都会在 `runtime/dispose` 中注册清理，卸载时会将其排空。进行中的一轮会先被中止，设置会在实例树消失前刷写。
 
-## Community
+## 社区
 
-[Join our Discord](https://discord.gg/9xYyyYuKap).
+[加入我们的 Discord](https://discord.gg/9xYyyYuKap)。
 
-## License
+## 许可证
 
-MIT. Do whatever you like with it, including commercially and in closed source --
-the only condition is that the copyright notice and permission notice travel with
-any substantial portion of it. See [LICENSE](LICENSE).
+MIT。你可以随意使用，包括商业用途和闭源使用 —— 唯一条件是版权声明与许可声明需随其实质性部分一同分发。参见 [LICENSE](LICENSE)。
+
+
