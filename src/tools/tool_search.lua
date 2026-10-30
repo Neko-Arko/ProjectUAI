@@ -7,13 +7,14 @@ return function(env)
 	local registry = env.require("agent/registry")
 	local util = env.require("runtime/util")
 	local H = env.require("tools/helpers")
+	local search = env.require("runtime/search")
 
 	local function scope(ctx)
 		local owner = ctx and ctx.session or {}
-		local definitions = registry.definitions({ only = owner.toolFilter, groups = owner.toolGroups, exclude = owner.toolExclude })
+		local definitions = registry.available({ only = owner.toolFilter, groups = owner.toolGroups, exclude = owner.toolExclude })
 		local byName, order = {}, {}
 		for _, definition in ipairs(definitions) do
-			local fn = definition["function"] or definition
+			local fn = definition
 			if fn.name and not byName[fn.name] then
 				byName[fn.name] = registry.get(fn.name)
 				order[#order + 1] = fn.name
@@ -31,12 +32,12 @@ return function(env)
 				type = "object",
 				properties = {
 					action = { type = "string", enum = { "list", "describe", "call" } },
-					query = { type = "string", description = "Case-insensitive name or description filter for list." },
+					query = { type = "string", maxLength = 256, description = "Words matched across tool name, description and group; exact names rank first." },
 					group = { type = "string", description = "Exact tool group for list." },
 					name = { type = "string", description = "Exact tool name for describe or call." },
 					arguments = { type = "object", description = "The target tool's exact arguments for call." },
 					offset = { type = "integer", minimum = 1, description = "1-based result or schema byte offset." },
-					limit = { type = "integer", minimum = 1, maximum = 100, description = "Rows or schema bytes; default 20 rows or 6000 bytes." },
+					limit = { type = "integer", minimum = 1, maximum = 20000, description = "List rows (max 100) or schema bytes (max 20000, within the result budget); default 20 rows or 6000 bytes." },
 				},
 				required = { "action" },
 			},
@@ -45,15 +46,20 @@ return function(env)
 				if args.action == "list" then
 					local query = util.trim(tostring(args.query or "")):lower()
 					local group = util.trim(tostring(args.group or ""))
+					local match = search.compile(query)
 					local rows = {}
 					for _, name in ipairs(order) do
 						local tool = byName[name]
-						if tool and (group == "" or tool.group == group)
-							and (query == "" or name:lower():find(query, 1, true) or tostring(tool.description or ""):lower():find(query, 1, true)) then
-							rows[#rows + 1] = { name = name, group = tool.group, risk = tool.risk,
+						local score = tool and match(name, tool.description, tool.group)
+						if score and (group == "" or tool.group == group) then
+							rows[#rows + 1] = { name = name, group = tool.group, risk = tool.risk, score = score,
 								description = util.ellipsis(tostring(tool.description or ""), 160) }
 						end
 					end
+					if query ~= "" then table.sort(rows, function(a, b)
+						if a.score ~= b.score then return a.score > b.score end
+						return a.name < b.name
+					end) end
 					local page = H.page(rows, { offset = args.offset, limit = args.limit }, "Toolbox",
 						function(row) return string.format("%s [%s/%s] %s", row.name, tostring(row.group), tostring(row.risk), row.description) end, 20, 100)
 					page.data.tools = page.data.count
@@ -64,7 +70,7 @@ return function(env)
 					local tool = byName[name]
 					if not tool then return H.fail("No tool named '" .. name .. "' is available in this conversation.") end
 					local schema = util.encode({ name = tool.name, group = tool.group, risk = tool.risk,
-						description = tool.description, parameters = tool.parameters })
+						description = tool.description, parameters = registry.definition(tool)["function"].parameters })
 					local page = H.readSlice("Tool schema " .. name, schema, { offset = args.offset, limit = args.limit }, 6000)
 					page.data.tool = { name = tool.name, group = tool.group, risk = tool.risk, bytes = #schema }
 					return page

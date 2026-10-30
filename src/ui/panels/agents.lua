@@ -82,7 +82,7 @@ return function(env)
 
 		P.sectionHeader(scroll.instance, {
 			title = "Subagents",
-			description = "The agent hands self-contained work to a subagent with dispatch_agent: its own context, a subset of the tools, and a written report at the end. Open an agent to watch its current step, tool progress, latest messages and report.",
+			description = "Follow delegated work in one place. Open Details for live progress, messages, reports and follow-ups.",
 			layoutOrder = 1,
 		})
 
@@ -338,10 +338,10 @@ return function(env)
 				local slot = P.frame(head, { name = "DotSlot", size = UDim2.fromOffset(theme.size.icon, theme.size.icon), layoutOrder = 1 })
 				local dot = P.statusDot(slot, { diameter = theme.size.dot, color = theme.color.accent,
 					anchor = Vector2.new(0.5, 0.5), position = UDim2.fromScale(0.5, 0.5) })
-				P.text(head, { name = "Label", text = record.label, role = "small", color = theme.color.text,
-					truncate = true, size = UDim2.new(0, 0, 0, theme.text.small.height), flex = "Fill", layoutOrder = 2 })
+				P.text(head, { name = "Label", text = record.label, role = "bodyStrong", color = theme.color.text,
+					wrap = true, auto = "Y", size = UDim2.new(0, 0, 0, 0), flex = "Fill", layoutOrder = 2 })
 				local elapsed = P.text(head, { name = "Elapsed", text = "", role = "caption", color = theme.color.textTertiary,
-					align = "Right", size = UDim2.fromOffset(theme.size.metaColumn, theme.text.small.height), layoutOrder = 3 })
+					align = "Right", auto = "X", layoutOrder = 3 })
 				local facts = P.text(card, { name = "Facts", text = "", role = "caption", color = theme.color.textTertiary,
 					wrap = true, auto = "Y", layoutOrder = 2 })
 				local note = P.text(card, { name = "Note", text = "", role = "small", color = theme.color.textSecondary,
@@ -427,7 +427,7 @@ return function(env)
 			if #records == 0 and not emptyState then
 				emptyState = C.emptyState(list, {
 					title = "No subagents yet",
-					description = "When the agent delegates -- a wide search, a sweep of the instance tree, anything repetitive -- the dispatch shows up here while it works and stays afterwards with its report.",
+					description = "Delegated tasks appear here while they run. Their reports stay available when the work is finished.",
 					layoutOrder = 1,
 				})
 			elseif #records > 0 and emptyState then
@@ -458,7 +458,7 @@ return function(env)
 		})
 		P.button(limits, {
 			name = "OpenAgentSettings",
-			text = "Change these",
+			text = "Agent settings",
 			variant = "secondary",
 			size = "sm",
 			layoutOrder = 3,

@@ -57,7 +57,7 @@ case("native editing keeps its caret, raw selection and per-file position", func
 	box.Text = "local alpha = 1\nprint(alpha)"; f.h.sched.advance(0.1)
 	box.CursorPosition = 1; assert(editor.find("alpha"))
 	check("Find selects exact source bytes", box.Text:sub(box.SelectionStart, box.CursorPosition - 1) == "alpha")
-	check("native selection uses the same visible text layer as hit testing", box.TextTransparency == 0 and not f.h.byName("SyntaxLine", editor.root).Visible and not f.h.byName("SourceCaret", editor.root).Visible)
+	check("native selection retains readable syntax and a visible range", box.TextTransparency == 1 and f.h.byName("SyntaxLine", editor.root).Visible and f.h.byName("SourceSelection", editor.root).Visible and not f.h.byName("SourceCaret", editor.root).Visible)
 	local cursor, selection = box.CursorPosition, box.SelectionStart
 	local other = assert(store.create("Other.lua", "return false", { select = true }))
 	assert(store.select(doc.id))
@@ -90,17 +90,17 @@ case("native line metrics and drag selection do not shift the editor canvas", fu
 	box.InputBegan:Fire({ UserInputType = f.h.sandbox.Enum.UserInputType.MouseButton1 })
 	box.SelectionStart, box.CursorPosition = box.CursorPosition, #box.Text + 1
 	check("holding selection does not let caret-follow move the canvas", editor.scroll.CanvasPosition.X == before.X and editor.scroll.CanvasPosition.Y == before.Y)
-	check("dragging shows native source and hides duplicate selection layers", box.TextTransparency == 0 and not caret.Visible and not f.h.byName("SyntaxLine", editor.root).Visible)
+	check("dragging keeps the bounded source layer and hides the collapsed caret", box.TextTransparency == 1 and not caret.Visible and f.h.byName("SyntaxLine", editor.root).Visible)
 	f.h.services.UserInputService.InputEnded:Fire({ UserInputType = f.h.sandbox.Enum.UserInputType.MouseButton1 })
-	check("selected range stays native after release", box.TextTransparency == 0)
+	check("selected range keeps its native endpoints after release", box.TextTransparency == 1 and box.SelectionStart > 0 and box.SelectionStart ~= box.CursorPosition)
 	box.SelectionStart = -1
 	check("collapsing selection restores syntax", box.TextTransparency == 1 and f.h.byName("SyntaxLine", editor.root).Visible)
 	local touch = { UserInputType = f.h.sandbox.Enum.UserInputType.Touch }
 	box.InputBegan:Fire(touch)
 	f.h.services.UserInputService.InputEnded:Fire({ UserInputType = touch.UserInputType })
-	check("another finger ending cannot release the active selection gesture", box.TextTransparency == 0)
+	check("another finger ending cannot release the active selection gesture", box.TextTransparency == 1 and not caret.Visible)
 	f.h.services.UserInputService.WindowFocusReleased:Fire()
-	check("window focus loss releases a missed pointer-up", box.TextTransparency == 1)
+	check("window focus loss releases a missed pointer-up", box.TextTransparency == 1 and caret.Visible)
 	box.InputBegan:Fire(touch); editor.setVisible(false); editor.setVisible(true)
 	check("hiding the editor clears a pending drag", box.TextTransparency == 1)
 	f.healthy(); editor.destroy(); f.close()
@@ -217,7 +217,7 @@ case("latest filters find quiet remotes and results preserve an edited replay dr
 	check("a live outcome updates without replacing replay edits", capture.view.record.outcome == "returned" and capture.view.argumentDraft == draft and draft.slots[1].value == "edited")
 	tab(f.h, f.h.byName("RemoteDetailTabs", view.root), "Code")
 	local preview = f.h.byName("PreviewText", view.root):FindFirstChildWhichIsA("TextBox")
-	check("generated code uses a selectable native preview", preview ~= nil and not preview.TextEditable and preview.TextTransparency == 0)
+	check("generated code uses a selectable native preview with bounded syntax", preview ~= nil and not preview.TextEditable and preview.TextTransparency == 1 and f.h.byName("SyntaxPreviewLine", preview).Visible)
 	f.healthy(); view.destroy(); f.close()
 end)
 

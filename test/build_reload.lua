@@ -32,7 +32,29 @@ for _, entry in ipairs(manifest.modules) do
 	previousId = entry.id
 end
 check("module manifest uses canonical order", previousId ~= "")
-local function boot(harness, id, hostContext)
+local PASSWORD = "reload fixture master password"
+local function cheapDerive(client)
+	local crypto = client.env.require("runtime/credential_crypto")
+	local sha = client.env.require("runtime/credential_sha256")
+	crypto.derive = function(password, salt, _, progress)
+		if progress and progress(0, 2) == false then return nil, crypto.error end
+		local key = sha.digest(password .. "\0" .. salt) .. sha.digest(salt .. "\0" .. password)
+		if progress and progress(2, 2) == false then return nil, crypto.error end
+		return key
+	end
+end
+local function authenticate(harness, handle)
+	cheapDerive(handle)
+	local status = handle.config.vaultStatus()
+	if status.ready then return end
+	local result
+	harness.sched.spawn(function()
+		result = { (status.enabled and handle.config.unlockVault or handle.config.enableVault)(PASSWORD) }
+	end)
+	harness.settle(1)
+	assert(result and result[1], result and result[2] or "reload fixture password operation did not complete")
+end
+local function boot(harness, id, hostContext, leaveGated)
 	local body = source
 	if id then body = body:gsub('local __UAI_BUILD = "[^"]+"', 'local __UAI_BUILD = "' .. id .. '"', 1) end
 	local chunk, errors = luau.load(body, "reload-test", { entry = true })
@@ -40,6 +62,9 @@ local function boot(harness, id, hostContext)
 	setfenv(chunk, harness.sandbox)
 	local handle = assert(chunk(hostContext))
 	harness.settle(1)
+	-- General reload checks run after real envelope authentication with a cheap
+	-- fixture KDF. Dedicated cases below leave the shipping startup gate intact.
+	if not leaveGated and handle.alive and not handle.reloadBlocked then authenticate(harness, handle) end
 	return handle
 end
 local function screenCount(harness)
@@ -156,6 +181,141 @@ local legacy = boot(legacyHarness)
 legacy.build = nil
 local replacedLegacy = boot(legacyHarness)
 check("legacy handle without build metadata is replaced", replacedLegacy ~= legacy and replacedLegacy.build == identity and not legacy.alive)
+
+-- Encrypted credentials must survive loader replacement and authenticated restart.
+-- The sentinels below are synthetic and are never sent to an upstream service.
+local credentialHarness = envMock.new()
+local credentialContext = { ui = false, reuse = true }
+local credentialClient = boot(credentialHarness, nil, credentialContext)
+check("new client requires encrypted remembered credentials", credentialClient.config.get("security.rememberCredentials") == true
+	and credentialClient.config.vaultStatus().ready and credentialClient.config.vaultStatus().enabled)
+check("required encryption cannot switch to session-only storage", credentialClient.config.setRememberCredentials(false) == false)
+local privateRecord = credentialClient.providers.blank("custom")
+privateRecord.id, privateRecord.label = "reload-private-fixture", "Reload credential fixture"
+privateRecord.baseUrl = "https://reload.fixture/v1?access_token=reload-url-private"
+privateRecord.wsUrl = "wss://reload.fixture/socket?session=reload-socket-private"
+privateRecord.apiKey = "reload-key-one\nreload-key-two"
+privateRecord.keyNames = { "Reload first key", "Reload second key" }
+privateRecord.keyIds = { "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222" }
+privateRecord.keyPaused, privateRecord.keyMode, privateRecord.selectedKey = { true, false }, "single", 2
+privateRecord.model, privateRecord.models = "fixture-model", { "fixture-model" }
+privateRecord.headers = { Authorization = "Bearer reload-header-key", ["X-Fixture-Auth"] = "reload-header-private" }
+privateRecord.query = { token = "reload-query-private", routing = "reload-query-route" }
+privateRecord.params = { access_token = "reload-body-private", temperature = 0.2 }
+assert(credentialClient.providers.save(privateRecord))
+credentialClient.providers.setActive(privateRecord.id)
+credentialClient.config.set("identity.extraHeaders", { ["X-Fixture-Identity"] = "reload-identity-private" })
+assert(credentialClient.config.saveNow())
+local function credentialData(client)
+	local record = assert(client.providers.get(privateRecord.id))
+	return { apiKey = record.apiKey, keyNames = record.keyNames, keyIds = record.keyIds,
+		keyPaused = record.keyPaused, keyMode = record.keyMode, selectedKey = record.selectedKey,
+		headers = record.headers, query = record.query, params = record.params,
+		baseUrl = record.baseUrl, wsUrl = record.wsUrl, authStyle = record.authStyle,
+		identity = client.config.get("identity.extraHeaders") }
+end
+local function sameCredentialData(left, right)
+	if type(left) ~= type(right) then return false end
+	if type(left) ~= "table" then return left == right end
+	for key, value in pairs(left) do if not sameCredentialData(value, right[key]) then return false end end
+	for key in pairs(right) do if left[key] == nil then return false end end
+	return true
+end
+local expectedCredentials = credentialClient.env.require("runtime/util").deepCopy(credentialData(credentialClient))
+-- Unloading an encrypted client deliberately clears its live provider objects.
+-- Keep an independent fixture template for the separate vault-lifecycle case.
+local privateTemplate = credentialClient.env.require("runtime/util").deepCopy(privateRecord)
+local privateValues = { "reload-key-one", "reload-key-two", "reload-header-key", "reload-header-private",
+	"reload-query-private", "reload-query-route", "reload-body-private", "reload-url-private",
+	"reload-socket-private", "reload-identity-private", "Reload first key", "Reload second key",
+	"11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222" }
+local function diskOmitsCredentials()
+	local disk = credentialHarness.files["UAI/config.json"]
+	if type(disk) ~= "string" then return false end
+	for _, value in ipairs(privateValues) do if disk:find(value, 1, true) then return false end end
+	return true
+end
+check("encrypted save excludes every private connection sentinel from disk", diskOmitsCredentials())
+local sameCredentials = boot(credentialHarness, nil, credentialContext)
+check("same-build reuse preserves the exact key pool and connection metadata", sameCredentials == credentialClient
+	and sameCredentialData(credentialData(sameCredentials), expectedCredentials) and diskOmitsCredentials())
+local credentialSave = credentialClient.config.saveNow
+credentialClient.config.saveNow = function() return false end
+local failedCredentials = boot(credentialHarness, identity .. "-credential-save-failed", credentialContext)
+check("failed credential replacement keeps the live instance and all session credentials", failedCredentials == credentialClient
+	and credentialClient.alive and sameCredentialData(credentialData(credentialClient), expectedCredentials) and diskOmitsCredentials())
+credentialClient.config.saveNow = credentialSave
+local credentialBuild = identity .. "-credential-handoff"
+local handedOff = boot(credentialHarness, credentialBuild, credentialContext)
+check("changed-build handoff preserves exact key pool, metadata and custom credentials", handedOff ~= credentialClient
+	and handedOff.alive and not credentialClient.alive and sameCredentialData(credentialData(handedOff), expectedCredentials))
+check("changed-build handoff never writes plaintext credentials to disk", diskOmitsCredentials())
+handedOff.destroy()
+check("genuine unload removes the live client owner while retaining ciphertext", not handedOff.alive
+	and credentialHarness.sandbox.UAI == nil and diskOmitsCredentials())
+local freshCredentials = boot(credentialHarness, credentialBuild, credentialContext, true)
+local freshRecord = assert(freshCredentials.providers.get(privateRecord.id))
+check("a genuine new boot requires a password before exposing credentials", freshCredentials ~= handedOff
+	and freshRecord.apiKey == "" and freshCredentials.config.vaultStatus().locked
+	and type(freshCredentials.providers.protocolProblem(freshRecord)) == "string")
+authenticate(credentialHarness, freshCredentials)
+check("genuine restart restores all encrypted connection fields after authentication", sameCredentialData(credentialData(freshCredentials), expectedCredentials)
+	and diskOmitsCredentials())
+check("credential replacement scenarios have no asynchronous errors", #credentialHarness.errors() == 0)
+freshCredentials.destroy()
+
+-- Private key handoff never grants access to a newly executed build. UI-disabled
+-- embedding still mounts the mandatory prompt and authenticates each execution.
+local vaultHarness = envMock.new()
+local vaultClient = boot(vaultHarness, nil, credentialContext, true)
+local vaultPassword = PASSWORD
+local function vaultCall(method, ...)
+	local args, result = { ... }, nil
+	vaultHarness.sched.spawn(function() result = { method(unpack(args)) } end)
+	vaultHarness.sched.advance(1)
+	assert(result, "vault reload fixture operation did not complete")
+	return unpack(result)
+end
+cheapDerive(vaultClient)
+assert(vaultCall(vaultClient.config.enableVault, vaultPassword))
+local vaultRecord = vaultClient.env.require("runtime/util").deepCopy(privateTemplate)
+assert(vaultClient.providers.save(vaultRecord))
+vaultClient.providers.setActive(vaultRecord.id)
+vaultClient.config.set("identity.extraHeaders", { ["X-Fixture-Identity"] = "reload-identity-private" })
+assert(vaultClient.config.saveNow())
+local vaultExpected = vaultClient.env.require("runtime/util").deepCopy(credentialData(vaultClient))
+local vaultUpdated = boot(vaultHarness, identity .. "-vault-handoff", credentialContext, true)
+check("changed-build replacement retains vault data but requires authentication", vaultUpdated ~= vaultClient and not vaultClient.alive
+	and vaultUpdated.config.vaultStatus().enabled and not vaultUpdated.config.vaultStatus().ready)
+authenticate(vaultHarness, vaultUpdated)
+check("vault handoff retains exact key pool and authentication fields", sameCredentialData(credentialData(vaultUpdated), vaultExpected))
+local vaultDisk = vaultHarness.files["UAI/config.json"]
+local vaultSaved = vaultHarness.json.decode(vaultDisk)
+check("vault handoff persists ciphertext without its password or session key", type(vaultSaved.credentialVault) == "table"
+	and vaultSaved.credentialVault.key == nil and not vaultDisk:find(vaultPassword, 1, true)
+	and not vaultDisk:find("reload-key-one", 1, true) and not vaultDisk:find("reload-identity-private", 1, true))
+vaultUpdated.destroy()
+local vaultCold = boot(vaultHarness, identity .. "-vault-handoff", credentialContext, true)
+check("genuine vault restart stays locked and mounts required password UI", vaultCold.config.vaultStatus().locked
+	and vaultCold.providers.get(privateRecord.id).apiKey == "" and vaultCold.uiMounted
+	and vaultCold.env.loadedModules["ui/credentialvault"] ~= nil)
+cheapDerive(vaultCold)
+assert(vaultCall(vaultCold.config.unlockVault, vaultPassword))
+check("explicit unlock after a genuine restart restores exact credentials", sameCredentialData(credentialData(vaultCold), vaultExpected))
+check("vault replacement and cold unlock have no asynchronous errors", #vaultHarness.errors() == 0)
+local unsavedVault = vaultCold.providers.get(privateRecord.id)
+unsavedVault.headers["X-Fixture-Auth"] = "reload-header-before-unload"
+unsavedVault.keyNames[2] = "Renamed before unload"
+vaultCold.config.save()
+vaultCold.destroy()
+local finalVaultBoot = boot(vaultHarness, identity .. "-vault-handoff", credentialContext, true)
+cheapDerive(finalVaultBoot)
+assert(vaultCall(finalVaultBoot.config.unlockVault, vaultPassword))
+local finalVaultRecord = finalVaultBoot.providers.get(privateRecord.id)
+check("unload before the debounce preserves the newest encrypted credential edits", finalVaultRecord.headers["X-Fixture-Auth"] == "reload-header-before-unload"
+	and finalVaultRecord.keyNames[2] == "Renamed before unload" and finalVaultRecord.apiKey == vaultExpected.apiKey)
+check("final unload save never exposes unsaved credentials in plaintext", not vaultHarness.files["UAI/config.json"]:find("reload-header-before-unload", 1, true))
+finalVaultBoot.destroy()
 
 local volatileHarness = envMock.new()
 local volatile = boot(volatileHarness)

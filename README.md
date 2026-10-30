@@ -3,18 +3,72 @@
 # Project UAI
 
 A universal AI agent that runs inside a Roblox client. It works in any game,
-with Chat Completions and Anthropic Messages endpoints, including compatible
-local servers and relays.
+with Chat Completions, OpenAI Responses and Anthropic Messages endpoints,
+including compatible local servers and relays.
 
-**Project UAI 3.6.6 — October 23, 2026: a provider gallery and a clearer queue.**
-Adding a provider opens a searchable gallery with Recommended, Paid and Local
-tiers. Each card describes the route and what access costs, hybrid services are
-labelled by their free half, and choosing a card seeds the editor with its URL,
-protocol and auth style. The catalog grows to 66 presets, led by Project UAI Free,
-AgentRouter, OpenCode Zen, OpenRouter and OpenCode Go. Queued follow-ups open as
-**Up next** with numbered cards and per-message controls, and Settings opens from
-one sidebar row. The client is 3.6.6; the bridge remains `bridge-v3.6.6`, and the
-Windows and Android downloads remain 3.6.5 until their own builds.
+**Project UAI 3.7.2 - October 29, 2026: password vault and scheduled free access.**
+Startup offers password protection and a red **Continue without encryption**
+option. Existing keys and their pool metadata carry over after the chosen save is
+verified. Without encryption, keys are saved using reversible byte encoding and
+future password prompts are skipped. With a vault, each execution requires its
+password. New vaults use 100,000 derivation iterations; existing 600,000-iteration
+vaults stay unchanged until an explicit password change. Normal configuration
+copies exclude credentials; private copies retain the chosen protection.
+See [API key security, migration and rotation](docs/API_KEY_SECURITY.md).
+
+**Project UAI Free is available daily from 8 PM to 6 AM, GMT+8 / Beijing / Singapore.**
+The closing time is the following morning. Capacity and upstream limits still apply.
+The Roblox client is 3.7.2; bridge, web UI and Android remain 3.7.1, and Windows
+desktop remains 3.7.0. **Manage API keys** opens a dedicated modal with named,
+masked entries. Add, rename, replace or remove a key without losing the others.
+**Rotate keys** is the default; choose **Use one key** to pin requests to a
+specific entry. Existing key pools are preserved. The setup guide opens expanded
+by default.
+
+The former **Claude Code** Settings tab is now named **Project UAI**.
+
+Pause individual keys while keeping them saved, and see their locally recorded
+requests and input/output tokens. Each conversation also shows its AI request
+count, including retries, tool follow-ups, summaries and subagents.
+
+Log details and context breakdown fit their contents, and shared modals have
+consistent inner padding. The Discord invitation, tutorial and donation dialogs
+are cleaner, settings group related controls, and Code keeps long selections
+visible with improved tabs, captions and comparison contrast.
+
+The bridge and Android patch extends Kilo quota recovery to every free-model
+spelling (`:free`, `/free`, `-free`). Anonymous Kilo free requests start directly;
+an explicit address-quota refusal can start a private Tor connection and one
+bounded circuit retry. The connection is enabled by default, starts only when needed, and has
+status and off switches in the apps. Shared exits still have quotas: this is
+recovery from one address allowance, not guaranteed unlimited access.
+See [Kilo setup, evidence and limitations](docs/KILO_TUNNEL.md).
+
+The bridge's **Tunnels** tab groups OpenCode, Kilo and Cline. Install and sign in
+to Cline to use its current free CLI models from the
+**Cline (Bridge)** provider in Roblox or Cowork. The bridge handles CLI work;
+Roblox retains tools, approvals and Stop. See [Cline setup](docs/CLINE_TUNNEL.md).
+The Windows app checks whether OpenCode and Cline are installed before Cowork
+starts, with a separate refresh after installation. Sign-in and model readiness
+remain separate from installation status.
+
+AgentRouter GPT models now use native Responses with the selected reasoning
+effort and UAI tools. A complete `gpt-6.1-sol` tool round trip was verified;
+account quotas and availability still apply. See [AgentRouter setup](docs/AGENTROUTER.md).
+Seven additional services join the gallery with explicit access labels and
+[individual setup guides](docs/providers/README.md).
+
+The Roblox model picker includes a searchable saved-provider switcher, model
+names and metadata on separate lines, and current connection status. The model
+list scrolls while search, provider selection and footer controls stay fixed.
+Compact layouts preserve focused fields and keep reasoning options and custom
+models reachable. Closing or switching providers cancels an outdated model refresh.
+
+Tools and Logs now support multiword searches. Tool details are built when
+opened, keeping the full catalog lighter to browse. Usage history preserves
+unknown-cost counts and cache writes, and invalid provider counters cannot
+corrupt totals. See [tool discovery](docs/TOOL_DISCOVERY.md),
+[diagnostics](docs/DIAGNOSTICS.md) and [usage accounting](docs/USAGE_ACCOUNTING.md).
 
 The apps retain verified automatic downloads and updates.
 The public page has a responsive white monochrome design with an interactive 3D
@@ -26,8 +80,9 @@ and checking the connection simpler, and accepts compressed message submissions
 that previously failed JSON decoding after pairing. Both apps retain verified
 automatic updates, and Android installation still requires confirmation.
 
-Start chatting with **Project UAI Free** without supplying an API key. It is the
-default when no provider is configured. Its adaptive router measures small tool
+During its daily **20:00–12:00 UTC+8** window, use **Project UAI Free** without
+supplying an API key. It is the default when no provider is configured.
+Its adaptive router measures small tool
 requests and prefers verified fast HCNSEC models when compatible; otherwise it
 keeps the provider's `auto` route. Free models have rounded green outlines.
 Thank you for continuing to use and support Project UAI. Capacity and response
@@ -48,11 +103,11 @@ workspace. Go keeps its own catalog and routes; the optional free CLI backend
 does not intercept it. Subscription and workspace region refusals identify the
 setting to check. See [provider setup](docs/PROVIDER_COMPATIBILITY.md).
 
-The client is 3.6.6, the bridge is `bridge-v3.6.6`, and the Windows desktop and
-Android companion remain 3.6.5.
-UI LIB remains 1.3.0 and SDK 1.0.0.
-Model pricing and context/reply limits use a refreshed provider-specific catalog;
-included Project UAI Free access is counted at zero cost.
+The client is 3.7.2; bridge, web UI and Android companion remain 3.7.1; Windows desktop is 3.7.0.
+UI LIB remains 1.4.0 and SDK 1.0.0.
+Model pricing and context/reply limits use an October 25 catalog with 1,760
+entries across 15 providers, including exact Kilo and Cline routes. Unknown
+prices stay unknown; included Project UAI Free access is counted at zero cost.
 See the [release notes](CHANGELOG.md), [script development manual](docs/SCRIPT_DEVELOPMENT.md)
 and [UI library guide](docs/UI_LIBRARY.md). The client exposes the scripting
 manual through `scripting_docs`: start with `quickstart`, then read only the
@@ -65,7 +120,9 @@ it. The model modal edits the same global effort setting, including for other
 models when **Options → Reasoning support** is enabled. The Thinking row estimates
 visible text only. A long retained trace is labelled
 **Excerpt**, not a 5,999-token model limit. See [provider behavior](docs/PROVIDER_COMPATIBILITY.md).
-See [3.6.6 verification](docs/TESTING_3.6.6.md),
+See [3.7.2 verification](docs/TESTING_3.7.2.md), [3.7.1 verification](docs/TESTING_3.7.1.md),
+[3.7.0 verification](docs/TESTING_3.7.0.md),
+[3.6.6 verification](docs/TESTING_3.6.6.md),
 [3.6.5 verification](docs/TESTING_3.6.5.md),
 [bridge 3.6.2 verification](docs/TESTING_3.6.2.md),
 [3.6.1 verification](docs/TESTING_3.6.1.md), [3.6.0 verification](docs/TESTING_3.6.0.md),
@@ -87,18 +144,23 @@ executor it uses the executor's HTTP function; in a plain client it falls back t
 `HttpService` and says which capabilities it lost. Embedded in a host script it
 takes a context table and adds that script's own instructions and hooks.
 
-Running the same bundle again toggles the existing interface; embedding hosts can
-pass `{ reuse = true }` to reuse it without toggling. A changed bundle
+Running the same bundle again reuses the existing client. An enabled vault asks
+for its password; a saved unprotected-storage choice skips that prompt.
+It requests showing the normal app afterward; embedding hosts can pass
+`{ reuse = true }` to retain the existing display preference. A changed bundle
 reloads an idle client after saving its settings and conversations. If work, an
 unsent draft, or an isolated conversation would be lost, the current instance stays
 open with a notice; finish that work before running the updated loader again.
 
-In **Settings → Import & export → Full configuration**, use **Copy config · includes
-API keys** to transfer all saved configuration, including providers, key pools,
-custom headers, permissions, preferences, and saved memory. On the other device,
-choose **Paste configuration to import**, paste the JSON, select **Review**, then
-**Apply**. This private export contains credentials. Conversations, activity history,
-workspace files, and skill files are separate from configuration.
+In **Settings → Import & export → Configuration transfer**, the normal copy excludes
+provider and connection credentials. Choose the separately labelled private copy
+only when you need to transfer personal keys and custom authentication fields.
+On the other device, paste the JSON, select **Review**, enter its master password
+if encrypted, then **Apply**. Import replaces provider settings and keeps that
+device's storage choice and vault password; a copy without credentials requires
+re-entry. Memory and other personal settings still
+need review before sharing. Conversations, activity history, workspace files and
+skill files are separate from configuration.
 
 ## What it is
 
@@ -120,12 +182,13 @@ The [embedding reference](docs/EMBEDDING.md) covers host scripts, custom UIs,
 sessions, tools, hooks, providers, state binding, and cleanup.
 
 **Embedding SDK 1.0.0.** Load the client with `{ ui = false, reuse = true }` to
-use sessions and tools without mounting its application. `uai.sdk` provides
-owned integration scopes and requests with structured results, cancellation,
+keep the normal app hidden after choosing storage or unlocking a vault. The saved
+unprotected-storage choice skips future prompts; an enabled vault asks each time.
+`uai.sdk` provides owned integration scopes and requests with structured results, cancellation,
 completion callbacks, and optional waiting. Open named conversations without
-changing the user's selection, and explicitly mount the app when needed with
+changing the user's selection, and explicitly show the app when needed with
 `uai.show(...)` or `uai.openSession(id)`. Start with the
-[UI-free SDK example](examples/embedding/sdk.lua) and
+[SDK example](examples/embedding/sdk.lua) and
 [SDK quickstart](docs/EMBEDDING.md#sdk-quickstart). Providers and permissions remain
 shared client settings; runtime capabilities still depend on the host.
 
@@ -162,7 +225,7 @@ too, so a delegated job runs until it answers instead of coming back with "I rea
 this session's step limit before finishing".
 
 **Any provider.** A provider is a base URL, an auth style, a key and a model.
-**Add a provider** opens a gallery of 66 presets with three tiers -- Recommended,
+**Add a provider** opens a gallery of 67 presets with three tiers -- Recommended,
 Paid and Local -- and a search field that spans them. Recommended leads with
 Project UAI Free, AgentRouter, OpenCode Zen, OpenRouter and OpenCode Go; hybrid
 services are labelled by their free half rather than as paid, and "Custom endpoint"
@@ -170,7 +233,8 @@ takes anything that speaks `/v1/chat/completions` -- a relay, a self-hosted vLLM
 Ollama on localhost. Model lists are never guessed: they come from
 `GET /v1/models` or from you typing one in.
 
-**Project UAI Free** is ready when no provider is configured. Add it later from the
+**Project UAI Free** is configured when no provider exists and opens daily during
+**20:00–12:00 UTC+8**. Add it later from the
 Recommended tier, or from the start card's Project UAI Free row; existing providers
 and personal keys stay as configured. AgentRouter can recover from explicit
 unauthorized-client errors using the
@@ -483,17 +547,19 @@ action. Opening a conversation acknowledges its own notifications; other unread
 conversations keep their badge. Long notifications scroll, hover/focus pauses
 expiry, and the stack fits the available screen and keyboard space.
 
-**Independent in-game chatbot.** `chat_bot` listens to new player messages and
-answers with the selected AI provider/model using its own short conversation memory.
-Set `instructions` for its personality, `prefix` (default `[AGENT]`), and optionally
-`user_ids` to choose players. It returns immediately and appears in the chat-loop
-indicator; `chat_loop_status` reports its progress and `chat_loop_stop` stops it.
-By default it runs for 600 seconds, sends at most 100 replies, and waits at least
-5 seconds between sends. Rapid messages are batched into one response. Incoming
-message IDs and short-window repeats are deduplicated, self/system/tagged-bot
-messages are ignored, and repeated reply text is suppressed for the entire run.
+**In-game chat agent.** `chat_agent` launches a background subagent that answers
+players with the active provider. It keeps its own conversation context and the
+read-only game tools (instances, players, environment, chat history), so it can look
+something up before answering instead of guessing. Set `instructions` for the job,
+`prefix` (default `[AGENT]`), and optionally `user_ids` to choose players. It
+returns immediately and appears in the chat-loop indicator; `chat_loop_status`
+reports its turns and `chat_loop_stop` stops it. By default it runs for 600 seconds,
+sends at most 20 replies, and waits at least 5 seconds between sends. Rapid messages
+are batched into one turn. Incoming message IDs and short-window repeats are
+deduplicated, self/system/tagged-bot messages are ignored, and repeated reply text
+is suppressed for the entire run.
 Only one managed job owns a channel, and manual `chat_send` calls are blocked there
-while the chatbot runs. A failed or ambiguous chat send stops the bot without retrying.
+while the chat agent runs. A failed or ambiguous chat send stops the loop without retrying.
 
 **Every listing the model produced, in the transcript.** A tool call that carries
 code -- the Luau it is about to execute, the body it is about to write to a file, the
@@ -559,8 +625,25 @@ detail names the endpoint a request will actually go to, the model-list route, t
 wire protocol, whether a socket is configured (and therefore whether a long reply can
 arrive at all), the health counters, the last observed latency, how long a benched
 provider has left, and the extra headers, body fields and query parameters the record
-sends. The API key is never rendered: it is set through a prompt and shown as its last
-four characters.
+sends. **Manage API keys** opens from provider details or connection setup. Name
+each entry and use Add API key, Replace or Remove without changing the others.
+Rotation is on by default. **Use one key** applies only the selected credential
+to this provider's inference and model discovery, including quota retries. The
+ordinary provider fallback setting remains independent. Removing the selected key
+restores rotation; removing another key preserves the selected credential.
+Saved secrets show only a masked suffix, and keys shorter than five characters
+are fully masked. Cancel discards changes. Apply saves directly from provider
+details; during connection setup, it updates the draft for the provider's Save.
+Pause excludes a key from new requests without deleting it. A paused selected key
+stays selected and blocks that provider until resumed or another active key is
+chosen. Calls already in progress retain their original request policy.
+
+Each key card shows locally recorded request attempts and input/output tokens;
+estimates are labelled. Renaming or pausing retains usage, while replacing a
+credential starts a fresh counter. The conversation header shows that chat's AI
+request attempts; Context breakdown explains what is included. Counts persist on
+this device from this update and do not reconstruct earlier requests. Model
+discovery and relay status polling are excluded.
 
 The layout follows the live viewport: compact desktop controls on handhelds,
 a floating resizable window on a desktop, and a large centred panel on a console.
@@ -716,7 +799,10 @@ remain usable without JavaScript; only search and copy controls need it.
 
 ## First run
 
-Project UAI Free is ready on a fresh install. Open Chat and send a message, or
+Set a master password or deliberately choose the red **Continue without encryption**
+action at startup. The latter saves recoverable, unprotected keys and skips future
+password prompts. Project UAI Free is configured on a fresh install and opens daily
+during 20:00–12:00 UTC+8. During those hours, open Chat and send a message, or
 add your own connection in Providers: choose a provider in the gallery or enter a
 base URL, then enter its authentication details and fetch or type an exact model
 ID. Shared free capacity and speed can vary; existing provider choices stay
@@ -735,16 +821,17 @@ choices and rules are preserved. Read only, Ask first and Auto remain available;
 the chip under the composer names the active mode. Ask first shows a tool's
 arguments before changes or execution, including the code for `run_luau`.
 
-Nothing on disk until then, and only three things after: `config.json`,
-`sessions/<id>.json` per conversation, and `stats.json` for the activity counters.
-A conversation can be marked isolated from the composer, which keeps it out of the
-first two entirely.
+Settings are saved in `config.json`, conversations in `sessions/<id>.json`, and
+activity counters in `stats.json`. A password vault encrypts provider credentials;
+the explicit unprotected option saves them with reversible byte encoding.
+Older plaintext and byte-encoded configurations remain readable for migration.
+A conversation marked isolated from the composer is not saved to its conversation file.
 
 ## Cowork: your browser workspace
 
 Cowork gives your Roblox conversation more room in the browser. Keep Roblox and
 its local bridge running on the same computer. The [Windows desktop launcher](desktop/README.md)
-is a single [UAI-Bridge-3.6.5-win-x64.exe](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.6.5/UAI-Bridge-3.6.5-win-x64.exe)
+is a single [UAI-Bridge-3.7.0-win-x64.exe](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.7.0/UAI-Bridge-3.7.0-win-x64.exe)
 download. Open it directly,
 complete Node setup if needed using **Get Node.js** or an existing
 installation, click **Start Cowork**, and load the updated UAI script. It discovers the app on dedicated port
@@ -808,7 +895,7 @@ troubleshooting, limits, architecture, and organized Node/Lua/browser tests.
 
 ## Android companion
 
-Install [UAI Relay 3.6.5](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.6.5/UAI-Relay-3.6.5.apk)
+Install [UAI Relay 3.7.0](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.7.0/UAI-Relay-3.7.0.apk)
 on Android 8 or later, start the relay, and load the current UAI script in your
 executor. With Relay mode set to Auto, the client discovers and pairs with the
 companion on the same phone. The relay holds the provider connection while the
@@ -855,12 +942,15 @@ agent to use them; prompt text alone does not install capabilities. The returned
 handle exposes `env`, `app`, `sessions`, `config`, `providers`, `tools`, `caps`,
 `bridge`, and `log`. Runtime methods use dots; UI LIB methods use colons.
 
-The full client mounts its standard app unless `context.ui = false`. An explicit
-`show`, `toggle`, or `openSession` can mount it later. UI LIB is independent and
-mounts nothing until `CreateWindow`. A same-build client loader rerun toggles the
-live instance unless `context.reuse = true`, and ignores new context; reuse a saved
-handle or `getgenv().UAI` when
-attaching another view. Changed builds replace the client only after active and
+The full client opens the storage choice when undecided and password entry when
+a vault is enabled. A saved unprotected-storage choice skips these prompts.
+With `context.ui = false`, the normal app stays hidden after access is granted;
+`show`, `toggle`, or `openSession` can show it later. UI LIB is independent and
+mounts nothing until `CreateWindow`.
+A same-build client loader rerun reuses the live instance and follows the saved
+protection choice. It requests showing the app after any required unlock unless
+`context.reuse = true`, and ignores new context; reuse a saved handle or
+`getgenv().UAI` when attaching another view. Changed builds replace the client only after active and
 unsaved work is protected. Pin all bundle/module URLs to one reviewed commit SHA
 for reproducible host releases.
 

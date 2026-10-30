@@ -92,6 +92,30 @@ case("reminders wait for idle visible chat without taking focus or interrupting 
 	stop(); stop(); f.healthy(); f.close()
 end)
 
+case("the invite wraps on narrow surfaces without replacing its selectable field", function()
+	local f = F.ui(900, 650)
+	local modal = f.env.require("ui/community").open()
+	local invite = f.h.byName("CommunityInvite", modal.card)
+	local field = invite:FindFirstChildOfClass("TextBox")
+	local card = f.h.byName("CommunityCard", modal.card)
+	local theme, P = f.env.require("ui/theme"), f.env.require("ui/primitives")
+	-- Publish the width change that native layout sends after a viewport resize.
+	card.Size = f.h.dt.UDim2.new(0, 170, 0, 0)
+	invite:GetPropertyChangedSignal("AbsoluteSize"):Fire()
+	local narrowHeight = invite.Size.Y.Offset
+	local measured = P.measureText(field.Text, { role = "small", width = 170 - theme.space.md * 2 }).Y
+	check("wrapped invite reserves every line and its vertical inset", narrowHeight >= measured + theme.space.sm * 2)
+	field:CaptureFocus(); field.CursorPosition, field.SelectionStart = 12, 3
+	card.Size = f.h.dt.UDim2.new(0, 380, 0, 0)
+	invite:GetPropertyChangedSignal("AbsoluteSize"):Fire()
+	check("more width releases the unused line height", invite.Size.Y.Offset < narrowHeight)
+	check("resizing retains the same native field, focus and selection", invite:FindFirstChildOfClass("TextBox") == field
+		and field:IsFocused() and field.CursorPosition == 12 and field.SelectionStart == 3
+		and field.Text == "https://discord.gg/9xYyyYuKap" and field.TextEditable == false)
+	modal.close(); f.h.settle(0.3)
+	f.healthy(); f.close()
+end)
+
 case("watch cleanup releases listeners and prevents future invitations", function()
 	local f = F.ui(390, 844)
 	local clock = f.env.require("runtime/clock")

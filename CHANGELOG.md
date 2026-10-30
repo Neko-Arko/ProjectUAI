@@ -1,5 +1,138 @@
 # Changelog
 
+## 3.7.2 - October 29, 2026 - Password vault and scheduled free access
+
+- Offer password protection by default and a red **Continue without encryption**
+  choice. The explicit alternative verifies reversible byte-encoded storage,
+  preserves key pools, leaves saved API keys unprotected, and skips future password
+  prompts. Existing encrypted vaults must unlock or reset before opting out.
+  Legacy session-only preferences alone cannot make this choice.
+- Use AES-256-SIV and PBKDF2-HMAC-SHA256 entirely in bundled Luau. Existing
+  byte-encoded and plaintext keys migrate with their exact pool metadata after an
+  encrypted save is staged and verified. Cancellation and failed saves preserve
+  current keys. Password changes and locking are available in Privacy.
+  New vaults and explicit password changes use **100,000 iterations** for less
+  derivation work. Existing 600,000-iteration vaults keep their recorded count;
+  using Change master password, including the same password, rewrites at 100,000.
+  Password entry remains required on each execution while a vault is enabled.
+- Show encryption/unlock progress as a compact percentage with Cancel and Exit
+  at the screen edge. The password dialog and backdrop hide during the wait;
+  access remains gated, and failure or cancellation restores entry.
+- Encrypt custom authentication fields alongside key pools and omit temporary
+  key-rotation maps, which can contain duplicate keys.
+- Exclude credentials from normal settings copies and diagnostics. Keep a separate
+  clearly labelled private copy that retains encryption when enabled or reversible
+  encoding otherwise. Encrypted imports request their source password before
+  review; imports retain this device's storage choice and vault password.
+  Older byte-encoded imports remain supported for migration.
+  Preserve unreadable encoded records and reject unsafe imports instead of silently
+  discarding credentials. Existing exported files and backups are not automatically erased.
+- Replace the included community credential, migrate exact retired included keys
+  on the official endpoint and store only a community reference in config/exports.
+  Encode its bundle representation to deter literal searches; it remains recoverable
+  by scripts with equivalent executor access. Personal keys are not rotated remotely.
+- Admit included Project UAI Free requests daily from **20:00 to 06:00 UTC+8**
+  (Beijing/Singapore), with UI guidance and paused off-hours background probes.
+  Accepted replies continue across closing; personal HCNSEC keys are unaffected.
+- Explain that dashboard key replacement/revocation differs from UAI's request
+  rotation. Bridge, desktop and companion implementations remain unchanged.
+- Keep reasoning levels visible when enabling reasoning support in a short model
+  picker. Compact provider details and the effort caption first; only extremely
+  limited keyboard space uses the existing Options fallback.
+- Rename the Claude Code Settings tab to **Project UAI**.
+
+## 3.7.1 - October 25, 2026 - UI polish, individual API keys and Kilo free routes
+
+- The Roblox client joins the bridge, web UI and Android companion (version
+  code 8) at 3.7.1. The Windows desktop remains 3.7.0. Installed bridges and
+  companion apps pick the patch up automatically from the `v3.7.1` GitHub
+  release; the companion APK keeps the existing production signing identity.
+- Manage provider credentials in a dedicated modal with named, masked entries.
+  Add, rename, replace or remove one entry without overwriting the others.
+  Rotation is the default; choose one specific key for inference and discovery.
+  Removing the selected key restores rotation. Apply/Cancel keeps edits isolated,
+  and configuration transfers retain key names and request preferences.
+  Preserve existing key pools, automatic rotation and unsaved provider drafts;
+  saved credentials stay masked, including keys shorter than five characters.
+- Pause and resume individual keys without deleting their names or local usage.
+  Show requests and input/output tokens per key, with estimates marked. Keep a
+  paused selected key pinned until the user resumes it or changes the selection.
+- Show each conversation's AI request count in its header and context breakdown.
+  Count retries, tool follow-ups, summaries and subagents; retain local counters
+  across reloads. Earlier untracked requests are not reconstructed.
+- Finish the provider gallery and configuration polish with clearer sections,
+  model controls and validation. Keep the setup guide expanded by default.
+- Fit log details and context breakdown to their contents, retaining scrolling
+  when space is limited. Give shared modal bodies consistent padding and improve
+  the Discord invitation, tutorial and donation dialogs.
+- Keep model search, provider selection and footer controls fixed while the model
+  list scrolls. Show names and metadata on separate lines, preserve focused fields
+  through compact layouts, and keep reasoning options reachable on small screens.
+- Group related settings, reveal the selected category, wrap long answer choices
+  and improve tool, conversation and subagent rows. Keep larger text readable in
+  compact controls, captions and forms.
+- Keep long Code documents and previews visible while selecting text, with bounded
+  syntax and selection layers aligned to native line spacing. Improve comparison
+  contrast, document tabs, status details and resize gesture cleanup.
+- Accept Kilo free routes whose model id ends in `free` behind any separator:
+  `:free`, `/free` or `-free`. `reflection/beam-free` — the only free route
+  spelled with a dash in the October 25 catalog — and the `openrouter/free`
+  router previously failed the tunnel's model check, bypassed quota recovery
+  and returned the anonymous refusal directly. Verified live: with the local
+  address limited, the same `reflection/beam-free` request completed HTTP 200
+  through a fresh Tor exit. See [Kilo quota recovery](docs/KILO_TUNNEL.md) and
+  the [3.7.1 verification](docs/TESTING_3.7.1.md).
+
+## 3.7.0 - October 25, 2026 - Models, tunnels and faster workflows
+
+- Align the Roblox client, bridge/web UI, Windows desktop and Android companion
+  at 3.7.0; Android advances to version code 7 with its existing production signer.
+- Use native Responses for AgentRouter GPT models, with the selected reasoning
+  effort, stateless requests and optional tool fields preserved. Verify an actual
+  UAI tool batch and result replay with `gpt-6.1-sol`. See [AgentRouter](docs/AGENTROUTER.md).
+- Add Vercel AI Gateway, Friendli, Venice, Nscale, Arcee, AI/ML API and Perplexity
+  Orchestrator presets with documented access labels and [setup guides](docs/providers/README.md).
+  Filter explicitly incompatible catalog entries and add searchable model menus.
+- Add a Tunnels page to the Windows bridge and Cowork for OpenCode, Kilo and
+  Cline. Cline uses the separately installed, signed-in CLI and its live free
+  model catalog. The new Cline (Bridge) provider requires the local bridge;
+  Roblox keeps tool execution, approvals and Stop. See [setup](docs/CLINE_TUNNEL.md).
+- Detect installed OpenCode and Cline apps before Cowork starts. Keep installation,
+  enablement and connection readiness separate, with an independent refresh.
+- Refresh the Roblox model picker with searchable saved providers, clearer model
+  details and connection health, and larger controls on touch devices. Cancel
+  stale catalog refreshes when closing the picker or switching providers.
+- Keep the Remotes Following action readable on narrow screens with larger text;
+  the toolbar scrolls instead of compressing the action label.
+- Refresh prices and context/reply limits from five catalog sources on October 25:
+  1,760 entries across 15 providers, including 401 Kilo entries and five exact
+  Cline free promotions. Preserve unknown prices and provider-specific rates.
+- Add multiword Tools and Logs searches, ranked tool discovery and useful schema
+  page sizes. Avoid building hidden parameter controls and cloning every schema
+  during discovery. Bound retained logs after redaction.
+- Reject invalid token counters, retain cache-write totals and persist unknown-cost
+  request counts in usage history. Show incomplete cost coverage on Home.
+- Keep Cowork catalogs current after provider changes while preserving focus and
+  scroll. Cancel closed catalog dialogs and discard late results; unrelated state
+  snapshots no longer rebuild large model lists.
+- Recover completed anonymous Kilo quota refusals through a private Tor tunnel,
+  enabled by default and started only when needed. Limit circuit retry to one,
+  suppress repeated terminal refusals for 60 seconds, preserve deadlines and
+  cancellation, and exclude signed-in requests and other providers.
+- Add switches and live connection status in the apps, Cowork web UI and Roblox.
+  Honor upstream `x-should-retry: false` instead of repeating terminal refusals.
+- Ship the Windows helper by pinned, verified download and native Tor in the
+  Android APK. Retain old bridge updater compatibility by embedding new modules
+  in its existing release package filenames.
+- Correct stale Kilo quota claims and document the observed IP-scoped recovery,
+  account limits, shared-exit limitations and [setup](docs/KILO_TUNNEL.md).
+  Recovery does not guarantee unlimited requests.
+- Include the 3.6.7 WPF desktop, reliable bridge payload packaging, manual update
+  checks and cache cleanup. See [verification](docs/TESTING_3.7.0.md).
+- Fix tunnel shutdown races, retained-request memory accounting and stale
+  browser connection status after disconnect or bridge replacement. Update the
+  Android build toolchain for the current Tor library's compile API requirement.
+
 ## 3.6.6 — October 23, 2026 — A provider gallery and a clearer queue
 
 - Rebuild the add-provider flow as a gallery. Add a provider opens three tiers --

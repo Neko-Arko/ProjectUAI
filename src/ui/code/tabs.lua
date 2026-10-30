@@ -2,6 +2,7 @@ return function(env)
 	local P = env.require("ui/primitives")
 	local theme = env.require("ui/theme")
 	local common = env.require("ui/code/common")
+	local icons = env.require("ui/icons")
 	local M = {}
 	function M.new(parent, options)
 		options = options or {}
@@ -29,17 +30,19 @@ return function(env)
 			cell.root.BackgroundTransparency = (active or cell.hovered) and 0 or 1
 			cell.label.TextColor3 = active and theme.color.text or theme.color.textSecondary
 			cell.line.Visible = active
+			cell.outline.Transparency = active and 0 or 1
 		end
 		local function create(item)
-			local holder = P.frame(root, { name = "Tab" })
+			local holder = P.frame(root, { name = "Tab", radius = theme.radius.sm })
 			local button = Instance.new("TextButton", holder)
 			button.Name, button.Text, button.AutoButtonColor = "TabButton", "", false
 			button.Active, button.Selectable, button.BorderSizePixel = true, true, 0
 			button.Size, button.BackgroundTransparency = UDim2.fromScale(1, 1), 1
 			local cell = { root = holder, button = button, item = item }
+			cell.outline = P.stroke(holder, theme.color.border)
 			cell.label = P.text(button, { name = "TabLabel", text = item.label, role = "small", truncate = true, position = UDim2.fromOffset(theme.space.md, 0) })
 			cell.label.Active = false
-			cell.line = P.frame(holder, { name = "ActiveTab", size = UDim2.new(1, 0, 0, 2), position = UDim2.new(0, 0, 1, -2), bg = theme.color.accent, visible = false })
+			cell.line = P.frame(holder, { name = "ActiveTab", size = UDim2.new(1, -theme.space.md * 2, 0, theme.stroke.hair), position = UDim2.new(0, theme.space.md, 1, -theme.stroke.hair), bg = theme.color.accent, visible = false })
 			button.MouseEnter:Connect(function() cell.hovered = true; paint(cell) end)
 			button.MouseLeave:Connect(function() cell.hovered = false; paint(cell) end)
 			button.SelectionGained:Connect(function() cell.hovered = true; paint(cell); reveal(cell, button) end)
@@ -47,15 +50,23 @@ return function(env)
 			button.Activated:Connect(function() if options.onSelect then options.onSelect(cell.item.id, cell.item) end end)
 			if options.onClose then
 				local close = Instance.new("TextButton", holder)
-				close.Name, close.Text, close.AutoButtonColor = "CloseTab", "×", false
-				close.Font, close.TextSize, close.TextColor3 = theme.text.small.font, theme.text.small.size + 3, theme.color.textSecondary
+				close.Name, close.Text, close.AutoButtonColor = "CloseTab", "", false
 				close.BackgroundTransparency, close.BorderSizePixel, close.ZIndex = 1, 0, button.ZIndex + 1
 				close.Active, close.Selectable = true, true
+				P.corner(close, theme.radius.sm)
+				local glyph = icons.draw("close", close, theme.size.icon, theme.color.textSecondary)
+				glyph.AnchorPoint, glyph.Position = Vector2.new(0.5, 0.5), UDim2.fromScale(0.5, 0.5)
+				local function paintClose(hovered)
+					close.BackgroundColor3, close.BackgroundTransparency = theme.color.surfaceHover, hovered and 0 or 1
+				end
+				close.MouseEnter:Connect(function() paintClose(true) end)
+				close.MouseLeave:Connect(function() paintClose(false) end)
+				close.SelectionLost:Connect(function() paintClose(false) end)
 				local target = common.controlHeight()
 				close.Position, close.Size = UDim2.new(1, -target, 0, 0), UDim2.new(0, target, 1, 0)
 				close.Activated:Connect(function() options.onClose(cell.item.id, cell.item) end)
 				cell.close = close
-				close.SelectionGained:Connect(function() reveal(cell, close) end)
+				close.SelectionGained:Connect(function() paintClose(true); reveal(cell, close) end)
 			end
 			return cell
 		end

@@ -9,7 +9,7 @@ const fromHash=location.hash.match(/(?:#|&)t=([a-f0-9]{64})(?:$|&)/i);
 let requestedSettings=new URLSearchParams(location.search).get('settings')==='mcp'?'mcp':null;
 let token=fromHash?.[1]?.toLowerCase()||stored('sessionStorage','uai.token')||stored('localStorage','uai.token')||'';
 if(fromHash||requestedSettings)history.replaceState(null,'',location.pathname);
-let state={},bridgeUpdate={},page='chat',stream,busy=false,connected=false,sending=false,stopping=false,sessionId=null,events=[],uploads=[],instance=stored('sessionStorage','uai.instance');
+let state={},bridgeUpdate={},kiloStatus={},clineStatus={},openCodeStatus={},page='chat',stream,busy=false,connected=false,sending=false,stopping=false,sessionId=null,events=[],uploads=[],instance=stored('sessionStorage','uai.instance');
 let drafts={};try{const value=JSON.parse(stored('sessionStorage','uai.drafts')||'{}');if(value&&typeof value==='object'&&!Array.isArray(value))drafts=value;}catch{}
 const tools=new Map(),dirtyDrafts=new Set();
 let currentResponse=null,responseUser=null,transcriptOrder=0;
@@ -35,8 +35,8 @@ function toast(text){
 function announce(text){if($('status').textContent!==text)$('status').textContent=text;}
 // Surface the bridge's real reason: 401/403/405 return plain-text bodies, so read
 // res.text() and only fall back to a generic message when there is nothing useful.
-async function api(path,body,method){
-  const res=await fetch('/api'+path,{method:method||(body===undefined?'GET':'POST'),headers:{Authorization:'Bearer '+token,'X-UAI-Browser-Id':browserId,...((body?.sessionId||sessionId)?{'X-UAI-Session-Id':body?.sessionId||sessionId}:{}),...(body===undefined?{}:{'content-type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});
+async function api(path,body,method,signal){
+  const res=await fetch('/api'+path,{method:method||(body===undefined?'GET':'POST'),headers:{Authorization:'Bearer '+token,'X-UAI-Browser-Id':browserId,...((body?.sessionId||sessionId)?{'X-UAI-Session-Id':body?.sessionId||sessionId}:{}),...(body===undefined?{}:{'content-type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body),signal:signal||AbortSignal.timeout(15000)});
   const raw=res.status===204?'':await res.text();
   let data,parsed=false;try{data=raw?JSON.parse(raw):{};parsed=true;}catch{data={};}
   if(!res.ok){
@@ -582,6 +582,9 @@ UAI.pictures=UAI.createPictures({token,browserId,getSession:()=>sessionId,api,to
 function apply(e){
   if(typeof e.kind!=='string')return;
   if(e.kind==='bridge:update'){bridgeUpdate=e.update||{};if(page==='cowork')requestPanelRefresh();return;}
+  if(e.kind==='kilo:state'){kiloStatus=e.kilo||{};if(page==='cowork'||page==='tunnels')requestPanelRefresh();return;}
+  if(e.kind==='cline:state'){clineStatus=e.cline||{};if(page==='tunnels')requestPanelRefresh();return;}
+  if(e.kind==='opencode:state'){openCodeStatus=e.opencode||{};if(page==='tunnels')requestPanelRefresh();return;}
   if(e.kind==='bridge:reset'){events=[];eventBytes=0;renderer.reset();tools.clear();resetResponses();UAI.pictures.resetMessages();$('transcript').replaceChildren();welcome();if(e.resync)toast('Connection restored. Reloaded the latest saved conversation.');return;}
   if(e.kind==='bridge:snapshot'){
     const readingSession=sessionId,readingY=$('transcript').scrollTop,wasPinned=stick();
@@ -803,6 +806,7 @@ function renderQuestions(){
   if(focused){const target=focused.isConnected?focused:root.querySelector('button,input,[tabindex="0"]')||$('input');if(document.activeElement!==target)target.focus({preventScroll:true});if(selection&&target===focused)focused.setSelectionRange(...selection);}
 }
 const workspaceViews={cowork:['Connection','Bring Roblox, your tools, and this conversation together.'],providers:['Providers','Choose the models and connections you work with.'],tools:['Tools','Browse available tools and control what they can do.'],agents:['Subagents','Follow delegated work and inspect its results.'],loops:['Chat loops','Manage recurring conversations and game workflows.'],memory:['Memory & skills','Keep useful context and reusable workflows close.'],logs:['Activity','Review requests, execution details, and diagnostic messages.']};
+workspaceViews.tunnels=['Tunnels','Free model connections owned by your local bridge.'];
 let workspaceOpener=null,workspaceRestore=true,workspaceBackdropStart=false;
 function markPage(){document.querySelectorAll('button[data-page]').forEach(b=>{b.classList.toggle('selected',b.dataset.page===page);if(b.dataset.page===page)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});}
 function show(next){
@@ -839,6 +843,7 @@ let toolFilter='',logFilter='';
 function buildPanel(root){root.replaceChildren();
   if(page==='memory'){heading(root,'Memory & skills');root.append(el('p','panel-description','Keep useful context and reusable workflows close to your conversation.'));const list=el('div','tool-grid knowledge-list');root.append(list);for(const tool of state.tools||[]){if(tool.name.startsWith('memory_')||tool.name.startsWith('skills_')){const c=card(list),copy=el('div','catalog-copy');copy.append(el('span','pill',tool.name.startsWith('memory_')?'Memory':'Skill'),el('h3',null,tool.name),el('p',null,tool.description));c.append(copy,button('Open',()=>runTool(tool.name),'outline'));}}return;}
   if(page==='cowork'){renderCowork(root);}
+  else if(page==='tunnels'){renderTunnels(root);}
   else if(page==='providers'){
     heading(root,'Providers',button('Add provider',()=>providerEditor(),'primary','provider:add'));
     root.append(el('p','panel-description','Manage your connections, check their health, and choose which provider powers your conversation.'));
@@ -1016,7 +1021,7 @@ function models(){modal('Models & reasoning',root=>{
   temperature.onchange=()=>{if(temperature.reportValidity())modalTask(()=>command('setting',{path:'agent.temperature',value:Number(temperature.value)}),{success:'Temperature saved.'});};
   const effortLabels={off:'Provider default',low:'Low',medium:'Medium',high:'High',xhigh:'Extra high',max:'Max'};
   function paintDetail(p){
-    const id=p?.model||'',info=p?.modelInfo?.[id]||{},signature=JSON.stringify([p?.id,id,info,state.settings?.agent?.effort,state.settings?.agent?.temperature,connected,!!modalContext?.pending,!!modalContext?.uncertain]);
+    const id=p?.model||'',info=p?.modelInfo?.[id]||{},signature=JSON.stringify([p?.id,p?.label,id,info,state.settings?.agent?.effort,state.settings?.agent?.temperature,connected,!!modalContext?.pending,!!modalContext?.uncertain]);
     if(detail.dataset.signature===signature)return;detail.dataset.signature=signature;
     selectedName.textContent=id||'Choose a model';selectedProvider.textContent=p?.label||'Add a provider to get started';
     capabilities.replaceChildren();for(const [label,value]of [['Context window',info.contextWindow],['Max output',info.maxOutputTokens]]){const row=el('div');row.append(el('span',null,label),el('strong',null,tokenCount(value)));capabilities.append(row);}
@@ -1033,9 +1038,20 @@ function models(){modal('Models & reasoning',root=>{
       samplingHelp.textContent=info.temperatureSource==='manual'?'Your model override '+(info.temperatureAllowed?'sends the shared temperature.':'omits temperature from requests.'):info.temperatureSource==='learned'?'This provider has rejected temperature for this model. Automatic leaves it out.':!info.temperatureAllowed?'This model does not use a custom temperature. Automatic leaves it out.':info.temperatureSource==='documented'?'This model supports temperature. Lower values give more consistent responses.':'No temperature restriction is known for this model. Automatic sends the shared value.';
     }
   }
+  let listSignature;
+  function syncProviders(){
+    const providers=(state.providers||[]).filter(item=>item&&typeof item.id==='string'),oldValue=provider.value,existing=new Map([...provider.options].map(option=>[option.value,option])),wanted=new Set(providers.map(item=>item.id));
+    for(const [id,option]of existing)if(!wanted.has(id))option.remove();
+    providers.forEach((item,index)=>{let option=existing.get(item.id);if(!option){option=el('option');option.value=item.id;}const label=item.label||item.id;if(option.textContent!==label)option.textContent=label;if(provider.options[index]!==option)provider.insertBefore(option,provider.options[index]||null);});
+    provider.value=wanted.has(oldValue)?oldValue:wanted.has(state.activeProvider)?state.activeProvider:providers[0]?.id||'';
+  }
   function paint(){
-    const p=state.providers?.find(p=>p.id===provider.value),ids=(p?.models||[]).filter(id=>id.toLowerCase().includes(search.value.toLowerCase())&&(!free.checked||isFreeModel(p,id)));
+    syncProviders();
+    const p=state.providers?.find(p=>p.id===provider.value),query=search.value.toLowerCase(),models=Array.isArray(p?.models)?p.models:[];
+    const ids=[...new Set(models.filter(id=>typeof id==='string'&&id.trim()))].filter(id=>id.toLowerCase().includes(query)&&(!free.checked||isFreeModel(p,id)));
     routeStatus.textContent=freeRouteText(p);routeStatus.hidden=!routeStatus.textContent;
+    const signature=JSON.stringify([p?.id,p?.model,connected,!!modalContext?.pending,!!modalContext?.uncertain,query,free.checked,ids.map(id=>{const info=p?.modelInfo?.[id]||{};return[id,isFreeModel(p,id),info.contextWindow,info.reasoning,info.maxOutputTokens];})]);
+    if(signature===listSignature){paintDetail(p);return;}listSignature=signature;
     count.textContent=ids.length+' model'+(ids.length===1?'':'s');empty.hidden=!!ids.length;empty.textContent=!state.providers?.length?'Add a provider to choose a model.':search.value||free.checked?'No models match these filters.':'No models available yet. Refresh the list, or enter an exact model ID in your provider settings.';
     const focused=list.contains(document.activeElement)?document.activeElement:null,existing=new Map([...list.children].map(n=>[n.dataset.model,n])),wanted=new Set(ids);
     for(const [id,node]of existing)if(!wanted.has(id))node.remove();
@@ -1116,6 +1132,47 @@ function renderPanel(){
 }
 
 let installSource=stored('localStorage','uai.installSource')||'executor';
+function tunnelModels(id,name){
+  modal(name+' free models',content=>{
+    const context=modalContext,controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(new DOMException('The model list took too long to load. Try again.','TimeoutError')),15000);
+    context.cleanup=()=>{clearTimeout(timer);controller.abort();};
+    content.append(el('p','muted','Loading current free models...'));
+    modalActions(modalCancel('Done'));
+    (async()=>{
+      try{
+        const response=await api(id==='cline'?'/tunnels/cline/models':'/opencode/models',undefined,undefined,controller.signal);
+        if(context!==modalContext||context.closing)return;
+        const rows=(Array.isArray(response?.data)?response.data:[]).filter(row=>row&&typeof row.id==='string'&&row.id.trim()).slice(0,100);
+        content.replaceChildren(el('p','muted','Copy a model ID into the matching provider. Availability and free promotions can change.'));
+        for(const row of rows){const line=el('div','tool-actions');line.append(el('code',null,row.id),button('Copy ID',()=>copyText(row.id),'outline'));content.append(line);}
+        if(!rows.length)content.append(el('p',null,'No free models are currently available.'));
+      }catch(error){if(context===modalContext&&!context.closing){content.replaceChildren(el('p','form-error',error.message),button('Try again',()=>tunnelModels(id,name),'outline'));}}
+      finally{clearTimeout(timer);}
+    })();
+  });
+}
+function renderTunnels(root){
+  heading(root,'Tunnels',button('Refresh status',async()=>{
+    try{const hello=await api('/hello');kiloStatus=hello.capabilities?.kilo||{};clineStatus=hello.capabilities?.cline||{};openCodeStatus=hello.capabilities?.opencode||{};requestPanelRefresh();}
+    catch(error){toast(error.message);}
+  },'outline'));
+  root.append(el('p','panel-description','Use free models through your local bridge. Configure connections in the desktop app while the bridge is stopped. Select the matching provider and fetch its models in Roblox or Cowork.'));
+  const labels={standby:'Ready when needed',disabled:'Off',missing:'Setup needed','auth-required':'Sign in required',starting:'Connecting',downloading:'Downloading helper',ready:'Ready',limited:'Quota reached',rotating:'Changing connection',failed:'Needs attention',stopped:'Stopped'};
+  for(const [id,name,status,detail,docs]of [
+    ['opencode','OpenCode',openCodeStatus,'Free models through your separately installed OpenCode CLI. Choose OpenCode Zen in Providers.','https://opencode.ai'],
+    ['kilo','Kilo',kiloStatus,'Anonymous Kilo quota recovery. Shared exits retain their provider allowances. Choose Kilo Code in Providers.','https://github.com/Project-Ptolemy/ProjectUAI/blob/main/docs/KILO_TUNNEL.md'],
+    ['cline','Cline',clineStatus,'Free promotional models through the signed-in Cline CLI. Choose Cline (Bridge) in Providers; this route requires the connected bridge.','https://github.com/Project-Ptolemy/ProjectUAI/blob/main/docs/CLINE_TUNNEL.md']
+  ]){
+    const box=card(root);box.dataset.tunnel=id;box.append(el('h2',null,name),el('span','pill',link==='online'?(labels[status.state]||'Unavailable'):'Disconnected'),el('p',null,link==='online'?(status.message||detail):'Reconnect the bridge to read its tunnel status.'));
+    if(status.message)box.append(el('small','muted',detail));
+    const actions=el('div','tool-actions'),guide=el('a','outline','Setup guide');guide.href=docs;guide.target='_blank';guide.rel='noopener noreferrer';actions.append(guide);
+    if(id!=='kilo'){
+      const models=button('Free models',()=>tunnelModels(id,name),'outline');models.disabled=link!=='online'||status.state==='disabled'||status.state==='missing';actions.append(models);
+    }
+    box.append(actions);
+  }
+}
 function renderCowork(root){
   const hero=el('section','connection-hero'),copy=el('div'),eyebrow=el('p','connection-eyebrow');hero.dataset.connected=String(connected);eyebrow.append(el('span','status-dot'),document.createTextNode(connected?'CONNECTED':'READY TO CONNECT'));
   copy.append(eyebrow,el('h2',null,connected?'Your workspace is connected.':'One connection. Your whole workspace.'),el('p',null,connected?(state.place?.name||'Roblox')+' is connected to this browser. Your conversations, tools, and changes stay in sync.':'Load Project UAI in Roblox, then connect it to this bridge to start working together.'));
@@ -1125,7 +1182,12 @@ function renderCowork(root){
     const n=el('div','connection-node');n.dataset.ready=String(ready);n.append(el('span','status-dot'),el('strong',null,name),el('small',null,detail));path.append(n);
   }root.append(path);
   const runtime=card(root);runtime.classList.add('runtime-summary');const runtimeHead=el('div','provider-heading');runtimeHead.append(el('h2',null,state.runtime==='web'?'Web runtime':'Game runtime'),el('span','pill','Automatic'));runtime.append(runtimeHead,el('p',null,'Web runtime starts as soon as Roblox connects. Disconnecting returns your game to Game runtime.'),el('small','muted','The bridge waits without a time limit for completion, a provider error, or Stop. Roblox continues to run tools and save your conversation.'));
-  const usage=card(root);usage.classList.add('metrics');usage.append(metric(state.usage?.total||0,state.usage?.estimated?'Tokens · estimated':'Tokens used'),metric(state.usage?.requests||0,'Requests'),metric('$'+(state.usage?.cost||0).toFixed(4),'Estimated cost'));
+  const kilo=card(root),kiloLabels={standby:'Ready when needed',disabled:'Off',starting:'Connecting',downloading:'Downloading helper',ready:'Ready',limited:'Quota reached',rotating:'Changing connection',failed:'Unavailable'};
+  kilo.append(el('h2',null,'Kilo tunnel'),el('span','pill',link==='online'?(kiloLabels[kiloStatus.state]||'Unavailable'):'Disconnected'),el('p',null,link==='online'?(kiloStatus.message||'Update the bridge to use automatic Kilo quota recovery.'):'Reconnect the bridge to read its Kilo tunnel status.'),el('small','muted','Anonymous Kilo free models only. Each outbound address still has an allowance. Manage this connection in the desktop app or with UAI_KILO_TUNNEL.'));
+  const usage=card(root),unknownCosts=Number.isFinite(state.usage?.unpriced)?Math.max(0,Math.floor(state.usage.unpriced)):0,requests=state.usage?.requests||0;
+  const allCostsUnknown=unknownCosts>0&&unknownCosts>=requests;
+  usage.classList.add('metrics');usage.append(metric(state.usage?.total||0,state.usage?.estimated?'Tokens · estimated':'Tokens used'),metric(requests,'Requests'),metric(allCostsUnknown?'Unknown':'$'+(state.usage?.cost||0).toFixed(4),unknownCosts>0&&!allCostsUnknown?'Known estimated cost':'Estimated cost'));
+  if(unknownCosts)root.append(el('p','field-help cost-coverage',unknownCosts+' request'+(unknownCosts===1?' has':'s have')+' unknown cost and '+(unknownCosts===1?'is':'are')+' excluded from this estimate.'));
   const update=el('section','bridge-update'),updateCopy=el('div');updateCopy.append(el('h3',null,'Bridge updates'),el('p',null,bridgeUpdate.currentVersion?'Version '+bridgeUpdate.currentVersion+(bridgeUpdate.availableVersion?' · '+bridgeUpdate.availableVersion+' available':''):'Automatic updates'));
   const labels={current:'Up to date',checking:'Checking for updates',staged:'Ready when the workspace is idle',restarting:'Installing update',updated:'Updated',error:'Update check unavailable'};update.append(updateCopy,el('span','pill',labels[bridgeUpdate.state]||'Automatic'));if(bridgeUpdate.error)update.append(el('small','update-error',bridgeUpdate.error));root.append(update);
   const guide=el('details','setup-guide');guide.id='connectionGuide';guide.open=!connected;guide.append(el('summary',null,'Setup instructions'));root.append(guide);
@@ -1470,14 +1532,14 @@ async function enter(){
     UAI.pictures.reset();renderer.reset();events=[];eventBytes=0;tools.clear();state={};$('transcript').replaceChildren();
     if(sendOperation){sendOperation.lost=true;setPhase('uncertain');persistOperation();}
   }
-  instance=hello.instance;connected=!!hello.connected;bridgeUpdate=hello.update||{};link='online';
+  instance=hello.instance;connected=!!hello.connected;bridgeUpdate=hello.update||{};kiloStatus=hello.capabilities?.kilo||{};clineStatus=hello.capabilities?.cline||{};openCodeStatus=hello.capabilities?.opencode||{};link='online';
   UAI.pictures.setToken(token);await UAI.pictures.configure(hello);
   try{sessionStorage.setItem('uai.token',token);sessionStorage.setItem('uai.instance',instance);localStorage.removeItem('uai.token');}catch{}
   $('gate').hidden=true;$('gate-error').textContent='';$('gate-token').value='';$('app').hidden=false;refresh();welcome();syncSidebar();(page==='chat'?$('input'):$('panel')).focus({preventScroll:true});
   stream?.close();stream=new EventSource('/api/stream?token='+encodeURIComponent(token));
-  stream.onopen=()=>{clearTimeout(connectionRetry);link='online';refresh();};
+  stream.onopen=()=>{clearTimeout(connectionRetry);link='online';refresh();if(page==='cowork'||page==='tunnels')requestPanelRefresh();};
   stream.onmessage=e=>{try{apply(JSON.parse(e.data));}catch(err){console.error(err);toast('Could not render bridge update: '+err.message);}};
-  stream.onerror=()=>{link='offline';connected=false;refresh();clearTimeout(connectionRetry);connectionRetry=setTimeout(checkConnection,2000);};
+  stream.onerror=()=>{link='offline';connected=false;refresh();if(page==='cowork'||page==='tunnels')requestPanelRefresh();clearTimeout(connectionRetry);connectionRetry=setTimeout(checkConnection,2000);};
   if(requestedSettings&&!connected){const section=requestedSettings;requestedSettings=null;openSettings(section);}
 }
 $('gate-form').onsubmit=async e=>{e.preventDefault();token=$('gate-token').value.trim().toLowerCase();$('gate-connect').disabled=true;$('gate-error').textContent='';try{await enter();}catch(err){showGate(err.message);}finally{$('gate-connect').disabled=false;}};

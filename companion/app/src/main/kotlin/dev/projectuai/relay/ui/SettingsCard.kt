@@ -35,11 +35,12 @@ import dev.projectuai.relay.service.RelayService
 
 @Composable
 internal fun SettingsCard(settings: RelaySettings, serviceToken: String, place: Long, context: Context,
-    running: Boolean, busy: Boolean, updatePending: Boolean) {
+    running: Boolean, busy: Boolean, updatePending: Boolean, kilo: dev.projectuai.relay.protocol.KiloCapability) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     var portText by rememberSaveable { mutableStateOf(settings.port.toString()) }
     var appliedPort by remember { mutableStateOf(settings.port) }
     var autoStart by remember { mutableStateOf(settings.autoStart) }
+    var kiloEnabled by remember { mutableStateOf(settings.kiloEnabled) }
     var pairingToken by remember(serviceToken) { mutableStateOf(settings.token) }
     var confirmReset by rememberSaveable { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
@@ -50,6 +51,14 @@ internal fun SettingsCard(settings: RelaySettings, serviceToken: String, place: 
             autoStart = it
             settings.autoStart = it
         }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        ToggleSetting("Kilo tunnel", "Automatically tries another connection after an anonymous Kilo quota response. Each outbound address still has an allowance. Stop the relay to change this setting.", kiloEnabled,
+            enabled = !running && !busy && !updatePending) {
+            kiloEnabled = it
+            settings.kiloEnabled = it
+        }
+        if (running) Text(kilo.message, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         SectionTitle("Local connection")
         Text("Port $appliedPort on this phone. Use the same port in Project UAI.",
@@ -106,13 +115,13 @@ internal fun SettingsCard(settings: RelaySettings, serviceToken: String, place: 
 }
 
 @Composable
-internal fun ToggleSetting(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
+internal fun ToggleSetting(title: String, detail: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f).padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = MaterialTheme.typography.bodyMedium)
             Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Switch(checked = checked, onCheckedChange = null)
+        Switch(checked = checked, enabled = enabled, onCheckedChange = null)
     }
 }

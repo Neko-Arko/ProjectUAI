@@ -121,6 +121,7 @@ return function(env)
 		local ok, writeErr = pcall(caps.fn.writefile, full, tostring(content))
 		if not ok or writeErr == false then
 			if writeErr == false then writeErr = "host refused to write " .. full end
+			if opts and opts.sensitive then return false, "host could not write credential storage" end
 			log.warn("fsx", "write failed: " .. full, writeErr)
 			return false, tostring(writeErr)
 		end
@@ -280,21 +281,21 @@ return function(env)
 		return out, rejected > 0 and "host listing contains ambiguous, inaccessible or unsupported paths; listing is incomplete" or nil
 	end
 
-	function M.readJson(path, fallback)
+	function M.readJson(path, fallback, opts)
 		local content = M.read(path)
 		if not content then return fallback end
 		local value, err = util.decode(content)
 		if value == nil then
-			log.warn("fsx", "corrupt json at " .. tostring(path), err)
+			log.warn("fsx", "corrupt json at " .. tostring(path), opts and opts.sensitive and "invalid credential storage JSON" or err)
 			return fallback
 		end
 		return value
 	end
 
-	function M.writeJson(path, value)
+	function M.writeJson(path, value, opts)
 		local ok, body = pcall(util.encode, value)
-		if not ok then return false, tostring(body) end
-		return M.write(path, body)
+		if not ok then return false, opts and opts.sensitive and "could not encode credential storage" or tostring(body) end
+		return M.write(path, body, opts)
 	end
 
 	-- Migration ----------------------------------------------------------------
@@ -309,6 +310,7 @@ return function(env)
 	local CLIENT_STATE = {
 		["code"] = true,
 		["config.json"] = true,
+		["config.vault.pending.json"] = true,
 		["stats.json"] = true,
 		["workspace.json"] = true,
 		["sessions"] = true,

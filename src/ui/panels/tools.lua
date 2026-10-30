@@ -12,6 +12,7 @@ return function(env)
 	local registry = env.require("agent/registry")
 	local permissions = env.require("agent/permissions")
 	local schema = env.require("agent/schema")
+	local search = env.require("runtime/search")
 
 	local M = {}
 
@@ -51,8 +52,8 @@ return function(env)
 		})
 		local summary = P.text(head, {
 			text = #stats.unavailable > 0
-				and env.t("%{count} unavailable on this host: %{list}", { count = #stats.unavailable, list = caps.summary() })
-				or env.t("Everything is available on this host"),
+				and env.t("%{count} unavailable on this host. %{list}", { count = #stats.unavailable, list = caps.summary() })
+				or env.t("All tools are available on this host. Open a tool to review its parameters and permissions.")
 			role = "caption",
 			color = theme.color.textTertiary,
 			wrap = true,
@@ -61,22 +62,23 @@ return function(env)
 		})
 		summary.Size = UDim2.new(1, 0, 0, 0)
 
-		local scroll
+		local scroll, results
 
 		local function rebuild()
 			if not column.Parent or not scroll then return end
 			local scrollPosition = scroll.instance.CanvasPosition
 			scroll.clear()
-			local needle = filter:lower()
+			local match = search.compile(filter)
 			local grouped = {}
+			local matched = 0
 			for _, tool in ipairs(registry.list()) do
-				if needle == ""
-					or tool.name:lower():find(needle, 1, true)
-					or tostring(tool.description):lower():find(needle, 1, true) then
+				if match(tool.name, tool.description, tool.group, GROUP_LABELS[tool.group], tool.risk) then
+					matched = matched + 1
 					grouped[tool.group] = grouped[tool.group] or {}
 					table.insert(grouped[tool.group], tool)
 				end
 			end
+			if results then results.Text = util.pluralise(matched, "matching tool") end
 
 			local order = util.keys(grouped, true)
 			if #order == 0 then
@@ -103,7 +105,7 @@ return function(env)
 					-- The same inset a card gives its own contents, so a group's name lines up
 					-- with the tool names under it instead of sitting sixteen pixels to their
 					-- left, and its switch lines up with theirs.
-					padding = { x = theme.space.lg, top = theme.space.sm, bottom = theme.space.xxs },
+					padding = { x = theme.space.md, top = theme.space.sm, bottom = theme.space.xxs },
 					layoutOrder = position,
 				})
 				local headText = P.column(header, {
@@ -163,7 +165,7 @@ return function(env)
 					local name = P.text(top, {
 						text = tool.name,
 						role = "monoSmall",
-						color = missing and theme.color.textDisabled or theme.color.text,
+						color = missing and theme.color.textSecondary or theme.color.text,
 						wrap = true,
 						auto = "Y",
 						layoutOrder = 1,
@@ -191,43 +193,56 @@ return function(env)
 
 					local details = P.column(card, { name = "ToolDetails", size = UDim2.new(1, 0, 0, 0),
 						auto = "Y", gap = theme.space.sm, layoutOrder = 4, visible = expanded[tool.name] == true })
+					local populateDetails, populated
 					P.button(card, { name = "ToolDetailsToggle",
 						text = expanded[tool.name] and "Hide details" or "Parameters & permissions", variant = "ghost",
 						size = "sm", fill = true, align = "Left", tight = true, layoutOrder = 3, onClick = function(button)
+							populateDetails()
 							details.Visible = not details.Visible
 							expanded[tool.name] = details.Visible
 							button.setText(details.Visible and "Hide details" or "Parameters & permissions")
 						end })
-					local params = P.text(details, {
-						text = schema.describe(tool.parameters),
-						role = "caption",
-						color = theme.color.textTertiary,
-						wrap = true,
-						auto = "Y",
-						layoutOrder = 3,
-					})
-					params.Size = UDim2.new(1, 0, 0, 0)
-
-					if missing then
-						local reason = P.text(details, {
-							text = caps.reason(missing),
+					populateDetails = function()
+						if populated then return end
+						populated = true
+						P.divider(details, { layoutOrder = 1 })
+						P.text(details, { name = "ParametersTitle", text = "Parameters", role = "label", layoutOrder = 2 })
+						local parameters = P.column(details, { name = "Parameters", size = UDim2.new(1, 0, 0, 0),
+							auto = "Y", bg = theme.color.canvas, radius = theme.radius.sm,
+							padding = theme.space.sm, layoutOrder = 3 })
+						local params = P.text(parameters, {
+							text = schema.describe(tool.parameters),
 							role = "caption",
-							color = theme.color.warn,
+							color = theme.color.textTertiary,
 							wrap = true,
 							auto = "Y",
-							layoutOrder = 4,
+							layoutOrder = 3,
 						})
-						reason.Size = UDim2.new(1, 0, 0, 0)
-					else
-						C.segmented(details, {
-							options = RULE_OPTIONS,
-							value = permissions.ruleFor(tool.name) or "default",
-							layoutOrder = 4,
-							onChange = function(value)
-								permissions.setRule(tool.name, value)
-							end,
-						})
+						params.Size = UDim2.new(1, 0, 0, 0)
+
+						if missing then
+							local reason = P.text(details, {
+								text = caps.reason(missing),
+								role = "caption",
+								color = theme.color.warn,
+								wrap = true,
+								auto = "Y",
+								layoutOrder = 4,
+							})
+							reason.Size = UDim2.new(1, 0, 0, 0)
+						else
+							P.text(details, { name = "PermissionTitle", text = "Permission rule", role = "label", layoutOrder = 4 })
+							C.segmented(details, {
+								options = RULE_OPTIONS,
+								value = permissions.ruleFor(tool.name) or "default",
+								layoutOrder = 5,
+								onChange = function(value)
+									permissions.setRule(tool.name, value)
+								end,
+							})
+						end
 					end
+					if expanded[tool.name] then populateDetails() end
 				end
 			end
 			scroll.instance.CanvasPosition = scrollPosition
@@ -237,7 +252,7 @@ return function(env)
 		-- labels above it are constructed earlier but neither of them sets an order.
 		P.field(head, {
 			name = "ToolSearch",
-			placeholder = "Search tools",
+			placeholder = "Search tools, groups or actions",
 			layoutOrder = 3,
 			onChange = function(text)
 				filter = util.trim(text)
@@ -245,8 +260,10 @@ return function(env)
 				if scroll then scroll.instance.CanvasPosition = Vector2.new(0, 0) end
 			end,
 		})
+		results = P.text(head, { name = "ToolSearchCount", text = "", role = "caption",
+			color = theme.color.textTertiary, layoutOrder = 4 })
 		P.button(head, { name = "ManageChatLoops", text = "Chat loops & quiz scores", variant = "ghost", size = "sm", fill = true, align = "Left",
-			layoutOrder = 4, onClick = function(button) env.require("ui/chat/loops").open(button.instance) end })
+			layoutOrder = 5, onClick = function(button) env.require("ui/chat/loops").open(button.instance) end })
 
 		-- Keep the flex item outside the clearable list contents.
 		local listHolder = P.frame(column, { name = "ToolListHolder", size = UDim2.new(1, 0, 0, 0),

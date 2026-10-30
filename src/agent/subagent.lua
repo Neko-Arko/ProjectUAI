@@ -764,6 +764,7 @@ return function(env)
 		-- there is a parent transcript to narrate into. The wiring below is therefore
 		-- unconditional; only the forwarding inside it is not.
 		record.session = child
+		child.accountingParent = function() return record.parent end
 
 		-- The brief replaces the main system prompt rather than appending to it, and it
 		-- is a function so that every turn -- including a follow-up months of tool calls

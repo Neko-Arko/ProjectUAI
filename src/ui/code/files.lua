@@ -47,7 +47,8 @@ return function(env)
 		local filter = P.field(root, { name = "WorkspaceFileSearch", placeholder = "Filter loaded files", text = view.query or "", role = "small", onChange = function(text) view.query = text; if refresh then refresh() end end })
 		filter.shell.Position, filter.shell.Size = UDim2.fromOffset(theme.space.sm, common.barHeight() + theme.space.xs), UDim2.new(1, -theme.space.sm * 2, 0, common.barHeight())
 		local top = common.barHeight() * 2 + theme.space.md
-		local hint = P.text(root, { name = "WorkspaceFileStatus", text = "Click a folder to expand · click a file to open", role = "caption", color = theme.color.textSecondary, truncate = true, position = UDim2.new(0, theme.space.sm, 1, -common.pixels(24)), size = UDim2.new(1, -theme.space.sm * 2, 0, common.pixels(24)) })
+		local footerHeight = math.max(common.pixels(24), theme.text.caption.height + theme.space.xxs * 2)
+		local hint = P.text(root, { name = "WorkspaceFileStatus", text = "Click a folder to expand · click a file to open", role = "caption", color = theme.color.textSecondary, truncate = true, position = UDim2.new(0, theme.space.sm, 1, -footerHeight), size = UDim2.new(1, -theme.space.sm * 2, 0, footerHeight) })
 		local function load(path)
 			local result, why = files.children(path)
 			view.pages[path] = { items = result or {}, error = why, limit = 200 }
@@ -97,7 +98,7 @@ return function(env)
 		function handle.deleteSelected()
 			deleteEntry(view.selected, view.selected and view.selected:match("[^/]+$"), view.selected and files.isDir(view.selected))
 		end
-		list = common.virtualList(root, { name = "WorkspaceFileTree", position = UDim2.fromOffset(0, top), size = UDim2.new(1, 0, 1, -top - common.pixels(24)), dense = true,
+		list = common.virtualList(root, { name = "WorkspaceFileTree", position = UDim2.fromOffset(0, top), size = UDim2.new(1, 0, 1, -top - footerHeight), dense = true,
 			onClose = function(row) if row.path and row.path ~= "" then deleteEntry(row.path, row.name, row.isDir) end end,
 			closable = function(row) return row.path ~= nil and row.path ~= "" end,
 			icon = function(row) return row.path ~= nil and (row.isDir and "Folder" or row.name:lower():match("%.lua[u]?$") and "ModuleScript" or "Document") or nil end,

@@ -42,6 +42,8 @@ const { createPictureStore } = require('./picture-store');
 const RELEASE = require('./release');
 const { help, DISCORD } = require('./support');
 const { createOpenCode } = require('./opencode');
+const { createKilo } = require('./kilo');
+const { createCline } = require('./cline');
 const { createMcp } = require('./mcp');
 
 const args = process.argv.slice(2);
@@ -66,6 +68,7 @@ const TOKEN = /^[a-f0-9]{64}$/.test(process.env.UAI_BRIDGE_SESSION_TOKEN || '')
   ? process.env.UAI_BRIDGE_SESSION_TOKEN : crypto.randomBytes(32).toString('hex');
 delete process.env.UAI_BRIDGE_SESSION_TOKEN;
 let updateState = { state: 'current', currentVersion: RELEASE.version };
+const pendingBridgeChecks = new Map();
 let draining = false, activeRequests = 0;
 
 // How long an inbox poll is held before answering empty. Comfortably under the
@@ -106,8 +109,10 @@ const commands = new Map();
 const commandPictures = new Map();
 const pictures = LEGACY ? null : createPictureStore({ limits: PICTURE_LIMITS });
 const opencode = createOpenCode();
+const kilo = createKilo({ onChange: value => broadcast({ kind: 'kilo:state', kilo: value }) });
+const cline = createCline({ onChange: value => broadcast({ kind: 'cline:state', cline: value }) });
 const inference = createInference({ publish: broadcast, legacy: LEGACY,
-  prepareBody: (body, sessionId) => pictures ? pictures.providerBody(body, sessionId) : body, opencode });
+  prepareBody: (body, sessionId) => pictures ? pictures.providerBody(body, sessionId) : body, opencode, kilo, cline });
 let gameInstance = null;
 
 const state = {
@@ -623,6 +628,9 @@ function serveStream(req, res) {
   }
   writeFrame(sub, `id: ${eventSequence}\ndata: ${JSON.stringify({ kind: 'bridge:cursor' })}\n\n`);
   writeFrame(sub, `data: ${JSON.stringify({ kind: 'bridge:game', connected: state.connected })}\n\n`);
+  writeFrame(sub, `data: ${JSON.stringify({ kind: 'kilo:state', kilo: kilo.capability() })}\n\n`);
+  writeFrame(sub, `data: ${JSON.stringify({ kind: 'cline:state', cline: cline.capability() })}\n\n`);
+  writeFrame(sub, `data: ${JSON.stringify({ kind: 'opencode:state', opencode: opencode.capability() })}\n\n`);
 
   // Comment frames keep the connection from being reaped by an idle timeout on a
   // quiet conversation. They are ignored by EventSource.
@@ -786,6 +794,8 @@ const server = http.createServer(async (req, res) => {
       const capabilities = { browserStream: { schema: 1, replay: true }, agentInbox: { waitHeader: 'X-UAI-Poll-Wait-Ms', maxWaitMs: HOLD_MS } };
       capabilities.inferencePreview = { schema: 1 };
       capabilities.opencode = opencode.capability();
+      capabilities.kilo = kilo.capability();
+      capabilities.cline = cline.capability();
       capabilities.mcp = mcp.capability();
       if (!LEGACY) capabilities.pictures = { mode: 'provider-image-content', version: 2 };
       sendJson(res, 200, {
@@ -797,8 +807,25 @@ const server = http.createServer(async (req, res) => {
           deliverableBytes: inference.limits.deliverableMax,
         },
       });
+    } else if (route === '/api/desktop/update-check' && post) {
+      if (typeof process.send !== 'function' || !process.connected) { sendText(res, 503, 'bridge updates are managed by the running supervisor'); return; }
+      const body = JSON.parse(await readBody(req, 256));
+      if (body !== null && (typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length)) { sendText(res, 400, 'expected empty body'); return; }
+      const fail = error => Object.assign(Error(error), { status: 503 });
+      const requestId = crypto.randomUUID();
+      const reply = new Promise((resolve, reject) => {
+        const timer = setTimeout(() => { pendingBridgeChecks.delete(requestId); reject(fail('bridge update check timed out')); }, 45000);
+        pendingBridgeChecks.set(requestId, update => { clearTimeout(timer); update ? resolve(update) : reject(fail('bridge update check returned no result')); });
+      });
+      try { process.send({ type: 'check-update', requestId }, () => {}); }
+      catch { pendingBridgeChecks.delete(requestId); throw fail('bridge update check timed out'); }
+      updateState = { ...await reply, currentVersion: RELEASE.version };
+      broadcast({ kind: 'bridge:update', update: updateState });
+      sendJson(res, 200, { ok: true, update: updateState });
     } else if (route === '/api/opencode/models' && req.method === 'GET') {
       sendJson(res, 200, await opencode.models());
+    } else if (route === '/api/tunnels/cline/models' && req.method === 'GET') {
+      sendJson(res, 200, await cline.models());
     } else if (route === '/api/inference' && post) {
       const input = JSON.parse(await readBody(req, 20 << 20));
       sendJson(res, 202, inference.start(input));
@@ -965,6 +992,7 @@ setInterval(() => {
 
 server.listen(PORT, HOST, () => {
   if (opencode.capability().available) opencode.start().catch(() => {});
+  cline.start().catch(() => {});
   const origin = `http://${HOST}:${PORT}`;
   process.send({ type: 'ready', version: RELEASE.version, updateProtocol: RELEASE.updateProtocol, token: TOKEN, port: PORT }, () => {});
   if (DESKTOP) {
@@ -997,7 +1025,7 @@ function shutdown() {
   inference.close();
   pictures?.close();
   server.closeAllConnections();
-  const stopped = opencode.close();
+  const stopped = Promise.allSettled([opencode.close(), kilo.close(), cline.close()]);
   server.close(() => stopped.finally(() => process.exit(0)));
   setTimeout(() => process.exit(0), 5000).unref();
 }
@@ -1023,6 +1051,12 @@ process.on('message', message => {
     // status before activation completes. Its own release is authoritative.
     updateState = { ...message.update, currentVersion: RELEASE.version };
     broadcast({ kind: 'bridge:update', update: updateState });
+  } else if (message?.type === 'check-result' && typeof message.requestId === 'string') {
+    const settle = pendingBridgeChecks.get(message.requestId);
+    if (settle) {
+      pendingBridgeChecks.delete(message.requestId);
+      settle(message.update && typeof message.update === 'object' && !Array.isArray(message.update) ? message.update : null);
+    }
   } else if (message?.type === 'prepare-update') {
     const idle = !stopping && !updateBusy();
     if (idle) draining = true;

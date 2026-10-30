@@ -20,6 +20,7 @@ return function(env)
 	local log = env.require("runtime/log")
 	local signal = env.require("runtime/signal")
 	local dispose = env.require("runtime/dispose")
+	local accounting = env.require("runtime/request_accounting")
 
 	local FILE = "stats.json"
 	-- Thirteen months of days. Past that the oldest is dropped, which is also the
@@ -50,7 +51,7 @@ return function(env)
 	local function blankTotals()
 		return {
 			sessions = 0, messages = 0, userMessages = 0, replies = 0,
-			tokensIn = 0, tokensOut = 0, cached = 0, reasoning = 0,
+			tokensIn = 0, tokensOut = 0, cached = 0, cacheCreated = 0, reasoning = 0, unpriced = 0,
 			cost = 0, requests = 0, toolCalls = 0, toolErrors = 0, errors = 0,
 		}
 	end
@@ -62,6 +63,9 @@ return function(env)
 			-- Nil until the first request is recorded, and the Usage panel prints it
 			-- rather than implying the token columns cover the whole history.
 			tokensFrom = nil,
+			requestTrackingSince = clock.ms(),
+			keyUsage = {},
+			conversationUsage = {},
 			seededAt = nil,
 			days = {},
 			hours = {},
@@ -98,12 +102,32 @@ return function(env)
 
 	local DAY_TEMPLATE = {
 		sessions = 0, messages = 0, userMessages = 0, replies = 0,
-		tokensIn = 0, tokensOut = 0, cost = 0, requests = 0,
+		tokensIn = 0, tokensOut = 0, cost = 0, requests = 0, unpriced = 0,
 		toolCalls = 0, toolErrors = 0, errors = 0,
 	}
 
 	local function blankDay()
 		return sanitiseCounters({}, DAY_TEMPLATE)
+	end
+
+	local function usageCounters(value)
+		value = type(value) == "table" and value or {}
+		local out = { estimated = value.estimated == true }
+		for _, name in ipairs({ "requests", "tokensIn", "tokensOut" }) do
+			local count = number(value[name])
+			out[name] = count <= 9007199254740991 and count == math.floor(count) and count or 0
+		end
+		return out
+	end
+
+	local function addUsage(row, name, amount)
+		amount = number(amount)
+		if amount > 9007199254740991 or amount ~= math.floor(amount) then return end
+		row[name] = math.min(9007199254740991, row[name] + amount)
+	end
+
+	local function validId(value)
+		return type(value) == "string" and #value > 0 and #value <= 160 and not value:find("[%z\1-\31\127]")
 	end
 
 	function M.load()
@@ -115,6 +139,21 @@ return function(env)
 			M.data.seededAt = tonumber(stored.seededAt)
 			M.data.totals = sanitiseCounters(stored.totals, blankTotals())
 			M.data.estimated = stored.estimated == true
+			if number(stored.requestTrackingSince) > 0 and number(stored.requestTrackingSince) <= 9007199254740991 then
+				M.data.requestTrackingSince = math.floor(number(stored.requestTrackingSince))
+			end
+			for providerId, provider in pairs(type(stored.keyUsage) == "table" and stored.keyUsage or {}) do
+				if validId(providerId) and type(provider) == "table" then
+					local entries = {}
+					for keyId, value in pairs(provider) do
+						if validId(keyId) and type(value) == "table" then entries[keyId] = usageCounters(value) end
+					end
+					M.data.keyUsage[providerId] = entries
+				end
+			end
+			for id, value in pairs(type(stored.conversationUsage) == "table" and stored.conversationUsage or {}) do
+				if validId(id) and type(value) == "table" then M.data.conversationUsage[id] = usageCounters(value) end
+			end
 			-- Lifetime metadata is persisted beside daily buckets. Reloading only
 			-- the buckets discarded model first/last-use dates and hour totals.
 			for hour, count in pairs(type(stored.hours) == "table" and stored.hours or {}) do
@@ -127,7 +166,7 @@ return function(env)
 				if type(id) == "string" and type(entry) == "table" then
 					M.data.models[id] = {
 						requests = number(entry.requests), tokensIn = number(entry.tokensIn),
-						tokensOut = number(entry.tokensOut), cost = number(entry.cost),
+						tokensOut = number(entry.tokensOut), cost = number(entry.cost), unpriced = number(entry.unpriced),
 						firstAt = number(entry.firstAt) > 0 and number(entry.firstAt) or nil,
 						lastAt = number(entry.lastAt) > 0 and number(entry.lastAt) or nil,
 					}
@@ -152,6 +191,7 @@ return function(env)
 									tokensIn = number(entry.tokensIn),
 									tokensOut = number(entry.tokensOut),
 									cost = number(entry.cost),
+									unpriced = number(entry.unpriced),
 								}
 							end
 						end
@@ -277,15 +317,19 @@ return function(env)
 		local tokensIn = number(delta.prompt)
 		local tokensOut = number(delta.completion)
 		local cost = number(delta.cost)
+		local unpriced = delta.costKnown == false and 1 or 0
 
 		bump(day, "requests")
 		bump(day, "tokensIn", tokensIn)
 		bump(day, "tokensOut", tokensOut)
 		bump(day, "cost", cost)
+		bump(day, "unpriced", unpriced)
 		bump(M.data.totals, "requests")
 		bump(M.data.totals, "tokensIn", tokensIn)
 		bump(M.data.totals, "tokensOut", tokensOut)
 		bump(M.data.totals, "cached", number(delta.cached))
+		bump(M.data.totals, "cacheCreated", number(delta.cacheCreated))
+		bump(M.data.totals, "unpriced", unpriced)
 		bump(M.data.totals, "reasoning", number(delta.reasoning))
 		bump(M.data.totals, "cost", cost)
 		if delta.estimated then M.data.estimated = true end
@@ -302,6 +346,7 @@ return function(env)
 			bump(perDay, "tokensIn", tokensIn)
 			bump(perDay, "tokensOut", tokensOut)
 			bump(perDay, "cost", cost)
+			bump(perDay, "unpriced", unpriced)
 
 			local lifetime = M.data.models[model]
 			if not lifetime then
@@ -312,11 +357,67 @@ return function(env)
 			bump(lifetime, "tokensIn", tokensIn)
 			bump(lifetime, "tokensOut", tokensOut)
 			bump(lifetime, "cost", cost)
+			bump(lifetime, "unpriced", unpriced)
 			lifetime.lastAt = at
 		end
 
 		M.save()
 		M.changed:fire(M.data)
+	end
+
+	local function usageRows(reference, create)
+		if not M.loaded then M.load() end
+		local rows = {}
+		if validId(reference.conversationId) then
+			local row = M.data.conversationUsage[reference.conversationId]
+			if not row and create then row = usageCounters(); M.data.conversationUsage[reference.conversationId] = row end
+			if row then rows[#rows + 1] = row end
+		end
+		if validId(reference.providerId) and validId(reference.keyId) then
+			local provider = M.data.keyUsage[reference.providerId]
+			if not provider and create then provider = {}; M.data.keyUsage[reference.providerId] = provider end
+			local row = provider and provider[reference.keyId]
+			if not row and create then row = usageCounters(); provider[reference.keyId] = row end
+			if row then rows[#rows + 1] = row end
+		end
+		return rows
+	end
+
+	-- Counts the locally observed dispatch, including failures and retries. This
+	-- stays separate from historical request totals based on successful usage.
+	function M.recordDispatch(reference)
+		local rows = usageRows(reference or {}, true)
+		for _, row in ipairs(rows) do addUsage(row, "requests", 1) end
+		if #rows > 0 then M.save(); M.changed:fire(M.data) end
+	end
+
+	function M.recordKeyTokens(delta)
+		local rows = usageRows(delta.reference or {}, false)
+		for _, row in ipairs(rows) do
+			addUsage(row, "tokensIn", delta.prompt)
+			addUsage(row, "tokensOut", delta.completion)
+			if delta.estimated then row.estimated = true end
+		end
+		if #rows > 0 then M.save(); M.changed:fire(M.data) end
+	end
+
+	local function readUsage(value)
+		local out = usageCounters(value)
+		out.trackedSince = M.data.requestTrackingSince
+		return out
+	end
+
+	function M.keyUsage(record, index)
+		if not M.loaded then M.load() end
+		local provider = type(record) == "table" and M.data.keyUsage[tostring(record.id or "")]
+		local id = type(record) == "table" and type(record.keyIds) == "table" and record.keyIds[index]
+		return readUsage(provider and id and provider[id])
+	end
+
+	function M.conversationUsage(session)
+		if not M.loaded then M.load() end
+		local id = accounting.conversationId(session)
+		return readUsage(id and M.data.conversationUsage[id])
 	end
 
 	function M.recordTool(name, ok, at)
@@ -427,9 +528,13 @@ return function(env)
 		end, { name = "stats", order = -1000 })
 
 		local untoken = usage.recorded:connect(function(delta) M.recordRequest(delta) end)
+		local undispatch = accounting.dispatched:connect(M.recordDispatch)
+		local unkeytokens = accounting.tokens:connect(M.recordKeyTokens)
 
 		dispose.add(unhook, "stats.events")
 		dispose.add(untoken, "stats.usage")
+		dispose.add(undispatch, "stats.dispatches")
+		dispose.add(unkeytokens, "stats.keyUsage")
 		-- The last few seconds of a session are the ones the debounce has not written
 		-- yet, and an unload is exactly when they would be lost.
 		dispose.add(function() M.saveNow() end, "stats.flush")
@@ -437,8 +542,7 @@ return function(env)
 	end
 
 	function M.init()
-		if M.loaded then return M end
-		M.load()
+		if not M.loaded then M.load() end
 		M.observe()
 		local ok, err = pcall(function()
 			M.seedFromSessions(env.require("agent/session").list())
@@ -498,7 +602,7 @@ return function(env)
 			fromKey = from and clock.keyFromDayNumber(from) or nil,
 			activeDays = 0,
 			sessions = 0, messages = 0, userMessages = 0, replies = 0,
-			tokensIn = 0, tokensOut = 0, tokens = 0, cost = 0,
+			tokensIn = 0, tokensOut = 0, tokens = 0, cost = 0, unpriced = 0,
 			requests = 0, toolCalls = 0, toolErrors = 0, errors = 0,
 			estimated = M.data.estimated == true,
 			hours = {},
@@ -518,6 +622,7 @@ return function(env)
 				out.tokensIn = out.tokensIn + number(day.tokensIn)
 				out.tokensOut = out.tokensOut + number(day.tokensOut)
 				out.cost = out.cost + number(day.cost)
+				out.unpriced = out.unpriced + number(day.unpriced)
 				out.requests = out.requests + number(day.requests)
 				out.toolCalls = out.toolCalls + number(day.toolCalls)
 				out.toolErrors = out.toolErrors + number(day.toolErrors)
@@ -528,13 +633,14 @@ return function(env)
 				for id, entry in pairs(day.models or {}) do
 					local row = perModel[id]
 					if not row then
-						row = { id = id, requests = 0, tokensIn = 0, tokensOut = 0, cost = 0 }
+						row = { id = id, requests = 0, tokensIn = 0, tokensOut = 0, cost = 0, unpriced = 0 }
 						perModel[id] = row
 					end
 					row.requests = row.requests + number(entry.requests)
 					row.tokensIn = row.tokensIn + number(entry.tokensIn)
 					row.tokensOut = row.tokensOut + number(entry.tokensOut)
 					row.cost = row.cost + number(entry.cost)
+					row.unpriced = row.unpriced + number(entry.unpriced)
 				end
 				if dayIsActive(day) then
 					active[index] = true

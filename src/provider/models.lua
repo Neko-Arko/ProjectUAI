@@ -6,8 +6,8 @@
 --   1. what the user added by hand, which always wins because they typed it
 --   2. what GET /v1/models reported, cached for the session
 --
--- Generic lists retain all IDs. Google's native catalog explicitly declares
--- supportedGenerationMethods, so its non-generation entries can be excluded.
+-- Generic lists retain all IDs. Documented catalog schemas can explicitly
+-- exclude non-chat APIs without guessing capabilities from a model's name.
 return function(env)
 	local util = env.require("runtime/util")
 	local clock = env.require("runtime/clock")
@@ -17,8 +17,10 @@ return function(env)
 	local proxy = env.require("provider/proxy")
 	local signal = env.require("runtime/signal")
 	local urls = env.require("net/url")
+	local modelCatalog = env.require("provider/model_catalog")
 	local communityKey = env.require("provider/community_key")
 	local support = env.require("runtime/support")
+	local providerKeys = env.require("runtime/provider_keys")
 
 	local CACHE_MS = 10 * 60 * 1000
 
@@ -34,10 +36,20 @@ return function(env)
 	local function scopeFor(record)
 		local scope = { baseUrl = registry.normaliseBaseUrl(record.baseUrl), api = record.api or "openai",
 			apiKey = record.apiKey, authStyle = record.authStyle, headers = record.headers or {}, query = record.query or {},
+			keyMode = providerKeys.mode(record), selectedKey = providerKeys.mode(record) == "single" and providerKeys.selected(record) or nil,
+			keyPaused = providerKeys.pauseFlags(record),
 			claudeUa = record.claudeUa }
 		if registry.isOpencodeZen(record) then
 			scope.opencode = env.require("net/bridge").opencodeStatus()
 			scope.bridge = env.require("net/bridge_connection").get()
+		end
+		if registry.isCline(record) then
+			local status = env.require("net/bridge").clineStatus()
+			-- Signing in can finish during an explicit refresh. Transient status
+			-- text does not change the authenticated owner of its catalog.
+			scope.cline = { enabled = status.enabled, version = status.version }
+			scope.bridge = env.require("net/bridge_connection").get()
+			scope.bridge.instance = env.require("net/bridge").status().instance or scope.bridge.instance
 		end
 		return util.deepCopy(scope)
 	end
@@ -67,6 +79,7 @@ return function(env)
 	-- Other ids use a distinct "free" token rather than matching "freedom".
 	function M.isFree(record, id)
 		if communityKey.isApplied(record) then return true end
+		if registry.isCline(record) then return env.require("net/bridge").clineHasModel(id) == true end
 		if registry.isOpencodeGo(record) then return false end
 		local name = tostring(id or ""):lower()
 		if registry.isOpencodeZen(record) and name == "big-pickle" then return true end
@@ -157,6 +170,7 @@ return function(env)
 		local recovery = proxy.new(record, { aborted = opts.aborted, onRetry = opts.onRetry, deadlineMs = deadline })
 		local function fetch()
 			return http.send({
+				requiresAccess = true,
 				url = url,
 				method = "GET",
 				headers = headers,
@@ -170,9 +184,10 @@ return function(env)
 			})
 		end
 		local res, err, decoded, decodeError
-		local cli = scope.opencode and scope.opencode.available == true
+		local cli = registry.isCline(snapshot) and "cline" or scope.opencode and scope.opencode.available == true and "opencode"
 		if cli then
-			decoded, err = env.require("net/bridge").opencodeModels(opts)
+			if cli == "cline" then decoded, err = env.require("net/bridge").clineModels(opts)
+			else decoded, err = env.require("net/bridge").opencodeModels(opts) end
 			if decoded then res = { ok = true, status = 200 } end
 		else
 			res, err = fetch()
@@ -212,7 +227,7 @@ return function(env)
 		end
 		pending[key] = nil
 		if not res or not res.ok or type(decoded) ~= "table" or decoded.error ~= nil then
-			if cli then return {}, support.error(err or "Could not read the OpenCode CLI model list.") end
+			if cli then return {}, support.error(err or (cli == "cline" and "Could not read Cline's free model list." or "Could not read the OpenCode CLI model list.")) end
 			local note = "could not read the model list"
 			if res and res.status == 404 then note = "this endpoint has no /models route -- add a model by hand" end
 			if res and res.status == 401 then note = "the API key was rejected" end
@@ -229,7 +244,7 @@ return function(env)
 		-- The documented shape is { data = { { id = ... } } }. Some servers answer
 		-- with a bare array, and Ollama answers with { models = { { name = ... } } }.
 		local rows = decoded.data or decoded.models or decoded
-		local found, seen = {}, {}
+		local found, seen, excluded = {}, {}, 0
 		if type(rows) == "table" then
 			for _, row in ipairs(rows) do
 				local id
@@ -239,6 +254,9 @@ return function(env)
 					id = row.id or row.name or row.model
 				end
 				id = type(id) == "string" and util.trim(id) or ""
+				if id ~= "" and not modelCatalog.accepts(url, row) then
+					id, excluded = "", excluded + 1
+				end
 				if nativeGemini then
 					id = id:gsub("^models/", "")
 					if type(row) == "table" and type(row.supportedGenerationMethods) == "table" then
@@ -259,10 +277,13 @@ return function(env)
 		M.changed:fire(record.id, found)
 
 		if #found == 0 then
+			if excluded > 0 then return {}, support.error("the catalog has no compatible chat models -- check the provider's API documentation or add an id manually") end
 			return {}, support.error("the endpoint returned an empty list -- add a model by hand")
 		end
-		local note = string.format("%d model%s from %s", #found, #found == 1 and "" or "s", cli and "OpenCode CLI through Project UAI Bridge" or urls.display(url))
+		local note = string.format("%d model%s from %s", #found, #found == 1 and "" or "s",
+			cli == "cline" and "Cline through Project UAI Bridge" or cli and "OpenCode CLI through Project UAI Bridge" or urls.display(url))
 		if partial then note = note .. "; catalog page limit reached, additional IDs may be entered manually" end
+		if excluded > 0 then note = note .. string.format("; %d non-chat entries hidden", excluded) end
 		if registry.isOpencodeGo(record) then note = note .. "; public list -- subscription access is checked when you send" end
 		return found, note
 	end

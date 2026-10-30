@@ -1,41 +1,81 @@
-UAI BRIDGE 3.6.5 — WINDOWS 10/11 (64-BIT)
+UAI BRIDGE 3.7.0 - WINDOWS 10/11 (64-BIT)
 
-1. Download UAI-Bridge-3.6.5-win-x64.exe and open it directly.
-2. If Node.js is missing, choose Get Node.js or Manual setup.
-   Then click Start Cowork.
+1. Download UAI-Bridge-3.7.0-win-x64.exe and open it directly.
+   https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.7.0/UAI-Bridge-3.7.0-win-x64.exe
+2. On Workspace, if Node.js is missing, choose Get Node.js or Manual setup,
+   then Check again. Click Start Cowork.
 3. Load the updated Project UAI script in Roblox. It connects automatically.
 
-The browser opens automatically unless you turn off Open browser when bridge
-starts. Installed Node.js 18+ is detected, or the app
+The native WPF app has five pages: Workspace, Connections, Updates, Settings, and Tunnels.
+Workspace starts and stops the bridge, copies the client script, and sets up
+Node.js. Connections has MCP setup. Tunnels has Cline, OpenCode and Kilo switches,
+readiness and setup actions.
+OpenCode and Cline installation status appears before starting Cowork. After
+installing either app, use Refresh installed apps. Installation is separate from
+sign-in and model readiness. Set up Node.js first if the status says Not checked.
+Updates shows app and bridge checks, downloads, and updates ready to restart.
+Settings saves browser, launch, and automatic app update preferences. Navigation
+adapts to smaller windows, and page content scrolls to keep actions reachable.
+
+Chat opens in the existing Cowork browser workspace. There is no embedded chat
+in the desktop window. The browser opens automatically unless you turn off
+Open browser on start in Settings. Installed Node.js 18+ is detected, or the app
 downloads a verified Node.js LTS runtime for your account. Node is no longer
 bundled. .NET, the bridge, browser assets and client are included in the single
 executable. Supporting files are prepared automatically in your private user
 cache. No ZIP extraction, terminal or administrator access is needed.
 
 OpenCode is optional and is never bundled or downloaded by this app. Install
-OpenCode Desktop from https://opencode.ai, then restart Cowork to use its native
-free-model workaround. The OpenCode card shows the actual CLI version and readiness. Use the OpenCode tunnel switch before starting Cowork. The original direct
-desktop workaround also remains supported; on mobile, OpenCode requires the UAI Relay app from Discord.
+OpenCode Desktop from https://opencode.ai, then restart the bridge to use its native
+free-model workaround. The OpenCode card on Tunnels shows the actual CLI
+version and readiness. Set the OpenCode tunnel switch before starting Cowork.
+The original direct desktop workaround also remains supported; on mobile,
+OpenCode requires the UAI Relay app from Discord.
 UAI tools run in Roblox. The native CLI is not allowed to run desktop tools.
 OpenCode Go subscriptions use https://opencode.ai/inference/go/v1 and your Go API
 key directly. Go does not use the native free-model route or its mobile relay requirement.
+
+Cline is also optional. Install its official CLI from
+https://docs.cline.bot/cline-cli/overview, then use Tunnels > Cline tunnel.
+Copy sign-in command gives you this PowerShell command:
+cline auth cline
+The bridge prefers a dedicated UAI profile when present; otherwise it uses your existing
+Cline sign-in. Restart the bridge after sign-in. Ready means the bridge checked
+Cline sign-in and its current official free-model catalog; provider quotas still
+apply. Native Cline owns authentication.
+
+Kilo quota recovery is enabled on Tunnels. It starts only after an explicit
+anonymous free-model quota response. The first recovery downloads a verified
+helper. Shared outbound connections may also reach their provider allowance.
 
 Project UAI Free is the default when you have not configured a provider. Thank
 you for your continued support. More free providers may become available.
 Discord help, availability and updates: https://discord.gg/9xYyyYuKap
 
 The bridge downloads updates automatically and applies them when work is idle.
-The desktop app also fetches updates from GitHub and applies them on restart.
-The previous version remains available if an update cannot start. Automatic
-bridge updates preserve pairing; manually restarting the app rotates its token.
+Its version includes the Cowork web UI; use Check for bridge updates on Updates
+while the bridge runs to look immediately. Old cached versions are removed
+automatically. The desktop app also checks GitHub and downloads verified app
+updates when Automatic app updates is enabled in Settings. Updates shows
+progress and the staged version. Check for updates works manually even when
+automatic downloads are off. Stop the bridge on Workspace, then choose Restart
+to update app on Updates to apply a staged version immediately. Closing the app
+also leaves a staged update ready for the next launch.
+
+For Restart to update app, the old app waits for the update helper to accept the
+handoff before exiting. The new app must report successful startup; otherwise the retained
+version is opened again. Failed startup candidates are retried only when you
+manually choose Check for updates. Unrelated or malformed GitHub release entries
+are skipped. Automatic bridge updates preserve pairing; manually restarting the
+app rotates its token.
 
 The executable includes the matching client as part of its embedded files.
 Use the updated Project UAI loader in your executor.
 Roblox must remain running. The app does not launch Roblox or an executor.
 
-To connect a local coding agent, click MCP setup in the running desktop app
-or open Settings > MCP in Cowork and choose
-Copy setup prompt. The desktop executable also supports --mcp-stdio for
+To connect a local coding agent, click MCP setup on Connections while the bridge
+is running, or open Settings > MCP in Cowork and choose Copy setup prompt.
+The desktop executable also supports --mcp-stdio for
 harnesses that launch local MCP commands. Roblox retains tool permissions.
 
 If Roblox is not connecting, open UAI > Cowork. Turn on "Find desktop app

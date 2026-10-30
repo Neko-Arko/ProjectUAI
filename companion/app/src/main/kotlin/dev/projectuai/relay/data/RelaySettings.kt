@@ -14,6 +14,7 @@ interface RelaySettings {
     var userStopped: Boolean
     var autoStart: Boolean
     var automaticUpdates: Boolean
+    var kiloEnabled: Boolean
     var lastUpdateCheckAt: Long
     var lastInstallVersion: String
     var resumeAfterUpdate: Boolean
@@ -50,6 +51,10 @@ class PrefsSettings(context: Context) : RelaySettings {
     override var automaticUpdates: Boolean
         get() = prefs.getBoolean("automaticUpdates", true)
         set(value) = prefs.edit().putBoolean("automaticUpdates", value).apply()
+
+    override var kiloEnabled: Boolean
+        get() = prefs.getBoolean("kiloEnabled", true)
+        set(value) = prefs.edit().putBoolean("kiloEnabled", value).apply()
 
     override var lastUpdateCheckAt: Long
         get() = prefs.getLong("lastUpdateCheckAt", 0)
@@ -88,4 +93,5 @@ class MemorySettings(
     override var resumeAfterUpdate: Boolean = false,
     override var updateInstallPending: Boolean = false,
     override var updateInstallSessionId: Int = -1,
+    override var kiloEnabled: Boolean = true,
 ) : RelaySettings

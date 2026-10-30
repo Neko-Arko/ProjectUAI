@@ -100,10 +100,12 @@ and loaded with `require` from a LocalScript.
 
 Loading UI LIB returns the API without mounting a window. `CreateWindow` mounts
 one. It does not depend on `getgenv().UAI`, configure providers, change tool
-permissions, or create agent sessions. The full client mounts its standard
-application by default. Pass `{ ui = false, reuse = true }` to its loader for a
-runtime without a mounted app, then use `uai.sdk` for owned integrations and
-request handles. `uai.show(...)` mounts the standard app on demand. There is no
+permissions, or create agent sessions. The full client initially offers password
+setup or an explicit Continue without encryption choice. A vault requires unlock
+on each execution; a saved unprotected-storage choice skips future prompts.
+Pass `{ ui = false, reuse = true }` to keep the normal app hidden after access is granted,
+then use `uai.sdk` for owned integrations and request handles. `uai.show(...)`
+shows the standard app on demand after any required setup or unlock. There is no
 alternate client `Parent` option. See [the embedding SDK guide](EMBEDDING.md).
 
 ### Keep downloads at the entry point

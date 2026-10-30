@@ -25,7 +25,8 @@ return function(env)
 	end
 
 	function M.eligible(record)
-		return config.get("agent.autoFreeRouting", true) ~= false and eligibleRecord(record)
+		return not config.accessProblem() and not config.vaultStatus().locked and config.get("agent.autoFreeRouting", true) ~= false and eligibleRecord(record)
+			and community.problem(record) == nil and #registry.requestKeys(record) > 0
 	end
 
 	local function same(a, b)
@@ -56,10 +57,16 @@ return function(env)
 	end
 
 	local function call(record, state, body)
+		if not current(record, state) then return nil end
 		local start = clock.ms()
+		local headers = env.require("provider/chat").headers(record)
+		local accounting = env.require("runtime/request_accounting").new(record)
+		local key = record.apiKey
 		local function aborted() return not current(record, state) or clock.since(start) >= TARGET end
 		local response = http.send({ url = registry.endpoint(record, "/chat/completions"), method = "POST",
-			headers = env.require("provider/chat").headers(record), body = util.encode(body),
+			requiresAccess = true,
+			headers = headers, body = util.encode(body),
+			onDispatch = function() accounting.dispatch(key, headers) end,
 			identity = registry.identityFor(record), identityRequired = registry.requiresClaude(record),
 			relay = state.scope.relay ~= nil, attempts = 1, timeout = TARGET / 1000, deadlineMs = start + TARGET,
 			aborted = aborted, silent = true, tag = "free:probe" })
@@ -71,6 +78,7 @@ return function(env)
 			if type(decoded) ~= "table" or decoded.error then return nil end
 			parsed = sse.fromResponse(decoded)
 		end
+		accounting.attach(parsed)
 		if parsed.streamError then return nil end
 		return parsed, clock.since(start)
 	end
@@ -205,6 +213,9 @@ return function(env)
 	function M.current(record)
 		local owner = owners[record]
 		-- Expiring latency measurements cannot abort an accepted long request.
+		-- Lock clears the saved provider's live fields; the accepted snapshot may
+		-- still finish its request while new work remains gated by M.eligible.
+		if owner and (config.accessProblem() or config.vaultStatus().locked) then return alive and registry.get(owner.record.id) == owner.record end
 		return alive and (not owner or matches(owner.record, owner.state))
 	end
 
@@ -213,7 +224,10 @@ return function(env)
 	function M.status(record)
 		local state = validState(record)
 		local best = state and winner(record)
+		local availability = community.availability(record)
+		local access = config.accessProblem()
 		return { enabled = config.get("agent.autoFreeRouting", true) ~= false, supported = eligibleRecord(record),
+			available = not access and availability.open, availability = access or availability.message,
 			running = state and state.running or false, model = best and best.model,
 			ms = best and best.ms, ready = state ~= nil }
 	end

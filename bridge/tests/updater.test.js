@@ -295,6 +295,47 @@ test('a worker crash during idle negotiation restores a live worker instead of r
   assert.equal(sup.worker.child.exitCode, null); assert.equal(sup.current.version, CURRENT);
 });
 
+test('pruning removes stale versions and quarantine folders while keeping fresh entries', async t => {
+  const root = temporary(t), cacheDir = path.join(root, 'cache');
+  const updater = new Updater({ cacheDir, fetchBytes: fixture().fetchBytes });
+  const first = await updater.check(CURRENT);
+  updater.activate(first);
+  const stale = path.join(cacheDir, 'versions', '9.9.9-' + 'b'.repeat(64));
+  const quarantine = path.join(cacheDir, '.invalid-stale');
+  fs.mkdirSync(stale, { recursive: true }); fs.mkdirSync(quarantine, { recursive: true });
+  const old = new Date(Date.now() - 7200000);
+  fs.utimesSync(stale, old, old); fs.utimesSync(quarantine, old, old);
+  const fresh = path.join(cacheDir, 'versions', '9.9.9-' + 'c'.repeat(64));
+  fs.mkdirSync(fresh, { recursive: true });
+  updater.prune([first.key]);
+  assert.equal(fs.existsSync(stale), false, 'stale version removed');
+  assert.equal(fs.existsSync(quarantine), false, 'stale quarantine removed');
+  assert.equal(fs.existsSync(fresh), true, 'recent unreferenced entry survives for concurrent processes');
+  assert.equal(fs.existsSync(path.dirname(first.entry)), true, 'active version kept');
+});
+
+test('a desktop update-check request performs one supervised check and answers before applying', async t => {
+  const data = fixture();
+  const { supervisor, call } = await running(t, data, { idleRetryMs: 50 });
+  assert.equal(supervisor.status.state, 'current');
+  const response = await call('/api/desktop/update-check', {});
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.update.state, 'staged');
+  assert.equal(body.update.currentVersion, CURRENT);
+  assert.equal(body.update.availableVersion, NEXT);
+  await until(async () => supervisor.status.state === 'updated', 'the staged release applies once the reply is delivered');
+  await until(async () => { try { return (await call('/api/hello')).ok; } catch { return false; } }, 'the updated worker serves the API again');
+  assert.equal(supervisor.current.version, NEXT);
+  const settled = await call('/api/desktop/update-check', {});
+  assert.equal(settled.status, 200);
+  const settledBody = await settled.json();
+  assert.equal(settledBody.ok, true);
+  assert.equal(settledBody.update.state, 'current');
+  assert.equal(settledBody.update.currentVersion, NEXT);
+});
+
 test('a downloaded start.txt keeps its cached update after the original runtime is rematerialized', async t => {
   let sup; t.after(() => sup?.stop());
   const root = temporary(t), packageDir = path.join(root, 'packages', 'original'); fs.mkdirSync(packageDir, { recursive: true });

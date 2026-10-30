@@ -14,6 +14,7 @@ return function(env)
 	local util = env.require("runtime/util")
 	local config = env.require("runtime/config")
 	local configTransfer = env.require("runtime/config_transfer")
+	local credentials = env.require("runtime/credentials")
 	local caps = env.require("runtime/caps")
 	local clock = env.require("runtime/clock")
 	local log = env.require("runtime/log")
@@ -148,40 +149,39 @@ return function(env)
 		})
 
 		R.number(appearance, "Text scale", "Multiplies every type size.", "ui.fontScale", 0.85, 1.4, 0.05)
-		R.toggle(appearance, {
+		local conversation = build.section("Conversation display", "Choose how messages, tool activity and notifications appear.")
+		R.toggle(conversation, {
 			label = "Show reasoning",
 			hint = "Display the model's chain of thought when it sends one. Applies to the conversation already on screen.",
 			path = "ui.showReasoning",
 		})
-		R.toggle(appearance, {
+		R.toggle(conversation, {
 			label = "Show the code a tool was given",
 			hint = "Draws the Luau, the file body or the property map a tool call carries under its row, outside the fold. Off, it is still there behind the row's own caret.",
 			path = "ui.showToolCode",
 		})
-		R.toggle(appearance, {
+		R.toggle(conversation, {
 			label = "Expand tool detail",
 			hint = "Open the remaining arguments and the result by default, rather than on the first click.",
 			path = "ui.showToolDetail",
 		})
-		R.toggle(appearance, {
+		R.toggle(conversation, {
 			label = "Show token counts",
 			hint = "Token and cost details in the composer's options menu.",
 			path = "ui.showUsage",
 		})
-		R.toggle(appearance, {
+		R.toggle(conversation, {
 			label = "Show the activity card",
 			hint = "The greeting and the counters an empty conversation opens with.",
 			path = "ui.showActivity",
 		})
-		R.toggle(appearance, {
+		R.toggle(conversation, {
 			label = "Notify while minimized",
 			hint = "A toast when a turn finishes, fails or is stopped with the window closed -- from any conversation. The count on the launcher appears either way.",
 			path = "ui.notifications",
 		})
 
-		-- Built here rather than after the section below it, because nothing in this
-		-- card sets a layout order: the rows appear in the order they are created, and a
-		-- note constructed later landed wherever the tie-break put it.
+		-- Keep the live layout note with the appearance controls it describes.
 		local viewportNote = P.text(appearance, {
 			text = "Now: " .. responsive.describe(),
 			role = "caption",
@@ -202,7 +202,7 @@ return function(env)
 		local text = P.column(row, {
 			size = UDim2.new(0, 0, 0, 0), auto = "Y", flex = "Fill", gap = 0, layoutOrder = 1,
 		})
-		P.text(text, { text = "Quick chat key", role = "small" })
+		P.text(text, { text = "Quick chat key", role = "label", wrap = true, auto = "Y" })
 		local keyHint = P.text(text, {
 			text = "",
 			role = "caption",
@@ -243,14 +243,15 @@ return function(env)
 		local build = builder(container)
 
 		local where = build.section("Where your data goes",
-			"This client has no telemetry and no home to call. The only outbound requests it makes are the ones listed here, and every one of them is somewhere you added.")
+			"Enabled providers and connected local relays are listed below. The selected route receives "
+			.. "your messages and relevant tool results. Tools can make additional requests when used.")
 
 		local list = {}
 		for _, record in ipairs(providers.list()) do
 			if record.enabled ~= false then
 				list[#list + 1] = {
 					key = record.label,
-					value = record.baseUrl,
+					value = credentials.cleanUrl(record.baseUrl),
 					tone = record.id == (providers.active() or {}).id and "good" or nil,
 				}
 			end
@@ -263,13 +264,64 @@ return function(env)
 			list[#list + 1] = { key = "Companion relay", value = "127.0.0.1:" .. tostring(relayLink.status().port) }
 		end
 		if #list == 0 then
-			build.note("Nothing is configured, so nothing leaves this machine at all.")
+			R.paragraph(where, "No enabled provider or connected local relay.")
 		else
-			R.facts(container, list, { name = "Endpoints", layoutOrder = build.order() })
+			R.facts(where, list, { name = "Endpoints" })
 		end
 
-		local secrets = build.section("Keys and logs",
-			"An API key is stored in the settings file so a request can be signed with it. Request logs and diagnostic exports reduce API keys to their last four characters. Full configuration export keeps all credentials so you can transfer settings; keep that copy private.")
+		local storage = build.section("Provider credential storage",
+			"Choose password encryption or explicitly save without encryption. Protected credentials need your password each time UAI starts. Other scripts can still intercept credentials while you use them.")
+		local storageStatus = R.paragraph(storage, "", { name = "CredentialStorageStatus", layoutOrder = 1 })
+		local function refreshStorage()
+			if not storage.Parent then return end
+			local vault = config.vaultStatus()
+			local unverified = type(config.storageError) == "string" and config.storageError ~= ""
+			storageStatus.Text = unverified and "Saved credential storage could not be verified. Keep this run open to preserve your keys and retry the storage choice."
+				or not fsx.enabled and "Filesystem access is unavailable. UAI needs verified storage before it can save your protection choice."
+				or vault.enabled and (vault.locked and "Saved provider credentials are encrypted and locked. Enter your master password to open UAI."
+					or "Saved provider credentials are encrypted. The vault is unlocked for this run.")
+				or vault.protection == "unprotected" and "Your API keys are saved without encryption. Their byte encoding is reversible; anyone with file access can recover them. Password prompts are skipped."
+				or "Set a master password or explicitly continue without encryption. Existing keys and key-pool settings carry over after storage is verified."
+			storageStatus.TextColor3 = (unverified or not vault.enabled) and theme.color.warn or theme.color.textSecondary
+		end
+		R.paragraph(storage,
+			"The vault covers provider keys, custom headers, query parameters and body overrides. Existing copies, clipboard history, backups and other scripts are outside the vault. "
+			.. "Review remaining configuration before sharing it; notes and other text can contain anything you entered.", { layoutOrder = 2 })
+		R.paragraph(storage,
+			"Replace personal keys regularly at the provider and revoke the old keys. Revoke immediately if theft is suspected. Daily replacement can shorten exposure, but it does not stop a malicious script stealing the replacement. "
+			.. "UAI's Rotate keys option only takes turns between keys; it does not renew or revoke them.", { layoutOrder = 3 })
+		refreshStorage()
+		local unsubscribeStorage = config.changed:connect(function(path)
+			if path == nil or path == "security" or path == "security.vault" then refreshStorage() end
+		end)
+		storage.Destroying:Connect(unsubscribeStorage)
+
+		local vaultSection = build.section("Master-password vault",
+			"Encrypted storage requires unlocking each run. There is no password recovery: forgotten-password reset removes saved vault credentials. You can also choose unprotected storage after unlocking.")
+		local vaultStatus = R.paragraph(vaultSection, "", { name = "CredentialVaultStatus", layoutOrder = 1 })
+		local vaultButton = P.button(vaultSection, { name = "ManageCredentialVault", text = "Set master password", fill = true, layoutOrder = 2,
+			onClick = function() env.require("ui/credentialvault").open() end })
+		local function refreshVault()
+			if not vaultSection.Parent then return end
+			local vault = config.vaultStatus()
+			vaultStatus.Text = vault.busy and "A vault operation is in progress."
+				or vault.error or (vault.enabled and (vault.locked and "Locked. Your encrypted credentials need your master password."
+					or "Unlocked for this run. Lock the vault or change the master password below.")
+				or vault.protection == "unprotected" and "Unprotected storage is active. Set a master password to encrypt your saved credentials."
+				or "Choose password protection or continue without encryption before using UAI.")
+			vaultStatus.TextColor3 = (vault.error or vault.protection == "unprotected") and theme.color.warn or theme.color.textSecondary
+			vaultButton.setText(vault.enabled and (vault.locked and "Unlock credential vault" or "Manage credential vault") or "Set master password")
+			vaultButton.setEnabled(not vault.busy)
+		end
+		refreshVault()
+		local unsubscribeVault = config.changed:connect(function(path)
+			if path == nil or path == "security" or path == "security.vault" then refreshVault() end
+		end)
+		vaultSection.Destroying:Connect(unsubscribeVault)
+
+		local secrets = build.section("Logs and exports",
+			"Request logs mask recognised credentials. Configuration and diagnostic exports exclude credential fields by default. "
+			.. "Only the explicitly labelled private configuration copy includes credentials; keep it private.")
 		R.toggle(secrets, {
 			label = "Mirror the log to the console",
 			hint = "Also print every entry with print/warn, which a developer console can read.",
@@ -566,7 +618,7 @@ return function(env)
 		R.segmented(appearance, {
 			name = "CodeFont",
 			label = "Code font",
-			hint = "The monospace family for code and diagnostics. Roblox renders from a fixed set of families, so this offers the ones that exist rather than a box to type a font name into that could not be loaded.",
+			hint = "Monospace fonts available on this device. Used for code and diagnostic details.",
 			path = "ui.codeFont",
 			options = fontOptions,
 		})
@@ -580,7 +632,7 @@ return function(env)
 		R.select(interface, {
 			name = "InterfaceFont",
 			label = "Interface font",
-			hint = "Menus, the sidebar and the transcript. Only the families this client can actually load are listed -- the list is probed against the engine rather than declared, so it is shorter on an older client than a longer one.",
+			hint = "The font for menus, navigation and messages. Shows the families available on this device.",
 			path = "ui.interfaceFont",
 			options = interfaceOptions,
 		})
@@ -646,18 +698,7 @@ return function(env)
 
 	-- What an export contains, and what it deliberately does not.
 	local function exportPayload()
-		local settings = util.deepCopy(config.data)
-		-- The keys are the one thing that must not be copied into a second file. Kept as
-		-- their last four characters so an exported provider list is still readable as a
-		-- list of providers.
-		for _, record in ipairs(util.get(settings, "providers.list", {}) or {}) do
-			local key = tostring(record.apiKey or "")
-			if key ~= "" then record.apiKey = "..." .. key:sub(-4) end
-		end
-		settings.bridge = settings.bridge or {}
-		if util.trim(tostring(settings.bridge.token or "")) ~= "" then
-			settings.bridge.token = "(removed)"
-		end
+		local settings = credentials.sanitise(config.data)
 		return {
 			exportedAt = clock.ms(),
 			version = env.info and env.info.version or "",
@@ -669,14 +710,19 @@ return function(env)
 
 	local function fullConfigImport()
 		local modal = overlay.modal({
-			title = "Import full configuration",
-			description = "Paste the private JSON copied by Full configuration export. Review it before replacing your settings.",
+			title = "Import configuration",
+			description = "Paste a configuration copy and review it before replacing your settings. Private copies can contain credentials.",
 			width = theme.size.modalWide,
 			height = theme.size.dialogTall,
 			scroll = true,
 		})
 		if not modal then return end
-		local candidate, applyButton
+		local candidate, applyButton, passwordModal
+		local sourceRevision = 0
+		modal.scrim.Destroying:Connect(function()
+			candidate = nil
+			if passwordModal and not passwordModal.closed then passwordModal.close() end
+		end)
 		local status = P.text(modal.content, {
 			name = "ConfigImportStatus",
 			text = "Paste your JSON below, then select Review.",
@@ -694,14 +740,16 @@ return function(env)
 			height = theme.text.monoSmall.height * 8 + theme.space.md * 2,
 			layoutOrder = 2,
 			onChange = function()
+				sourceRevision = sourceRevision + 1
 				candidate = nil
+				if passwordModal and not passwordModal.closed then passwordModal.close() end
 				if applyButton then applyButton.setEnabled(false) end
 				status.Text = "Select Review to validate this configuration."
 				status.TextColor3 = theme.color.textSecondary
 			end,
 		})
 		P.text(modal.content, {
-			text = "Applying replaces providers, credentials, permissions, and all saved preferences. Conversations, activity history, workspace files, and skill files stay on this device.",
+			text = "Applying replaces providers, credentials, permissions and preferences. Copies that exclude credentials require you to enter them again. This device keeps its storage choice and any vault password. Conversations, activity history, workspace files and skill files stay on this device.",
 			role = "caption",
 			color = theme.color.textTertiary,
 			wrap = true,
@@ -712,24 +760,50 @@ return function(env)
 			text = "Cancel", variant = "ghost", size = "sm", layoutOrder = 1,
 			onClick = function() modal.close() end,
 		})
+		local function displayPreview(preview, err)
+			if modal.closed then return end
+			candidate = preview
+			applyButton.setEnabled(preview ~= nil)
+			if not preview then
+				status.Text = tostring(err)
+				status.TextColor3 = theme.color.warn
+				return
+			end
+			local summary = preview.summary
+			status.Text = string.format("Ready to import\n%s · %s\nActive provider: %s\nPermission mode: %s · %s\n%s · Bridge %s",
+				util.pluralise(summary.providers, "provider"), util.pluralise(summary.keys, "API key"),
+				util.ellipsis(summary.active, 64), permissions.MODE_LABELS[summary.permissionMode] or summary.permissionMode,
+				util.pluralise(summary.rules, "rule"), util.pluralise(summary.memory, "memory entry"),
+				summary.bridgeEnabled and "enabled" or "disabled")
+			status.Text = status.Text .. (summary.credentialsIncluded == false
+				and "\nCredentials excluded: enter your credentials again after import."
+				or "\nThis copy can include private credentials.")
+			status.Text = status.Text .. (config.vaultStatus().enabled
+				and "\nThis device keeps its own master-password vault."
+				or summary.rememberCredentials == true and "\nThis device remembers provider credentials using reversible byte encoding."
+				or "\nProvider credentials will stay in this run only.")
+			status.TextColor3 = theme.color.text
+		end
 		P.button(modal.footer, {
 			name = "ReviewConfigImport", text = "Review", size = "sm", layoutOrder = 2,
 			onClick = function()
-				local preview, err = configTransfer.preview(field.get())
-				candidate = preview
-				applyButton.setEnabled(preview ~= nil)
-				if not preview then
-					status.Text = tostring(err)
-					status.TextColor3 = theme.color.warn
-					return
+				if passwordModal and not passwordModal.closed then return end
+				local source, revision = field.get(), sourceRevision
+				local preview, err, reason = configTransfer.preview(source)
+				if reason == "password" then
+					candidate = nil; applyButton.setEnabled(false)
+					status.Text, status.TextColor3 = "Enter the source master password to review this encrypted copy.", theme.color.textSecondary
+					passwordModal = env.require("ui/credentialvault").open("import", {
+						cancelled = function() return modal.closed or sourceRevision ~= revision end,
+						submit = function(password, options)
+							local unlocked, why = configTransfer.preview(source, { password = password, progress = options.progress, cancelled = options.cancelled })
+							return unlocked ~= nil, unlocked or why
+						end,
+						onSuccess = function(unlocked) if not modal.closed and sourceRevision == revision then displayPreview(unlocked) end end,
+					})
+				else
+					displayPreview(preview, err)
 				end
-				local summary = preview.summary
-				status.Text = string.format("Ready to import\n%s · %s\nActive provider: %s\nPermission mode: %s · %s\n%s · Bridge %s",
-					util.pluralise(summary.providers, "provider"), util.pluralise(summary.keys, "API key"),
-					util.ellipsis(summary.active, 64), permissions.MODE_LABELS[summary.permissionMode] or summary.permissionMode,
-					util.pluralise(summary.rules, "rule"), util.pluralise(summary.memory, "memory entry"),
-					summary.bridgeEnabled and "enabled" or "disabled")
-				status.TextColor3 = theme.color.text
 			end,
 		})
 		applyButton = P.button(modal.footer, {
@@ -755,7 +829,8 @@ return function(env)
 					local entry = overlay.open[index]
 					if entry.card and entry.card.Name == "SettingsDialog" then entry.close() end
 				end
-				overlay.toast(persisted and "Full configuration imported and saved" or "Configuration imported for this session", "good", 4)
+				overlay.toast(persisted and "Configuration imported with this device's credential storage preference"
+					or "Configuration imported for this session", "good", 4)
 			end,
 		})
 		clock.delay(theme.duration("fast"), function()
@@ -766,22 +841,36 @@ return function(env)
 	local function paneImportExport(container)
 		local build = builder(container)
 
-		local transfer = build.section("Full configuration",
-			"Copy every saved setting to another device, including provider records, API keys and key pools, custom headers and parameters, permissions, and preferences. This JSON includes credentials; keep it private.")
+		local transfer = build.section("Configuration transfer",
+			"Copy provider records, permissions and preferences to another device. The default copy excludes credential fields, custom headers, query parameters and body overrides. Enter those again after import.")
 		R.paragraph(transfer,
-			"Conversations, activity history, workspace files, and skill files are not included. Saved memory and skill preferences are included.")
+			"Saved memory and skill preferences are included. Review other text before sharing it. Conversations, activity history, workspace files and skill files are not included.")
 		local copyButton = P.button(transfer, {
 			name = "CopyFullConfig",
-			text = "Copy config · includes API keys",
+			text = "Copy config without credentials",
 			variant = "secondary",
 			fill = true,
 			enabled = caps.clipboard,
 			onClick = function()
 				local copied, err = configTransfer.copyToClipboard(caps.fn.clipboard)
-				overlay.toast(copied and "Full configuration copied, including API keys" or tostring(err), copied and "good" or "warn", 4)
+				overlay.toast(copied and "Configuration copied with credential fields excluded" or tostring(err), copied and "good" or "warn", 4)
 			end,
 		})
 		copyButton.setEnabled(caps.clipboard)
+		local privateCopyButton = P.button(transfer, {
+			name = "CopyPrivateConfig", text = "Copy private config including credentials", variant = "ghost", fill = true,
+			enabled = caps.clipboard,
+			onClick = function()
+				local copied, err = configTransfer.copyToClipboard(caps.fn.clipboard, { includeCredentials = true })
+				local message = config.vaultStatus().enabled and "Private configuration copied with encrypted provider credentials. Import requires its master password. Other settings and connection tokens remain readable; keep it private."
+					or "Private configuration copied with recoverable provider credentials and connection tokens. Do not share it."
+				overlay.toast(copied and message
+					or tostring(err), copied and "good" or "warn", 5)
+			end,
+		})
+		privateCopyButton.setEnabled(caps.clipboard)
+		R.paragraph(transfer,
+			"Private copies retain your storage mode. Encrypted copies require the source vault's password; unprotected copies contain recoverable credentials. Other settings and bridge/relay tokens remain readable. Clipboard managers may retain either copy.")
 		if not caps.clipboard then
 			R.paragraph(transfer, "This host cannot write to the clipboard. You can still paste an export to import it.")
 		end
@@ -791,7 +880,9 @@ return function(env)
 		})
 
 		local out = build.section("Diagnostic export",
-			"Writes a copy of your settings and the activity history into the client's own folder. API keys are reduced to their last four characters and the bridge token is dropped. Custom fields may still contain credentials, so review before sharing.")
+			"Writes a copy of your settings and the activity history into the client's own "
+			.. "folder. Credential fields, custom headers, query parameters, body overrides and connection tokens "
+			.. "are excluded. Review remaining text before sharing.")
 		local outPath = EXPORT_DIR .. "/uai-export.json"
 		local result = P.text(out, {
 			name = "ExportResult",
@@ -1124,8 +1215,10 @@ return function(env)
 							local globals = (type(getgenv) == "function") and getgenv() or nil
 							local live = globals and globals.UAI
 							if live and live.destroy then
-								live.destroy()
+								local finished, why = live.destroy()
+								if finished == false then overlay.toast(why or "UAI could not finish unloading. Try again.", "warn", 5) end
 							else
+								if config.vaultStatus().busy then overlay.toast("Finish or cancel credential storage before unloading UAI.", "warn", 5); return end
 								env.require("runtime/dispose").drain()
 								pcall(function() env.require("ui/app").screen:Destroy() end)
 							end
@@ -1141,12 +1234,7 @@ return function(env)
 	local function paneAgent(container)
 		local build = builder(container)
 
-		local agent = build.section("Agent", "How hard it works before it stops and answers.")
-		R.toggle(agent, {
-			name = "AutomaticFreeRouting", label = "Automatic free routing",
-			hint = "Choose a recently verified free model for included HCNSEC access when its model is Auto. Off keeps provider Auto and stops new local routing probes; an active request continues.",
-			path = "agent.autoFreeRouting", value = config.get("agent.autoFreeRouting", true) ~= false,
-		})
+		local agent = build.section("Tools & execution", "Control how much work the agent can do in one turn.")
 		R.number(agent, "Step limit", "Tool rounds allowed in one turn, unless the switch below removes it.",
 			"agent.maxTurns", 4, 60, 1)
 		R.toggle(agent, {
@@ -1175,15 +1263,39 @@ return function(env)
 		R.number(agent, "Tool timeout",
 			"Seconds before a tool is abandoned. Subagents are exempt: they run to their own budget below.",
 			"agent.toolTimeout", 5, 60, 1)
-		R.number(agent, "Request timeout",
+		R.number(agent, "Tool result cap",
+			"Maximum bytes kept from one tool result. A tool's own page limit can be smaller. Roughly four bytes per token for English text; code and Unicode vary.",
+			"agent.resultCap", RESULT_STOPS)
+
+		local requests = build.section("Model requests", "Routing, wait time and recovery when contacting your provider.")
+		R.toggle(requests, {
+			name = "AutomaticFreeRouting", label = "Automatic free routing",
+			hint = "Choose a recently verified free model for included HCNSEC access when its model is Auto. Off keeps provider Auto and stops new local routing probes; an active request continues.",
+			path = "agent.autoFreeRouting", value = config.get("agent.autoFreeRouting", true) ~= false,
+		})
+		R.number(requests, "Request timeout",
 			"Wait for a direct or companion model call. Direct native requests cap at 300 seconds; hosts and providers may stop sooner. Cowork bridge requests always wait until completion, failure or Stop.",
 			"agent.requestTimeout", REQUEST_STOPS)
-		R.toggle(agent, {
+		R.toggle(requests, {
 			label = "Maximum request wait",
 			hint = "Use the direct transport's maximum wait instead of a shorter timeout, up to 300 seconds. Cowork bridge requests already have no time limit. Stop remains available.",
 			path = "agent.requestUnlimited",
 		})
-		R.number(agent, "Subagent budget",
+		R.number(requests, "Retries", "Attempts per provider before moving to the next.",
+			"agent.retries", 1, 6, 1)
+		R.toggle(requests, {
+			label = "Ask for streams",
+			hint = "Streamed replies carry reasoning text and usage counts.",
+			path = "agent.stream",
+		})
+		R.toggle(requests, {
+			label = "Provider fallback",
+			hint = "Try the next enabled provider when one fails.",
+			path = "agent.fallback",
+		})
+
+		local delegation = build.section("Subagents", "Set the capacity and limits for delegated work.")
+		R.number(delegation, "Subagent budget",
 			"Seconds one subagent may work before it wraps up. The main agent can continue its own work and check progress while the child runs. Ignored while the switch below is on.",
 			"agent.subagentBudget", 30, 900, 30)
 		-- The switch the step-limit message asks for. A subagent that stops mid-job and
@@ -1191,67 +1303,57 @@ return function(env)
 		-- answered nothing, and until this existed the only way past it was to edit
 		-- config.json -- `Unlimited tool calls` deliberately stops at the conversation the
 		-- user is watching.
-		R.toggle(agent, {
+		R.toggle(delegation, {
 			label = "Unlimited subagents",
 			hint = "Let a dispatched subagent run with no step limit or clock while its parent continues working. The repeat breaker, each tool's timeout, the ceilings below and Stop still apply. The Subagents panel can stop one child, and ending the parent turn stops unfinished children.",
 			path = "agent.subagentUnlimited",
 		})
-		R.number(agent, "Parallel subagents",
+		R.number(delegation, "Parallel subagents",
 			"Subagents alive at once across the whole tree. Several dispatched in one step run together; this is the ceiling on how many, including the ones a subagent starts itself. Anything over it waits for a slot.",
 			"agent.subagentConcurrency", 1, 12, 1)
 		-- Two ceilings that had no control anywhere: the only way to change either was
 		-- to edit config.json, which for the depth cap means the only switch that can
 		-- turn delegation off entirely was unreachable.
-		R.number(agent, "Subagent steps",
+		R.number(delegation, "Subagent steps",
 			"Tool rounds one subagent may take before it has to answer the parent with what it has. Ignored while Unlimited subagents is on.",
 			"agent.subagentTurns", 1, 30, 1)
-		R.number(agent, "Delegation depth",
+		R.number(delegation, "Delegation depth",
 			"How many levels of subagent are allowed. A subagent given the full tool set can dispatch its own; at 0 the agent cannot dispatch at all and does the work in the conversation instead. The Subagents panel lists what is running under these limits.",
 			"agent.subagentDepth", 0, 4, 1)
-		R.number(agent, "Context budget",
+
+		local context = build.section("Conversation memory", "Keep long conversations within the model's context window.")
+		R.number(context, "Context budget",
 			"Hard ceiling on tokens kept before older turns are summarised. When the model's context window is known, compaction begins at the Compact-at fraction of it, so this mainly caps models with very large or unknown windows.",
 			"agent.contextTokens", BUDGET_STOPS)
-		R.number(agent, "Compact at",
+		R.number(context, "Compact at",
 			"Share of the model's context window at which older turns are summarised, when the window is known. Lower compacts sooner and cheaper; higher keeps more history in view. The Context budget above is still a hard ceiling.",
 			"agent.contextFraction", 0.5, 0.95, 0.05)
-		R.number(agent, "Reply ceiling",
-			"Maximum generated tokens per request, including reasoning where the provider counts it. Model limits, available context and learned provider caps may lower it. This does not require the model to use the whole allowance.",
-			"agent.maxTokens", REPLY_STOPS)
-		R.number(agent, "Tool result cap",
-			"Maximum bytes kept from one tool result. A tool's own page limit can be smaller. Roughly four bytes per token for English text; code and Unicode vary.",
-			"agent.resultCap", RESULT_STOPS)
-		R.choice(agent, "Effort",
-			"Low is the faster default; raise it for difficult tasks. Existing saved choices are kept. Sent as the provider's effort level where supported; raw provider parameters can override it. Provider default omits the effort field and may still think extensively. The Thinking row shows visible text, not a 5,999-token limit.",
-			"agent.effort",
-			{ "low", "medium", "high", "xhigh", "max", "off" },
-			{ "Low", "Medium", "High", "Very high", "Max", "Provider default" },
-			{ "Faster", "Provider default" })
-		R.number(agent, "Temperature",
-			"Lower is steadier; 0 is as deterministic as the provider allows. The current Claude models reject it, and it is not sent to them.",
-			"agent.temperature", 0, 1.5, 0.05)
-		R.number(agent, "Retries", "Attempts per provider before moving to the next.",
-			"agent.retries", 1, 6, 1)
-		R.toggle(agent, {
-			label = "Ask for streams",
-			hint = "Streamed replies carry reasoning text and usage counts.",
-			path = "agent.stream",
-		})
-		R.toggle(agent, {
+		R.toggle(context, {
 			label = "Summarise old turns",
 			hint = "Keeps a long conversation inside the context budget.",
 			path = "agent.compaction",
 		})
-		R.toggle(agent, {
-			label = "Provider fallback",
-			hint = "Try the next enabled provider when one fails.",
-			path = "agent.fallback",
-		})
+
+		local response = build.section("Responses", "Adjust response length, effort and language.")
+		R.number(response, "Reply ceiling",
+			"Maximum generated tokens per request, including reasoning where the provider counts it. Model limits, available context and learned provider caps may lower it. This does not require the model to use the whole allowance.",
+			"agent.maxTokens", REPLY_STOPS)
+		R.choice(response, "Effort",
+			"Low is the faster default; raise it for difficult tasks. Existing saved choices are kept. "
+			.. "Sent as the provider's effort level where supported; raw provider parameters can override it. Provider default omits the effort field and may still think extensively. The Thinking row shows visible text, not a 5,999-token limit.",
+			"agent.effort",
+			{ "low", "medium", "high", "xhigh", "max", "off" },
+			{ "Low", "Medium", "High", "Very high", "Max", "Provider default" },
+			{ "Faster", "Provider default" })
+		R.number(response, "Temperature",
+			"Lower is steadier; 0 is as deterministic as the provider allows. The current Claude models reject it, and it is not sent to them.",
+			"agent.temperature", 0, 1.5, 0.05)
 		-- One field, and the only half of the old language picker that was ever wired to
 		-- anything. That control was a grid of eleven tiles behind a modal behind a menu
 		-- entry, and it advertised two effects: the language the agent answers in, which
 		-- src/agent/prompt.lua does read, and the locale dates are formatted with, which
 		-- nothing reads at all. What survives is the effect that exists.
-		R.field(agent, {
+		R.field(response, {
 			name = "ReplyLanguage",
 			label = "Reply language",
 			hint = "Added to the system prompt as one line: answer in this language, leaving code and identifiers alone. Empty means whatever the conversation is already in, which is what a model does by default.",
@@ -1302,7 +1404,7 @@ return function(env)
 
 	local function panePermissions(container)
 		local build = builder(container)
-		local card = build.section("Permissions", permissions.MODE_HINTS[permissions.mode()])
+		local card = build.section("Permissions", "Choose when tools can run and review saved exceptions.")
 
 		local modeOptions = {}
 		for _, mode in ipairs(permissions.MODES) do
@@ -1526,8 +1628,8 @@ return function(env)
 	local function paneConnectors(container)
 		local build = builder(container)
 
-		local card = build.section("Inference",
-			"Where requests go. A provider is a base URL, an auth style, a key and a model.")
+		local card = build.section("Inference providers",
+			"Your configured providers and models. Add a service or edit its connection details in Providers.")
 		local list = providers.list()
 		if #list == 0 then
 			R.paragraph(card, "Nothing configured yet.")
@@ -1548,7 +1650,7 @@ return function(env)
 		end
 		R.actions(card, { {
 			name = "OpenInference",
-			text = "Configure third-party inference",
+			text = "Manage providers",
 			variant = "secondary",
 			onClick = function()
 				env.require("ui/app").show("providers")
@@ -1656,7 +1758,7 @@ return function(env)
 			local text = P.column(row, {
 				size = UDim2.new(0, 0, 0, 0), auto = "Y", flex = "Fill", gap = 0, layoutOrder = 1,
 			})
-			P.text(text, { text = group.label, role = "small" })
+			P.text(text, { text = group.label, role = "label", wrap = true, auto = "Y" })
 			local detail = util.pluralise(group.total, "tool")
 			if group.unavailable > 0 then
 				detail = detail .. ", " .. tostring(group.unavailable) .. " unavailable on this host"
@@ -1697,7 +1799,7 @@ return function(env)
 		{ id = "general", section = "Settings", label = "General", icon = "gear", build = paneGeneral },
 		{ id = "privacy", section = "Settings", label = "Privacy", icon = "worktree", build = paneprivacy },
 		{ id = "usage", section = "Settings", label = "Usage", icon = "sliders", build = paneUsage },
-		{ id = "claude_code", section = "Settings", label = "Claude Code", icon = "code", build = paneClaudeCode },
+		{ id = "claude_code", section = "Settings", label = "Project UAI", icon = "code", build = paneClaudeCode },
 		{ id = "cowork", section = "Settings", label = "Cowork", icon = "terminal", build = paneCowork },
 		{ id = "import_export", section = "Settings", label = "Import & export", icon = "document", build = paneImportExport },
 		{ id = "agent", section = "Agent", label = "Behaviour", icon = "spark", build = paneAgent },
@@ -1736,6 +1838,12 @@ return function(env)
 	function M.render(id, container)
 		local entry = M.pane(id)
 		if not entry then return false end
+		local heading = P.column(container, { name = "SettingsPaneHeading", size = UDim2.new(1, 0, 0, 0),
+			auto = "Y", gap = theme.space.xxs, layoutOrder = -1 })
+		P.text(heading, { name = "SettingsPaneSection", text = entry.section, role = "caption",
+			color = theme.color.textTertiary, auto = "Y", wrap = true, layoutOrder = 1 })
+		P.text(heading, { name = "SettingsPaneTitle", text = entry.label, role = "title",
+			auto = "Y", wrap = true, layoutOrder = 2 })
 		local ok, err = pcall(entry.build, container)
 		if not ok then
 			log.warn("settings", "the " .. tostring(id) .. " pane failed to build", err)

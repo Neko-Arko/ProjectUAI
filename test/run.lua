@@ -9,6 +9,7 @@ package.path = "test/?.lua;test/mock/?.lua;" .. package.path
 
 local envMock = require("env")
 local json = require("json")
+local authenticate = require("password_fixture")
 
 local suite = { passed = 0, failed = 0, scenarios = 0, failures = {} }
 local filters, nativeOnly = {}, false
@@ -156,6 +157,7 @@ local function bootWith(opts)
 	local handle, err = harness.boot()
 	if not handle then error("boot failed: " .. tostring(err), 0) end
 	harness.settle(1)
+	authenticate(harness, handle)
 
 	-- Most scenarios deliberately choose their own endpoint or an empty setup.
 	-- Keep the real first-run default only in tests that request it explicitly.
@@ -206,7 +208,7 @@ print(("="):rep(72))
 -- 1. Boot ------------------------------------------------------------------
 
 scenario("boot mounts the interface", function()
-	local harness, handle = bootWith({ provider = false })
+	local harness, handle = bootWith({ provider = "default" })
 
 	truthy("bootstrap returned a handle", handle ~= nil)
 	-- The version is asserted against the changelog's newest entry rather than
@@ -230,7 +232,8 @@ scenario("boot mounts the interface", function()
 	local text = harness.textOf(screen)
 	contains("the sidebar offers a new conversation", text, "New conversation")
 	contains("and names the place the client is in", text, "Mock Place")
-	contains("the empty state explains what to do", text, "No provider configured")
+	contains("the first-run provider is visible", text, "Project UAI Free")
+	check("the first-run provider has a usable default model", handle.providers.active().model, "auto")
 
 	-- Navigation is the sidebar's, and in a client whose panels are its surfaces the
 	-- panel list has to be reachable rather than hidden behind an invisible control.
@@ -618,8 +621,8 @@ scenario("transient failures are retried and real refusals are not", function()
 			body = '{"error":{"message":"TOOL_SCHEMA_INVALID"}}' }, nil, false },
 		{ "a 200 hiding an overload", { status = 200, ok = true,
 			body = '{"error":{"message":"server_is_overloaded"}}' }, nil, true },
-		{ "a 200 hiding a rate limit in an SSE frame", { status = 200, ok = true,
-			body = 'data: {"type":"error","error":{"message":"upstream_provider_rate_limit"}}' }, nil, true },
+		{ "a streamed rate limit is reported by its protocol adapter", { status = 200, ok = true,
+			body = 'data: {"type":"error","error":{"message":"upstream_provider_rate_limit"}}' }, nil, false },
 		{ "a 200 whose reply merely mentions rate limits", { status = 200, ok = true,
 			body = '{"choices":[{"message":{"content":"You will hit a rate_limit if you loop."}}]}' }, nil, false },
 	}
@@ -1205,8 +1208,17 @@ scenario("the request payload is shaped the way gateways expect", function()
 	}
 	local schemaProblems = {}
 	local function auditSchema(node, path)
-		if type(node) ~= "table" then return end
-		if node.type ~= nil and not TYPES[node.type] then
+		if type(node) == "boolean" then return end
+		if type(node) ~= "table" then
+			schemaProblems[#schemaProblems + 1] = path .. ": schema must be an object or boolean"
+			return
+		end
+		if type(node.type) == "table" then
+			if #node.type == 0 then schemaProblems[#schemaProblems + 1] = path .. ": empty type union" end
+			for _, name in ipairs(node.type) do
+				if not TYPES[name] then schemaProblems[#schemaProblems + 1] = path .. ": invalid union type " .. tostring(name) end
+			end
+		elseif node.type ~= nil and not TYPES[node.type] then
 			schemaProblems[#schemaProblems + 1] = path .. ": type " .. tostring(node.type)
 		end
 		if node.type == "array" and node.items == nil then
@@ -1217,10 +1229,16 @@ scenario("the request payload is shaped the way gateways expect", function()
 				schemaProblems[#schemaProblems + 1] = path .. ": requires undeclared " .. tostring(name)
 			end
 		end
-		for key, value in pairs(node) do
-			if type(value) == "table" and not ARRAY_KEYS[key] then
-				auditSchema(value, path .. "." .. tostring(key))
-			end
+		-- Property maps are containers, not schemas: a property named `type`
+		-- must not be confused with the enclosing schema's type keyword.
+		for _, key in ipairs({ "properties", "patternProperties", "$defs", "definitions", "dependentSchemas" }) do
+			for name, value in pairs(node[key] or {}) do auditSchema(value, path .. "." .. key .. "." .. name) end
+		end
+		for _, key in ipairs({ "items", "additionalProperties", "unevaluatedProperties", "propertyNames", "contains", "not", "if", "then", "else" }) do
+			if node[key] ~= nil then auditSchema(node[key], path .. "." .. key) end
+		end
+		for _, key in ipairs({ "allOf", "anyOf", "oneOf", "prefixItems" }) do
+			for index, value in ipairs(node[key] or {}) do auditSchema(value, path .. "." .. key .. "." .. index) end
 		end
 	end
 	local decoded = json.decode(body)
@@ -2582,6 +2600,7 @@ scenario("the Anthropic Messages API is spoken natively", function()
 	record.stream = false
 	local saved, problems = handle.providers.save(record)
 	truthy("the native preset saves", saved, table.concat(problems or {}, ", "))
+	handle.providers.setActive(record.id)
 	check("and is marked as the messages api", handle.providers.active().api, "anthropic")
 	handle.config.set("permissions.mode", "full")
 	harness.settle(1)
@@ -2769,7 +2788,7 @@ scenario("context overflow recovers the same turn on both wire protocols", funct
 		check(api .. " learns the real context window", handle.config.get("agent.forceContext")["relayed-unknown"], 12000)
 		check(api .. " retries the main request once", #main, 2)
 		check(api .. " makes a separate summary request", #summaries, 1)
-		truthy(api .. " summary uses a bounded output budget", summaries[1] and summaries[1].max_tokens > 0 and summaries[1].max_tokens <= 512)
+		truthy(api .. " summary uses the bounded handover budget", summaries[1] and summaries[1].max_tokens > 0 and summaries[1].max_tokens <= 3072)
 		truthy(api .. " the retry has less history", main[2] and #main[2].messages < #main[1].messages)
 		contains(api .. " the retry includes the rolling summary", main[2] and json.encode(main[2]), "Keep the lighthouse")
 		contains(api .. " the latest question survives", main[2] and json.encode(main[2]), "Finish the dock")
@@ -2975,6 +2994,7 @@ scenario("an over-large reply ceiling is lowered to what the model allows", func
 	record.stream = false
 	local saved, problems = nativeHandle.providers.save(record)
 	truthy("the native preset saves", saved, table.concat(problems or {}, ", "))
+	nativeHandle.providers.setActive(record.id)
 	nativeHandle.config.set("agent.maxTokens", 96000)
 	nativeHandle.config.set("agent.executorReplyCeiling", 0)
 	native.settle(1)
@@ -3941,8 +3961,14 @@ scenario("the composer states what is actually in force", function()
 	check("changing the mode changes the label", permissionLabel.Text, "Ask first")
 
 	local modelLabel = harness.byName("ModelLabel")
-	contains("the model is the one the provider is pointed at", modelLabel.Text, "claude-opus-5")
-	contains("with the window this client knows it has", modelLabel.Text, "1M")
+	check("the chip names the model the provider is pointed at", modelLabel.Text, "claude-opus-5")
+	harness.click(harness.byName("ComposerOptions"))
+	harness.click(harness.byName("Option_context_inspect"))
+	harness.settle(1)
+	local limits = harness.byName("ContextLimits")
+	contains("context details retain the known model window", limits and limits.Text or "", "Model window: 1,000,000 tokens")
+	harness.press("Escape")
+	harness.settle(1)
 
 	-- Isolation is the worktree chip: a conversation marked that way is never written.
 	local session = handle.sessions.current()
@@ -4379,7 +4405,8 @@ scenario("a tool call builds its exact code only when inspected", function()
 	local step = 0
 	local source = "local part = Instance.new(\"Part\")\npart.Anchored = true\nreturn part.Name"
 	local harness, handle = bootWith({
-		handler = function()
+		handler = function(entry)
+			if not tostring(entry.url):find("/chat/completions", 1, true) then return { StatusCode = 404, Body = "{}" } end
 			step = step + 1
 			if step == 1 then
 				return { StatusCode = 200, Body = chatBody({
@@ -4650,6 +4677,8 @@ scenario("two conversations work at the same time", function()
 
 	local state = handle.env.require("agent/state")
 	local permissions = handle.env.require("agent/permissions")
+	-- Planning is a write too; only the world mutation should park this fixture.
+	permissions.setRule("todo_write", "allow")
 
 	local alpha = handle.sessions.current()
 	alpha.rename("Alpha")
@@ -5357,7 +5386,10 @@ scenario("the model picker separates endpoint, model and effort", function()
 	local modelRow = harness.byName("Model_claude-opus-5")
 	truthy("the model it is pointed at is listed", modelRow ~= nil)
 	contains("with the window this client documents", harness.textOf(modelRow), "1M")
-	truthy("model rows are compact", modelRow.Size.Y.Offset <= 44)
+	local modelName = modelRow and harness.byName("ModelName", modelRow)
+	local modelMetadata = modelRow and harness.byName("ModelMetadata", modelRow)
+	truthy("model rows fit the name and metadata lines", modelName and modelMetadata
+		and modelRow.Size.Y.Offset >= modelName.Size.Y.Offset + modelMetadata.Size.Y.Offset)
 
 	-- Effort is the model's own scale, and Opus 5 documents five levels.
 	truthy("the effort scale is the model's own", harness.byName("Effort_xhigh") ~= nil)
@@ -5557,7 +5589,8 @@ scenario("chat and virtual input tools are registered and callable", function()
 	check("input group label", registry.groupLabel("input"), "Virtual input")
 
 	local histResult = chatHist.run({})
-	contains("chat_history handles empty history", histResult, "No recent in-game chat messages")
+	contains("chat_history handles empty history", histResult.text, "No recent in-game chat messages")
+	check("empty chat history reports its count", histResult.data.count, 0)
 
 	local chatFixture = require("gamechat")(harness)
 	handle.env.services.TextChatService = harness.services.TextChatService
@@ -5565,7 +5598,8 @@ scenario("chat and virtual input tools are registered and callable", function()
 	contains("chat_send reports sent message", sendResult, "Hello from AI")
 
 	local histAfter = chatHist.run({})
-	contains("chat_history records sent message", histAfter, "Hello from AI")
+	contains("chat_history records sent message", histAfter.text, "Hello from AI")
+	check("chat history reports the retained message", histAfter.data.count, 1)
 
 	local badKey = keyPress.run({ key = "InvalidKey123NonExistent" })
 	contains("key_press rejects invalid keys", type(badKey) == "table" and badKey.text or tostring(badKey), "unrecognised KeyCode")
@@ -6136,8 +6170,7 @@ scenario("adding a provider starts at the gallery and seeds the editor", functio
 	check("the docs link followed the switch",
 		linkAfter and linkAfter.Text, "https://console.anthropic.com/settings/keys")
 	local authRow = harness.byName("AuthStyle", harness.byName("Form"))
-	local selected = authRow and harness.byName("Segment_x-api-key", authRow)
-	truthy("the auth segment control follows", selected ~= nil, harness.dump(authRow))
+	contains("the auth header selector follows the preset", authRow and harness.textOf(authRow) or "", "x-api-key")
 
 	check("no thread errors", #harness.errors(), 0,
 		harness.errors()[1] and harness.errors()[1].traceback or nil)
@@ -6563,7 +6596,7 @@ scenario("conversation_search reads other threads", function()
 		arguments = json.encode({ query = "quantum submarine" }),
 	} }, context)
 	truthy("a miss is reported, not an error", none.ok, none.text)
-	contains("saying nothing was found", none.text, "No other conversation or paste")
+	contains("saying nothing was found", none.text, "No matches found")
 
 	local listed = handle.tools.dispatch({ id = "l", ["function"] = {
 		name = "conversation_list",
@@ -6699,7 +6732,7 @@ scenario("a subagent has no ask tool and knows what it is", function()
 	local brief = handle.env.require("agent/prompt").subagent("a task", {})
 	contains("it says what it is", brief, "subagent of UAI")
 	contains("and that nobody can answer it", brief, "You cannot ask the user questions")
-	contains("with what to do instead", brief, "report findings, changes, checks and blockers")
+	contains("with what to do instead", brief, "Report exact targets, findings, changes, checks")
 	contains("and where dumped files belong", brief, "and its dump/ for")
 
 	check("no thread errors", #harness.errors(), 0,
@@ -6731,7 +6764,7 @@ scenario("the system prompt teaches denials, dates and asking early", function()
 	-- assertion is on the shape of the line rather than a fixed date.
 	truthy("the date is stated", promptText:find("Date: %d%d%d%d%-%d%d%-%d%d %d%d:%d%d UTC") ~= nil,
 		"no Date line in the prompt")
-	contains("and quotes must be exact", promptText, "Quote exact evidence")
+	contains("and copied references must be exact", promptText, "Copy exact paths, IDs, revisions and enum values from evidence")
 	-- The per-game workspace layout: authored scripts in the game folder root,
 	-- dumps in its dump/ subfolder, and the whole thing a default rather than a fence.
 	contains("game work has a per-place home", promptText, "Use the exact Current game files path")
@@ -6913,6 +6946,7 @@ end)
 scenario("a key pool rotates on a rate limit without delay", function()
 	local seenKeys = {}
 	local handler = function(spec)
+		if not tostring(spec.url):find("/chat/completions", 1, true) then return { StatusCode = 404, Body = "{}" } end
 		local auth = spec.headers and (spec.headers["Authorization"] or spec.headers["x-api-key"]) or ""
 		seenKeys[#seenKeys + 1] = auth
 		if #seenKeys == 1 then
@@ -6948,6 +6982,7 @@ end)
 scenario("quota wording in a 200-body style refusal also rotates", function()
 	local seenKeys = {}
 	local handler = function(spec)
+		if not tostring(spec.url):find("/chat/completions", 1, true) then return { StatusCode = 404, Body = "{}" } end
 		local auth = spec.headers and (spec.headers["Authorization"] or spec.headers["x-api-key"]) or ""
 		seenKeys[#seenKeys + 1] = auth
 		if #seenKeys == 1 then
@@ -6973,6 +7008,7 @@ end)
 scenario("a single key is never rotated", function()
 	local seenKeys = {}
 	local handler = function(spec)
+		if not tostring(spec.url):find("/chat/completions", 1, true) then return { StatusCode = 404, Body = "{}" } end
 		local auth = spec.headers and (spec.headers["Authorization"] or spec.headers["x-api-key"]) or ""
 		seenKeys[#seenKeys + 1] = auth
 		return { StatusCode = 429, Body = json.encode({ error = { message = "rate limit" } }) }
@@ -6988,6 +7024,7 @@ scenario("a single key is never rotated", function()
 		attempts = 1,
 	})
 	falsy("a single-key pool has nothing to rotate to", result ~= nil)
+	truthy("the single-key refusal was exercised", #seenKeys > 0)
 	-- The 429 may still be retried by the transport layer, but every attempt
 	-- carries the same key.
 	for index = 1, #seenKeys do
@@ -7207,6 +7244,7 @@ scenario("skills install from github resolves, fetches and saves", function()
 	-- Anthropic-style skill repo.
 	local fetched = {}
 	local handler = function(entry)
+		if not tostring(entry.url):find("https://raw.githubusercontent.com/", 1, true) then return { StatusCode = 404, Body = "{}" } end
 		fetched[#fetched + 1] = entry.url
 		return { StatusCode = 200, Body = table.concat({
 			"---",

@@ -2,6 +2,7 @@
 -- Run after reviewing and building: luajit test/embedding_boot.lua
 package.path = "test/?.lua;test/mock/?.lua;" .. package.path
 local envMock, luau, json = require("env"), require("luau"), require("json")
+local authenticate = require("password_fixture")
 local file = assert(io.open("dist/uai.lua", "rb"))
 local source = file:read("*a"); file:close()
 local passed, failed = 0, 0
@@ -51,7 +52,7 @@ local function clean(h, client)
 	check("callbacks have no asynchronous errors", #h.errors() == 0)
 end
 
-case("UI-free boot runs a real turn and exposes host services without presentation", function()
+case("hidden embedding requires a password before a real turn and host services", function()
 	local context = { ui = false, reuse = true, prompt = "Host-owned assistant" }
 	local h = fixture(context)
 	h.http.handler = function(request)
@@ -63,31 +64,36 @@ case("UI-free boot runs a real turn and exposes host services without presentati
 		return { StatusCode = 200, Body = '{"data":[]}' }
 	end
 	local client = assert(boot(h, context))
-	check("UI-free boot never creates a screen", h.screensCreated == 0 and not client.uiMounted and client.app == nil)
-	check("standard app and boot modules remain unloaded", client.env.loadedModules["ui/app"] == nil and client.env.loadedModules["ui/boot"] == nil)
+	check("hidden boot creates the required password surface", h.screensCreated == 1 and client.uiMounted and client.app ~= nil)
+	check("password gate hides the application without a boot indicator", not client.app.window.visible and client.env.loadedModules["ui/boot"] == nil)
+	check("a host cannot send before authentication", client.ask("Blocked host request") == false)
+	authenticate(h, client)
 	check("host services are directly exposed", client.hooks == client.env.require("agent/hooks") and client.permissions == client.env.require("agent/permissions"))
 	check("SDK attaches to every client", type(client.sdk) == "table")
-	check("hide does not mount the app", client.hide() and h.screensCreated == 0)
+	check("hide keeps the normal app hidden", client.hide() and h.screensCreated == 1 and not client.app.window.visible)
 	local record = client.providers.blank("custom")
 	record.label, record.baseUrl, record.apiKey = "Embedding fixture", "https://embedding.test/v1", "fixture-key"
 	record.model, record.models, record.stream = "embedding-fixture", { "embedding-fixture" }, false
 	assert(client.providers.save(record))
+	assert(client.providers.setActive(record.id))
 	local reply
 	local session = client.sessions.current()
 	assert(session.send("Read the host status", function(text) reply = text end))
 	h.settle(3)
 	check("UI-free turns deliver final responses", reply == "The host turn completed." and not session.busy)
-	check("ordinary turn and cleanup sweep never load the app", h.screensCreated == 0 and client.env.loadedModules["ui/app"] == nil)
+	check("ordinary turns retain the hidden application", h.screensCreated == 1 and not client.app.window.visible)
 	local before = session.id
 	local reused = boot(h, { reuse = true, prompt = "This context is not adopted" })
-	check("explicit reuse returns the same unmounted client and preserves context", reused == client and reused.env.context == context and h.screensCreated == 0)
+	check("reuse keeps the client and context but rechallenges", reused == client and reused.env.context == context
+		and h.screensCreated == 1 and not client.config.vaultStatus().ready)
 	check("reuse retains the selected conversation", reused.sessions.current().id == before)
 	clean(h, client)
 	check("unloaded handles cannot remount or send", not client.show() and not client.toggle() and not client.openSession(before) and not client.ask("late"))
 end)
 
-case("host permission and question listeners work without the standard app", function()
+case("host permission and question listeners work after hidden authentication", function()
 	local h = fixture(); local client = assert(boot(h, { ui = false, reuse = true }))
+	authenticate(h, client)
 	-- The host-listener contract is about delivery, not the default access mode.
 	client.permissions.setMode("ask")
 	local session = client.sessions.current()
@@ -106,13 +112,14 @@ case("host permission and question listeners work without the standard app", fun
 	h.settle(3)
 	check("a host can resolve live permission requests", result and result.ok and approvals == 1 and writes == 1)
 	check("a host can answer questions through their event callback", answer and answer.ok and questions == 1 and answer.text:find("Keep the current settings", 1, true))
-	check("request handling creates no presentation", h.screensCreated == 0 and client.env.loadedModules["ui/app"] == nil)
+	check("request handling retains the hidden normal window", h.screensCreated == 1 and not client.app.window.visible)
 	off(); clean(h, client)
 end)
 
-case("explicit show and openSession lazily mount one normal application", function()
+case("explicit show and openSession reveal the existing authenticated application", function()
 	local h = fixture(); local client = assert(boot(h, { ui = false, reuse = true }))
-	check("invalid conversation never mounts", not client.openSession("absent") and h.screensCreated == 0)
+	authenticate(h, client)
+	check("invalid conversation never reveals the app", not client.openSession("absent") and not client.app.window.visible)
 	local session = client.sessions.newThread({ title = "Host conversation" })
 	check("opening a conversation mounts and selects it", client.openSession(session.id) and client.uiMounted and client.app ~= nil and client.sessions.activeId == session.id)
 	check("lazy mount creates only the app screen", h.screensCreated == 1 and liveScreens(h) == 1)
@@ -126,29 +133,34 @@ case("explicit show and openSession lazily mount one normal application", functi
 	clean(h, client)
 end)
 
-case("UI-free updates preserve context and defer active work without UI", function()
+case("hidden updates preserve context and defer active work behind the password gate", function()
 	local context = { ui = false, reuse = true, prompt = "Persistent host context" }
 	local h = fixture(); local first = assert(boot(h, context))
+	authenticate(h, first)
 	local session = first.sessions.current()
 	session.ctx.pushUser("Retain across a changed build")
 	session.emit("user", { text = "Retain across a changed build" })
 	local id = session.id
 	local nextClient = assert(boot(h, nil, "embedding-next-build"))
 	check("changed build replaces an idle UI-free client", nextClient ~= first and not first.alive and nextClient.alive)
-	check("replacement preserves UI-free context and conversation", nextClient.env.context == context and nextClient.sessions.threads[id] and h.screensCreated == 0)
+	check("replacement preserves hidden context and conversation", nextClient.env.context == context and nextClient.sessions.threads[id]
+		and h.screensCreated == 2 and not nextClient.config.vaultStatus().ready and not nextClient.app.window.visible)
 	local active = nextClient.sessions.current(); active.busy = true
 	local blocked = boot(h, nil, "embedding-busy-build")
 	check("busy UI-free update keeps existing work alive", blocked == nextClient and nextClient.alive and active.busy)
-	check("reload notices use the console without loading UI", #h.console.warnings > 0 and h.screensCreated == 0 and nextClient.env.loadedModules["ui/app"] == nil)
+	check("deferred updates retain the password gate", h.screensCreated == 2 and not nextClient.config.vaultStatus().ready and not nextClient.app.window.visible)
 	active.busy = false
 	clean(h, nextClient)
 end)
 
-case("default boot and legacy same-build toggle remain available", function()
+case("default boot and same-build execution require password entry", function()
 	local h = fixture(); local client = assert(boot(h))
-	check("default startup mounts the standard application", client.uiMounted and client.app and client.app.window.visible and liveScreens(h) == 1)
-	check("reuse suppresses the default toggle", boot(h, { reuse = true }) == client and client.app.window.visible)
-	check("unqualified rerun keeps legacy toggle behavior", boot(h) == client and not client.app.window.visible)
+	check("default startup mounts behind the gate", client.uiMounted and client.app and not client.app.window.visible and liveScreens(h) == 1)
+	authenticate(h, client)
+	check("authentication opens the default window", client.app.window.visible)
+	check("reuse rechallenges without replacing the client", boot(h, { reuse = true }) == client and not client.app.window.visible and not client.config.vaultStatus().ready)
+	authenticate(h, client)
+	check("unqualified rerun also rechallenges", boot(h) == client and not client.app.window.visible and not client.config.vaultStatus().ready)
 	clean(h, client)
 end)
 
@@ -161,7 +173,7 @@ case("startup failures drain runtime cleanup with and without a mounted app", fu
 		check("failed startup drains registered cleanup", drained == 1)
 		check("failed startup releases screen trees", liveScreens(h) == 0)
 		check("failed startup callbacks settle cleanly", #h.errors() == 0)
-		if not ui then check("UI-free failure creates no boot indicator", h.screensCreated == 0) end
+		if not ui then check("hidden failure creates only the password app screen", h.screensCreated == 1) end
 	end
 end)
 

@@ -17,6 +17,7 @@
 -- that rebuilt the entire panel mid-turn, scroll position included.
 return function(env)
 	local util = env.require("runtime/util")
+	local keyData = env.require("runtime/provider_keys")
 	local clock = env.require("runtime/clock")
 	local caps = env.require("runtime/caps")
 	local config = env.require("runtime/config")
@@ -33,6 +34,7 @@ return function(env)
 	local traits = env.require("provider/traits")
 	local communityKey = env.require("provider/community_key")
 	local icons = env.require("ui/icons")
+	local urls = env.require("net/url")
 
 	local M = {}
 
@@ -52,6 +54,40 @@ return function(env)
 		return tostring(value)
 	end
 
+	local function keyUsage(record)
+		if keyData.mode(record) == "single" then
+			local index = keyData.selected(record)
+			local entry = keyData.entries(record)[index or 0]
+			local name = entry and entry.name ~= "" and entry.name or ("API key " .. tostring(index or 1))
+			return "Use one key: " .. name .. (entry and entry.paused and " (paused)" or "")
+		end
+		local pool, active = keyData.entries(record), 0
+		for _, entry in ipairs(pool) do if not entry.paused then active = active + 1 end end
+		if active < #pool then return active == 0 and "All API keys are paused" or ("Rotate " .. active .. " active keys / " .. #pool .. " saved") end
+		return "Rotate keys automatically"
+	end
+
+	local function sameKeyConnection(record, updated)
+		if record.apiKey ~= updated.apiKey or keyData.mode(record) ~= keyData.mode(updated)
+			or keyData.selected(record) ~= keyData.selected(updated) then return false end
+		for index in ipairs(keyData.keys(record)) do
+			if keyData.paused(record, index) ~= keyData.paused(updated, index) then return false end
+		end
+		return true
+	end
+
+	local function applyKeys(record, updated)
+		local connectionChanged = not sameKeyConnection(record, updated)
+		record.apiKey = updated.apiKey
+		record.keyNames = util.deepCopy(updated.keyNames)
+		record.keyPaused = util.deepCopy(updated.keyPaused)
+		record.keyIds = util.deepCopy(updated.keyIds)
+		record.keyMode = updated.keyMode
+		record.selectedKey = updated.selectedKey
+		if connectionChanged then record.keyRotation = nil end
+		return connectionChanged
+	end
+
 	-- Never the key itself.
 	--
 	-- The editor rendered record.apiKey into an ordinary field, so opening Edit on any
@@ -60,16 +96,35 @@ return function(env)
 	-- were kept, and the export path reduced it to exactly that.
 	local function maskedKey(record)
 		local raw = tostring(record.apiKey or "")
+		if registry.isCline(record) then return "Sign in to Cline in the desktop app", nil end
+		if record.authStyle == "none" then return "No API key required", nil end
 		if util.trim(raw) == "" and registry.opencodeKeyOptional(record) then return "Provided by connected OpenCode CLI", nil end
 		if util.trim(raw) == "" then return "not set", "warn" end
 		local pool = registry.keysOf(record)
+		if #pool > 0 and #keyData.requestKeys(record) == 0 then return "No active API key", "warn" end
+		if keyData.mode(record) == "single" then
+			local key = keyData.requestKeys(record)[1]
+			if not key then return "Choose an API key", "warn" end
+			return #key <= 4 and "set" or (string.rep("\226\128\162", 4) .. " " .. key:sub(-4)), nil
+		end
 		if #pool > 1 then
 			local last = pool[#pool]
-			return string.rep("\226\128\162", 4) .. " " .. last:sub(-4) .. "  \194\183  pool of " .. #pool .. " keys", nil
+			local suffix = #last <= 4 and "set" or (string.rep("\226\128\162", 4) .. " " .. last:sub(-4))
+			return suffix .. "  \194\183  pool of " .. #pool .. " keys", nil
 		end
 		local key = pool[1] or ""
 		if #key <= 4 then return "set", nil end
 		return string.rep("\226\128\162", 4) .. " " .. key:sub(-4), nil
+	end
+
+	local function modelSource(record)
+		if registry.isCline(record) then return "Cline's free catalog through the desktop bridge" end
+		if registry.isOpencodeZen(record) and env.require("net/bridge").opencodeStatus().available then return "OpenCode CLI through the desktop bridge" end
+		return urls.display(registry.endpoint(record, "/models"))
+	end
+
+	local function fetchLabel(record)
+		return registry.isCline(record) and "Refresh Cline models" or "Fetch models"
 	end
 
 	-- Everything the registry knows about a record and the panel never said.
@@ -90,14 +145,18 @@ return function(env)
 		local route = env.require("net/transport").target()
 		if route == "cowork" then transport = "Web relay"
 		elseif route == "companion" then transport = "Relay (companion)" end
+		if registry.isCline(record) then transport = "Cline CLI through the desktop bridge / text only" end
 		local out = {
-			{ key = "Endpoint", value = chat.endpointOf(record) },
-			{ key = "Model list", value = registry.endpoint(record, "/models") },
+			{ key = "Endpoint", value = registry.isCline(record) and "Cline through Project UAI Bridge" or urls.display(chat.endpointOf(record)) },
+			{ key = "Model list", value = modelSource(record) },
 			{ key = "Protocol", value = labelOf(chat.STYLES, chat.styleOf(record)) },
 			{ key = "Auth", value = labelOf(AUTH_OPTIONS, record.authStyle or "bearer")
 				.. "  \194\183  " .. key, tone = keyTone },
 			{ key = "Streaming", value = transport },
 		}
+		if not registry.isCline(record) and #registry.keysOf(record) > 0 then
+			out[#out + 1] = { key = "Key usage", value = keyUsage(record) }
+		end
 		if (health.ok or 0) + (health.fail or 0) > 0 then
 			out[#out + 1] = {
 				key = "Health",
@@ -134,6 +193,9 @@ return function(env)
 	-- Keep an unfinished Add in memory for this client session. Existing records
 	-- remain isolated edit copies; their unsaved changes do not become Add drafts.
 	local addDraft = nil
+	env.require("runtime/dispose").add(config.changed:connect(function(path)
+		if (path == nil or path == "security" or path == "security.vault") and config.vaultStatus().locked then addDraft = nil end
+	end), "provider draft vault state")
 
 	local function draftDirty(candidate)
 		local blank = registry.blank("custom")
@@ -152,9 +214,8 @@ return function(env)
 	-- spans all three, because a name is the one thing someone arriving here usually
 	-- does know.
 	--
-	-- It is a dialog rather than a modal so that the tabs, the search field and the
-	-- result count stay put while the list scrolls: a gallery whose only filter scrolls
-	-- out of reach on the second screenful is a list with extra steps.
+	-- Roomy layouts pin search, tabs and counts. Short layouts keep those same
+	-- controls in one scrolling body so the keyboard cannot crowd out the catalog.
 
 	local function highlighted(text, needle)
 		local value = tostring(text or "")
@@ -188,8 +249,8 @@ return function(env)
 		opts = opts or {}
 		local dialog = overlay.dialog({
 			name = "ProviderPicker",
-			width = theme.size.providerPicker,
-			height = theme.size.providerPickerTall,
+			width = responsive.isMobile() and theme.size.providerPicker or (theme.size.providerPicker + theme.size.menuMin),
+			height = math.ceil(theme.size.providerPickerTall / (responsive.isMobile() and theme.metricScale or 1)),
 		})
 		if not dialog then return end
 
@@ -212,9 +273,12 @@ return function(env)
 		if not known then tier = "free" end
 		local query = ""
 
-		local root = P.column(dialog.card, {
+		local viewport = P.scroll(dialog.card, { name = "PickerViewport", size = UDim2.fromScale(1, 1), bar = 0 })
+		viewport.instance.ScrollingEnabled = false
+		viewport.instance.VerticalScrollBarInset = Enum.ScrollBarInset.None
+		local root = P.column(viewport.instance, {
 			name = "PickerRoot",
-			size = UDim2.fromScale(1, 1),
+			size = UDim2.new(1, 0, 0, dialog.height),
 			gap = theme.space.md,
 			padding = { x = theme.space.lg, top = theme.space.lg, bottom = theme.space.md },
 		})
@@ -231,7 +295,7 @@ return function(env)
 		})
 		P.text(head, {
 			name = "PickerOverline",
-			text = "INFERENCE PROVIDERS",
+			text = opts.onPick and "CONNECTION PRESET" or "INFERENCE PROVIDERS",
 			role = "overline",
 			color = theme.color.accent,
 			size = UDim2.new(1, 0, 0, theme.text.overline.height),
@@ -239,8 +303,8 @@ return function(env)
 		})
 		P.text(head, {
 			name = "PickerTitle",
-			text = "Add a provider",
-			role = "title",
+			text = opts.onPick and "Choose a provider" or "Add an inference provider",
+			role = "display",
 			color = theme.color.text,
 			wrap = true,
 			auto = "Y",
@@ -248,7 +312,7 @@ return function(env)
 		})
 		P.text(head, {
 			name = "PickerDescription",
-			text = "Pick a route to fill in its URL, protocol and auth style. Every field stays editable, and nothing is saved until you say so.",
+			text = "Choose a hosted API or a local server. You'll review the connection before saving.",
 			role = "small",
 			color = theme.color.textSecondary,
 			wrap = true,
@@ -266,6 +330,7 @@ return function(env)
 		local countLabel
 		local search
 		local gallery
+		local cards = {}
 		local render
 		local resetSearch
 		local silent = false
@@ -275,7 +340,7 @@ return function(env)
 			options = (function()
 				local out = {}
 				for _, entry in ipairs(catalog.tiers) do
-					out[#out + 1] = { value = entry.id, label = entry.label }
+					out[#out + 1] = { value = entry.id, label = entry.id == "free" and "Free & included" or entry.label }
 				end
 				return out
 			end)(),
@@ -357,13 +422,15 @@ return function(env)
 			name = "ProviderGallery",
 			size = UDim2.fromScale(1, 1),
 			gap = theme.space.md,
-			-- Room at the bottom so the last card can clear the fade and the footer.
-			-- Without it the list ended mid-card against the edge, which reads as a
-			-- clipped layout rather than as "there is more above".
-			padding = { right = theme.space.xs, bottom = theme.space.xl },
+			-- Keep card outlines clear of every scroll edge, with extra room below
+			-- the final row to clear the fade and footer.
+			padding = { x = theme.space.sm, top = theme.space.sm, bottom = theme.space.xl },
 			fade = true,
 			fadeColor = theme.color.surface,
 		})
+		gallery.layout.FillDirection = Enum.FillDirection.Horizontal
+		gallery.layout.Wraps = true
+		gallery.layout.ItemLineAlignment = Enum.ItemLineAlignment.Stretch
 
 		local footer = P.row(root, {
 			name = "PickerFooter",
@@ -374,8 +441,8 @@ return function(env)
 		})
 		-- The result count lives here rather than beside the tabs: a segmented control
 		-- is sized by its labels and capped, so a sibling that wants the rest of the row
-		-- competes with it for width on a phone. The footer is pinned, always visible
-		-- and already the place for a status line.
+		-- competes with it for width on a phone. Roomy layouts pin the footer;
+		-- short layouts scroll it after the cards with the rest of the original body.
 		countLabel = P.text(footer, {
 			name = "ProviderCount",
 			text = "",
@@ -391,9 +458,51 @@ return function(env)
 			text = "Close",
 			variant = "ghost",
 			size = "sm",
-			layoutOrder = 2,
+			layoutOrder = 3,
 			onClick = function() dialog.close() end,
 		})
+		local fittingPicker, compactPicker = false, false
+		local galleryFlex = galleryHolder:FindFirstChildOfClass("UIFlexItem")
+		local function fitPicker()
+			if dialog.closed or fittingPicker then return end
+			local height = dialog.card.AbsoluteSize.Y
+			if height <= 0 then return end
+			fittingPicker = true
+			local width = gallery.viewportSize().X -- excludes the gallery insets and scrollbar
+			local minimumCard = math.max(theme.size.modalMin, theme.text.small.size * 20)
+			local columns = not responsive.isMobile() and width >= minimumCard * 2 + theme.space.md and 2 or 1
+			galleryHolder:SetAttribute("Columns", columns)
+			for _, card in ipairs(cards) do
+				card.instance.Size = UDim2.new(1 / columns, -theme.space.md * (columns - 1) / columns, 0, 0)
+			end
+			local chrome = math.max(head.AbsoluteSize.Y, theme.text.overline.height + theme.text.title.height + theme.text.small.height * 2 + theme.space.hair * 2)
+				+ math.max(tabsRow.AbsoluteSize.Y, theme.size.tab) + math.max(search.shell.AbsoluteSize.Y, theme.size.control)
+				+ math.max(footer.AbsoluteSize.Y, theme.size.control) + theme.space.lg + theme.space.md * 5
+			local compact = height < chrome + theme.size.control * 3
+			-- In short/keyboard space, the original search, tabs, cards and footer
+			-- share one scrolling body. No focused field is replaced or hidden.
+			viewport.instance.ScrollingEnabled = compact
+			viewport.instance.ScrollBarThickness = compact and theme.size.scrollbar or 0
+			gallery.instance.ScrollingEnabled = not compact
+			galleryFlex.FlexMode = compact and Enum.UIFlexMode.None or Enum.UIFlexMode.Fill
+			root.AutomaticSize = compact and Enum.AutomaticSize.Y or Enum.AutomaticSize.None
+			root.Size = compact and UDim2.new(1, 0, 0, 0) or UDim2.new(1, 0, 0, height)
+			galleryHolder.Size = compact and UDim2.new(1, 0, 0, math.max(theme.size.control,
+				gallery.layout.AbsoluteContentSize.Y + theme.space.sm + theme.space.xl)) or UDim2.new(1, 0, 0, 0)
+			if compact ~= compactPicker then
+				viewport.instance.CanvasPosition = Vector2.new(0, 0)
+				gallery.instance.CanvasPosition = Vector2.new(0, 0)
+			end
+			compactPicker, fittingPicker = compact, false
+		end
+		dialog.card:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitPicker)
+		gallery.instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitPicker)
+		for _, instance in ipairs({ head, tabsRow, search.shell, footer }) do
+			instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitPicker)
+		end
+		gallery.layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(fitPicker)
+		local unsubscribePickerLayout = responsive.changed:connect(fitPicker)
+		fitPicker()
 
 		local function choose(preset)
 			if chosen or closed or not preset then return end
@@ -406,30 +515,30 @@ return function(env)
 			end
 			M.editor(registry.blank(preset.id), opts.onSaved)
 		end
+		P.button(footer, {
+			name = "CustomProviderShortcut", text = "Custom endpoint", variant = "secondary", size = "sm", layoutOrder = 2,
+			onClick = function() choose(catalog.get("custom")) end,
+		})
 
 		local function buildCard(parent, preset, index)
-			-- Highlighted routes are named in the catalog, not chosen by position: the
-			-- recommended tier leads with included access, AgentRouter and OpenCode Zen,
-			-- and moving a card must not move the accent with it.
-			local lead = preset.highlight == true
+			local included = preset.free == true
+			local actionHeight = theme.text.label.height + theme.space.xs * 2
 			local card = P.rowButton(parent, {
 				name = "Choice_" .. tostring(preset.id),
 				auto = "Y",
 				vertical = true,
-				gap = theme.space.xs,
-				padding = { x = theme.space.md, y = theme.space.sm + theme.space.hair },
+				gap = theme.space.sm,
+				padding = { x = theme.space.md, top = theme.space.md, bottom = theme.space.md + theme.space.sm + actionHeight },
 				radius = theme.radius.lg,
 				bg = theme.color.surfaceRaised,
-				bgHover = theme.color.surfaceOverlay,
+				bgHover = theme.color.surfaceHover,
 				stroke = true,
-				-- The first free route is the one this screen exists to recommend, so it
-				-- is the only card with an accent edge. Everything else is neutral and
-				-- the tier badge carries the rest of the meaning.
-				strokeColor = lead and theme.color.accentBorder or theme.color.borderSubtle,
-				strokeWidth = 1,
+				strokeColor = included and P.freeModelOutline(theme.color.surfaceRaised) or theme.color.borderSubtle,
+				strokeWidth = theme.stroke.hair,
 				layoutOrder = index,
 				onClick = function() choose(preset) end,
 			})
+			cards[#cards + 1] = card
 			local cardHead = P.row(card.row, {
 				name = "ChoiceHead",
 				size = UDim2.new(1, 0, 0, 0),
@@ -448,14 +557,27 @@ return function(env)
 			P.text(textColumn, {
 				name = "ChoiceName",
 				text = tostring(preset.label),
-				role = "bodyStrong",
+				role = "heading",
 				color = theme.color.text,
 				wrap = true,
 				auto = "Y",
 				layoutOrder = 1,
 			})
-			local description, rich = highlighted(preset.description, preset.noteHighlight)
-			P.text(textColumn, {
+			-- Keep the introduction brief, but never trim a highlighted access
+			-- requirement. Cost and eligibility stay visible before choosing a route.
+			local summary = tostring(preset.description or "")
+			local stop = summary:find(". ", 1, true)
+			if stop then summary = summary:sub(1, stop) end
+			local requirement = tostring(preset.noteHighlight or "")
+			if not included and requirement ~= "" and not summary:find(requirement, 1, true) then
+				if tostring(preset.description):find(requirement, 1, true) then
+					summary = preset.description
+				else
+					summary = summary .. "\n" .. requirement .. "."
+				end
+			end
+			local description, rich = highlighted(summary, preset.noteHighlight)
+			P.text(card.row, {
 				name = "ChoiceDescription",
 				text = description,
 				rich = rich,
@@ -469,29 +591,27 @@ return function(env)
 			local _, badgeLabel = P.badge(cardHead, { text = badgeText, tone = tone, layoutOrder = 2 })
 			badgeLabel.Name = "ChoiceBadge"
 
-			local meta = P.row(card.row, {
-				name = "ChoiceMeta",
-				size = UDim2.new(1, 0, 0, 0),
-				auto = "Y",
-				gap = theme.space.xs,
-				layoutOrder = 2,
-			})
-			P.text(meta, {
+			P.text(card.row, {
 				name = "ChoiceCost",
 				text = tostring(preset.cost or ""),
 				role = "caption",
-				color = theme.color.textTertiary,
-				truncate = true,
-				size = UDim2.new(0, 0, 0, theme.text.caption.height),
-				flex = "Fill",
-				layoutOrder = 1,
+				color = theme.color.textSecondary,
+				wrap = true,
+				auto = "Y",
+				size = UDim2.new(1, 0, 0, 0),
+				layoutOrder = 3,
 			})
-			local chevron = P.frame(meta, {
-				name = "ChoiceOpen",
-				size = UDim2.fromOffset(theme.size.icon, theme.size.icon),
-				layoutOrder = 2,
+			-- The intrinsic content reserves this space; the action follows the outer
+			-- card's bottom when a grid line stretches to fit its taller neighbour.
+			local footerRow = P.row(card.instance, {
+				name = "ChoiceActionRow", size = UDim2.new(1, -theme.space.md * 2, 0, actionHeight),
+				anchor = Vector2.new(0, 1), position = UDim2.new(0, theme.space.md, 1, -theme.space.md), alignX = "Right",
 			})
-			icons.draw("chevron", chevron, theme.size.icon, theme.color.textTertiary)
+			local action = P.row(footerRow, {
+				name = "ChoiceOpen", size = UDim2.fromOffset(0, actionHeight), auto = "X", padding = { x = theme.space.sm, y = theme.space.xs },
+				bg = theme.color.surfaceActive, radius = theme.radius.sm,
+			})
+			P.text(action, { name = "ChoiceAction", text = "Set up", role = "label", color = theme.color.text, auto = "X" })
 			return card
 		end
 
@@ -530,7 +650,7 @@ return function(env)
 
 		render = function()
 			if closed or dialog.closed then return end
-			local searching = query ~= ""
+			local searching = util.trim(query) ~= ""
 			local list
 			if searching then
 				list = catalog.search(query) or {}
@@ -539,7 +659,9 @@ return function(env)
 			end
 			clearSearch.instance.Visible = searching
 			countLabel.Text = countText(#list, tier, searching)
+			cards = {}
 			gallery.clear()
+			viewport.instance.CanvasPosition = Vector2.new(0, 0)
 			if #list == 0 then
 				local caption = "No provider matches that search."
 				if not searching then
@@ -561,10 +683,12 @@ return function(env)
 				if custom then buildCard(gallery.instance, custom, #list + 1) end
 			end
 			gallery.instance.CanvasPosition = Vector2.new(0, 0)
+			fitPicker()
 		end
 
 		dialog.scrim.Destroying:Connect(function()
 			closed = true
+			unsubscribePickerLayout()
 			if pendingSearch then pcall(task.cancel, pendingSearch); pendingSearch = nil end
 		end)
 
@@ -577,14 +701,18 @@ return function(env)
 	-- be dismissed to see the rest of the screen. This modal exists for the one moment
 	-- when none of that is reachable yet: there is no record to select.
 	function M.editor(record, onSaved)
+		if config.vaultStatus().locked then return env.require("ui/credentialvault").open("unlock") end
+		keyData.ensureIds(record)
 		local editing = util.deepCopy(record)
 		local adding = util.trim(editing.id) == ""
 		local retainDraft = adding
+		local keyManager, unsubscribeVault
 		local modal = overlay.modal({
-			title = adding and "Add a provider" or ("Connection for " .. tostring(editing.label)),
-			description = "Any endpoint that speaks /v1/chat/completions, or Anthropic's Messages API.",
-			width = theme.size.modalWide,
-			height = theme.size.modalTall,
+			title = adding and "Connect a provider" or "Edit connection",
+			description = adding and "Add access, choose a model, and save when you're ready."
+				or "Update this provider's connection and model.",
+			width = theme.size.providerPicker,
+			height = math.ceil(theme.size.providerPickerTall / (responsive.isMobile() and theme.metricScale or 1)),
 			-- Six labelled rows, two segmented pickers and a footer do not fit on a phone,
 			-- and an unbounded modal is centred -- so what did not fit went off the top and
 			-- the bottom at once, taking the title and the Save button with it. Bounded and
@@ -593,12 +721,25 @@ return function(env)
 			-- Scrim, close button and Escape preserve every editable connection
 			-- field. Saving and Start over explicitly release the retained draft.
 			onClose = function()
+				if unsubscribeVault then unsubscribeVault(); unsubscribeVault = nil end
+				if keyManager and not keyManager.closed then keyManager.close() end
 				if retainDraft and util.trim(editing.id) == "" then
 					addDraft = draftDirty(editing) and util.deepCopy(editing) or nil
 				end
 			end,
 		})
 		if not modal then return end
+		modal.card.BackgroundColor3 = theme.color.surface
+		unsubscribeVault = config.changed:connect(function(path)
+			if (path == nil or path == "security" or path == "security.vault") and config.vaultStatus().locked then
+				retainDraft, addDraft = false, nil
+				modal.close()
+				for _, child in ipairs(modal.card:GetDescendants()) do
+					if child:IsA("TextBox") then child.Text = "" end
+				end
+				for name in pairs(editing) do editing[name] = nil end
+			end
+		end)
 
 		local form = P.column(modal.content, {
 			name = "Form",
@@ -607,18 +748,22 @@ return function(env)
 			gap = theme.space.md,
 			layoutOrder = 1,
 		})
+		if editing.credentialsOmitted == true then
+			R.paragraph(form,
+				"Provider credentials were omitted from saved settings. Restore your API key and any required custom headers, query parameters, body fields or URL credentials. Saving this connection confirms you reviewed those fields and enables requests.",
+				{ name = "RestoreProviderCredentials", color = theme.color.warn, role = "small", layoutOrder = 0 })
+		end
 
 		-- What this vendor is, in the same words the gallery used to describe it. The
 		-- editor is where a key gets pasted, and pasting one into a screen that no
 		-- longer says which service it belongs to is how a key ends up on the wrong
 		-- endpoint.
 		local introHolder, introBadge, introBadgeLabel, introText
-		if adding then
-			introHolder = P.column(form, {
+		do
+			introHolder = P.card(form, {
 				name = "PresetIntro",
-				size = UDim2.new(1, 0, 0, 0),
-				auto = "Y",
-				gap = theme.space.xs,
+				gap = theme.space.sm,
+				padding = theme.space.md,
 				layoutOrder = 1,
 			})
 			local badgeText, tone = catalog.badge(catalog.get(editing.preset) or {})
@@ -630,17 +775,56 @@ return function(env)
 				color = theme.color.textSecondary,
 				wrap = true,
 				auto = "Y",
-				layoutOrder = 2,
+				layoutOrder = 3,
 			})
 		end
+		local connectionSection = R.section(form, {
+			name = "ConnectionSetup", title = "Connection details", description = "Name and endpoint. Preset defaults stay editable.", layoutOrder = 30,
+		})
+		local accessSection = R.section(form, {
+			name = "AccessSetup", title = "Access", layoutOrder = 10,
+		})
+		local modelSection = R.section(form, {
+			name = "ModelSetup", title = "Model", layoutOrder = 20,
+		})
+		local function details(name, title, description, opened, order)
+			local group = P.column(form, {
+				name = name .. "Group", size = UDim2.new(1, 0, 0, 0), auto = "Y", gap = theme.space.sm, layoutOrder = order,
+			})
+			local body, label
+			local toggle = P.rowButton(group, {
+				name = name .. "Toggle", auto = "Y", vertical = true, padding = { x = theme.space.sm, y = theme.space.sm },
+				gap = theme.space.xxs, layoutOrder = 1,
+				onClick = function(handle)
+					opened = not opened
+					body.Visible = opened
+					handle.instance:SetAttribute("Expanded", opened)
+					label.Text = opened and ("Hide " .. title:lower()) or title
+				end,
+			})
+			label = P.text(toggle.row, { name = name .. "Label", text = opened and ("Hide " .. title:lower()) or title,
+				role = "label", color = theme.color.textSecondary, wrap = true, auto = "Y", layoutOrder = 1 })
+			P.text(toggle.row, { text = description, role = "caption", color = theme.color.textTertiary,
+				wrap = true, auto = "Y", layoutOrder = 2 })
+			toggle.instance:SetAttribute("Expanded", opened)
+			body = P.card(group, { name = name, gap = theme.space.md, padding = theme.space.md, layoutOrder = 2 })
+			body.Visible = opened
+			return body
+		end
+		local guideBody = details("ProviderGuide", "Setup guide", "Key links and provider requirements", true, 40)
+		local accessNotice = R.paragraph(accessSection, "", { name = "AccessSummary", color = theme.color.textSecondary, layoutOrder = 1 })
 
 		local problemLabel
-		local presetButton, urlField, keyRow, nameField
+		local presetButton, urlField, nameField
 		local protocolControl, authControl, keyHintLabel
 		local docsRow, docsNoteRow, presetNoteRow
 		local proxyNote, communityRow, keyLabel, setKeyButton
-		local urlColumn, keyColumn
+		local urlColumn, keyUsageLabel
 		local function refreshConnectionInfo()
+			local custom = editing.preset == "custom"
+			connectionSection.Parent.LayoutOrder = custom and 10 or 30
+			accessSection.Parent.LayoutOrder = custom and 20 or 10
+			modelSection.Parent.LayoutOrder = custom and 30 or 20
 			if proxyNote then
 				local target = registry.proxyTarget(editing)
 				local usingProxy = registry.proxyProvider(editing)
@@ -650,7 +834,13 @@ return function(env)
 					or target and ("If this endpoint rejects UAI as an unauthorized client, UAI retries through " .. env.require("net/url").display(target)
 					.. " and saves that Base URL for this provider. Requests and API keys pass through puai-proxy.davidzk.tech. Shared limit: 90,000 requests per day. The URL stays editable.") or ""
 			end
-			if communityRow then communityRow.Visible = communityKey.eligible(editing) end
+			local included = communityKey.isApplied(editing)
+			if communityRow then communityRow.Visible = communityKey.eligible(editing) and not included end
+			local preset = catalog.get(editing.preset)
+			local requirement = preset and not preset.free and preset.noteHighlight or ""
+			if requirement ~= "" and tostring(preset.description):find(requirement, 1, true) then requirement = "" end
+			accessNotice.Text = included and "Included access is ready. Shared capacity and response times vary." or requirement
+			accessNotice.Visible = accessNotice.Text ~= ""
 		end
 		-- Any connection edit invalidates fetched choices and in-flight discovery,
 		-- including changing away and back before the old response arrives.
@@ -660,19 +850,29 @@ return function(env)
 		local function invalidateTest()
 			testRun = nil
 			if testButton and testButton.instance.Parent then
-				testButton.setText("Test")
+				testButton.setText("Test connection")
 				testButton.setEnabled(true)
 			end
 		end
 
 		local function showProblems()
+			refreshConnectionInfo()
 			local ok, problems = registry.validate(editing)
 			if keyLabel then
 				local shown, tone = maskedKey(editing)
 				keyLabel.Text, keyLabel.TextColor3 = shown, tone and theme.color.warn or theme.color.textSecondary
 			end
-			problemLabel.Text = ok and "" or (problems[1]:gsub("^%l", string.upper) .. ".")
-			problemLabel.Visible = not ok
+			if setKeyButton then
+				setKeyButton.instance.Visible = not registry.isCline(editing)
+			end
+			if keyUsageLabel then
+				keyUsageLabel.Text = keyUsage(editing)
+				keyUsageLabel.Visible = not registry.isCline(editing)
+			end
+			if problemLabel then
+				problemLabel.Text = ok and "" or (problems[1]:gsub("^%l", string.upper) .. ".")
+				problemLabel.Visible = not ok
+			end
 			return ok
 		end
 
@@ -680,14 +880,25 @@ return function(env)
 		local rowOrder = 0
 		local function row(label, hint, build)
 			rowOrder = rowOrder + 1
-			local column = P.column(form, {
+			local parent = label == "Preset" and introHolder
+				or (label == "Name" or label == "Base URL") and connectionSection
+				or label == "API keys" and accessSection
+				or label == "Model" and modelSection or connectionSection
+			local column = P.column(parent, {
+				name = label:gsub("%s", "") .. "FieldGroup",
 				size = UDim2.new(1, 0, 0, 0),
 				auto = "Y",
 				gap = theme.space.xs,
-				layoutOrder = rowOrder * 10,
+				layoutOrder = label == "Preset" and 2 or rowOrder * 10,
 			})
-			P.text(column, { text = tostring(label), role = "label", color = theme.color.text })
+			if label ~= "Preset" and label ~= "Model" then
+				P.text(column, { text = tostring(label), role = "label", color = theme.color.text, layoutOrder = 1 })
+			end
 			local handle = build(column)
+			if type(handle) == "table" then
+				local instance = handle.shell or handle.instance
+				if instance then instance.LayoutOrder = 2 end
+			end
 			if hint then
 				local note = P.text(column, {
 					text = hint,
@@ -695,6 +906,7 @@ return function(env)
 					color = theme.color.textTertiary,
 					wrap = true,
 					auto = "Y",
+					layoutOrder = 9,
 				})
 				note.Size = UDim2.new(1, 0, 0, 0)
 			end
@@ -710,8 +922,8 @@ return function(env)
 		-- carried over when it still matches the old preset's own name, which is the case
 		-- where it was never edited.
 		--
-		-- Optional links and notes stay inside the key field group, so related help
-		-- does not acquire a whole form-row gap apiece. Preserve its order on refresh.
+		-- Extended help stays in the optional guide. Signup requirements in the
+		-- preset summary and the active proxy notice remain in the main form.
 		local function refreshDocs()
 			refreshConnectionInfo()
 			if introHolder then
@@ -722,9 +934,10 @@ return function(env)
 					introBadgeLabel.TextColor3 = theme.toneColor(tone)
 					introBadge.BackgroundColor3 = theme.toneSurface(tone)
 					introText.Text = tostring(current.description or "")
-					introHolder.Visible = true
+					introBadge.Visible = true
 				else
-					introHolder.Visible = false
+					introBadge.Visible = false
+					introText.Text = "A custom provider connection."
 				end
 			end
 			if docsRow then docsRow:Destroy() docsRow = nil end
@@ -737,7 +950,7 @@ return function(env)
 				-- a client GUI, so "get a key here" has to be text a person can select or
 				-- one press away from the clipboard -- a "click here" label with the
 				-- destination hidden behind it is neither.
-				docsRow = P.row(keyColumn, {
+				docsRow = P.row(guideBody, {
 					name = "KeyLink",
 					size = UDim2.new(1, 0, 0, 0),
 					auto = "Y",
@@ -768,7 +981,7 @@ return function(env)
 						end,
 					})
 				end
-				docsNoteRow = R.paragraph(keyColumn,
+				docsNoteRow = R.paragraph(guideBody,
 					presetRecord.free and "Free access is included. Join our Discord for updates, availability notices and help."
 						or presetRecord.authStyle == "none"
 						and "Server setup and API documentation are at the address above."
@@ -776,7 +989,7 @@ return function(env)
 					{ layoutOrder = 12 })
 			end
 			if presetRecord.note then
-				presetNoteRow = R.paragraph(keyColumn, presetRecord.note, { layoutOrder = 13 })
+				presetNoteRow = R.paragraph(guideBody, presetRecord.note, { layoutOrder = 13 })
 			end
 		end
 
@@ -810,7 +1023,6 @@ return function(env)
 					local shown, tone = maskedKey(editing)
 					keyLabel.Text, keyLabel.TextColor3 = shown, tone and theme.color.warn or theme.color.textSecondary
 				end
-				if setKeyButton then setKeyButton.setText("Replace") end
 			end
 			if presetButton then presetButton.setText(preset.label) end
 			if urlField then urlField.set(editing.baseUrl) end
@@ -833,7 +1045,7 @@ return function(env)
 			showProblems()
 		end
 
-		row("Preset", "Change the vendor here without losing anything typed. The gallery fills in the URL, the protocol, the auth style and the key hint.", function(column)
+		row("Preset", nil, function(column)
 			presetButton = P.button(column, {
 				name = "Preset",
 				text = (catalog.get(editing.preset) or {}).label or "Custom endpoint",
@@ -901,6 +1113,7 @@ return function(env)
 				color = theme.color.textTertiary,
 				wrap = true,
 				auto = "Y",
+				layoutOrder = 3,
 			})
 			normalisedNote.Size = UDim2.new(1, 0, 0, 0)
 			return urlField
@@ -924,73 +1137,62 @@ return function(env)
 			end)
 
 		row("Auth header", nil, function(column)
-			authControl = C.segmented(column, {
+			authControl = P.button(column, {
 				name = "AuthStyle",
-				options = AUTH_OPTIONS,
-				value = editing.authStyle,
-				onChange = function(value)
-					local changed = editing.authStyle ~= value
-					editing.authStyle = value
-					if changed and forgetFetchedModels then forgetFetchedModels() end
-					showProblems()
+				text = labelOf(AUTH_OPTIONS, editing.authStyle), variant = "secondary", fill = true, align = "Left", trailing = "chevron",
+				onClick = function(handle)
+					local options = {}
+					for _, option in ipairs(AUTH_OPTIONS) do
+						options[#options + 1] = { value = option.value, label = option.label, selected = editing.authStyle == option.value }
+					end
+					overlay.menu({ target = handle.instance, options = options, onSelect = function(value)
+						local changed = editing.authStyle ~= value
+						editing.authStyle = value
+						handle.setText(labelOf(AUTH_OPTIONS, value))
+						if changed and forgetFetchedModels then forgetFetchedModels() end
+						showProblems()
+					end })
 				end,
 			})
+			authControl.set = function(value) authControl.setText(labelOf(AUTH_OPTIONS, value)) end
 			return authControl
 		end)
 
-		-- The key goes in through a prompt and never comes back out.
-		--
-		-- A masked field would need a new primitive; a prompt needs none, and it has the
-		-- better property that the secret is on screen only while it is being typed.
-		row("API key", "Saved on this device. Sent to this provider and any configured gateway or relay; key values are masked in the request log.", function(column)
-			keyColumn = column
-			local line = P.row(column, { size = UDim2.new(1, 0, 0, 0), auto = "Y", gap = theme.space.sm })
+		-- Keep connection setup compact. The key manager owns its own draft and
+		-- applies names, credentials and routing together, without saving the provider.
+		row("API keys", nil, function(column)
 			local shown, tone = maskedKey(editing)
-			keyLabel = P.text(line, {
+			keyLabel = P.text(column, {
 				name = "KeyState",
 				text = shown,
 				role = "monoSmall",
 				color = tone and theme.color.warn or theme.color.textSecondary,
-				size = UDim2.new(0, 0, 0, math.max(theme.size.control, responsive.minTarget())),
-				flex = "Fill",
-				truncate = true,
-				layoutOrder = 1,
+				wrap = true, auto = "Y",
+				layoutOrder = 2,
 			})
-			setKeyButton = P.button(line, {
-				name = "SetKey",
-				text = util.trim(editing.apiKey or "") == "" and "Add key" or "Replace",
+			keyUsageLabel = R.paragraph(column, keyUsage(editing), { name = "KeyUsage", layoutOrder = 3 })
+			setKeyButton = P.button(column, {
+				name = "ManageKeys",
+				text = "Manage API keys",
 				variant = "secondary",
 				size = "sm",
-				layoutOrder = 2,
-				onClick = function(handle)
-					overlay.prompt({
-						title = "API key",
-						description = "Paste the key for " .. tostring(editing.label)
-							.. ". It replaces whatever is stored now. Paste several keys, one per line, to rotate automatically on rate limits.",
-						placeholder = (catalog.get(editing.preset) or {}).keyHint or "sk-...",
-						confirmText = "Save key",
-						multiline = true,
-						onConfirm = function(text)
-							-- Kept verbatim: the pool parser splits on newlines and
-							-- commas, so what was pasted is what is stored, and a
-							-- single key with a stray trailing newline is still one.
-							local key = tostring(text or "")
-							local changed = editing.apiKey ~= key
-							editing.apiKey = key
-							if changed then editing.keyRotation = nil end
-							if changed and forgetFetchedModels then forgetFetchedModels() end
-							local value, warn = maskedKey(editing)
-							keyLabel.Text = value
-							keyLabel.TextColor3 = warn and theme.color.warn or theme.color.textSecondary
-							handle.setText("Replace")
+				layoutOrder = 4,
+				onClick = function()
+					if modal.closed or registry.isCline(editing) or (keyManager and not keyManager.closed) then return end
+					keyManager = env.require("ui/providerkeys").open({
+						record = editing,
+						onClose = function() keyManager = nil end,
+						onApply = function(updated)
+							if modal.closed or registry.isCline(editing) then return false end
+							if applyKeys(editing, updated) and forgetFetchedModels then forgetFetchedModels() end
 							showProblems()
+							return true
 						end,
 					})
 				end,
 			})
-			setKeyButton.instance.LayoutOrder = 2
-			communityRow = P.column(column, { name = "CommunityKey", size = UDim2.new(1, 0, 0, 0), auto = "Y", gap = theme.space.xs, layoutOrder = 3 })
-			R.paragraph(communityRow, "Project UAI Free includes shared access powered by HCNSEC. No personal key is required. You may use your own HCNSEC key instead; response times and shared capacity vary. Updates and help: https://discord.gg/9xYyyYuKap", { layoutOrder = 1 })
+			communityRow = P.column(column, { name = "CommunityKey", size = UDim2.new(1, 0, 0, 0), auto = "Y", gap = theme.space.xs, layoutOrder = 6 })
+			R.paragraph(communityRow, "Included community access is available. Switching replaces this draft's personal keys with included access.", { layoutOrder = 1 })
 			P.button(communityRow, { name = "UseCommunityKey", text = "Use included free access", variant = "secondary", fill = true, layoutOrder = 2,
 				onClick = function()
 					local ok, why = communityKey.apply(editing)
@@ -998,7 +1200,6 @@ return function(env)
 					if forgetFetchedModels then forgetFetchedModels() end
 					local shown = maskedKey(editing)
 					keyLabel.Text, keyLabel.TextColor3 = shown, theme.color.textSecondary
-					setKeyButton.setText("Replace")
 					showProblems()
 					overlay.toast("Community key added to this draft. Choose a model and save to use it.", "good")
 				end })
@@ -1009,9 +1210,8 @@ return function(env)
 		-- not a field: the shape of an OpenAI key is not the shape of a Gemini key, and
 		-- the person pasting one wants to know they are pasting the right kind of thing
 		-- before the request fails on the far end. The docs link and the preset note sit
-		-- with it inside the key row, because all three are things the
-		-- preset decides and a preset change has to move together.
-		keyHintLabel = P.text(keyColumn, {
+		-- together in the optional guide, and update in place with the preset.
+		keyHintLabel = P.text(guideBody, {
 			name = "KeyHint",
 			text = (catalog.get(editing.preset) or {}).keyHint
 				and ("Key hint: " .. tostring((catalog.get(editing.preset) or {}).keyHint)) or "",
@@ -1023,6 +1223,7 @@ return function(env)
 		})
 		keyHintLabel.Size = UDim2.new(1, 0, 0, 0)
 		keyHintLabel.Visible = keyHintLabel.Text ~= ""
+		R.paragraph(guideBody, "Keys are masked here. Settings / Privacy lets you choose password encryption or unprotected storage. Requests send them to the configured provider, gateway or relay.", { layoutOrder = 14 })
 
 		-- Model.
 		--
@@ -1033,7 +1234,7 @@ return function(env)
 		-- with nothing on screen that could do either, and Test asked the endpoint for a
 		-- completion with no model named, which comes back as the provider's own wording
 		-- for that and reads as a broken connection.
-		local modelButton, modelNote
+		local modelButton, modelNote, fetchButton
 		local fetched = {}
 
 		-- What the picker offers: the ids already on the record, plus whatever this
@@ -1056,7 +1257,7 @@ return function(env)
 			return out
 		end
 
-		local DEFAULT_MODEL_NOTE = "The endpoint is the only authority on this, so nothing here guesses one. Fetch the list, or type the id exactly as the provider expects it."
+		local DEFAULT_MODEL_NOTE = "Model IDs come from your provider. Fetch its catalog or add an ID manually."
 
 		local function setModelNote(text, bad)
 			if not modelNote then return end
@@ -1096,13 +1297,15 @@ return function(env)
 			local revision = modelRevision
 			invalidateTest()
 			handle.setEnabled(false)
-			setModelNote("Asking " .. registry.endpoint(target, "/models") .. "...", false)
+			if fetchButton then fetchButton.setEnabled(false) end
+			setModelNote("Loading " .. modelSource(target) .. "...", false)
 			task.spawn(function()
 				local found, note = models.discover(target, { force = true,
 					aborted = function() return modal.closed or revision ~= modelRevision end })
 				if modal.closed or not handle.instance.Parent or revision ~= modelRevision then return end
 				adoptProxy(target, revision)
 				handle.setEnabled(true)
+				if fetchButton then fetchButton.setEnabled(true) end
 				fetched = found
 				setModelNote(note, #found == 0)
 				-- Straight back into the list. Picking one is the reason to fetch, and a
@@ -1113,9 +1316,15 @@ return function(env)
 		end
 
 		local function typeModel()
+			-- A manual entry supersedes a discovery still loading in this form.
+			modelRevision = modelRevision + 1
+			invalidateTest()
+			if modelButton then modelButton.setEnabled(true) end
+			if fetchButton then fetchButton.setEnabled(true) end
 			overlay.prompt({
 				title = "Model id",
-				description = "Type it exactly as the provider expects it. It is saved with this provider and selected.",
+				description = "Type it exactly as the provider expects it. It is saved with this "
+					.. "provider and selected.",
 				placeholder = "model id",
 				confirmText = "Use it",
 				onConfirm = function(text)
@@ -1138,7 +1347,7 @@ return function(env)
 				local bits = {}
 				if models.isFree(editing, id) then bits[#bits + 1] = "Free" end
 				if badge then bits[#bits + 1] = badge end
-				if not own[id] then bits[#bits + 1] = "from /models" end
+				if not own[id] then bits[#bits + 1] = "from catalog" end
 				options[#options + 1] = {
 					label = id,
 					value = "model:" .. id,
@@ -1149,16 +1358,20 @@ return function(env)
 			end
 			if #options > 0 then options[#options + 1] = { divider = true } end
 			options[#options + 1] = {
-				label = "Fetch from /models",
+				label = fetchLabel(editing),
 				value = "fetch",
-				detail = registry.endpoint(editing, "/models"),
+				detail = modelSource(editing),
+				searchable = false,
 				tone = "info",
 			}
-			options[#options + 1] = { label = "Type an id", value = "add", tone = "info" }
+			options[#options + 1] = { label = "Type an id", value = "add", tone = "info", searchable = false }
 			overlay.menu({
 				target = handle.instance,
 				width = theme.size.menuWide,
 				options = options,
+				searchable = true,
+				searchPlaceholder = "Search model IDs...",
+				emptyText = "No matching models. Refresh the catalog or type an exact ID.",
 				onSelect = function(value)
 					if revision ~= modelRevision then return end
 					if value == "fetch" then
@@ -1184,6 +1397,7 @@ return function(env)
 				variant = "secondary",
 				fill = true,
 				align = "Left",
+				trailing = "chevron",
 				onClick = openModelMenu,
 			})
 			modelNote = P.text(column, {
@@ -1193,7 +1407,14 @@ return function(env)
 				color = theme.color.textTertiary,
 				wrap = true,
 				auto = "Y",
+				layoutOrder = 4,
 			})
+			local actions = P.row(column, { name = "SetupModelActions", size = UDim2.new(1, 0, 0, 0), auto = "Y",
+				gap = theme.space.xs, wrap = true, layoutOrder = 3 })
+			fetchButton = P.button(actions, { name = "FetchSetupModels", text = "Fetch catalog", variant = "secondary", size = "sm", layoutOrder = 1,
+				onClick = function() if modelButton.instance.Active then fetchModels(modelButton) end end })
+			P.button(actions, { name = "TypeSetupModel", text = "Enter model ID", variant = "ghost", size = "sm", layoutOrder = 2,
+				onClick = typeModel })
 			modelNote.Size = UDim2.new(1, 0, 0, 0)
 			paintModel()
 			return modelButton
@@ -1204,6 +1425,7 @@ return function(env)
 			invalidateTest()
 			fetched = {}
 			if modelButton then modelButton.setEnabled(true) end
+			if fetchButton then fetchButton.setEnabled(true) end
 			setModelNote(DEFAULT_MODEL_NOTE, false)
 		end
 
@@ -1217,13 +1439,13 @@ return function(env)
 			wrap = true,
 			auto = "Y",
 			visible = false,
-			layoutOrder = 2,
+			layoutOrder = 0,
 		})
 		problemLabel.Size = UDim2.new(1, 0, 0, 0)
 
 		testButton = P.button(modal.footer, {
 			name = "TestConnection",
-			text = "Test",
+			text = "Test connection",
 			variant = "ghost",
 			size = "sm",
 			layoutOrder = 1,
@@ -1238,6 +1460,7 @@ return function(env)
 				if editing.preset ~= "azure" and util.trim(editing.model) == "" then
 					problemLabel.Text = "Choose a model first: fetch the list, or type the id."
 					problemLabel.Visible = true
+					modal.scroll.instance.CanvasPosition = Vector2.new(0, 0)
 					return
 				end
 				handle.setEnabled(false)
@@ -1260,7 +1483,7 @@ return function(env)
 					if aborted() then return end
 					testRun = nil
 					adoptProxy(candidate, revision)
-					handle.setText("Test")
+					handle.setText("Test connection")
 					handle.setEnabled(true)
 					if result then
 						overlay.toast(env.t("Reached %{provider} in %{time}",
@@ -1268,6 +1491,7 @@ return function(env)
 					else
 						problemLabel.Text = tostring(err)
 						problemLabel.Visible = true
+						modal.scroll.instance.CanvasPosition = Vector2.new(0, 0)
 					end
 				end)
 			end,
@@ -1291,12 +1515,18 @@ return function(env)
 
 		P.button(modal.footer, {
 			name = "SaveProvider",
-			text = adding and "Add" or "Save",
+			text = adding and "Add provider" or "Save changes",
 			variant = "primary",
 			size = "sm",
 			layoutOrder = 2,
 			onClick = function()
-				local ok, problems = registry.save(editing)
+				local current = not adding and registry.get(editing.id)
+				if current and sameKeyConnection(current, editing) then
+					-- Requests may advance the live cursor while a connection draft is
+					-- open. A label-only edit must not restore its old copied cursor.
+					editing.keyRotation = current.keyRotation
+				end
+				local ok, problems = registry.save(editing, { credentialsRestored = true })
 				if not ok then
 					-- Sentence-cased and one per line. It was table.concat(problems, ". "),
 					-- which turned two lowercase fragments into "give the provider a name.
@@ -1307,6 +1537,7 @@ return function(env)
 					end
 					problemLabel.Text = table.concat(lines, "\n")
 					problemLabel.Visible = true
+					modal.scroll.instance.CanvasPosition = Vector2.new(0, 0)
 					return
 				end
 				if adding then addDraft = nil end
@@ -1335,6 +1566,39 @@ return function(env)
 			return
 		end
 		M.picker({ onSaved = onSaved })
+	end
+
+	local savedKeyManager
+	function M.manageKeys(record, onSaved)
+		if registry.isCline(record) then return nil end
+		if savedKeyManager and not savedKeyManager.closed then return savedKeyManager end
+		savedKeyManager = env.require("ui/providerkeys").open({
+			record = record,
+			applyHint = "Apply changes updates this provider's keys and request preferences using the storage preference shown above.",
+			onClose = function() savedKeyManager = nil end,
+			onApply = function(updated)
+				local current = registry.get(record.id)
+				if not current or registry.isCline(current) then
+					overlay.toast("This provider is no longer available. Reopen its settings.", "warn")
+					return false
+				end
+				local candidate = util.deepCopy(current)
+				candidate.keyRotation, candidate.health = current.keyRotation, current.health
+				local connectionChanged = applyKeys(candidate, updated)
+				local ok, problems = registry.save(candidate)
+				if not ok then
+					overlay.toast(problems[1] or "Could not save API keys", "warn")
+					return false
+				end
+				if connectionChanged then models.invalidate(candidate.id) end
+				if candidate.credentialsOmitted == true then
+					overlay.toast("Keys updated. Open Edit connection to review custom authentication, then save to enable requests.", "info", 5)
+				end
+				if onSaved then onSaved(candidate.id) end
+				return true
+			end,
+		})
+		return savedKeyManager
 	end
 
 	-- The empty panel's start card.
@@ -1427,7 +1691,8 @@ return function(env)
 				layoutOrder = index,
 				onClick = function()
 					if preset.free then
-						local record = env.require("provider/free").use()
+						local record, why = env.require("provider/free").use()
+						if not record then overlay.toast(why, "warn", 4); return end
 						if onSetup then onSetup(record.id) end
 						return
 					end
@@ -1646,6 +1911,8 @@ return function(env)
 
 		local statusBox = nil
 		local healthError = nil
+		local modelQueries = {}
+		local modelPositions = {}
 
 		local function order()
 			panel.__order = (panel.__order or 0) + 1
@@ -1661,7 +1928,7 @@ return function(env)
 				local bits = {}
 				if models.isFree(record, id) then bits[#bits + 1] = "Free" end
 				if badge then bits[#bits + 1] = badge end
-				if not own[id] then bits[#bits + 1] = "from /models" end
+				if not own[id] then bits[#bits + 1] = "from catalog" end
 				options[#options + 1] = {
 					label = id,
 					value = "model:" .. id,
@@ -1672,16 +1939,20 @@ return function(env)
 			end
 			if #options > 0 then options[#options + 1] = { divider = true } end
 			options[#options + 1] = {
-				label = "Fetch from /models",
+				label = fetchLabel(record),
 				value = "fetch",
-				detail = registry.endpoint(record, "/models"),
+				detail = modelSource(record),
+				searchable = false,
 				tone = "info",
 			}
-			options[#options + 1] = { label = "Add a model by id", value = "add", tone = "info" }
+			options[#options + 1] = { label = "Add a model by id", value = "add", tone = "info", searchable = false }
 			overlay.menu({
 				target = target,
 				width = theme.size.menuWide,
 				options = options,
+				searchable = true,
+				searchPlaceholder = "Search model IDs...",
+				emptyText = "No matching models. Refresh the catalog or add an exact ID.",
 				onSelect = function(value)
 					if value == "fetch" then
 						local revision = selectionRevision
@@ -1698,7 +1969,8 @@ return function(env)
 					elseif value == "add" then
 						overlay.prompt({
 							title = "Add a model to " .. record.label,
-							description = "Type the id exactly as the provider expects it. It is saved to this provider and selected.",
+							description = "Type the id exactly as the provider expects it. "
+								.. "It is saved to this provider and selected.",
 							placeholder = "model id",
 							confirmText = "Add",
 							onConfirm = function(text)
@@ -1722,6 +1994,13 @@ return function(env)
 			healthError = nil
 			panel.__order = 0
 			local record = selected and registry.get(selected) or nil
+			if config.vaultStatus().locked then
+				local locked = R.section(detail.instance, { name = "ProviderVaultLocked", title = "Credential vault locked",
+					description = "Unlock saved credentials before changing providers or making requests.", layoutOrder = order() })
+				P.button(locked, { name = "UnlockProviderVault", text = "Unlock credential vault", fill = true,
+					onClick = function() env.require("ui/credentialvault").open("unlock") end })
+				return
+			end
 			-- Included free access must not hide the way to anything else.
 			local list = registry.list()
 			if not record then
@@ -1788,7 +2067,7 @@ return function(env)
 			end
 			local subtitle = P.text(subtitleRow, {
 				name = "ProviderEndpoint",
-				text = record.baseUrl,
+				text = registry.isCline(record) and "Cline through the desktop app" or urls.display(record.baseUrl),
 				role = "caption",
 				color = theme.color.textTertiary,
 				truncate = true,
@@ -1798,10 +2077,11 @@ return function(env)
 			})
 
 			-- Status ------------------------------------------------------------
+			local modelOrder = order()
 			local status = R.section(detail.instance, {
 				name = "Status",
-				title = "Status",
-				description = "What this client will actually send, and how the endpoint has been answering.",
+				title = "Connection",
+				description = "Your endpoint, authentication and recent connection health.",
 				layoutOrder = order(),
 			})
 			statusBox = R.facts(status, factsFor(record), { name = "StatusFacts", layoutOrder = 1 })
@@ -1843,10 +2123,16 @@ return function(env)
 			end
 			actions[#actions + 1] = {
 				name = "EditConnection",
-				text = "Connection",
+				text = "Edit connection",
 				variant = "secondary",
 				onClick = function() M.editor(record, function() panel.select(record.id) end) end,
 			}
+			if not registry.isCline(record) then
+				actions[#actions + 1] = {
+					name = "ManageProviderKeys", text = "Manage API keys", variant = "secondary",
+					onClick = function() M.manageKeys(record, function() panel.select(record.id) end) end,
+				}
+			end
 			if caps.clipboard then
 				actions[#actions + 1] = {
 					name = "CopyEndpoint",
@@ -1867,12 +2153,14 @@ return function(env)
 				description = communityKey.isApplied(record)
 					and "Auto measures available models in the background and prefers a verified tool-capable route below ten seconds. Speed varies with your prompt and shared capacity. Choose a specific model to keep it fixed."
 					or "Models come from the endpoint or your manual entries. Fetch the current list if none are known yet.",
-				layoutOrder = order(),
+				layoutOrder = modelOrder,
 			})
 			local known = models.list(record)
 			R.select(modelSection, {
 				name = "ActiveModel",
 				label = "Active model",
+				searchable = true,
+				searchPlaceholder = "Search model IDs...",
 				hint = #known == 0 and "Nothing known yet. Fetch the list, or add an id by hand."
 					or (traits.badge(record.model, record) and ("Context window " .. traits.badge(record.model, record))
 						or "No published context window for this id."),
@@ -1891,7 +2179,7 @@ return function(env)
 			R.actions(modelSection, {
 				{
 					name = "ManageModels",
-					text = #known == 0 and "Fetch or add a model" or "Fetch, add or remove",
+					text = #known == 0 and "Fetch or add a model" or "Manage models",
 					variant = "secondary",
 					onClick = function(handle)
 						modelMenu(record, handle.instance, function() panel.select(record.id) end)
@@ -1899,13 +2187,47 @@ return function(env)
 				},
 			}, { name = "ModelActions" })
 
+			local modelRows, modelCount, modelEmpty, modelList = {}, nil, nil, nil
+			local modelRowHeight = math.max(theme.size.rowSmall, responsive.minTarget(), theme.text.monoSmall.height + theme.space.xs)
+			local function modelListHeight(count)
+				local visible = math.min(6, count)
+				return visible * modelRowHeight + math.max(0, visible - 1) * theme.space.xs + theme.space.xxs * 2
+			end
+			local function filterModels(text, preservePosition)
+				modelQueries[record.id] = tostring(text or "")
+				local matches = env.require("runtime/search").compile(text)
+				local visible = 0
+				for _, entry in ipairs(modelRows) do
+					entry.instance.Visible = matches(entry.id) ~= nil
+					if entry.instance.Visible then visible = visible + 1 end
+				end
+				if modelCount then modelCount.Text = string.format("%d of %d models", visible, #known) end
+				if modelEmpty then modelEmpty.Visible = visible == 0 end
+				if modelList then
+					modelList.instance.Visible = visible > 0
+					modelList.instance.Size = UDim2.new(1, 0, 0, modelListHeight(visible))
+					if preservePosition ~= true then modelList.instance.CanvasPosition = Vector2.new(0, 0) end
+				end
+			end
+			if #known > 8 then
+				P.field(modelSection, { name = "SavedModelSearch", placeholder = "Search this provider's models...",
+					text = modelQueries[record.id] or "", layoutOrder = 50, onChange = filterModels })
+				modelCount = P.text(modelSection, { name = "SavedModelCount", role = "caption", color = theme.color.textTertiary, layoutOrder = 51 })
+				modelEmpty = P.text(modelSection, { name = "NoSavedModelsMatch", text = "No matching models. Clear the search or fetch the latest catalog.",
+					role = "small", color = theme.color.textTertiary, wrap = true, auto = "Y", visible = false, layoutOrder = 52 })
+			end
+			modelList = P.scroll(modelSection, {
+				name = "SavedModelList", size = UDim2.new(1, 0, 0, modelListHeight(#known)), gap = theme.space.xs,
+				padding = { left = theme.space.xxs, right = theme.space.xs, top = theme.space.xxs, bottom = theme.space.xxs }, layoutOrder = 100,
+			})
+			modelList.instance.Visible = #known > 0
 			local own = {}
 			for _, id in ipairs(record.models or {}) do own[id] = true end
 			for index, id in ipairs(known) do
 				local free = models.isFree(record, id)
-				local row = P.rowButton(modelSection, {
+				local row = P.rowButton(modelList.instance, {
 					name = "Model_" .. tostring(index),
-					height = theme.size.rowSmall,
+					height = modelRowHeight,
 					padding = { x = theme.space.sm },
 					radius = theme.radius.sm,
 					stroke = free, strokeColor = free and P.freeModelOutline() or nil,
@@ -1921,6 +2243,7 @@ return function(env)
 					size = UDim2.fromOffset(theme.size.icon, theme.size.icon),
 					layoutOrder = 1,
 				})
+				modelRows[#modelRows + 1] = { instance = row.instance, id = id }
 				P.statusDot(slot, {
 					diameter = theme.size.dot,
 					color = id == record.model and theme.color.accent or theme.color.borderStrong,
@@ -1948,18 +2271,24 @@ return function(env)
 					remove.instance.LayoutOrder = 4
 				end
 			end
+			if modelCount then filterModels(modelQueries[record.id] or "", true) end
+			modelList.instance.CanvasPosition = modelPositions[record.id] or Vector2.new(0, 0)
+			modelList.instance:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+				modelPositions[record.id] = modelList.instance.CanvasPosition
+			end)
 
 			-- Behaviour ---------------------------------------------------------
 			local behaviour = R.section(detail.instance, {
 				name = "Behaviour",
 				title = "Behaviour",
-				description = "Per-provider switches. Each one can only narrow what the matching global setting allows: turning one off always takes effect, turning it on needs the global on as well.",
+				description = "Preferences for this provider. Global settings still apply.",
 				layoutOrder = order(),
 			})
 			R.toggle(behaviour, {
 				name = "Enabled",
 				label = "Enabled",
-				hint = "A disabled provider is skipped by the fallback chain. Disabling the active one leaves it flagged active while requests go elsewhere.",
+				hint = "A disabled provider is skipped by the fallback chain. Disabling the active "
+					.. "one leaves it flagged active while requests go elsewhere.",
 				value = record.enabled ~= false,
 				layoutOrder = 1,
 				onChange = function(value)
@@ -1969,8 +2298,9 @@ return function(env)
 			})
 			R.toggle(behaviour, {
 				name = "Stream",
-				label = "Ask for a stream",
-				hint = "Streamed replies carry reasoning text and token counts. Turning this off always takes effect; turning it on only does while Settings has streaming on.",
+				label = "Streaming responses",
+				hint = "Streamed replies carry reasoning text and token counts. Turning this off "
+					.. "always takes effect; turning it on only does while Settings has streaming on.",
 				value = record.stream ~= false,
 				layoutOrder = 2,
 				onChange = function(value)
@@ -1986,7 +2316,9 @@ return function(env)
 				R.toggle(behaviour, {
 					name = "ClaudeUa",
 					label = "Send the Claude Code identity",
-					hint = "The claude-cli User-Agent and its client headers. Turning this off suppresses the whole set for this endpoint whatever the global switch says, which is the one lever this client has when a CDN in front of an API refuses the request.",
+					hint = "The claude-cli User-Agent and its client headers. Turning this off suppresses "
+						.. "the whole set for this endpoint whatever the global switch says, which is the "
+						.. "one lever this client has when a CDN in front of an API refuses the request.",
 					value = record.claudeUa ~= false,
 					layoutOrder = 3,
 					onChange = function(value)
@@ -2000,13 +2332,15 @@ return function(env)
 			local advanced = R.section(detail.instance, {
 				name = "Advanced",
 				title = "Transport",
-				description = "Optional gateway streaming and extra headers, body fields and query parameters. HTTP works without a socket; the provider and host still set request limits.",
+				description = "Optional gateway streaming and extra headers, body fields and query parameters. "
+					.. "HTTP works without a socket; the provider and host still set request limits.",
 				layoutOrder = order(),
 			})
 			R.field(advanced, {
 				name = "SocketUrl",
 				label = "Gateway socket URL",
-				hint = "Optional, for Chat completions only. Requires a gateway implementing UAI's envelope protocol. Ordinary local servers and OpenAI Responses/Realtime sockets use different protocols. The gateway receives your provider headers.",
+				hint = "Optional, for Chat completions only. Requires a gateway implementing UAI's envelope protocol. "
+					.. "Ordinary local servers and OpenAI Responses/Realtime sockets use different protocols. The gateway receives your provider headers.",
 				value = record.wsUrl or "",
 				placeholder = "wss://your-uai-gateway.example/stream",
 				layoutOrder = 1,
@@ -2046,7 +2380,7 @@ return function(env)
 				local ordering = R.section(detail.instance, {
 					name = "Order",
 					title = "Fallback order",
-					description = env.t("Position %{position} of %{total}. When the active provider fails, the chain walks this list in order.",
+					description = env.t("Position %{position} of %{total}. If fallback is enabled and the active provider fails, other enabled providers are tried in this order.",
 						{ position = position, total = #list }),
 					layoutOrder = order(),
 				})
@@ -2074,7 +2408,8 @@ return function(env)
 			local danger = R.section(detail.instance, {
 				name = "Remove",
 				title = "Remove",
-				description = "The endpoint and its key are deleted from this device. This cannot be undone.",
+				description = "The endpoint and its key are deleted from this device. This cannot "
+					.. "be undone.",
 				layoutOrder = order(),
 			})
 			R.actions(danger, {
@@ -2106,7 +2441,8 @@ return function(env)
 							confirmText = "Remove",
 							danger = true,
 							onConfirm = function()
-								registry.remove(record.id)
+								local removed, why = registry.remove(record.id)
+								if not removed then overlay.toast(why, "warn", 4); return end
 								panel.select(successor and successor.id or nil)
 							end,
 						})
@@ -2169,9 +2505,13 @@ return function(env)
 				panel.select(selected)
 			end
 		end)
+		local unsubscribeVault = config.changed:connect(function(path)
+			if root.Parent and (path == nil or path == "security" or path == "security.vault") then panel.select(selected) end
+		end)
 		root.Destroying:Connect(function()
 			pcall(panel.unsubscribe)
 			pcall(unsubscribeLayout)
+			pcall(unsubscribeVault)
 		end)
 
 		panel.root = root

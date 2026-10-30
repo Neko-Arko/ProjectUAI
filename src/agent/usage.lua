@@ -9,6 +9,11 @@ return function(env)
 	local util = env.require("runtime/util")
 	local signal = env.require("runtime/signal")
 	local pricing = env.require("agent/pricing")
+	local function count(value)
+		local number = tonumber(value)
+		if not number or number ~= number or number < 0 or number > 9007199254740991 then return nil end
+		return math.floor(number)
+	end
 
 	local M = {
 		session = { prompt = 0, completion = 0, total = 0, cost = 0, requests = 0, estimated = false },
@@ -66,23 +71,22 @@ return function(env)
 	-- `usage` is the provider block when it exists. `fallback` supplies estimates
 	-- so a provider that reports nothing still moves the counters.
 	function M.record(usage, model, fallback, record)
-		local prompt, completion, estimated
-		if type(usage) == "table" and (usage.prompt_tokens or usage.completion_tokens or usage.input_tokens or usage.output_tokens) then
-			prompt = tonumber(usage.prompt_tokens or usage.input_tokens) or 0
-			completion = tonumber(usage.completion_tokens or usage.output_tokens) or 0
-			estimated = false
-		else
-			prompt = (fallback and fallback.prompt) or 0
-			completion = (fallback and fallback.completion) or 0
-			estimated = true
-		end
+		usage = type(usage) == "table" and usage or {}
+		local prompt = count(usage.prompt_tokens) or count(usage.input_tokens)
+		local completion = count(usage.completion_tokens) or count(usage.output_tokens)
+		local estimated = prompt == nil or completion == nil
+		prompt = prompt or count(fallback and fallback.prompt) or 0
+		completion = completion or count(fallback and fallback.completion) or 0
 
-		local cached = tonumber(util.get(usage or {}, "prompt_tokens_details.cached_tokens",
+		local cached = count(util.get(usage or {}, "prompt_tokens_details.cached_tokens",
 			util.get(usage or {}, "input_tokens_details.cached_tokens", 0))) or 0
-		local created = tonumber(util.get(usage or {}, "cache_creation_input_tokens",
+		local created = count(util.get(usage or {}, "cache_creation_input_tokens",
 			util.get(usage or {}, "prompt_tokens_details.cache_creation_tokens", 0))) or 0
-		local reasoning = tonumber(util.get(usage or {}, "completion_tokens_details.reasoning_tokens",
+		local reasoning = count(util.get(usage or {}, "completion_tokens_details.reasoning_tokens",
 			util.get(usage or {}, "output_tokens_details.reasoning_tokens", 0))) or 0
+		cached = math.min(cached, prompt)
+		created = math.min(created, prompt - cached)
+		reasoning = math.min(reasoning, completion)
 		local pricedCost = pricing.costFor(model, record, prompt, completion, cached, created)
 		local cost = pricedCost or 0
 
@@ -102,6 +106,7 @@ return function(env)
 		if estimated then M.session.estimated = true end
 
 		M.session.cached = (M.session.cached or 0) + cached
+		M.session.cacheCreated = (M.session.cacheCreated or 0) + created
 		M.session.reasoning = (M.session.reasoning or 0) + reasoning
 
 		local delta = {
@@ -112,8 +117,10 @@ return function(env)
 			costKnown = pricedCost ~= nil,
 			estimated = estimated,
 			cached = tonumber(cached) or 0,
+			cacheCreated = created,
 			reasoning = tonumber(reasoning) or 0,
 		}
+		env.require("runtime/request_accounting").report(fallback and fallback.accounting, usage, { prompt = prompt, completion = completion })
 		M.recorded:fire(delta)
 		M.changed:fire(M.session, M.turn)
 		return { prompt = prompt, completion = completion, cost = cost, costKnown = pricedCost ~= nil, estimated = estimated }

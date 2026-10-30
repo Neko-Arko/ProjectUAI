@@ -1,16 +1,37 @@
 # Project UAI — contract
 
-Current client release: **3.6.6 — October 23, 2026**. The bridge remains
-`bridge-v3.6.6`; the Windows app and Android companion remain 3.6.5 until their
-own builds.
+Current client release: **3.7.2 - October 29, 2026**, with password-vault setup,
+an explicit unprotected-storage option, safer exports and scheduled included access.
+The bridge, web UI and Android companion (version code 8) remain **3.7.1**, which
+accepts every Kilo free-model spelling in quota
+recovery. The Windows desktop app remains **3.7.0**.
 
-Bridge 3.6.6 and Windows desktop 3.6.5 use verified automatic GitHub updates.
+Bridge 3.7.1 and Windows desktop 3.7.0 use verified automatic GitHub updates.
 Bridge worker replacement waits for idle work and retains its session token;
 desktop app updates stage for restart with a retained fallback. Desktop detects
 Node.js 18+ or downloads a verified LTS runtime per user instead of bundling Node.
 The Windows distribution is one independent executable. Bridge, browser, client
 and license files are embedded and verified into a private cache automatically;
 users do not extract a ZIP or maintain an adjacent support folder.
+
+Kilo free quota recovery is enabled by default in both local apps and starts
+only on a complete anonymous `PROMOTION_MODEL_LIMIT_REACHED` refusal. Its scope
+is exact HTTPS Kilo inference routes with free models and no credential headers
+or URL credentials/query. One tunnel attempt and one circuit retry retain the
+original payload and deadline; uncertain outcomes and partial streams are never
+replayed. The apps advertise optional `capabilities.kilo` schema 1 with enabled,
+available, state and a bounded display message. Disconnect clears client state.
+See [Kilo tunnel](docs/KILO_TUNNEL.md) for controls and quota evidence.
+
+Cline is a bridge-only local CLI route. Its provider uses the reserved
+`https://uai-tunnel.invalid/cline/v1` marker, which must never reach executor
+HTTP or the Android companion. The bridge accepts Chat Completions only,
+requires no provider credential headers, and admits only current free models
+available through the authenticated CLI. Optional `capabilities.cline` schema 1
+advertises enabled, available, state and a bounded message. Missing authentication
+is visible as `auth-required`; it cannot be reported as ready. CLI host tool
+requests are denied; validated UAI calls return to Roblox's normal permissions.
+See [Cline tunnel](docs/CLINE_TUNNEL.md).
 
 A universal Roblox AI agent client. Universal means: no game, no gateway and no
 host script is assumed. It runs standalone under an executor, embedded in a host
@@ -62,7 +83,7 @@ end
 | `env.caps.fn` | resolved executor functions (`request`, `writefile`, `loadstring`, ...) or nil |
 | `env.context` | table the host passed in; `{}` when standalone |
 | `env.info` | `{ name, version, folder, uaVersion }` |
-| `env.root` | the mounted app's `ScreenGui`; absent during UI-free runtime use |
+| `env.root` | the mounted app's `ScreenGui`, including credential-storage entry |
 
 Cycles are a load error, not a hang. `runtime/*` must not require anything above
 it; `ui/*` must not require `agent/*` except through `agent/session`.
@@ -75,17 +96,24 @@ ASCII or valid spans.
 
 ### Embedding SDK
 
-The full client accepts `context.ui = false` to skip application construction.
-Runtime boot still owns capabilities, configuration, providers, sessions, tools,
-hooks, and cleanup. Explicit `show`, `toggle`, or `openSession(id)` can mount the
-standard app later; `hide` does not mount it. `handle.uiMounted` reports mounting,
-not visibility. `context.reuse = true` returns a live copy of the same build
-without toggling or replacing its boot context. Changed-build replacement keeps
-the existing guarded save/reload contract.
+The full client initially requires password setup or the explicit red
+Continue without encryption choice. An enabled vault requires unlock on every
+execution, including `context.ui = false`, same-build reuse and changed-build
+replacement. A saved unprotected-storage choice skips future password prompts.
+The app is mounted for credential entry; `context.ui = false` keeps its normal
+window hidden after access is granted. Runtime boot still owns capabilities, configuration,
+providers, sessions, tools, hooks and cleanup. Explicit `show`, `toggle`, or
+`openSession(id)` can show the standard app after access is granted. `handle.uiMounted`
+reports mounting, not visibility. A same-build rerun requests showing the app after
+any required authentication unless `context.reuse = true`, which retains the existing
+display preference and boot context; it does not bypass an enabled vault. Changed-build
+replacement keeps the existing guarded save/reload contract.
 
 `handle.sdk.version` independently identifies the embedding API, beginning at
-`1.0.0`. `features` advertises `uiFreeBoot`, `resourceScopes`, `requests`, and
-`sessionLookup`. SDK APIs use dot calls. Public `hooks`, `permissions`, and
+`1.0.0`. `features` advertises `passwordGate`, `resourceScopes`, `requests`, and
+`sessionLookup`; `uiFreeBoot` is false because `ui = false` hides the normal app
+rather than guaranteeing no application construction. SDK APIs use dot calls.
+Public `hooks`, `permissions`, and
 `openSession` remove the need to import presentation or lifecycle internals for
 ordinary host integrations. `env` and `app` remain implementation escape hatches,
 not a promise that all their internals are covered by the SDK version.
@@ -112,8 +140,8 @@ returns `session, created` and selects only with `activate = true`; existing
 conversation options otherwise remain unchanged. `newThread` keeps default
 activation and accepts `activate = false` and `ephemeral = true`. IDs are bounded
 to 120 alphanumeric/underscore/hyphen characters; duplicates cannot replace live
-entries. UI-free boot leaves permission policy unchanged, so hosts must provide
-an approval presenter or explicitly open the app for work requiring approval.
+entries. Hiding the normal app leaves permission policy unchanged. The mounted
+application owns approval presentation after authentication.
 Creation validates option types and copies string-to-boolean tool maps. Ordinary
 session persistence stores a versioned policy containing tool filters/groups/
 exclusions, turn/time budgets, unlimited mode, and streaming preference. Valid
@@ -171,6 +199,7 @@ credentials or raw error bodies. Runtime modules do not depend on `net/*`.
   configured gateway implements UAI's envelope protocol. A normal local server
   or OpenAI Responses/Realtime socket does not implement that protocol. See
   [the provider and WebSocket contract](docs/PROVIDER_COMPATIBILITY.md).
+* Explicit `x-should-retry: false` suppresses transport retries.
 * Retries: 408/409/429/5xx and transport errors, exponential backoff with
   jitter, `Retry-After` honoured, capped attempts, then the next provider in the
   fallback chain.
@@ -213,9 +242,12 @@ credentials or raw error bodies. Runtime modules do not depend on `net/*`.
   and HTTP error documents; manual model ids remain available.
 * Secrets are redacted in the request log; only the last four characters of a
   key are displayed in diagnostic views, and the Providers panel never renders the
-  key itself. Full configuration export is an explicit private transfer: it includes
-  complete credentials in clipboard JSON and is clearly labelled. Its import preview
-  reports counts and provider names without displaying keys.
+  key itself. Configuration copies omit credentials by default. The separate
+  explicitly labelled private copy retains vault encryption when enabled, or
+  contains reversibly encoded credentials after the unprotected-storage choice.
+  Included community access is represented by a reference, never its raw key.
+  Import previews report counts and provider names without displaying keys, and
+  imports retain this device's storage choice and vault password, if any.
 * `util.encode` is the only path to `JSONEncode`, and it scrubs on the way through:
   every string is repaired to valid UTF-8, NaN and the infinities become `0`, and a
   function, userdata or thread becomes a marker rather than a raise. This is not
@@ -234,6 +266,11 @@ credentials or raw error bodies. Runtime modules do not depend on `net/*`.
     label = "OpenAI",
     baseUrl = "https://api.openai.com/v1",
     apiKey = "sk-...",
+    keyNames = { "Personal" },            -- optional labels aligned with deduplicated keys
+    keyPaused = { false },                -- optional pause flags; missing means active
+    keyIds = { "00000000-0000-4000-8000-000000000001" }, -- generated accounting IDs
+    keyMode = "rotate",                   -- rotate (default) | single
+    selectedKey = 1,                      -- saved key index used by single mode
     authStyle = "bearer",                -- bearer | x-api-key | api-key | both | none
     models = { "gpt-4o" },               -- only what the user added or picked
     model = "gpt-4o",                    -- current selection
@@ -264,6 +301,14 @@ No key for free routes, and the free half by name for hybrid services (OpenCode
 Zen's CLI models, OpenRouter's free ids, OpenCode Go's CLI catalog). A hybrid is
 never labelled Paid, and no label claims a whole service is free when only part
 of it is.
+
+The setup form groups Connection, Access and Model, with direct catalog and
+manual model-ID actions. Custom setup puts the URL, protocol and authentication
+header together at the top; connection controls remain directly visible.
+Extended vendor guidance has its own disclosure, expanded by default. The gallery
+uses two card columns when space allows and one on narrow screens, with inset card boundaries,
+aligned Set up actions and complete access lines. Short viewports scroll the
+complete gallery body while retaining its search field and current tier.
 
 `registry.requiresClaude(record)` recognizes `agentrouter.org` and its subdomains,
 including manually entered endpoints. `identityFor` returns `claude` there even
@@ -325,9 +370,18 @@ never submits a corrective native prompt or approves desktop execution. Mixed to
 batches retain provider order even when MCP calls arrive out of order.
 Capability and catalog data cannot survive a changed connection.
 
-Project UAI Free uses the existing intentionally distributed HCNSEC community key
+Project UAI Free uses an intentionally distributed HCNSEC community key
 and the provider-supported `auto` router, verified through live discovery and tool
-inference. **Settings → Agent → Automatic free routing** (`agent.autoFreeRouting`)
+inference. New included-access inference, discovery and background probes are
+admitted daily during **20:00–06:00 UTC+8**, including the opening instant and
+excluding the closing instant, independent of the device's local timezone.
+Accepted replies retain their owner and are not cut off at 06:00. Personal
+HCNSEC credentials and other providers are unaffected. Client checks communicate
+the schedule; the upstream service must enforce actual availability and quotas.
+The key is reversibly encoded to deter literal searches, not encrypted or secret
+from other executor scripts. Exact retired included credentials migrate on the
+official endpoint; personal keys and custom endpoints are not guessed or replaced.
+**Settings → Agent → Automatic free routing** (`agent.autoFreeRouting`)
 is optional and enabled by default. Disabling it cancels background measurements
 and preserves the selected provider model for future requests; accepted requests
 keep their original owner and route until completion. The provider's `auto` can
@@ -348,7 +402,7 @@ race or replay the current prompt. Synthetic latency is not a real-request SLA.
 Per-request selections retain the saved `auto`, preserve scoped adapter lessons,
 and cannot override later provider edits. Free model choices have a subdued green
 rounded outline in the model picker and provider menus; selection stays distinct.
-Empty startup/import/reset configurations receive this ready provider;
+Empty startup/import/reset configurations receive this scheduled provider;
 configured providers and credentials remain intact. Explicit removal stays removed
 for the current session. Public credentials remain masked in the UI. The welcome
 thanks users for continued support, explains variable shared availability and speed,
@@ -360,14 +414,179 @@ cursor before network work can yield. Quota refusals bench their rejected key;
 proxy recovery and transport retries retain the selected request key. Intentional
 request snapshots share the originating record's cursor, while independent
 provider-editor drafts remain isolated. Cached model discovery uses no key slot.
+Manage API keys opens a dedicated modal from provider setup or saved-provider
+details. Each masked entry has an optional name; empty names display API key N.
+Names are trimmed single-line UTF-8 text, at most 120 bytes, stored in the ordered
+`keyNames` array alongside the deduplicated `apiKey` pool. Adding appends keys;
+replacing or removing an entry preserves other credentials and their names. There
+is no UI limit on the number of entries. Existing newline/comma-separated pools
+remain compatible and default to rotation without rewriting their saved data.
+
+`keyMode` defaults to `rotate`. In `single` mode only `selectedKey` is used for
+inference and model discovery; quota recovery never selects a different key from
+that provider. The ordinary provider fallback setting remains independent. Removing
+an earlier entry adjusts the selected index; removing the selected entry restores
+rotation and explains the change. Discovery caches include the request policy,
+while a name-only edit preserves both discovery results and the rotation cursor.
+Accepted request snapshots retain their original key policy.
+
+`keyPaused` is an optional dense boolean array aligned with the keys. Paused
+entries are excluded from rotation and model discovery. All-paused and pinned
+paused configurations may be saved; requests then stop with an actionable error
+instead of sending anonymously or selecting another credential. Selecting a new
+single key requires an active entry. Replacements preserve pause state; appended
+keys start active. Pausing affects future requests, not accepted snapshots.
+
+`keyIds` is an optional dense array of unique lowercase GUIDs, generated before
+live records are copied for requests or editing and persisted with configuration.
+Names, pauses and index shifts preserve IDs; a different replacement credential
+gets a new ID. These identities are for local accounting and do not invalidate
+authentication caches or expose credentials. Diagnostic exports omit key IDs and
+private names; full configuration transfers preserve the metadata.
+
+The manager keeps an isolated draft until Apply. In provider setup, Apply returns
+the key changes to the connection draft and Save persists them; opening directly
+from a saved provider applies them to that provider. Cancel or Escape discards
+manager edits. Explicit private configuration transfer includes names and routing preferences;
+diagnostic support exports omit private key names.
+
+### Provider credential storage
+
+The bootstrap activates `config.requireVault()` before loading configuration.
+Plaintext and byte-encoded configurations restore the same live provider records,
+preserving pools, names, pauses, selection and accounting IDs for the initial
+storage choice. Their original file is retained until password setup verifies
+encrypted storage or the user explicitly chooses verified unprotected storage;
+startup does not rewrite undecided legacy credentials before that verification.
+The versioned `storedCredentials` envelopes from `runtime/credential_codec`
+are reversible encoding with a corruption checksum, not encryption. Invalid or
+future envelopes remain recoverable and block affected requests. Migration never
+silently replaces unreadable keys with empty data.
+
+The `credentialVault` envelope uses RFC 5297 AES-256-SIV and PBKDF2-HMAC-SHA256
+with a 64-byte derived key (two AES-256 keys). New vaults and explicit password
+changes use 100,000 iterations. Existing envelopes retain their stored count,
+including 600,000, during unlock and ordinary saves. An explicit password change
+can use the same password to rewrite the vault at the new count. The reduced
+derivation workload also reduces resistance to offline password guessing.
+The public GUID-based salt distinguishes vaults; SIV does not require a
+random nonce. The authenticated header binds format version, cipher, KDF,
+iterations and salt. The payload binds protected provider fields to unique provider
+IDs and includes identity headers. Envelopes and plaintext size are bounded. The
+implementation uses the LuaJIT-compatible Luau modules bundled with the client,
+without external apps or executor cryptography.
+
+`config.enableVault(password, options)` preserves legacy live keys and enables
+encryption only after staging and reading back the encrypted projection and
+verifying the primary save. No plaintext backup is written. A failed primary write
+attempts to restore previous bytes from memory; an encrypted pending file can
+recover an interrupted write when the primary is missing or unreadable, or a failed
+removal left a session-only primary beside its last encrypted recovery copy. Failures
+retain live records and the previous storage choice. `config.storageError` is
+transient and never includes a credential. Cancellation before commit leaves the
+prior file and configuration intact.
+Configuration loads and writes are serialized. Reentrant loads and credential
+edits cannot replace a save's state; unrelated settings changed while it yields
+remain dirty for a subsequent save. Unload and changed-build replacement retain
+the current client while credential derivation or filesystem work owns storage;
+they can be retried after it finishes or derivation is cancelled. Generic
+replacement/reset of security settings cannot bypass the verified storage controls.
+
+`config.continueWithoutEncryption(options?)` is the explicit alternative. It
+preserves live key pools and identity fields, verifies a reversible byte-encoded
+save, then persists `security.credentialProtection = "unprotected"`. This selection
+admits use without a vault and skips future password prompts. The UI action is red
+and states that saved API keys are unprotected. An existing encrypted vault must
+first satisfy the current password challenge, or be reset to discard its keys;
+the choice cannot decrypt or silently replace locked credentials. When opting out
+after unlock, encryption and the private key are cleared only after the new save
+is verified. Legacy `rememberCredentials = false` alone never skips the initial
+choice. Ordinary security setters and imported configuration cannot opt out for
+the user. Privacy can enable password protection again.
+
+Cold vault loads remain locked, retain their encrypted envelope, and block provider
+credential use and edits until `config.unlockVault(password, options)` succeeds.
+Wrong passwords, malformed envelopes and authentication failures release no keys.
+`config.vaultStatus()` reports required, ready, enabled, locked, busy, error and
+protection state (`password`, `unprotected` or `undecided`).
+`config.accessProblem()` returns nil when required access is ready; otherwise it
+returns a bounded setup/unlock/storage-choice explanation. New inference, model discovery, free routing,
+agent/tool dispatch, remote commands and credential transfers respect this gate.
+With a vault enabled, re-execution challenges even an unlocked session: the password
+is derived and verified again while current live edits are retained. Keeping a
+private key for safe saves or build handoff never satisfies the new challenge.
+Cancellation and closing other UI cannot grant access; Exit unloads the client.
+Derivation yields cooperatively and supports progress/cancellation callbacks.
+New passwords need at least 12 Unicode characters; several unrelated words are recommended.
+The password is never persisted. The derived key stays in the vault module's
+private session state, outside configuration, exports and diagnostics.
+Setup prominently warns that there is no password recovery and that resetting
+after a forgotten password removes the vault's saved credentials, requiring re-entry.
+During setup or unlock derivation, the password dialog and its full-screen backdrop
+hide in favor of a compact bottom-right panel showing the operation title above
+the current percentage, Cancel and Exit. It does not capture input outside its
+bounds; password entry releases keyboard focus while suspended. The required
+access gate remains active, with normal UAI controls hidden. Cancellation or failure restores password entry with cleared
+fields and feedback; successful authentication and any required verified save
+release the gate. Cancel and Exit retain the runtime's storage ownership rules.
+
+`config.lockVault()` saves current protected fields before clearing live credentials
+and its session key. `config.changeVaultPassword(password, options)` requires an
+unlocked vault and verifies the new envelope before switching keys.
+`config.disableVault()` and `config.setRememberCredentials(false)` retain their
+legacy session-only semantics outside the bootstrap gate and cannot stand in for
+the explicit unprotected-storage choice. `config.resetVault()` explicitly discards
+locked vault credentials, retaining other settings and returning to the storage choice.
+It does not revoke keys at their providers or erase existing exports and backups.
+Executors without verifiable filesystem persistence cannot complete either
+saved-storage choice. Accepted request snapshots are not erased retroactively;
+Lua strings cannot promise secure memory zeroization. Other scripts with executor
+access can intercept passwords or live credentials during use.
+Bridge and relay pairing tokens keep their existing storage behavior.
+
+Legacy session-only saves contain a separate copy without private API keys, all custom
+provider headers/query/body overrides, URL userinfo/query/fragments, identity
+extra headers, error text and learned scopes that can duplicate credentials.
+These stripped pools lose their saved per-key metadata and are marked
+`credentialsOmitted`; requests require a reviewed connection Save before reuse.
+Background/model-only saves cannot clear that guard. `keyRotation` is never
+persisted, including remembered mode, because its cooldown map contains raw keys.
+Included credentials use `communityCredential` references in all saved configs
+and exports, with restoration restricted to the official endpoint. Versioned
+`communityKeyState` preserves included-key names, pauses, selection and accounting
+IDs in local saves/private transfers; a changed credential revision resets its IDs.
+Ordinary exports omit that private metadata. Unrestorable references cannot dispatch.
+
+Legacy storage APIs remain available to isolated compatibility modules but cannot
+bypass the bootstrap's required storage choice. Bridge/relay pairing storage
+remains independent.
+Changed-build replacement passes a private in-memory configuration snapshot and,
+when unlocked, a matching vault key to the new loader. With a vault enabled, both
+replacement and genuine unload/restart require the password before admitting new
+work. The verified unprotected-storage choice survives replacement and cold boot.
+Existing exports/backups are not erased.
+
+`config_transfer.export()` and `copyToClipboard(write)` exclude connection
+credentials. `{includeCredentials=true}` explicitly requests a private transfer.
+Private exports preserve vault encryption when enabled, otherwise use reversible
+byte encoding. Encrypted imports request the source password before review.
+Imports replace providers, not merge key pools, and retain the receiving device's
+storage choice and vault password, if any. The destination must complete setup/unlock
+or its explicit unprotected-storage choice before import or export.
+User-authored memory, notes and instructions still require
+review before sharing. See [API key security](docs/API_KEY_SECURITY.md).
 
 **Models are never guessed.** General presets carry no model list; the managed
 Project UAI Free default uses the live-verified `auto` router. `provider/models`
 resolves a provider's models from exactly two sources — ids the user added by
 hand (which rank first, and persist on the record) and whatever `GET /v1/models`
-reported (cached for ten minutes, not persisted). Nothing is filtered out of the
-endpoint's answer, because deciding which of its ids are chat models would be a
-guess. An endpoint with no `/models` route is a normal case: the Providers editor
+reported, or the authenticated desktop backend's catalog for CLI routes (cached
+for ten minutes, not persisted). Generic catalogs retain every ID. Native Gemini
+uses explicit generation methods; exact AI/ML API, Vercel, FriendliAI and Venice
+catalog routes use documented type/mode fields to omit explicit non-chat APIs.
+Unknown field shapes, custom routes and manually entered IDs remain available.
+Names never determine whether a model is chat-compatible. An endpoint with no
+`/models` route is a normal case: the Providers editor
 takes a typed id, and saving requires one.
 
 Model metadata is independent of discovery: the reviewed catalog enriches known
@@ -380,6 +599,20 @@ cache categories and context tiers. Unknown gateway prices stay unknown. Include
 Project UAI Free access costs zero; personal HCNSEC rates are not assumed. Context
 and reply limits use the same catalog, while protocol-specific request traits
 remain explicit. User-declared context overrides remain effective.
+
+Usage counters must be finite and nonnegative. Missing or invalid input/output
+counts use the labelled estimate for that side. Cache reads/writes stay within
+input tokens and reasoning stays within output. Unknown-cost request counts and
+cache-write totals persist with usage history; unknown prices are never treated
+as evidence of free access.
+
+Tool discovery filters the same current capability, permission, group and
+conversation scope as provider declarations without cloning all schemas.
+`tool_search` supports bounded multiword queries and returns normalized schema
+pages with byte limits separate from listing row limits. The Tools panel builds
+parameter/permission details only when expanded. Diagnostic searches span
+request fields and retained log details. Stored log values are bounded after
+redaction, with omission markers for truncated content.
 
 Rolling compaction writes a structured handover: goal, current state, decisions,
 exact facts (paths/IDs/revisions/commands), completed work and checks, open
@@ -1069,6 +1302,23 @@ comes from. It observes the stream through the `onEvent` hook and the
 `usage.recorded` signal, buckets everything by local day and local hour, and
 persists to `stats.json`.
 
+Per-key and per-conversation request counters observe actual inference dispatches
+through `runtime/request_accounting`. Native retries and protocol/key/provider
+fallbacks count separately; relay submission retries for the same inference job
+count once. Model discovery, connection health checks and relay polling do not
+count; synthetic inference probes count toward their key, without a conversation.
+Failed requests count if dispatched; rejected preparation and cancellation before
+dispatch do not. A subagent's attribution is captured from its parent before dispatch.
+These local counters persist from their tracking start; past requests are not
+inferred from transcript length. The chat header and context breakdown show the
+conversation total, independent of the currently active provider.
+
+Per-key records use provider ID plus opaque key ID, never credential strings or
+key names. Input and output usage are credited once from normalized provider
+counts, with labelled estimates filling missing fields when available. UI reads
+these counters and their change signal through the `agent/session` facade; usage
+refreshes update existing labels without rebuilding key drafts or prompts.
+
 Anthropic input accounting includes uncached, cache-read and cache-creation
 tokens; all occupy context. Price estimates retain their documented approximation
 and do not claim cache-discount billing accuracy. Reload restores persisted
@@ -1096,7 +1346,7 @@ Persisted files, all under one folder (`env.info.folder`, default `UAI/`):
 | `sessions/<id>.json` | `agent/session` | one conversation: context, transcript, title, place and timestamps; newest 64 restored, older disk history retained |
 | `sessions/.folders.1.json`, `.folders.2.json` | `runtime/conversation_folders` | alternating verified custom-folder catalogs; names, stable IDs and revision |
 | `stats.json` | `agent/stats` | per-day and per-model counters; days capped at 400 |
-| `export/*.json` | the Import & export pane | a shareable copy of the settings, with keys reduced to four characters |
+| `export/*.json` | the Import & export pane | a diagnostic settings copy with connection credentials excluded; review remaining personal text before sharing |
 
 ## 7. Design tokens
 
@@ -1169,6 +1419,10 @@ removed from settings, bridge commands and configuration transfer; legacy values
 are discarded. The main window and transcript remain plain frames. The standalone
 UI LIB and browser system accessibility preferences remain independently owned.
 
+Shared modal bodies use balanced vertical padding and consistent horizontal
+insets. Log details and the context breakdown fit their current contents up to
+the usable viewport height, scrolling when needed instead of reserving blank space.
+
 The transcript canvas uses `UIListLayout.AbsoluteContentSize` plus vertical padding.
 Lightweight spacers preserve the measured size of unmounted dialogue. Drawing
 work is bounded independently of the retained event count, and data retention
@@ -1189,6 +1443,23 @@ its control sizes. Standard icons have a 12px minimum to retain their strokes.
 Controls have a 15px minimum on handhelds, 28px
 with a pointer and 48px on a console. Native dimensions are reduced directly;
 the application is not resampled through a UIScale.
+
+Control, row, tab and status heights also reserve their text line boxes when
+large type and compact density are combined. Compact multiline fields reduce
+their vertical inset as needed to keep the first line readable, preserving the
+same field, draft and selection through expansion and keyboard changes.
+
+The model and saved-provider pickers use 40px touch targets for their primary
+controls and may use more available vertical space for the catalogue. This
+does not reposition or rescale the main window. The model catalogue always has
+its own scrolling viewport; provider, search and footer controls stay fixed.
+Short layouts reserve the reasoning level buttons before compacting provider
+details and the catalogue, omitting the effort caption when needed. Only keyboard
+space too small for search, a model row and the levels moves effort into Options;
+the free filter also remains available there. The original
+search field, selection and catalogue position survive these layout changes.
+Catalogue modals use the shared modal's `pinFooter` option to keep actions out
+of the body scroll. Other forms retain the normal scrolling-footer fallback.
 
 The shared header retains its brand, detail and Minimize/Maximise/Close actions.
 The shared welcome view, composer, Quick Chat, Code tabs and document tabs remain
@@ -1213,8 +1484,9 @@ Chat/Home view, with no draft, focused field, other overlay, scrolled-back chat,
 keyboard or active request. Busy transitions and window focus changes reset idle
 time. Persisted cooldown is 14 days, with at most one display per loaded client.
 Dismissal keeps the cooldown; opting out or successfully copying the invite
-disables reminders. Manual menu access stays available. UI-free boot schedules
-nothing; screen destruction and runtime disposal release the watcher.
+disables reminders. Manual menu access stays available. A hidden normal window
+does not qualify for automatic display; screen destruction and runtime disposal
+release the watcher.
 
 The introduction is an app-owned modal. It opens once when the mounted window
 is visible and enabled, deferring while an overlay, focused text field or request
@@ -1223,7 +1495,7 @@ automatic introduction. Tutorial in the profile menu reopens it from the start.
 Back and Next move through six pages in a fitted, scrolling card with compact
 progress and navigation. Chat and Providers actions open those panels without
 sending a request or changing the selected conversation; Discord and donation
-actions open the existing dialogs. UI-free boot schedules nothing. Screen
+actions open the existing dialogs. A hidden normal window defers display. Screen
 destruction and runtime disposal cancel pending automatic display.
 
 Dismissal hit targets surround modal and menu cards without covering their
@@ -1300,10 +1572,11 @@ The Code workspace is owned by `runtime/code_store` and composed in
 are destinations within Code. Layout follows the available panel rectangle. Native
 TextBox editing owns source input, selection and IME; escaped line-state syntax
 highlighting, a visible caret, virtual labels and an independent gutter remain
-available during ordinary editing. While dragging or selecting a range, the
-native TextBox renders its text, caret and selection together; syntax colors
-return when the range collapses. Native multiline font probes calibrate the
-syntax line advance without accumulated rounded-height drift. Cursor-follow
+available during ordinary editing. Syntax labels remain visible while dragging
+or selecting a range; bounded selection fills follow the native TextBox's byte
+endpoints without switching to its full-document text renderer. Native multiline
+font probes calibrate editor and preview line advances without accumulated
+rounded-height drift. Cursor-follow
 scrolling yields to pointer selection. Source
 remains raw and unwrapped. Enter inserts a newline; Run is explicit.
 
@@ -1541,6 +1814,13 @@ executable's `--mcp-stdio` entry owns an adapter process without opening another
 window; it discovers an already-running desktop bridge. Checkout users can run
 `node bridge/server.js --mcp-stdio`. Connection examples live in the browser's
 Settings modal and [bridge/MCP.md](bridge/MCP.md).
+
+The Updates page triggers a bridge and web UI check on demand through the
+authenticated `POST /api/desktop/update-check`; the supervisor answers with its
+update state after the check and applies a staged release once the worker is
+idle, so the reply is never severed by the restart it causes. Extracted-payload,
+desktop-update and bridge-update caches keep referenced and recent entries and
+prune stale predecessors on use.
 
 `UAI_MCP_DISABLED=1` disables public MCP admission, returning HTTP 503 at both
 aliases and `enabled=false` in its authenticated capability/configuration.

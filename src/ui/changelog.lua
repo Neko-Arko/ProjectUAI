@@ -64,6 +64,7 @@ return function(env)
 				size = UDim2.new(1, 0, 0, 0),
 				auto = "Y",
 				gap = theme.space.sm,
+				wrap = true,
 				alignY = "Center",
 				layoutOrder = 1,
 			})

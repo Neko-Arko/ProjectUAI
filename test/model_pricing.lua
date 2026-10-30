@@ -9,6 +9,8 @@ local OPENAI = provider("https://api.openai.com/v1")
 local ZEN = provider("https://opencode.ai/zen/v1")
 local GO = provider("https://opencode.ai/inference/go/v1")
 local ROUTER = provider("https://openrouter.ai/api/v1")
+local KILO = provider("https://api.kilo.ai/api/gateway")
+local CLINE = provider("https://uai-tunnel.invalid/cline/v1")
 
 case("current model rates stay exact and scoped to the endpoint", function()
 	local f = F.new(); local pricing = f.env.require("agent/pricing")
@@ -44,6 +46,38 @@ case("Go metadata retains independent limits without inventing subscription char
 		and traits.maxOutput("deepseek-v4.1-flash", GO) == 384000)
 	check("Go subscription token rates do not become an additional charge", pricing.priceFor("deepseek-v4.1-flash", GO) == nil)
 	check("Go does not borrow a Zen free rate", pricing.priceFor("cat-jam-free", GO) == nil)
+	f.healthy(); f.close()
+end)
+
+case("Kilo and Cline prices stay scoped to exact supported routes", function()
+	local f = F.new(); local pricing = f.env.require("agent/pricing"); local traits = f.env.require("provider/traits")
+	check("Kilo auto free has a verified zero rate", pricing.priceFor("kilo-auto/free", KILO)[1] == 0)
+	check("Kilo paid model keeps its published rate", pricing.priceFor("openai/gpt-6.1-sol", KILO)[2] == 10)
+	check("Kilo documented limits enrich discovered models", traits.contextWindow("recursive/flint-v1.0:free", KILO) == 262144
+		and traits.maxOutput("recursive/flint-v1.0:free", KILO) == 235929)
+	check("Kilo zero placeholders remain unknown", pricing.priceFor("google/lyria-3-pro-preview", KILO) == nil)
+	for _, base in ipairs({ "https://api.kilo.ai/unrelated", "http://api.kilo.ai/api/gateway", "https://api.kilo.ai:8443/api/gateway",
+		"https://api.kilo.ai.example/api/gateway", "https://custom.example/v1" }) do
+		check("Kilo prices cannot cross route " .. base, pricing.priceFor("kilo-auto/free", provider(base)) == nil)
+	end
+	check("documented Kilo gateway alias retains scoped prices", pricing.priceFor("kilo-auto/free", provider("https://ai-gateway.kilo.ai:443/api/v1/chat/completions"))[1] == 0)
+	check("Cline exact promotion has a zero rate", pricing.priceFor("reflection/beam-free", CLINE)[1] == 0)
+	check("Cline cannot borrow another free or paid ID", pricing.priceFor("reflection/beam", CLINE) == nil
+		and pricing.priceFor("invented:free", CLINE) == nil)
+	check("Cline promotion does not price another endpoint", pricing.priceFor("reflection/beam-free", provider("https://custom.example/v1")) == nil)
+	check("unsupported Cline routes have no price", pricing.priceFor("reflection/beam-free", provider("https://uai-tunnel.invalid/cline/v1/responses")) == nil)
+	f.healthy(); f.close()
+end)
+
+case("October catalog changes update billing estimates and provider limits", function()
+	local f = F.new(); local pricing = f.env.require("agent/pricing"); local traits = f.env.require("provider/traits")
+	local mistral = pricing.priceFor("mistral-large-4", provider("https://api.mistral.ai/v1"))
+	check("Mistral Large 4 uses the updated public rate", mistral[1] == 1.36 and mistral[2] == 4.18)
+	local together = provider("https://api.together.xyz/v1")
+	check("Together Qwen has its provider-specific updated rate", pricing.priceFor("qwen/qwen3.7-max", together)[1] == 2.5)
+	check("Together Qwen reply limit comes from current catalog", traits.maxOutput("qwen/qwen3.6-plus", together) == 65536)
+	check("retired Mistral model is no longer priced", pricing.priceFor("mistral-large-2411", provider("https://api.mistral.ai/v1")) == nil)
+	check("direct DeepSeek context uses its corrected size", traits.contextWindow("deepseek-v4-flash", provider("https://api.deepseek.com/v1")) == 1048576)
 	f.healthy(); f.close()
 end)
 
@@ -110,13 +144,13 @@ case("usage preserves known versus unknown estimates and cache-write details", f
 	f.healthy(); f.close()
 end)
 
-case("verified CLI limits and direct provider limits reach model traits", function()
+case("documented free-route limits and direct provider limits reach model traits", function()
 	local f = F.new(); local traits = f.env.require("provider/traits")
 	local expected = {
-		["cat-jam-free"] = { 262144, 131072 }, ["longcat-2.5-preview-free"] = { 1000000, 131072 },
+		["cat-jam-free"] = { 1048576, 131072 }, ["longcat-2.5-preview-free"] = { 1000000, 131072 },
 		["space-bunny-free"] = { 524288, 524288 }, ["mimo-v2.6-flash-free"] = { 200000, 32000 },
-		["step-5-preview-free"] = { 1000000, 65536 }, ["deepseek-v4.1-flash-free"] = { 1000000, 32000 },
-		["glm-5.3-flash-free"] = { 1000000, 32000 },
+		["step-5-preview-free"] = { 1000000, 65536 }, ["deepseek-v4.1-flash-free"] = { 200000, 32000 },
+		["glm-5.3-flash-free"] = { 200000, 32000 },
 		["muse-spark-1.3-contributor-free"] = { 1048576, 131072 }, ["nemotron-3.5-lightning-free"] = { 262144, 262144 },
 		["nemotron-3-ultra-free"] = { 1000000, 128000 }, ["big-pickle"] = { 160000, 32000 },
 	}

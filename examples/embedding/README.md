@@ -3,20 +3,21 @@
 A complete custom UI built with **Project UAI UI LIB**, connected to a live UAI
 conversation and a small host-owned settings model. It demonstrates composition,
 tool registration, state binding, request handling, and cleanup without building
-GUI objects in consumer code. The separate [SDK example](sdk.lua) runs without
-mounting the native app and exposes owned tools, requests, and teardown.
+GUI objects in consumer code. The separate [SDK example](sdk.lua) keeps the normal
+app hidden after the storage choice or vault unlock and exposes owned tools,
+requests and teardown.
 
 Read [Embedding Project UAI](../../docs/EMBEDDING.md) for the runtime reference and
 [UI_LIBRARY.md](../../docs/UI_LIBRARY.md) for the UI API. The example targets
-Project UAI 2.8.0 with embedding SDK 1.0.0 and UI LIB 1.3.0.
+Project UAI 3.7.2 with embedding SDK 1.0.0 and UI LIB 1.4.0.
 
-## UI-free SDK example
+## SDK example
 
 ```lua
 local integration = loadstring(game:HttpGet(
 	"https://raw.githubusercontent.com/Project-Ptolemy/ProjectUAI/main/examples/embedding/sdk.lua"
 ))()
--- After a real provider/model has been configured:
+-- After choosing storage or unlocking the vault, and configuring a real provider/model:
 local request, why = integration.ask("Call sdk_example_status and summarize the result.")
 if not request then warn(why) end
 -- In a yieldable task: local result, waitError = request.await(30)
@@ -24,11 +25,15 @@ if not request then warn(why) end
 ```
 
 Loading this entry does not send a request. It boots with `ui = false` and
-`reuse = true`, owns the read tool `sdk_example_status`, and opens an ephemeral
-conversation with only that tool allowed. It leaves current conversation
+`reuse = true`, follows the saved credential-protection choice, owns the read tool
+`sdk_example_status`, and opens an ephemeral conversation with only that tool
+allowed. It leaves current conversation
 selection unchanged. A reused client preserves its boot context, UI mount state,
-providers, and permissions. If setup is needed, `integration.client.show("providers")`
-explicitly mounts the native app. The SDK can also save user-supplied provider
+providers, and permissions. An enabled vault asks for its password each time;
+the explicit **Continue without encryption** choice saves reversibly encoded,
+unprotected keys and skips future prompts. After access is granted,
+`integration.client.show("providers")` opens the native app for provider setup.
+The SDK can also save user-supplied provider
 settings through the [provider API](../../docs/EMBEDDING.md#provider-api).
 
 `ask(text)` returns a request or `nil, reason`. Progress and final results go to
@@ -60,16 +65,17 @@ revision determines its dependency URLs; pinning only the outer URL does not
 change that variable.
 
 The launcher passes `reuse = true` to the client bundle. A live copy of the same
-build is reused without toggling; a first boot starts the standard app with a
-short host prompt. It loads UI LIB and the example
-modules, installs the model/tools once for that client, and creates the workbench
+build is reused without requesting normal-app display. An enabled vault still
+requires password entry; a saved unprotected-storage choice skips it.
+A first boot starts the standard app with a short host prompt. It loads UI LIB
+and the example modules, installs the model/tools once for that client, and creates the workbench
 window. Downloads and compilation are checked separately.
 
 The window initially attaches to `uai.sessions.current()`. It does not create a
 fresh conversation on every rerun. An existing client's provider configuration,
 permission mode, boot prompt, and tools remain its own settings. Configure a
-provider/model with **Providers**, then use **Send** when ready. The launcher
-does not automatically submit a request or switch permission mode.
+provider/model with **Providers** after any storage choice or vault unlock, then use
+**Send** when ready. The launcher does not automatically submit a request or switch permission mode.
 
 ## Files and return values
 
@@ -78,7 +84,7 @@ does not automatically submit a request or switch permission mode.
 | `launcher.lua` | `{ client, UI, model, window, session }` | Downloads and composes the example |
 | `host_tools.lua` | Installer function `(uai) -> model` | Owns local state and registers two tools |
 | `assistant_panel.lua` | Factory `(uai, UI, options) -> window, session` | Declares and binds the custom view |
-| `sdk.lua` | `{ client, scope, session, created, ask, destroy }` | UI-free runtime example with a read tool and structured requests |
+| `sdk.lua` | `{ client, scope, session, created, ask, destroy }` | Hidden normal app, credential-protection choice, a read tool and structured requests |
 
 `host_tools.lua` and `assistant_panel.lua` return factories. Execute or require
 each module to obtain its factory, then call it with the dependencies.
@@ -213,8 +219,9 @@ visible.
 ## Ownership
 
 Rerunning the launcher replaces `embedding-workbench`, releases its listeners
-and pending paint, and reuses the model and same-build client without toggling
-the standard app. Different builds follow the client's guarded reload policy.
+and pending paint, and reuses the model and same-build client without requesting
+display of the standard app. The saved credential-protection choice still applies.
+Different builds follow the client's guarded reload policy.
 
 Minimize and Hide retain the view/model subscriptions. Closing the custom window
 destroys only that view. The conversation remains in UAI, including any accepted

@@ -25,7 +25,7 @@ local function setup(handlers)
 	local h = envMock.new()
 	h.http.relay = handlers.relay
 	h.http.handler = handlers.handler
-	local app = assert(h.boot())
+	local app = assert(h.boot()); require("password_fixture")(h, app)
 	h.settle(1)
 	local record = app.providers.blank("custom")
 	record.label, record.baseUrl, record.apiKey = "Relay", "https://relay.test/v1", "sk-relay-key"

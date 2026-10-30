@@ -512,8 +512,9 @@ return function(env)
 		local body = M.buildBody(record, util.merge(request, { stream = wantStream }))
 		local requestScope = registry.compatibilityKey(record)
 		local url = M.endpoint(record)
-		local pool = registry.keysOf(record)
+		local pool = registry.requestKeys(record)
 		local currentKey = registry.nextKey(record)
+		local accounting = env.require("runtime/request_accounting").new(record, request)
 
 		local function rebuildHeaders()
 			local accept = body.stream and "text/event-stream" or "application/json"
@@ -541,6 +542,8 @@ return function(env)
 			if clock.ms() >= deadline then return nil, "deadline: request budget expired" end
 			local requestStarted = clock.ms()
 			local res, err = http.send({
+				requiresAccess = true,
+				onDispatch = function() accounting.dispatch(currentKey, headers) end,
 				relay = env.require("net/transport").shouldRelay(env.require("runtime/images").hasReferences(request.messages)),
 				relayUnlimited = relayUnlimited,
 				sessionId = request.sessionId,
@@ -665,6 +668,7 @@ return function(env)
 			parsed = M.fromMessage(decoded)
 		end
 
+		accounting.attach(parsed)
 		if parsed.streamError then
 			registry.markFail(record, parsed.streamError)
 			return nil, "stream error: " .. parsed.streamError, res

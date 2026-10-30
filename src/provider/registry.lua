@@ -12,6 +12,7 @@ return function(env)
 	local signal = env.require("runtime/signal")
 	local catalog = env.require("provider/catalog")
 	local communityKey = env.require("provider/community_key")
+	local providerKeys = env.require("runtime/provider_keys")
 	local urls = env.require("net/url")
 
 	local COOLDOWN_AFTER = 3
@@ -45,20 +46,9 @@ return function(env)
 	local KEY_COOLDOWN_SECONDS = 30
 
 	function M.keysOf(record)
-		local raw = tostring(record and record.apiKey or "")
-		local keys, seen = {}, {}
-		-- Line breaks are the primary form (that is what a multi-line paste
-		-- produces); commas are accepted because a user who was handed
-		-- "key1,key2" should not have to edit it.
-		for token in raw:gmatch("[^\r\n,]+") do
-			local key = util.trim(token)
-			if key ~= "" and not seen[key] then
-				seen[key] = true
-				keys[#keys + 1] = key
-			end
-		end
-		return keys
+		return providerKeys.keys(record)
 	end
+	M.requestKeys = providerKeys.requestKeys
 
 	function M.keyPoolSize(record)
 		return #M.keysOf(record)
@@ -76,7 +66,15 @@ return function(env)
 	-- Request snapshots keep their existing copy semantics, but own one shared
 	-- cursor with the record they were copied from, even before the first request.
 	function M.shareKeyRotation(record, snapshot)
-		if M.keyPoolSize(record) > 1 then snapshot.keyRotation = keyState(record) end
+		providerKeys.ensureIds(record)
+		if table.concat(M.keysOf(record), "\n") == table.concat(M.keysOf(snapshot), "\n") then
+			snapshot.keyIds = util.deepCopy(record.keyIds)
+		else
+			providerKeys.ensureIds(snapshot)
+		end
+		if providerKeys.mode(record) == "rotate" and providerKeys.mode(snapshot) == "rotate" and M.keyPoolSize(record) > 1 then
+			snapshot.keyRotation = keyState(record)
+		end
 		return snapshot
 	end
 
@@ -85,7 +83,7 @@ return function(env)
 	-- is a pool that was just load-balanced, and waiting out the shortest
 	-- remaining bench is faster than hammering any single key.
 	function M.nextKey(record)
-		local keys = M.keysOf(record)
+		local keys = M.requestKeys(record)
 		if #keys == 0 then return nil end
 		if #keys == 1 then return keys[1] end
 
@@ -120,7 +118,7 @@ return function(env)
 	-- Bench one key after it was refused. `seconds` may be overridden by a
 	-- caller that read a Retry-After header, which outranks our default.
 	function M.cooldownKey(record, key, seconds)
-		local keys = M.keysOf(record)
+		local keys = M.requestKeys(record)
 		if #keys < 2 then return false end
 		local state = keyState(record)
 		state.cooldowns[key] = clock.ms() + (seconds or KEY_COOLDOWN_SECONDS) * 1000
@@ -183,15 +181,56 @@ return function(env)
 	end
 
 	function M.protocolProblem(record, opts)
+		if not (opts and opts.configuration) then
+			local access = config.accessProblem()
+			if access then return access end
+			if config.vaultStatus().locked then
+				return "The credential vault is locked. Unlock it in Settings > Privacy before making requests."
+			end
+			if record.credentialStorageError or config.get("identity.credentialStorageError") then
+				return "Saved credentials could not be decoded. The stored data has been preserved. Re-enter the affected credentials and save the connection before making requests."
+			end
+			if record.communityCredential == true and util.trim(record.apiKey) == "" then
+				return "Included credentials can only be restored for the official Project UAI Free endpoint. Edit this connection and enter your own credentials or select Project UAI Free."
+			end
+			local availability = communityKey.problem(record)
+			if availability then return availability end
+			if record.credentialsOmitted == true then
+				return "Provider credentials were not saved. Enter this session's API key or custom connection credentials, then save the provider. Settings > Privacy controls credential storage."
+			end
+		end
+		-- Pausing is a valid saved configuration, but must stop dispatch before a
+		-- missing effective key could become an anonymous HTTP request.
+		if not (opts and opts.configuration) and #M.requestKeys(record) == 0 then
+			if providerKeys.mode(record) == "single" then
+				if providerKeys.paused(record, providerKeys.selected(record)) then
+					return "the selected API key is paused; resume it, choose another key, or turn on key rotation"
+				end
+				return "choose an existing API key or turn on key rotation"
+			end
+			if M.keyPoolSize(record) > 0 then return "all API keys are paused; resume a key before making requests" end
+		end
 		if record.api ~= nil and record.api ~= "openai" and record.api ~= "anthropic" and record.api ~= "gemini" then
 			return "choose Chat completions, Anthropic messages or Google Gemini; this API protocol is not implemented"
 		end
 		local parsed = urls.parse(M.normaliseBaseUrl(record.baseUrl))
+		local tunnel = env.require("net/tunnel_route")
+		if tunnel.reserved(M.normaliseBaseUrl(record.baseUrl)) then
+			if not M.isCline(record) or record.api ~= nil and record.api ~= "openai" then
+				return "Cline requires the desktop bridge's Chat completions preset."
+			end
+			if util.trim(record.wsUrl) ~= "" or record.query ~= nil and (type(record.query) ~= "table" or next(record.query) ~= nil) then
+				return "Cline uses the desktop bridge; custom sockets and query parameters are not supported."
+			end
+			if util.trim(record.apiKey) ~= "" or tunnel.hasCredentials(record.headers) then
+				return "Cline uses its desktop sign-in. Remove provider keys and credential headers from this route."
+			end
+		end
 		local path = parsed and parsed.path:gsub("/+$", "") or ""
 		if path:match("/api/chat$") or path:match("/api/generate$") then
 			return "Ollama's native /api routes use a different protocol; use its OpenAI-compatible base URL, usually http://127.0.0.1:11434/v1"
 		end
-		if (path:match("/responses$") and not M.isOpencodeGo(record))
+		if (path:match("/responses$") and not M.isOpencodeGo(record) and not M.isAgentRouter(record))
 			or (path:match(":generateContent$") or path:match(":streamGenerateContent$") or path:match("/generateContent$"))
 				and record.api ~= "gemini" and M.opencodeGoProtocol(record) ~= "gemini" then
 			return "this route uses a different API; select the matching Chat completions, Anthropic messages or Google Gemini protocol"
@@ -242,6 +281,14 @@ return function(env)
 		return parsed ~= nil and parsed.host == "opencode.ai"
 	end
 
+	function M.isCline(record)
+		return env.require("net/tunnel_route").isClineBase(M.normaliseBaseUrl(record and record.baseUrl or ""))
+	end
+
+	function M.isAgentRouter(record)
+		return env.require("provider/agentrouter").matches(record)
+	end
+
 	local function officialOpencodeRoute(record)
 		local parsed, path = providerRoute(record)
 		if not parsed or parsed.scheme ~= "https" or parsed.host ~= "opencode.ai" then return nil end
@@ -274,7 +321,7 @@ return function(env)
 
 	-- Host based so manually entered gateways keep the same required identity.
 	function M.requiresClaude(record)
-		if M.proxyProvider(record) == "agentrouter" then return true end
+		if M.isAgentRouter(record) or M.proxyProvider(record) == "agentrouter" then return true end
 		local base = util.trim(tostring(record and record.baseUrl or "")):lower()
 		local authority = base:match("^https?://([^/%?#]+)")
 		if not authority or authority:find("@", 1, true) then return false end
@@ -285,7 +332,7 @@ return function(env)
 	function M.identityFor(record)
 		-- A manually entered Zen endpoint gets the same compatibility identity as
 		-- the preset without competing Claude/Stainless headers.
-		if M.isOpencode(record) then return "none" end
+		if M.isOpencode(record) or M.isCline(record) then return "none" end
 		if M.requiresClaude(record) then return "claude" end
 		return (record.claudeUa ~= false) and "claude" or "none"
 	end
@@ -502,12 +549,17 @@ return function(env)
 
 	function M.list()
 		M.migrate()
+		local vault = config.vaultStatus()
 		local stored = config.get("providers.list", {})
 		if type(stored) ~= "table" then return {} end
-		local out = {}
+		local out, migrated = {}, false
 		for _, record in ipairs(stored) do
-			if type(record) == "table" then out[#out + 1] = record end
+			if type(record) == "table" then
+				if not vault.locked and not vault.busy and providerKeys.ensureIds(record) then migrated = true end
+				out[#out + 1] = record
+			end
 		end
+		if migrated then config.save() end
 		table.sort(out, function(a, b)
 			if (a.order or 0) ~= (b.order or 0) then return (a.order or 0) < (b.order or 0) end
 			return tostring(a.id) < tostring(b.id)
@@ -538,7 +590,7 @@ return function(env)
 		elseif urlError then
 			problems[#problems + 1] = urlError
 		end
-		local protocolProblem = M.protocolProblem(record)
+		local protocolProblem = M.protocolProblem(record, { configuration = true })
 		if protocolProblem then problems[#problems + 1] = protocolProblem end
 		if util.trim(record.wsUrl) ~= "" then
 			local socketUrl = urls.parse(record.wsUrl)
@@ -549,6 +601,8 @@ return function(env)
 		if (record.authStyle or "bearer") ~= "none" and util.trim(record.apiKey) == "" and not M.opencodeKeyOptional(record) then
 			problems[#problems + 1] = "an API key is required for this auth style"
 		end
+		local keysValid, keysProblem = providerKeys.validate(record)
+		if not keysValid then problems[#problems + 1] = keysProblem end
 		-- Azure takes the model from the deployment in the URL; everyone else needs
 		-- one named, and nothing here will guess it.
 		if record.preset ~= "azure" and util.trim(record.model) == "" then
@@ -562,11 +616,21 @@ return function(env)
 
 	function M.save(record, opts)
 		if requestSnapshots[record] then return true end
+		local access = config.accessProblem()
+		if access then return false, { access } end
+		local vault = config.vaultStatus()
+		if vault.locked or vault.busy then return false, { "Unlock the credential vault and finish any vault operation before editing providers" } end
 		opts = opts or {}
 		record.baseUrl = M.normaliseBaseUrl(record.baseUrl)
 		if M.requiresClaude(record) then record.claudeUa = true end
 		local ok, problems = M.validate(record)
 		if not ok and not opts.force then return false, problems end
+		providerKeys.ensureIds(record)
+		if opts.credentialsRestored then
+			record.credentialsOmitted = nil
+			record.storedCredentials, record.credentialStorageError = nil, nil
+			if not communityKey.isApplied(record) then record.communityCredential, record.communityKeyState = nil, nil end
+		end
 
 		local list = config.get("providers.list", {})
 		if type(list) ~= "table" then list = {} end
@@ -603,6 +667,8 @@ return function(env)
 	-- left alone. Idempotent, and writes nothing when there is nothing to change.
 	local RETIRED_REFERER = "https://carldv.github.io/ProjectUAI/"
 	function M.migrate()
+		local vault = config.vaultStatus()
+		if config.accessProblem() or vault.locked or vault.busy then return 0 end
 		local preset = catalog.get("openrouter")
 		local replacement = preset and preset.headers and preset.headers["HTTP-Referer"]
 		local stored = config.get("providers.list", {})
@@ -610,6 +676,7 @@ return function(env)
 		local retired = string.gsub(RETIRED_REFERER, "/+$", "")
 		local changed = 0
 		for _, record in ipairs(stored) do
+			if type(record) == "table" and (communityKey.migrate(record) or communityKey.restore(record)) then changed = changed + 1 end
 			if type(record) == "table" and retiredOpencode(record.baseUrl) then
 				record.baseUrl = "https://opencode.ai/zen/v1"
 				record.wsUrl = ""
@@ -638,6 +705,10 @@ return function(env)
 	end
 
 	function M.remove(id)
+		local access = config.accessProblem()
+		if access then return false, access end
+		local vault = config.vaultStatus()
+		if vault.locked or vault.busy then return false, "Unlock the credential vault and finish any vault operation before removing providers." end
 		local list = config.get("providers.list", {})
 		local kept = {}
 		for _, record in ipairs(list) do
@@ -652,6 +723,10 @@ return function(env)
 	end
 
 	function M.setActive(id)
+		local access = config.accessProblem()
+		if access then return false, access end
+		local vault = config.vaultStatus()
+		if vault.locked or vault.busy then return false, "Unlock the credential vault and finish any vault operation before changing providers." end
 		if not M.get(id) then return false, "unknown provider" end
 		config.set("providers.active", id)
 		M.changed:fire("active", id)
@@ -669,6 +744,10 @@ return function(env)
 	end
 
 	function M.setModel(id, model)
+		local access = config.accessProblem()
+		if access then return false, access end
+		local vault = config.vaultStatus()
+		if vault.locked or vault.busy then return false, "Unlock the credential vault and finish any vault operation before editing providers." end
 		local record = M.get(id)
 		if not record then return false end
 		record.model = model
@@ -682,6 +761,10 @@ return function(env)
 	end
 
 	function M.reorder(id, direction)
+		local access = config.accessProblem()
+		if access then return false, access end
+		local vault = config.vaultStatus()
+		if vault.locked or vault.busy then return false, "Unlock the credential vault and finish any vault operation before editing providers." end
 		local list = M.list()
 		for index, record in ipairs(list) do
 			if record.id == id then
@@ -780,5 +863,12 @@ return function(env)
 		return table.concat(bits, " | ")
 	end
 
+	env.require("runtime/dispose").add(config.changed:connect(function(path)
+		if path == "security.vault" then
+			local vault = config.vaultStatus()
+			if not vault.locked and not vault.busy then M.migrate() end
+			M.changed:fire("vault")
+		end
+	end), "provider vault state")
 	return M
 end

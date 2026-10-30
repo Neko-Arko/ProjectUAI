@@ -9,7 +9,8 @@ local function fixture(protocol, proxy)
 	f.record = f.registry.blank(proxy and "agentrouter" or "custom")
 	f.record.id, f.record.label, f.record.model = "key-fixture", "Key fixture", "fixture-model"
 	f.record.models, f.record.apiKey = { "fixture-model" }, "key-one\nkey-two, key-three\nkey-one"
-	f.record.api = protocol == "anthropic" and "anthropic" or "openai"
+	f.record.api = protocol == "gemini" and "gemini" or protocol == "anthropic" and "anthropic" or "openai"
+	if protocol == "gemini" then f.record.authStyle = "x-goog-api-key" end
 	if not proxy then f.record.baseUrl = "https://keys.fixture/v1" end
 	if protocol == "responses" then
 		f.record.baseUrl = "https://opencode.ai/zen/v1"
@@ -20,12 +21,13 @@ local function fixture(protocol, proxy)
 		local body
 		if protocol == "anthropic" then body = { type = "message", content = { { type = "text", text = "ready" } }, stop_reason = "end_turn" }
 		elseif protocol == "responses" then body = { status = "completed", output = { { type = "message", content = { { type = "output_text", text = "ready" } } } } }
+		elseif protocol == "gemini" then body = { candidates = { { content = { role = "model", parts = { { text = "ready" } } }, finishReason = "STOP" } } }
 		else body = { choices = { { message = { role = "assistant", content = "ready" }, finish_reason = "stop" } } } end
 		return { StatusCode = 200, Body = f.h.json.encode(body) }
 	end
 	function f.observe(entry)
 		local get = f.env.require("net/headers").get
-		local auth = get(entry.headers, "x-api-key") or get(entry.headers, "Authorization") or ""
+		local auth = get(entry.headers, "x-goog-api-key") or get(entry.headers, "x-api-key") or get(entry.headers, "Authorization") or ""
 		f.seen[#f.seen + 1] = auth:gsub("^Bearer ", "")
 	end
 	function f.complete()
@@ -39,12 +41,37 @@ local function fixture(protocol, proxy)
 	return f
 end
 
-for _, protocol in ipairs({ "openai", "anthropic", "responses" }) do
+for _, protocol in ipairs({ "openai", "anthropic", "responses", "gemini" }) do
 	case(protocol .. " rotates successful requests and wraps the pool", function()
 		local f = fixture(protocol)
 		f.h.http.handler = function(entry) f.observe(entry); return f.reply() end
 		for _ = 1, 4 do f.complete() end
 		check("every ready credential is used in order", table.concat(f.seen, ",") == "key-one,key-two,key-three,key-one")
+		f.healthy(); f.close()
+	end)
+end
+
+for _, protocol in ipairs({ "openai", "anthropic", "responses", "gemini" }) do
+	case(protocol .. " uses only the selected key for successes and quota refusals", function()
+		local f = fixture(protocol)
+		assert(f.env.require("runtime/provider_keys").setMode(f.record, "single", 2))
+		f.h.http.handler = function(entry) f.observe(entry); return f.reply() end
+		f.complete(); f.complete()
+		check("successful requests keep the selected credential", table.concat(f.seen, ",") == "key-two,key-two")
+		f.h.http.handler = function(entry)
+			f.observe(entry)
+			return { StatusCode = 429, Body = '{"error":{"message":"rate limit exceeded","status":"RESOURCE_EXHAUSTED"}}' }
+		end
+		local result = f.run(function()
+			return f.env.require("provider/chat").complete(f.record, {
+				messages = { { role = "user", content = "hello" } }, stream = false, attempts = 1,
+			})
+		end)
+		check("quota refusal never consumes another key or another pool attempt", result == nil
+			and table.concat(f.seen, ",") == "key-two,key-two,key-two" and f.record.keyRotation == nil)
+		f.h.http.handler = function(entry) f.observe(entry); return f.reply() end
+		f.complete()
+		check("the next independent request still uses the selected key", f.seen[4] == "key-two")
 		f.healthy(); f.close()
 	end)
 end

@@ -1014,6 +1014,11 @@ return function(env)
 			local callback = request.onRetry
 			request.onRetry = function(info) if not pcall(callback, info) then log.warn("provider", "retry callback failed safely") end end
 		end
+		-- Choose a known native Responses route before building and limiting a
+		-- second, unused Chat Completions payload for the same tool catalog.
+		if responses.eligible(record) and (responses.remembered(record) or responses.wantsResponses(record)) then
+			return responses.complete(record, request)
+		end
 		local wantStream = request.stream
 		if wantStream == nil then wantStream = record.stream ~= false and config.get("agent.stream", true) end
 		if env.require("net/transport").streamForced() or registry.isOpencode(record) then wantStream = true end
@@ -1022,15 +1027,10 @@ return function(env)
 		applyRemembered(record, body)
 		local requestScope = registry.compatibilityKey(record)
 
-		-- A record that already learned the Responses lane, or names a model
-		-- verified to speak only that lane, skips chat entirely.
-		if responses.eligible(record) and (responses.remembered(record) or responses.wantsResponses(record)) then
-			return responses.complete(record, request)
-		end
-
 		local url = registry.endpoint(record, "/chat/completions")
-		local pool = registry.keysOf(record)
+		local pool = registry.requestKeys(record)
 		local currentKey = registry.nextKey(record)
+		local accounting = env.require("runtime/request_accounting").new(record, request)
 		local currentKeyIndex = 0
 
 		local function rebuildHeaders()
@@ -1074,6 +1074,7 @@ return function(env)
 					path = urls.requestTarget(url),
 					headers = socketHeaders,
 					body = payload,
+					onDispatch = function() accounting.dispatch(currentKey, socketHeaders) end,
 					aborted = request.aborted,
 					onFrame = request.onFrame,
 					-- The transport bounds this setting to 1..300 seconds.
@@ -1096,6 +1097,8 @@ return function(env)
 				recovery = proxy.new(record, { aborted = request.aborted, onRetry = request.onRetry, deadlineMs = deadline })
 			end
 			local res, err = http.send({
+				requiresAccess = true,
+				onDispatch = function() accounting.dispatch(currentKey, headers) end,
 				relay = web,
 				relayUnlimited = relayUnlimited,
 				sessionId = request.sessionId,
@@ -1248,6 +1251,7 @@ return function(env)
 			parsed = sse.fromResponse(decoded)
 		end
 
+		accounting.attach(parsed)
 		if parsed.streamError then
 			registry.markFail(record, parsed.streamError)
 			return nil, "stream error: " .. parsed.streamError, res

@@ -12,6 +12,7 @@ local scheduler = require("scheduler")
 local datatypes = require("datatypes")
 local instanceMock = require("instance")
 local servicesMock = require("services")
+local bit32Mock = require("bit32")
 
 local M = {}
 
@@ -45,6 +46,7 @@ function M.new(opts)
 
 	local sandbox
 	sandbox = {
+		bit32 = bit32Mock,
 		game = api.game,
 		workspace = api.workspace,
 		Instance = Instance,

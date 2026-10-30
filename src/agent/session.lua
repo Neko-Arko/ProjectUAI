@@ -18,6 +18,7 @@ return function(env)
 	local permissions = env.require("agent/permissions")
 	local state = env.require("agent/state")
 	local folderStore = env.require("runtime/conversation_folders")
+	local accounting = env.require("agent/stats")
 
 	local THREAD_DIR = "sessions"
 	-- Disk history survives eviction. Unsaved/ephemeral threads stay in memory.
@@ -45,7 +46,12 @@ return function(env)
 		-- running in the background raised a prompt into a stream with no listener and sat
 		-- there until its own deadline denied every call it had asked for.
 		anyEvent = signal.new("session:any"),
+		usageChanged = accounting.changed,
 	}
+
+	-- Presentation reads recorded counters through the session boundary.
+	function M.keyUsage(record, index) return accounting.keyUsage(record, index) end
+	function M.conversationUsage(session) return accounting.conversationUsage(session) end
 
 	-- Published for the composer's paste detection, so the two halves of the feature
 	-- share one number rather than each keeping a copy that drifts.
@@ -215,6 +221,8 @@ return function(env)
 			return true
 		end
 		local function takeReady(deadline)
+			local access = config.accessProblem()
+			if access then queue.hold(access); return nil end
 			local head = queue.peek()
 			if not head or head.state ~= "queued" or queue.held() then return nil end
 			if head.needsValidation then
@@ -227,6 +235,8 @@ return function(env)
 				head.needsValidation = false
 			end
 			if session.aborted() or deadline and clock.ms() >= deadline then return nil end
+			access = config.accessProblem()
+			if access then queue.hold(access); return nil end
 			return queue.take()
 		end
 
@@ -319,6 +329,8 @@ return function(env)
 		function session.consumeQueued(waitForPreparation, deadline)
 			local count = 0
 			while count < 16 and not session.aborted() and not queue.held() do
+				local access = config.accessProblem()
+				if access then queue.hold(access); break end
 				if deadline and clock.ms() >= deadline then break end
 				local head = queue.peek()
 				if not head then break end
@@ -340,6 +352,8 @@ return function(env)
 		end
 		function session.resumeQueue()
 			if not alive or session.removed then return false, "conversation no longer exists" end
+			local access = config.accessProblem()
+			if access then return false, access end
 			if session.clearingMessages then return false, "conversation is being cleared" end
 			if session.cancellingMessages then return false, "conversation is being stopped" end
 			if session.busy then return false, "The current turn is still working" end
@@ -354,6 +368,8 @@ return function(env)
 		-- message and join that worker only at a safe response/tool boundary.
 		function session.send(text, onDone, files, images, options)
 			if not alive then return false, "client is unloaded" end
+			local access = config.accessProblem()
+			if access then return false, access end
 			if session.removed then return false, "conversation no longer exists" end
 			if session.clearingMessages then return false, "conversation is being cleared" end
 			if session.cancellingMessages then return false, "conversation is being stopped" end
@@ -413,6 +429,8 @@ return function(env)
 				end
 				clean = prepared
 			end
+			access = config.accessProblem()
+			if access then queue.reject(entry, access); preparing(); return false, access end
 			local accepted, commitError = queue.commit(entry, clean)
 			preparing()
 			if not accepted then queue.reject(entry, commitError); preparing(); startReady(); return false, commitError end
@@ -434,6 +452,8 @@ return function(env)
 
 		runPrepared = function()
 			if not alive or session.removed then return false, "conversation no longer exists" end
+			local access = config.accessProblem()
+			if access then return false, access end
 			if session.busy then return false, "already working" end
 			if running >= 8 then return false, "Eight native session workers are already active; wait for a turn to finish" end
 			local head = queue.peek()
@@ -545,6 +565,8 @@ return function(env)
 		-- starting a turn. Reuses the busy interlock so a send cannot interleave with
 		-- the mutation, and persists the trimmed conversation when it changes.
 		function session.compact(onDone)
+			local access = config.accessProblem()
+			if access then return false, access end
 			if session.busy or session.preparing then return false, "already working" end
 			if session.removed then return false, "conversation no longer exists" end
 			if not alive or running >= 8 then return false, "Eight native session workers are already active; wait for a turn to finish" end

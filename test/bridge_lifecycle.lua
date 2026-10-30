@@ -35,7 +35,7 @@ do
 		if req.url:find("/api/agent/events", 1, true) then uploads = uploads + 1; return { StatusCode = 204, Body = "" } end
 		return { StatusCode = 404, Body = "{}" }
 	end
-	local app = assert(h.boot()); h.settle(0.2)
+	local app = assert(h.boot()); require("password_fixture")(h, app); h.settle(0.2)
 	app.config.set("bridge.runtime", "web")
 	check("offline saved/runtime writes cannot force Web", app.config.get("bridge.runtime") == "game")
 	manual(app); h.settle(0.3)
@@ -57,7 +57,7 @@ do
 	h.services.UserInputService.TouchEnabled, h.services.UserInputService.MouseEnabled = true, false
 	local probes = 0
 	h.http.relay = function() probes = probes + 1; return { StatusCode = 599, Body = "{}" } end
-	local app = assert(h.boot()); h.settle(1)
+	local app = assert(h.boot()); require("password_fixture")(h, app); h.settle(1)
 	app.env.require("runtime/log").setLevel("debug")
 	h.settle(180)
 	check("absent companion discovery backs off", probes >= 3 and probes <= 4)
@@ -96,7 +96,7 @@ do
 		response.delay = delay
 		return response
 	end
-	local app = assert(h.boot()); h.settle(1)
+	local app = assert(h.boot()); require("password_fixture")(h, app); h.settle(1)
 	local link = app.env.require("net/relay_link")
 	check("companion initially pairs", link.usable())
 	local before = scans
@@ -121,7 +121,7 @@ end
 
 for _, pause in ipairs({ 0, 2.5 }) do
 	local h = envMock.new()
-	local app = assert(h.boot()); h.settle(0.2)
+	local app = assert(h.boot()); require("password_fixture")(h, app); h.settle(0.2)
 	local sends, completed, pendingAck = 0, false, false
 	app.sessions.current().send = function() sends = sends + 1; h.sandbox.task.wait(2); return true end
 	h.http.handler = function(req)
@@ -150,10 +150,11 @@ do
 	local h = envMock.new()
 	local pairing = false
 	h.http.relay = function(req)
-		if req.url:find("/api/pair", 1, true) then pairing = true; local response = pair(); response.delay = 1; return response end
+		-- Authentication settles one second of mock time before this lifecycle case.
+		if req.url:find("/api/pair", 1, true) then pairing = true; local response = pair(); response.delay = 2; return response end
 		return hello()
 	end
-	local app = assert(h.boot()); h.settle(0.2)
+	local app = assert(h.boot()); require("password_fixture")(h, app); h.settle(0.2)
 	check("pairing is in flight", pairing)
 	app.config.set("relay.mode", "off"); h.settle(2)
 	check("late pairing after opt-out cannot restore credentials", app.config.get("relay.token") == "" and not app.env.require("net/relay_link").usable())
@@ -167,7 +168,7 @@ do
 		if not companion then return { StatusCode = 599, Body = "{}" } end
 		return req.url:find("/api/pair", 1, true) and pair() or hello()
 	end
-	local app = assert(h.boot()); h.settle(1)
+	local app = assert(h.boot()); require("password_fixture")(h, app); h.settle(1)
 	local result, starts, polls = nil, 0, 0
 	h.sandbox.task.spawn(function()
 		result = app.env.require("net/relay").request({ url = "https://provider.invalid", body = "{}", timeout = 15 }, {}, function(spec)
@@ -188,7 +189,7 @@ end
 do
 	local h = envMock.new()
 	h.http.relay = function(req) return req.url:find("/api/pair", 1, true) and pair() or hello() end
-	local app = assert(h.boot()); h.settle(1)
+	local app = assert(h.boot()); require("password_fixture")(h, app); h.settle(1)
 	local submissions, deletes, upstreamTimeout = 0, 0, nil
 	h.http.relay = function(req)
 		if req.url:find("/api/hello", 1, true) then return hello() end
@@ -246,7 +247,7 @@ do
 		return { StatusCode = 200, Body = json.encode({ id = req.url:match("/inference/(.+)$"), state = ready and "completed" or "running", status = 200, body = "long answer" }),
 			delay = polls == 1 and 34.5 or 0 }
 	end
-	local app = assert(h.boot()); h.settle(0.2); manual(app); h.settle(0.3)
+	local app = assert(h.boot()); require("password_fixture")(h, app); h.settle(0.2); manual(app); h.settle(0.3)
 	local response, err, aborted
 	local clock = app.env.require("runtime/clock")
 	local function request()

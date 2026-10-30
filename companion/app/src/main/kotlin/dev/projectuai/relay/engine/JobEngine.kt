@@ -34,7 +34,9 @@ class JobEngine(
     private val clock: () -> Long = System::currentTimeMillis,
     private val onChanged: () -> Unit = {},
     private val ownerClock: () -> Long = { System.nanoTime() / 1_000_000L },
+    private val kilo: KiloRoute? = null,
 ) {
+    fun kiloCapability() = kilo?.capability() ?: dev.projectuai.relay.protocol.KiloCapability()
     data class Limits(
         val bodyBytes: Long = 8L * 1024 * 1024,
         val maxJobs: Int = 200,
@@ -180,6 +182,7 @@ class JobEngine(
     fun close() {
         synchronized(lock) { closed = true }
         cancelAll()
+        kilo?.close()
     }
 
     /** Reserve an idle engine while Android's update installer is open. */
@@ -227,11 +230,20 @@ class JobEngine(
             val mediaType = headers.entries.firstOrNull { it.key.equals("content-type", true) }
                 ?.value?.toMediaTypeOrNull() ?: "application/json".toMediaTypeOrNull()
             builder.method("POST", request.body.toRequestBody(mediaType))
-            val call = client.newCall(builder.build())
-            job.call = call
-            if (job.cancelled) call.cancel()
-            call.timeout().timeout(timeout.toLong() * 1000L, TimeUnit.MILLISECONDS)
-            call.execute().use { response ->
+            val prepared = builder.build()
+            val response = if (kilo != null && KiloRoute.eligible(prepared, request.body)) {
+                kilo.execute(prepared, client, timeout, { job.cancelled }) { call ->
+                    job.call = call
+                    if (job.cancelled) call.cancel()
+                }
+            } else {
+                val call = client.newCall(prepared)
+                job.call = call
+                if (job.cancelled) call.cancel()
+                call.timeout().timeout(timeout.toLong() * 1000L, TimeUnit.MILLISECONDS)
+                call.execute()
+            }
+            response.use {
                 synchronized(lock) { if (job.state == JobState.RUNNING) job.stage = "receiving" }
                 notifyChanged()
                 val body = response.body

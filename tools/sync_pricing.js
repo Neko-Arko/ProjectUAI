@@ -11,6 +11,8 @@ const SOURCES = {
 	modelsdev: 'https://models.dev/api.json',
 	litellm: 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json',
 	openrouter: 'https://openrouter.ai/api/v1/models',
+	kilo: 'https://api.kilo.ai/api/gateway/models',
+	cline: 'https://api.cline.bot/api/v1/ai/cline/recommended-models',
 };
 const PROVIDERS = {
 	openai: ['openai', 'openai'], anthropic: ['anthropic', 'anthropic'],
@@ -53,17 +55,18 @@ function litellmRow(model) {
 		tools: typeof model.supports_function_calling === 'boolean' ? model.supports_function_calling : undefined,
 		reasoning: typeof model.supports_reasoning === 'boolean' ? model.supports_reasoning : undefined });
 }
-function openrouterRow(model) {
+function openrouterRow(model, source = 'openrouter') {
 	const cost = model.pricing || {};
 	const decimal = value => typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : undefined;
-	return clean({ source: 'openrouter', price: price({ input: decimal(cost.prompt), output: decimal(cost.completion),
+	return clean({ source, price: price({ input: decimal(cost.prompt), output: decimal(cost.completion),
 		cache_read: decimal(cost.input_cache_read), cache_write: decimal(cost.input_cache_write) }, 1e6),
 		context: positive(model.context_length), output: positive((model.top_provider || {}).max_completion_tokens),
 		tools: Array.isArray(model.supported_parameters) ? model.supported_parameters.includes('tools') : undefined,
 		reasoning: Array.isArray(model.supported_parameters) ? model.supported_parameters.includes('reasoning') : undefined });
 }
 function normalize(raw, cliModels) {
-	if (!raw.modelsdev || !raw.litellm || !raw.openrouter || !Array.isArray(raw.openrouter.data)) throw Error('Incomplete catalog sources');
+	if (!raw.modelsdev || !raw.litellm || !Array.isArray(raw.openrouter?.data)
+		|| !Array.isArray(raw.kilo?.data) || !Array.isArray(raw.cline?.free)) throw Error('Incomplete catalog sources');
 	const providers = {};
 	for (const [provider, [modelsdevId, litellmId]] of Object.entries(PROVIDERS)) {
 		const catalog = raw.modelsdev[modelsdevId];
@@ -91,6 +94,22 @@ function normalize(raw, cliModels) {
 		if (keyId && row.price) providers.openrouter[keyId] = row;
 	}
 	if (Object.keys(providers.openrouter).length < 100) throw Error('OpenRouter returned an incomplete model list');
+	providers.kilo = {};
+	for (const model of raw.kilo.data) {
+		const row = openrouterRow(model, 'kilo'), keyId = id(model.id);
+		// A zero placeholder for a non-free route is not a published free rate.
+		if (row.price && row.price.input === 0 && row.price.output === 0 && model.isFree !== true) delete row.price;
+		if (keyId && (row.price || row.context)) providers.kilo[keyId] = row;
+	}
+	if (Object.keys(providers.kilo).length < 100) throw Error('Kilo returned an incomplete model list');
+	providers.cline = {};
+	for (const model of raw.cline.free) {
+		const keyId = id(model?.id);
+		if (!keyId || !/^[a-z0-9][a-z0-9_./:-]{0,199}$/.test(keyId)) throw Error('Cline returned an invalid free model ID');
+		// The official promotion feed establishes free text tokens only. It does
+		// not establish limits or a relationship to a similarly named paid model.
+		providers.cline[keyId] = { source: 'cline', price: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
+	}
 	if (cliModels !== undefined) {
 		if (!Array.isArray(cliModels) || !cliModels.length) throw Error('OpenCode catalog must be a nonempty array');
 		for (const model of cliModels) {
@@ -148,7 +167,7 @@ function render(snapshot) {
 	return lines.concat(['\t\t},', '\t}', 'end', '']).join('\n');
 }
 async function fetchSource(url) {
-	const response = await fetch(url, { headers: { 'User-Agent': 'ProjectUAI-Metadata/3.2' }, signal: AbortSignal.timeout(30000) });
+	const response = await fetch(url, { headers: { 'User-Agent': 'ProjectUAI-Metadata/3.7' }, signal: AbortSignal.timeout(30000) });
 	if (!response.ok) throw Error(url + ': HTTP ' + response.status);
 	const bytes = Buffer.from(await response.arrayBuffer());
 	return { data: JSON.parse(bytes.toString('utf8')), sha256: crypto.createHash('sha256').update(bytes).digest('hex') };

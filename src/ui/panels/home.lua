@@ -90,6 +90,7 @@ return function(env)
 			radius = theme.radius.sm,
 			padding = { x = theme.space.sm },
 			selected = selected,
+			layoutOrder = order,
 			onClick = onClick,
 		})
 		P.text(handle.row, {
@@ -238,13 +239,14 @@ return function(env)
 				util.pluralise(row.requests, "request") }
 			local cost = env.require("agent/usage").formatCost(row.cost)
 			if cost ~= "" then facts[#facts + 1] = cost .. " known est." end
+			if (row.unpriced or 0) > 0 then facts[#facts + 1] = util.pluralise(row.unpriced, "request") .. " with unknown cost" end
 			local detail = P.text(entry, {
 				name = "Detail",
 				text = table.concat(facts, "  ") .. (window.estimated and "  (some estimated)" or ""),
 				role = "caption",
 				color = theme.color.textTertiary,
-				truncate = true,
-				size = UDim2.new(1, 0, 0, theme.text.caption.height),
+				wrap = true, auto = "Y",
+				size = UDim2.new(1, 0, 0, 0),
 				layoutOrder = 3,
 			})
 			detail.Name = "Detail"
@@ -418,15 +420,29 @@ return function(env)
 			local intro = P.column(holder, { name = "FreeIntroduction", size = UDim2.new(1, 0, 0, 0),
 				maxSize = Vector2.new(theme.size.statCard, math.huge), auto = "Y", gap = theme.space.xs,
 				padding = theme.space.md, bg = theme.color.surface, radius = theme.radius.lg, layoutOrder = 3 })
-			P.text(intro, { name = "FreeIntroductionTitle", text = "Project UAI Free is ready", role = "label",
+			P.stroke(intro, theme.color.borderSubtle)
+			P.text(intro, { name = "FreeIntroductionTitle", text = "Project UAI Free hours", role = "label",
 				size = UDim2.new(1, 0, 0, 0), auto = "Y", wrap = true, layoutOrder = 1 })
 			P.text(intro, { name = "FreeIntroductionText",
-				text = "Thank you for your continued use and support of Project UAI. Free access powered by HCNSEC is included, with no account or personal key needed. Speed and availability vary with shared capacity. More free providers may be available soon.",
+				text = "Thank you for your continued use and support of Project UAI. Free access powered by HCNSEC is included daily 20:00-12:00 UTC+8 (Beijing/Singapore), through the following midday, with no account or personal key needed. Outside these hours, choose another provider or return at 20:00 UTC+8. Speed and availability vary with shared capacity. More free providers may be available soon.",
 				role = "caption", color = theme.color.textSecondary, size = UDim2.new(1, 0, 0, 0),
 				auto = "Y", wrap = true, layoutOrder = 2 })
+			-- The countdown is the one line that has to move: a person deciding whether
+			-- to wait wants the remaining time, not a schedule to work out themselves.
+			local timer = P.text(intro, { name = "FreeHoursTimer", text = "", role = "caption",
+				color = theme.color.text, size = UDim2.new(1, 0, 0, 0), auto = "Y", wrap = true, layoutOrder = 3 })
+			local community = env.require("provider/community_key")
+			local stopTimer
+			stopTimer = env.require("runtime/clock").interval(1, function()
+				if not timer.Parent then stopTimer(); return end
+				local countdown = community.countdown(freeRecord)
+				timer.Text = countdown and (countdown.text .. "  ·  daily " .. community.shortHours) or ""
+			end)
+			local countdown = community.countdown(freeRecord)
+			timer.Text = countdown and (countdown.text .. "  ·  daily " .. community.shortHours) or ""
 			P.text(intro, { name = "FreeCommunityInvite", text = "Updates and help: https://discord.gg/9xYyyYuKap",
-				role = "caption", color = theme.color.accent, size = UDim2.new(1, 0, 0, 0), auto = "Y", wrap = true, layoutOrder = 3 })
-			P.button(intro, { name = "FreeCommunity", text = "Join our Discord", variant = "ghost", size = "sm", layoutOrder = 4,
+				role = "caption", color = theme.color.accent, size = UDim2.new(1, 0, 0, 0), auto = "Y", wrap = true, layoutOrder = 4 })
+			P.button(intro, { name = "FreeCommunity", text = "Join our Discord", variant = "ghost", size = "sm", layoutOrder = 5,
 				onClick = function() env.require("ui/community").open() end })
 		end
 
@@ -568,12 +584,15 @@ return function(env)
 		-- screen changes every number on it. Debounced because a turn records a message,
 		-- a request and a tool result within the same few frames, and rebuilding the
 		-- grid three times for one turn is three times the work for one result.
-		local refresh = clock.debounce(function()
+		local refresh, cancelRefresh = clock.debounce(function()
 			if not card.Parent then return end
 			render()
 		end, theme.motion.slow)
 		local unsubscribe = stats.changed:connect(refresh)
-		card.Destroying:Connect(function() pcall(unsubscribe) end)
+		card.Destroying:Connect(function()
+			cancelRefresh()
+			pcall(unsubscribe)
+		end)
 
 		return holder
 	end

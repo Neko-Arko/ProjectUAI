@@ -13,20 +13,39 @@ return function(env)
 
 	function M.open()
 		if current and not current.closed then return current end
-		local modal = overlay.modal({ title = "Join the Project UAI community",
-			description = "Get updates, ask for help, and share what you build.",
-			width = theme.size.modalWide, onClose = function() current = nil end })
+		local modal = overlay.modal({ title = "Join our Discord",
+			description = "Get Project UAI updates, ask for help, and share what you build.",
+			width = theme.size.modal, onClose = function() current = nil end })
 		if not modal then return nil end
 		current = modal
 		community.markShown()
-		local invite = P.field(modal.content, { name = "CommunityInvite", text = community.invite,
-			role = "small", multiline = true, height = responsive.minTarget(), layoutOrder = 1 })
+		local card = P.card(modal.content, { name = "CommunityCard", padding = theme.space.md,
+			gap = theme.space.sm, bg = theme.color.surface, layoutOrder = 1 })
+		P.text(card, { name = "CommunityInviteLabel", text = "Discord invite", role = "label",
+			size = UDim2.new(1, 0, 0, 0), auto = "Y", layoutOrder = 1 })
+		local invite = P.field(card, { name = "CommunityInvite", text = community.invite,
+			role = "small", multiline = true,
+			height = math.max(responsive.minTarget(), theme.text.small.height + theme.space.sm * 2), layoutOrder = 2 })
 		invite.instance.TextEditable = false
-		P.text(modal.content, { name = "CommunityReminderNote", text = "Reminders appear at most once every two weeks. Joining is optional.",
+		local measuredWidth
+		local function fitInvite()
+			local width = invite.shell.AbsoluteSize.X
+			if width <= 0 or width == measuredWidth then return end
+			measuredWidth = width
+			local textHeight = P.measureText(community.invite, { role = "small", width = math.max(1, width - theme.space.md * 2) }).Y
+			local height = math.max(responsive.minTarget(), math.max(theme.text.small.height, math.ceil(textHeight)) + theme.space.sm * 2)
+			invite.shell.Size = UDim2.new(1, 0, 0, height)
+		end
+		invite.shell:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitInvite)
+		fitInvite()
+		P.text(card, { name = "CommunityCopyHint", text = "Open this link in your browser or Discord.",
+			role = "caption", color = theme.color.textSecondary, wrap = true, auto = "Y",
+			size = UDim2.new(1, 0, 0, 0), layoutOrder = 3 })
+		P.text(modal.content, { name = "CommunityReminderNote", text = "Joining is optional. Reminders appear at most once every two weeks and stop after you copy the invite.",
 			role = "caption", color = theme.color.textSecondary, wrap = true, auto = "Y",
 			size = UDim2.new(1, 0, 0, 0), layoutOrder = 2 })
 		P.button(modal.content, { name = "CommunityNever", text = "Don't show again", variant = "ghost",
-			fill = true, layoutOrder = 3, onClick = function() community.disable(); modal.close() end })
+			size = "sm", layoutOrder = 3, onClick = function() community.disable(); modal.close() end })
 		P.button(modal.footer, { name = "CommunityLater", text = "Not now", variant = "ghost", layoutOrder = 1,
 			onClick = function() modal.close() end })
 		P.button(modal.footer, { name = "CommunityCopy", text = "Copy invite", variant = "primary", layoutOrder = 2,

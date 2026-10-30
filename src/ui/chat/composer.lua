@@ -765,7 +765,7 @@ return function(env)
 			end
 			pendingPreview.Visible = pendingButton.instance.Visible and room >= controlHeight * 5
 			if pendingPreview.Visible then
-				local height = theme.textRole("caption").size + theme.space.xxs
+				local height = theme.text.caption.height + theme.space.xxs
 				pendingPreview.Position = UDim2.fromOffset(inset + theme.space.xs, top)
 				pendingPreview.Size = UDim2.new(1, -inset * 2 - theme.space.xs * 2, 0, height)
 				top = top + height + theme.space.xs
@@ -821,17 +821,16 @@ return function(env)
 
 			local record = providers.active()
 			if not record then
-				modelLabel.Text = "no provider"
+				modelLabel.Text = "Choose provider"
 				modelLabel.TextColor3 = theme.color.warn
 				effortLabel.Text = ""
 			else
 				local model = util.trim(tostring(record.model or ""))
 				if model == "" then
-					modelLabel.Text = record.label .. "  no model"
+					modelLabel.Text = "Choose model"
 					modelLabel.TextColor3 = theme.color.warn
 				else
-					local badge = traits.badge(model, record)
-					modelLabel.Text = model .. (badge and ("  " .. badge) or "")
+					modelLabel.Text = model
 					modelLabel.TextColor3 = theme.color.textSecondary
 				end
 				-- The effort actually sent, which is the setting clamped to what this

@@ -143,7 +143,7 @@ case("manual bridge worker replacement refreshes state and closes old MCP work",
 		end
 		return { StatusCode = 204, Body = "" }
 	end
-	local app = assert(h.boot()); h.settle(0.2)
+	local app = assert(h.boot()); require("password_fixture")(h, app); h.settle(0.2)
 	app.config.set("bridge.autoDiscover", false)
 	app.config.set("bridge.port", 8795); app.config.set("bridge.token", "mcp-fixture"); app.config.set("bridge.enabled", true)
 	h.settle(1.5)

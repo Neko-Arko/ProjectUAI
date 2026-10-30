@@ -5,8 +5,8 @@ local F = require("coding_fixture")
 local suite = F.suite("Model effort")
 local case, check = suite.case, suite.check
 
-local function fixture(width)
-	local f = F.ui(width or 900, 700)
+local function fixture(width, height)
+	local f = F.ui(width or 900, height or 700)
 	local registry = f.env.require("provider/registry")
 	local record = registry.blank("custom")
 	record.label, record.baseUrl, record.authStyle = "Effort fixture", "https://effort.fixture/v1", "none"
@@ -48,6 +48,65 @@ case("manual reasoning support exposes global controls for either provider proto
 		for _, style in ipairs({ "openai", "anthropic" }) do check(style .. " omits effort for provider default", effort(f, style) == nil) end
 		check("controls fit the modal width", f.h.byName("EffortPills").AbsoluteSize.X > 0 and modal.card.AbsoluteSize.X <= width)
 		check("choosing effort sends no inference", f.h.http.requestCount == 0)
+		modal.close(); f.h.settle(0.3); f.healthy(); f.close()
+	end
+end)
+
+case("short pickers keep enabled reasoning levels visible through model and viewport changes", function()
+	for _, width in ipairs({ 320, 900 }) do
+		local f = fixture(width, 400)
+		for index = 4, 12 do f.record.models[index] = "vendor/fixture-" .. index end
+		assert(f.registry.save(f.record))
+		local modal = f.env.require("ui/panels/modelpicker").open(); f.h.settle(0.3)
+		local search = assert(f.h.byName("ModelFilter")):FindFirstChildOfClass("TextBox")
+		local list = assert(f.h.byName("ModelScroll"))
+		search.Text = "vendor/"
+		local function visibleLevels()
+			local section = assert(f.h.byName("Section_ReasoningEffort"))
+			local strip = assert(f.h.byName("EffortPills"))
+			local high = assert(f.h.byName("Effort_high"))
+			check("enabled levels are shown directly", section.Visible and strip.Visible and high.Visible)
+			check("the effort strip fits between the catalog and footer", strip.AbsoluteSize.X > 0
+				and strip.AbsoluteSize.Y >= high.AbsoluteSize.Y
+				and strip.AbsolutePosition.X >= modal.scroll.instance.AbsolutePosition.X
+				and strip.AbsolutePosition.X + strip.AbsoluteSize.X <= modal.scroll.instance.AbsolutePosition.X + modal.scroll.instance.AbsoluteSize.X
+				and list.AbsolutePosition.Y + list.AbsoluteSize.Y <= strip.AbsolutePosition.Y
+				and strip.AbsolutePosition.Y + strip.AbsoluteSize.Y <= modal.footer.AbsolutePosition.Y)
+			check("a visible effort choice is inside the strip", high.AbsoluteSize.X > 0 and high.AbsoluteSize.Y > 0
+				and high.AbsolutePosition.X >= strip.AbsolutePosition.X
+				and high.AbsolutePosition.X + high.AbsoluteSize.X <= strip.AbsolutePosition.X + strip.AbsoluteSize.X
+				and high.AbsolutePosition.Y >= strip.AbsolutePosition.Y
+				and high.AbsolutePosition.Y + high.AbsoluteSize.Y <= strip.AbsolutePosition.Y + strip.AbsoluteSize.Y)
+			check("models retain their own bounded scrolling viewport", list.AbsoluteSize.Y > 0 and list.ScrollingEnabled
+				and not modal.scroll.instance.ScrollingEnabled
+				and list.AbsolutePosition.Y >= search.AbsolutePosition.Y + search.AbsoluteSize.Y)
+		end
+		click(f, "ModelOptions"); click(f, "Option_reasoning")
+		visibleLevels()
+		click(f, "Effort_high")
+		check("visible levels update the shared preference", f.config.get("agent.effort") == "high" and selected(f, "high"))
+		list.CanvasPosition = f.h.dt.Vector2.new(0, 20)
+		for _, height in ipairs({ 700, 400 }) do
+			f.h.setViewport(width, height)
+			visibleLevels()
+			check("resizing preserves search and catalog identity", f.h.byName("ModelFilter"):FindFirstChildOfClass("TextBox") == search
+				and search.Text == "vendor/" and f.h.byName("ModelScroll") == list and list.CanvasPosition.Y == 20)
+			check("resizing preserves the selected effort", selected(f, "high") and f.config.get("agent.effort") == "high")
+		end
+		f.registry.setModel(f.record.id, "vendor/plain"); f.h.settle(0.2)
+		check("unsupported models remove the level strip", not f.h.byName("Section_ReasoningEffort").Visible and f.h.byName("EffortPills") == nil)
+		f.registry.setModel(f.record.id, "claude-opus-4-6"); f.h.settle(0.2)
+		visibleLevels()
+		check("documented reasoning uses the same saved effort", selected(f, "high") and f.h.byName("Effort_xhigh") == nil)
+		f.registry.setModel(f.record.id, "vendor/reasoner"); f.h.settle(0.2)
+		visibleLevels()
+		click(f, "ModelOptions"); click(f, "Option_reasoning")
+		check("disabling manual support removes the controls immediately", not f.h.byName("Section_ReasoningEffort").Visible and f.h.byName("EffortPills") == nil)
+		click(f, "ModelOptions"); click(f, "Option_reasoning")
+		visibleLevels()
+		check("reenabling restores the saved effort without resetting navigation", selected(f, "high")
+			and search.Text == "vendor/" and f.h.byName("ModelScroll") == list and list.CanvasPosition.Y == 20)
+		check("layout and reasoning changes send no inference", f.h.http.requestCount == 0)
 		modal.close(); f.h.settle(0.3); f.healthy(); f.close()
 	end
 end)

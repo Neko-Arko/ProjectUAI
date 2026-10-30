@@ -61,14 +61,16 @@ local function subdued(stroke, theme, surface)
 		and stroke.Color.G > stroke.Color.R and stroke.Color.G > stroke.Color.B
 end
 
-case("screenshot viewport fits five complete rows with reasoning and quiet free outlines", function()
+case("screenshot viewport fits three complete rows with reasoning and quiet free outlines", function()
 	local f = fixture(777, 632)
 	local theme = f.env.require("ui/theme")
 	local picker = f.env.require("ui/panels/modelpicker").open(); f.h.settle(0.3)
 	local list, effort = assert(f.h.byName("ModelScroll")), assert(f.h.byName("Section_ReasoningEffort"))
 	local rows = modelRows(list)
-	check("dialog retains the original compact bounds", picker.card.Size.X.Offset <= 480 and picker.card.Size.Y.Offset <= 500)
-	check("five complete rows fit with the reasoning controls shown", effort.Visible and #rows == 8 and fullRows(list) == 5)
+	check("dialog stays bounded with its provider context", picker.card.Size.X.Offset <= 540 and picker.card.Size.Y.Offset <= 560)
+	check("three complete rows fit with the reasoning controls shown", effort.Visible and #rows == 8 and fullRows(list) >= 3)
+	check("the active provider and model are visible above search", f.h.byName("CurrentProvider").Text == "Picker fixture"
+		and f.h.byName("CurrentModel").Text == f.record.model and f.h.byName("CurrentProviderStatus").Text:find("8 free", 1, true))
 	check("the catalogue owns scrolling at the screenshot size", list.ScrollingEnabled and not picker.scroll.instance.ScrollingEnabled)
 	check("the list stops before reasoning controls", list.AbsolutePosition.Y + list.AbsoluteSize.Y < effort.AbsolutePosition.Y)
 	check("temperature consumes no permanent list space", f.h.byName("Section_Temperature") == nil and f.h.byName("ModelTemperature") == nil)
@@ -98,11 +100,13 @@ case("short touch layouts keep one scroll owner and temperature under Options", 
 	f.env.require("ui/responsive").refresh("picker fixture")
 	local picker = f.env.require("ui/panels/modelpicker").open(); f.h.settle(0.3)
 	local list, search = assert(f.h.byName("ModelScroll")), f.h.byName("ModelFilter"):FindFirstChildOfClass("TextBox")
-	check("short screens scroll the complete body", picker.scroll.instance.ScrollingEnabled and not list.ScrollingEnabled
-		and picker.content.Size.Y.Offset > picker.scroll.viewportSize().Y)
+	check("short screens keep the catalogue as the scrolling owner", not picker.scroll.instance.ScrollingEnabled and list.ScrollingEnabled
+		and picker.content.Size.Y.Offset == picker.scroll.viewportSize().Y)
 	check("touch rows keep the shared input target minimum", modelRows(list)[1].Size.Y.Offset >= f.env.require("ui/responsive").minTarget())
-	check("search and effort remain in the scrollable body", search:IsDescendantOf(picker.content)
-		and f.h.byName("Section_ReasoningEffort"):IsDescendantOf(picker.content))
+	local effort = assert(f.h.byName("Section_ReasoningEffort"))
+	check("short screens keep reasoning levels visible below the catalogue", effort.Visible and f.h.byName("EffortPills").Visible
+		and list.AbsoluteSize.Y > 0 and list.AbsolutePosition.Y + list.AbsoluteSize.Y < effort.AbsolutePosition.Y
+		and effort.AbsolutePosition.Y + effort.AbsoluteSize.Y <= picker.footer.AbsolutePosition.Y)
 	search.Text = "free"
 	click(f, "ModelOptions")
 	local temperature = assert(f.h.byName("Option_temperature"))
@@ -132,6 +136,43 @@ case("provider menus use the same quiet free marker and preserve selection fill"
 	check("the free marker does not imply selection", selected.BackgroundTransparency == 0 and available.BackgroundTransparency == 1)
 	check("paid models do not acquire a free outline", not paid:GetAttribute("UAIFreeModel") and paid:FindFirstChildOfClass("UIStroke").Transparency == 1)
 	menu.close(); f.h.settle(0.3); f.healthy(); f.close()
+end)
+
+case("saved-provider search preserves the model filter and explains desktop routes", function()
+	for _, width in ipairs({ 320, 900 }) do
+		local f = fixture(width, 632)
+		-- Incomplete saved connections must explain setup needs before selection.
+		local cline = f.registry.blank("cline"); assert(f.registry.save(cline, { force = true }))
+		local keyed = f.registry.blank("custom")
+		keyed.label, keyed.baseUrl = "Needs key", "https://provider.fixture/v1?key=private-query"
+		assert(f.registry.save(keyed, { force = true }))
+		local picker = f.env.require("ui/panels/modelpicker").open(); f.h.settle(0.2)
+		local search = f.h.byName("ModelFilter"):FindFirstChildOfClass("TextBox")
+		search.Text = "fixture"
+		click(f, "Section_Endpoint")
+		local switcher = f.env.require("ui/panels/providerpicker").open(picker)
+		check("provider switcher fits its viewport", switcher.card.Size.X.Offset <= width and switcher.card.Size.Y.Offset <= 632)
+		local clineRow, keyedRow = f.h.byName("Option_" .. cline.id), f.h.byName("Option_" .. keyed.id)
+		check("unavailable Cline is explicit before selecting", f.h.textOf(clineRow):find("Connect the desktop bridge", 1, true)
+			and not f.h.textOf(clineRow):find("uai-tunnel.invalid", 1, true))
+		check("key requirements are visible but query credentials are not", f.h.textOf(keyedRow):find("API key required", 1, true)
+			and not f.h.textOf(keyedRow):find("private-query", 1, true))
+		local providerSearch = f.h.byName("ProviderSwitchSearch"):FindFirstChildOfClass("TextBox")
+		f.registry.changed:fire("health", cline); f.h.settle(0.1)
+		check("status refresh retains keyboard-focus targets and the search field", f.h.byName(clineRow.Name) == clineRow
+			and f.h.byName("ProviderSwitchSearch"):FindFirstChildOfClass("TextBox") == providerSearch)
+		providerSearch.Text = "Cline"
+		check("saved-provider search filters existing rows", clineRow.Visible and not keyedRow.Visible)
+		providerSearch.Text = "no-match"
+		check("provider empty state is explicit", f.h.byName("NoSavedProviderMatch").Visible)
+		providerSearch.Text = "Cline"; click(f, clineRow.Name)
+		check("selection updates the real active record", f.registry.active().id == cline.id and f.h.byName("CurrentProvider").Text == "Cline")
+		check("switching providers preserves model search identity", f.h.byName("ModelFilter"):FindFirstChildOfClass("TextBox") == search and search.Text == "fixture")
+		click(f, "Section_Endpoint"); picker.close(); f.h.settle(0.3)
+		check("owner closure also releases the saved-provider picker", f.h.byName("ProviderSwitchSearch") == nil)
+		check("provider browsing performs no requests", f.h.http.requestCount == 0)
+		f.healthy(); f.close()
+	end
 end)
 
 suite.finish()

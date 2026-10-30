@@ -9,7 +9,7 @@ return function(env)
 
 	function M.attach(handle)
 		local sdk = { version = "1.0.0", features = {
-			uiFreeBoot = true, resourceScopes = true, requests = true, sessionLookup = true,
+			uiFreeBoot = false, passwordGate = true, resourceScopes = true, requests = true, sessionLookup = true,
 		} }
 		local pending = {}
 		function sdk.createScope(id) return scopes.create(handle, id) end

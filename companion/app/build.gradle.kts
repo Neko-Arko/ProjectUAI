@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
 }
@@ -15,14 +14,15 @@ if (hasReleaseSigning && releaseSigningValues.values.any { it.isEmpty() }) {
 
 android {
     namespace = "dev.projectuai.relay"
-    compileSdk = 36
+    // Tor Android's current AAR requires the Android 37.1 compile API.
+    compileSdk { version = release(37) { minorApiLevel = 1 } }
 
     defaultConfig {
         applicationId = "dev.projectuai.relay"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "3.6.5"
+        versionCode = 8
+        versionName = "3.7.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -51,6 +51,7 @@ android {
     }
 
     buildFeatures { compose = true }
+    sourceSets.getByName("main").assets.srcDir("../../licenses")
 
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
@@ -82,6 +83,10 @@ dependencies {
     implementation("io.ktor:ktor-server-core:3.0.3")
     implementation("io.ktor:ktor-server-cio:3.0.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("info.guardianproject:tor-android:0.4.9.14") {
+        // TorService is Java; use the application's aligned Kotlin runtime.
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
+    }
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")

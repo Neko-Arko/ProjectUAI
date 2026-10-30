@@ -1,9 +1,9 @@
 # Provider compatibility and WebSockets
 
-Applies to **3.3.5**, October 18, 2026.
+Applies to **3.7.2**, October 29, 2026.
 
 UAI implements **Chat Completions**, **Anthropic Messages** and **Google Gemini**,
-plus a dedicated **Responses** path for supported OpenCode models. Custom
+plus a dedicated **Responses** path for supported OpenCode and AgentRouter models. Custom
 providers can select their matching protocol. This is protocol compatibility, not a guarantee that
 every model, server version, account or proprietary API works.
 
@@ -11,6 +11,36 @@ The compatibility checks use synthetic HTTP responses and socket events. They
 need no running models, API keys or paid inference. Live server availability,
 model quality, tool-call accuracy, executor networking and TLS are outside that
 coverage.
+
+## Provider setup and model discovery
+
+Initial use requires password setup or the explicit **Continue without encryption**
+choice before inference or discovery, including public no-key and included free
+routes. With a vault, every execution requires unlock, including `ui = false`
+embedding. A saved unprotected-storage choice skips future password prompts and
+stores keys with reversible byte encoding. The gate preserves existing credentials
+for verified migration; see [API key security](API_KEY_SECURITY.md).
+
+The [individual setup guides](providers/README.md) cover Vercel AI Gateway,
+Perplexity Orchestrator, FriendliAI Model APIs, Venice, Nscale, Arcee AI and
+AI/ML API. Each guide names the exact preset, account/key requirements, catalog
+route and documented limits. Vercel's free-tier credits apply only to eligible
+models; the public catalog also contains paid models. AI/ML API's documented
+free tier is currently paused.
+
+Catalog discovery is separate from inference authentication and funding. Several
+providers expose public catalogs, so a successful fetch does not validate a key
+or establish access to every returned model. The provider editor and model menus
+support multiword search; refresh and manual entry stay available after an empty
+search. Query credentials are omitted from connection summaries and loading text.
+
+Generic model lists retain all IDs. On four exact documented routes UAI reads an
+explicit API kind: AI/ML API `type: openai/chat-completions`, Vercel
+`type: language`, FriendliAI `mode: chat`, and Venice `type: text`. Explicit other
+kinds are omitted and the discovery note reports how many were hidden. Untyped
+entries and manually entered IDs remain available. These rules do not interpret
+vendor fields on custom hosts, alternate ports or different API paths. Chat
+compatibility still does not establish tools, vision or reasoning support.
 
 Chat and Responses requests keep at most 128 tool declarations by default.
 When more tools are available, `uai_tool_catalog` exposes the remaining names,
@@ -66,11 +96,22 @@ socket/HTTP dispatch or execute a partially delivered tool call.
 
 ## Model prices and limits
 
-The October 15, 2026 catalog contains provider-specific text-token prices and
-context/reply limits. Models.dev supplies the main catalog, LiteLLM fills exact
-provider gaps, OpenRouter supplies its own route prices, and the installed
-OpenCode CLI supplies verified free-model limits. Metadata enriches discovered
-or manually entered models; it does not offer models the endpoint has not listed.
+The October 25, 2026 catalog contains 1,760 model entries across 15 providers,
+including provider-specific text-token prices and context/reply limits.
+[Models.dev](https://models.dev/api.json) supplies the main catalog, including
+OpenCode's current free-model limits; [LiteLLM](https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json)
+fills exact provider gaps. [OpenRouter](https://openrouter.ai/api/v1/models) and
+[Kilo](https://api.kilo.ai/api/gateway/models) supply their own route prices.
+[Cline's promotion feed](https://api.cline.bot/api/v1/ai/cline/recommended-models)
+establishes zero token rates for five exact free IDs; it does not publish their
+context or reply limits. Metadata enriches discovered or manually entered models;
+it does not offer models the endpoint has not listed.
+
+Kilo's 401 catalog entries apply only to its supported HTTPS gateway routes.
+Zero price placeholders without an explicit free flag remain unknown. Cline
+prices apply only to its reserved desktop bridge route, and the bridge still
+checks current free availability before every request. Promotions and account
+allowances can change after this dated snapshot.
 
 Prices are estimates in USD per million text tokens. Documented cache rates and
 long-context tiers apply to usage estimates. Special service tiers, request fees,
@@ -186,7 +227,7 @@ service does not expose it or the key cannot list models, manual ids remain usab
 | Preset | Base path / host | Protocol | Default auth |
 | --- | --- | --- | --- |
 | Project UAI Free (HCNSEC) | `api.hcnsec.cn/v1` | Chat Completions | Bearer |
-| AgentRouter | `agentrouter.org/v1` | Messages | x-api-key |
+| AgentRouter | `agentrouter.org/v1` | GPT: Responses; others: selected protocol | x-api-key |
 | Anthropic Messages | `api.anthropic.com/v1` | Messages | x-api-key |
 | Google Gemini | `generativelanguage.googleapis.com/v1beta` | Native generateContent / streamGenerateContent | x-goog-api-key |
 | Azure AI Foundry | `<resource>.openai.azure.com/openai/v1` | Chat Completions | api-key |
@@ -226,14 +267,24 @@ key or model entry is required. Existing providers and private credentials stay
 intact. Choose **Use Project UAI Free** to add it later. Thank you for your continued
 use and support of Project UAI; more free providers may become available soon.
 
+Included community access is scheduled **daily from 20:00 to 12:00 the following
+midday, fixed UTC+8 (Beijing/Singapore)**. The client's local timezone and daylight
+saving do not change these hours. Outside the schedule, UAI explains the next
+opening and skips new included-access inference, model discovery and background
+probes. Choose another provider or return at 20:00 UTC+8. You can still save the
+free provider; personal HCNSEC keys do not use this community schedule. An already
+accepted inference may finish after 12:00. These checks provide client guidance;
+the service controls actual availability and must enforce any server access limits.
+
 **Settings → Agent → Automatic free routing** is enabled by default and optional.
 Turn it off to stop background measurements and retain the selected provider model
 for future requests. An accepted request finishes on its existing route. When UAI
 selects a measured model, a conversation notice names it and gives this setting path.
 The provider may still perform its own routing when its selected model is `auto`.
 
-With automatic free routing enabled, `auto` selected and the default Chat settings, UAI measures models in the
-background when you open the model picker or send an agent request. It discovers
+During scheduled hours, with automatic free routing enabled, `auto` selected and
+the default Chat settings, UAI measures models in the background when you open the
+model picker or send an agent request. It discovers
 the live catalog, checks a small tool call and its result replay, and prefers the
 fastest verified candidate whose two responses each finished within ten seconds.
 The picker shows the latest synthetic probe time. The first request can use the

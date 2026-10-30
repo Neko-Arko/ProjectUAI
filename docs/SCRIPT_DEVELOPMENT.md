@@ -9,6 +9,12 @@ the whole guide, enumerate the whole game or scaffold a project before every
 small edit. Current user instructions, live tool schemas and observed state take
 precedence over examples here.
 
+When a tool profile hides a needed capability, use `tool_search` with a few
+action or name words, then describe the exact match. Words can span its name,
+description and group. Follow `nextOffset` for additional schema bytes; a
+describe `limit` is bytes, while a list `limit` is rows. Search does not grant
+permissions or expand the conversation's tool scope.
+
 ## Quickstart
 
 Turn a clear scripting request into a small working result:

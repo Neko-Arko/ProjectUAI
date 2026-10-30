@@ -265,6 +265,31 @@ class Updater {
       fs.renameSync(temporary, pointer);
     } finally { if (fs.existsSync(temporary)) fs.unlinkSync(temporary); }
   }
+  prune(keepKeys = []) {
+    // Applied updates leave predecessor versions and quarantine folders behind.
+    // Entries still referenced stay; older unreferenced ones re-download when
+    // needed. Recently written entries may belong to a concurrent process of
+    // this installation, so they always survive.
+    try {
+      const keep = new Set(keepKeys.filter(key => typeof key === 'string' && /^\d+\.\d+\.\d+-[a-f0-9]{64}$/.test(key)));
+      const cutoff = Date.now() - 3600000;
+      const versions = path.join(this.cacheDir, 'versions');
+      if (fs.existsSync(versions)) {
+        for (const entry of fs.readdirSync(versions)) {
+          if (keep.has(entry)) continue;
+          const target = contained(versions, entry);
+          try { if (fs.statSync(target).mtimeMs >= cutoff) continue; } catch { continue; }
+          try { noLinks(target); fs.rmSync(target, { recursive: true, force: true }); } catch { /* best effort */ }
+        }
+      }
+      for (const entry of fs.readdirSync(this.cacheDir)) {
+        if (!/^\.(?:invalid|stage|active)-/.test(entry)) continue;
+        const target = contained(this.cacheDir, entry);
+        try { if (fs.statSync(target).mtimeMs >= cutoff) continue; } catch { continue; }
+        try { noLinks(target); fs.rmSync(target, { recursive: true, force: true }); } catch { /* best effort */ }
+      }
+    } catch { /* pruning never affects availability */ }
+  }
 }
 
 module.exports = { Updater, RELEASES_URL, MANIFEST_NAME, PACKAGE_NAME, ROOT_FILES, MAX_PACKAGE,

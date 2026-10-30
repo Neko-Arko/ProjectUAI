@@ -30,6 +30,10 @@ return function(env)
 	local FOUR = { "low", "medium", "high", "max" }
 
 	local TRAITS = {
+		-- Explicit Responses effort scales from the official model references.
+		-- Context and reply limits continue to come from provider-scoped metadata.
+		["gpt-6.1-sol"] = { effort = FIVE, default = "medium", exact = true },
+		["gpt-6-astra"] = { effort = FIVE, exact = true },
 		["gemini-2.5-pro"] = { effort = { "low", "medium", "high" }, thinking = "gemini-budget", thinkingMax = 32768 },
 		["gemini-2.5-flash"] = { effort = { "low", "medium", "high" }, thinking = "gemini-budget", thinkingMax = 24576 },
 		["gemini-2.5-flash-image"] = {},
@@ -96,7 +100,9 @@ return function(env)
 		if id == "" then return EMPTY end
 		local best, bestLength = EMPTY, 0
 		for prefix, traits in pairs(TRAITS) do
-			if id:find(prefix, 1, true) and #prefix > bestLength then
+			local matches = id:find(prefix, 1, true)
+			if traits.exact then matches = id == prefix or id:sub(-#prefix - 1) == "/" .. prefix end
+			if matches and #prefix > bestLength then
 				best, bestLength = traits, #prefix
 			end
 		end

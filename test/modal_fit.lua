@@ -54,6 +54,7 @@ end
 
 local modal = overlay.modal({ title = "Live activity" })
 local bodyLayout = modal.content:FindFirstChildOfClass("UIListLayout")
+local bodyPadding = modal.scroll.instance:FindFirstChildOfClass("UIPadding")
 local footerLayout = modal.footer:FindFirstChildOfClass("UIListLayout")
 local title = modal.card:FindFirstChild("Header"):FindFirstChildWhichIsA("TextLabel", true)
 P.frame(modal.content, { size = U.fromOffset(300, 100) })
@@ -61,6 +62,9 @@ local action = P.frame(modal.footer, { size = U.fromOffset(80, 36) })
 bodyLayout.AbsoluteContentSize = V.new(300, 100)
 h.sched.advance(0.2)
 check("populated modal settles without a resident layout task", h.sched.pending() == 0)
+check("modal content has balanced vertical breathing room", bodyPadding.PaddingTop.Offset == theme.space.md
+	and bodyPadding.PaddingBottom.Offset == theme.space.md
+	and bodyPadding.PaddingLeft.Offset == theme.space.lg and bodyPadding.PaddingRight.Offset == theme.space.lg)
 
 local sizeWrites = 0
 local observeSize = modal.card:GetPropertyChangedSignal("Size"):Connect(function() sizeWrites = sizeWrites + 1 end)
@@ -89,7 +93,7 @@ check("feedback cannot exhaust one scheduler resume cycle", runs == beforeRuns +
 h.sched.advance(0.1)
 check("native-like layout feedback reaches a fixed size and stops", h.sched.pending() == 0 and runs <= beforeRuns + 3)
 check("the final body measurement is fitted", modal.card.Size.Y.Offset == modal.card:FindFirstChild("Header").Size.Y.Offset
-	+ modal.footer.Size.Y.Offset + 220 + theme.space.sm + theme.space.xxs)
+	+ modal.footer.Size.Y.Offset + 220 + theme.space.md * 2)
 feedback:Disconnect()
 
 beforeMeasures = measurements

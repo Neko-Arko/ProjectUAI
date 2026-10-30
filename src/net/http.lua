@@ -7,6 +7,7 @@
 -- than per call site.
 return function(env)
 	local util = env.require("runtime/util")
+	local config = env.require("runtime/config")
 	local caps = env.require("runtime/caps")
 	local clock = env.require("runtime/clock")
 	local guard = env.require("runtime/capture_guard")
@@ -15,6 +16,7 @@ return function(env)
 	local signal = env.require("runtime/signal")
 	local urls = env.require("net/url")
 	local headerMap = env.require("net/headers")
+	local tunnelRoute = env.require("net/tunnel_route")
 
 	local HISTORY_LIMIT = 60
 	local MAX_BODY, MAX_WORKERS, MAX_RELAY_WORKERS = 8 * 1024 * 1024, 8, 16
@@ -42,11 +44,19 @@ return function(env)
 		if not spec.aborted then return false end
 		local ok, value = pcall(spec.aborted); return not ok or value == true
 	end
+	local function accessProblem(spec)
+		-- Provider calls opt in at the boundary, including retries and discovery.
+		-- Recheck only before native dispatch; an accepted exchange keeps its result.
+		if spec.requiresAccess ~= true then return nil end
+		local problem = config.accessProblem()
+		return problem and ("vault_required: " .. problem) or nil
+	end
 	local function terminal(err)
 		local value = tostring(err or ""):lower()
 		return value == "aborted" or value:find("deadline", 1, true) ~= nil or value:find("timed out", 1, true) ~= nil
 			or value:find("timeout", 1, true) ~= nil or value:find("response_limit:", 1, true) ~= nil or value:find("malformed:", 1, true) ~= nil
 			or value:find("malformed_stream:", 1, true) ~= nil or value:find("capacity:", 1, true) ~= nil
+			or value:find("vault_required:", 1, true) ~= nil
 	end
 
 	-- A browser agent for the public web: search engines and CDNs answer 403 to
@@ -95,27 +105,14 @@ return function(env)
 	end
 
 	-- A gateway that answers 200 and then puts the failure in the body. Detected
-	-- structurally -- a decodable object carrying an `error`, or an SSE frame whose
-	-- type is "error" -- and never by substring, because a reply that happens to
-	-- discuss rate limits must not be mistaken for one.
+	-- structurally, as a whole decodable error object. Streamed errors belong to
+	-- the protocol adapter: an accepted stream may already contain partial output
+	-- or tool calls and must not replay merely because a later frame names quota.
 	local function errorPayload(body)
 		if type(body) ~= "string" or body == "" then return nil end
-		local function check(text)
-			local decoded = util.decode(text)
-			if type(decoded) ~= "table" then return nil end
-			if decoded.type == "error" then return decoded end
-			if decoded.error ~= nil then return decoded end
-			return nil
-		end
-		local direct = check(body)
-		if direct then return direct end
-		for line in body:gmatch("[^\r\n]+") do
-			local data = line:match("^data:%s*(.+)$")
-			if data and data ~= "[DONE]" then
-				local hit = check(data)
-				if hit then return hit end
-			end
-		end
+		local decoded = util.decode(body)
+		if type(decoded) ~= "table" then return nil end
+		if decoded.type == "error" or decoded.error ~= nil then return decoded end
 		return nil
 	end
 
@@ -250,7 +247,7 @@ return function(env)
 		}
 	end
 
-	local function send(url, method, headers, body, timeout, profile)
+	local function send(url, method, headers, body, timeout, profile, onDispatch)
 		local options = { Url = url, Method = method, Headers = headers }
 		if body and body ~= "" and method ~= "GET" and method ~= "HEAD" then
 			options.Body = body
@@ -267,6 +264,7 @@ return function(env)
 				if timeout and timeout > 0 then options.Timeout = math.max(1, math.ceil(timeout)) end
 			end
 			if profile and profile.omitEmptyHeaders and next(headers) == nil then options.Headers = nil end
+			if onDispatch then pcall(onDispatch) end
 			local ok, res = pcall(guard.run, request, options)
 			if not ok then return nil, tostring(res), "transport" end
 			if type(res) ~= "table" then return nil, "empty executor response", "response" end
@@ -274,6 +272,7 @@ return function(env)
 		end
 
 		if caps.http == "none" then return nil, caps.reason("http"), "terminal" end
+		if onDispatch then pcall(onDispatch) end
 		local ok, res = pcall(guard.run, function() return env.hs:RequestAsync(options) end)
 		if not ok then return nil, tostring(res), "transport" end
 		if type(res) ~= "table" then return nil, "empty HttpService response", "response" end
@@ -284,8 +283,25 @@ return function(env)
 	-- a fixed failure kind. Only a completed native throw is a transport failure;
 	-- received/invalid responses and terminal waits cannot authorize alias fallback.
 	function M.request(spec)
+		local access = accessProblem(spec)
+		if access then return nil, access, 0, "terminal" end
 		local url = tostring(spec.url or "")
 		if url == "" then return nil, "no url", nil, "terminal" end
+		if tunnelRoute.reserved(url) then
+			local problem = tunnelRoute.problem(url, spec.method, spec.headers)
+			local bridge = env.require("net/bridge")
+			local status = bridge.clineStatus()
+			local endpoint = env.require("net/transport").endpoint("cowork")
+			if not problem and (not bridge.online or not endpoint or not status.enabled or not status.available) then
+				problem = status.message or "Start UAI Bridge, enable Cline in Tunnels and sign in before using this provider."
+			end
+			if problem then
+				return { status = 599, ok = false, body = util.encode({ error = { message = problem } }),
+					headers = { ["x-should-retry"] = "false" }, via = "web", terminal = true }, nil, 0, "terminal"
+			end
+			spec = util.copy(spec)
+			spec.relay, spec.relayEndpoint = true, endpoint
+		end
 		-- Local discovery can select an executor function and option shape explicitly.
 		-- Keep it local to this call; a delayed worker must use the same selection.
 		local profile = spec.executorProfile
@@ -329,8 +345,10 @@ return function(env)
 			-- subsequent exchanges for that relay job behind the unfinished call.
 			-- Otherwise an unlimited job can fill every slot with abandoned polls.
 			while ((owner and owner.pending) or (lane and nativeLanes[lane]) or (spec.waitForSlot and workers >= MAX_WORKERS))
-				and clock.ms() < deadline and not aborted(spec) do clock.wait(0.05) end
+				and clock.ms() < deadline and not aborted(spec) and not accessProblem(spec) do clock.wait(0.05) end
 			if aborted(spec) then return nil, "aborted", clock.since(started), "terminal" end
+			access = accessProblem(spec)
+			if access then return nil, access, clock.since(started), "terminal" end
 			if owner and owner.pending then
 				return nil, "capacity: previous native relay exchange is still running; this call was not dispatched", clock.since(started), "terminal"
 			end
@@ -353,6 +371,8 @@ return function(env)
 				-- Scheduling can outlive the caller. Recheck before dispatch while
 				-- leaving the reserved slot owned until this worker actually settles.
 				if not pending.accepting or aborted(spec) then return nil, "aborted", "terminal" end
+				local access = accessProblem(spec)
+				if access then return nil, access, "terminal" end
 				local remaining = deadline - clock.ms()
 				if remaining <= 0 then return nil, "deadline: request budget expired before dispatch", "terminal" end
 				if spec.relay then
@@ -364,7 +384,7 @@ return function(env)
 					relaySpec.aborted = function() return not pending.accepting or aborted(spec) end
 					return env.require("net/relay").request(relaySpec, headers, M.request)
 				end
-				return send(url, method, headers, spec.body, remaining / 1000, profile)
+				return send(url, method, headers, spec.body, remaining / 1000, profile, spec.onDispatch)
 			end)
 			if relayed then relayWorkers = math.max(0, relayWorkers - 1) else workers = math.max(0, workers - 1) end
 			if owner and owner.pending == pending then owner.pending = nil end
@@ -470,6 +490,9 @@ return function(env)
 	-- its way through a backoff on a key that rotation can replace at once.
 	function M.shouldRetry(res, err, info)
 		if (res and res.terminal) or terminal(err) then return false end
+		if res and tostring(M.header(res, "x-should-retry")):lower() == "false" then
+			return false, "provider requested no retry"
+		end
 		local elapsed = tonumber(info and info.elapsed) or 0
 		local status = res and res.status or 0
 		local body = tostring(res and res.body or "")
@@ -539,6 +562,8 @@ return function(env)
 		local lastRes, lastErr
 		for attempt = 1, attempts do
 			if aborted(spec) then return nil, "aborted" end
+			local access = accessProblem(spec)
+			if access then return nil, access end
 			local copy = util.copy(spec)
 			copy.attempt, copy.deadlineMs = attempt, deadline
 			copy.relayUnlimited = relayUnlimited
@@ -581,6 +606,8 @@ return function(env)
 			while slept < wait do
 				if clock.ms() >= deadline then return nil, "deadline: request budget expired during backoff" end
 				if aborted(spec) then return nil, "aborted" end
+				local access = accessProblem(spec)
+				if access then return nil, access end
 				local step = math.min(0.25, wait - slept)
 				clock.wait(step)
 				slept = slept + step

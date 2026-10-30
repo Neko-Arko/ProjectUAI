@@ -2,6 +2,7 @@
 -- This is not the OpenAI Responses or Realtime WebSocket API.
 return function(env)
 	local util = env.require("runtime/util")
+	local config = env.require("runtime/config")
 	local caps = env.require("runtime/caps")
 	local clock = env.require("runtime/clock")
 	local sse = env.require("net/sse")
@@ -11,6 +12,8 @@ return function(env)
 	local workers, connections, alive, active = 0, 0, true, {}
 	function M.stream(spec)
 		if not alive then return nil, "aborted" end
+		local access = config.accessProblem()
+		if access then return nil, "vault_required: " .. access end
 		if not caps.fn.websocket then return nil, caps.reason("ws") end
 		local parsedUrl = urls.parse(spec.url)
 		if not parsedUrl or (parsedUrl.scheme ~= "ws" and parsedUrl.scheme ~= "wss") then
@@ -89,6 +92,8 @@ return function(env)
 		active[close] = true; workers, connections = workers + 1, connections + 1
 		clock.spawn(function()
 			local ok = pcall(function()
+				local access = config.accessProblem()
+				if access then fail("vault_required: " .. access); return end
 				local envelope = util.encode({ path = spec.path or "/v1/chat/completions", headers = spec.headers or {}, body = spec.body })
 				local connected = caps.fn.websocket(spec.url)
 				if not accepting or aborted() or clock.ms() >= deadline then
@@ -96,6 +101,8 @@ return function(env)
 					return
 				end
 				socket = connected
+				access = config.accessProblem()
+				if access then fail("vault_required: " .. access); return end
 				if not socket or not socket.OnMessage or not socket.OnClose then error("socket does not expose events", 0) end
 				messageConn = socket.OnMessage:Connect(function(message)
 					if not pcall(receive, message) then fail("malformed_stream: socket frame processing failed") end
@@ -115,6 +122,7 @@ return function(env)
 					-- Once Send is entered, even an exception may follow delivery. No
 					-- automatic HTTP fallback is safe from this point onward.
 					dispatched = true
+					if spec.onDispatch then pcall(spec.onDispatch) end
 					socket:Send(envelope)
 				end
 			end)

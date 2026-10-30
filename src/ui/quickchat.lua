@@ -227,6 +227,8 @@ return function(env)
 	end
 
 	function M.show()
+		local vault = config.vaultStatus()
+		if vault.required == true and vault.ready ~= true then return end
 		if not M.mounted or M.visible then return end
 		M.visible = true
 		visibilityGeneration = visibilityGeneration + 1
@@ -275,6 +277,8 @@ return function(env)
 	end
 
 	function M.submit(text)
+		local vault = config.vaultStatus()
+		if vault.required == true and vault.ready ~= true then M.hide(); return end
 		if not M.mounted or not M.visible then return end
 		local message = util.trim(tostring(text or ""))
 		if message == "" then return end

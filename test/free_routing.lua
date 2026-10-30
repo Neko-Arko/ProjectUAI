@@ -8,6 +8,8 @@ local request = { messages = { { role = "user", content = "Private user task" } 
 
 local function fixture(options)
 	local f = F.new(); options = options or {}
+	f.now = 1767268800000 -- 20:00 UTC+8, when included access opens.
+	f.env.require("runtime/clock").ms = function() return f.now + f.h.sched.now * 1000 end
 	local registry = f.env.require("provider/registry")
 	local record = registry.blank("hcnsec"); registry.save(record); registry.setActive(record.id)
 	f.record, f.registry, f.posts = record, registry, {}
@@ -39,6 +41,60 @@ local function fixture(options)
 	function f.warm(seconds) f.route.refresh(record); f.h.sched.advance(seconds or 2) end
 	return f
 end
+
+case("closed hours skip probes and opening restores measurements", function()
+	local f = fixture()
+	f.now = 1767225600000 + 8 * 3600000 -- 16:00 UTC+8, between the midday close and the evening opening.
+	f.warm()
+	local status = f.route.status(f.record)
+	check("closed included access retains setup but reports its schedule", status.supported and not status.available
+		and status.availability:find("20:00-12:00 UTC+8", 1, true))
+	check("closed refresh and selection send no probes", f.route.select(f.record, request) == f.record and f.h.http.requestCount == 0)
+	f.now = 1767268800000
+	f.warm()
+	local selected = f.route.select(f.record, request)
+	check("the next open-hours action resumes measurement", selected.model == FAST and f.route.status(f.record).available)
+	f.now = 1767326400000 -- 12:00 UTC+8 the next day, when the window closes.
+	check("closing hides stale measurements without cancelling accepted ownership", not f.route.status(f.record).ready and f.route.current(selected))
+	f.healthy(); f.close()
+end)
+
+case("probes accepted near closing never issue an off-hours replay", function()
+	local f = fixture({ delay = { [FAST] = 3, [OTHER] = 3, auto = 3 } })
+	f.now = 1767326400000 - 1000
+	f.warm(8)
+	check("closing stops follow-up probe work and publication", #f.posts == 2 and not f.route.status(f.record).ready)
+	f.healthy(); f.close()
+end)
+
+case("locking blocks new free probes while accepted routed snapshots can finish", function()
+	local f = fixture(); f.warm()
+	local selected = f.route.select(f.record, request)
+	check("the fixture has an accepted routed snapshot", selected ~= f.record and selected.model == FAST)
+	local config = f.env.require("runtime/config")
+	config.vaultStatus = function() return { enabled = true, locked = true, busy = false } end
+	f.record.apiKey = ""
+	local count = f.h.http.requestCount
+	f.route.refresh(f.record); f.h.sched.advance(0.2)
+	check("lock stops new selection and background traffic", not f.route.eligible(f.record)
+		and f.route.select(f.record, request) == f.record and f.h.http.requestCount == count)
+	check("lock retains the already accepted snapshot's ownership", f.route.current(selected) and selected.apiKey ~= "")
+	f.healthy(); f.close()
+end)
+
+case("the model picker explains closed free hours without probing", function()
+	local f = F.ui(390, 760); local registry = f.env.require("provider/registry")
+	-- 16:00 UTC+8: closed, four hours before the evening opening.
+	f.now = 1767225600000 + 8 * 3600000
+	f.env.require("runtime/clock").ms = function() return f.now + f.h.sched.now * 1000 end
+	local record = registry.blank("hcnsec"); registry.save(record); registry.setActive(record.id)
+	local picker = f.env.require("ui/panels/modelpicker").open(); f.h.settle(0.2)
+	local text = f.h.textOf()
+	check("closed Auto names the wait until opening", text:find("Auto (outside free hours)", 1, true)
+		and text:find("Free | opens in ", 1, true))
+	check("opening the picker outside free hours dispatches no probes", f.h.http.requestCount == 0)
+	picker.close(); f.healthy(); f.close()
+end)
 
 case("cold selection is immediate; fresh verified measurements select the fastest", function()
 	local f = fixture()
@@ -260,22 +316,29 @@ case("relay probes retain their ten-second synthetic deadline and connection sco
 	f.healthy(); f.close()
 end)
 
-case("free model choices retain green rounded borders through focus and selection", function()
+case("free model choices retain subtle rounded outlines and a distinct focus state", function()
 	local f = F.ui(900, 800); local registry = f.env.require("provider/registry")
+	local theme, primitives = f.env.require("ui/theme"), f.env.require("ui/primitives")
 	local record = registry.blank("zen"); record.apiKey = "fixture"; record.models = { "big-pickle", "cat-jam-free", "paid-model" }; record.model = "paid-model"
 	registry.save(record); registry.setActive(record.id)
 	local picker = f.env.require("ui/panels/modelpicker").open(); f.h.settle(0.2)
 	local free = assert(f.h.byName("Model_big-pickle")); local paid = assert(f.h.byName("Model_paid-model"))
 	local border = free:FindFirstChildOfClass("UIStroke")
-	check("free choice uses visible two-pixel green outline", border.Thickness == 2 and border.Transparency == 0 and border.Color == f.env.require("ui/theme").color.success)
+	check("free choice uses a visible subtle one-pixel outline", border.Thickness == 1 and border.Transparency == 0
+		and border.Color == primitives.freeModelOutline(theme.color.surface))
 	check("outline follows rounded row", free:FindFirstChildOfClass("UICorner").CornerRadius.Offset > 0)
 	check("paid choice has no free outline", paid:FindFirstChildOfClass("UIStroke").Transparency == 1)
 	free.SelectionGained:Fire(); f.h.click(free); f.h.settle(0.2)
-	check("focused selected free choice keeps green outline", border.Transparency == 0 and border.Color == f.env.require("ui/theme").color.success and record.model == "big-pickle")
+	check("focused selected free choice uses the focus accent", border.Transparency == 0 and border.Color == theme.color.accent and record.model == "big-pickle")
+	free.SelectionLost:Fire(); f.h.settle(0.2)
+	check("leaving focus restores its free outline without losing selection", border.Color == primitives.freeModelOutline(theme.color.surface)
+		and border.Transparency == 0 and record.model == "big-pickle")
 	picker.close()
 	f.env.require("ui/panels/providers").editor(record); f.h.click(assert(f.h.byName("ActiveModel"))); f.h.settle(0.2)
 	local option = assert(f.h.byName("Option_model:big-pickle"))
-	check("provider editor model menu also marks free choices", option:GetAttribute("UAIFreeModel") and option:FindFirstChildOfClass("UIStroke").Thickness == 2)
+	check("provider editor model menu also marks free choices", option:GetAttribute("UAIFreeModel")
+		and option:FindFirstChildOfClass("UIStroke").Thickness == 1
+		and option:FindFirstChildOfClass("UIStroke").Color == primitives.freeModelOutline(theme.color.surfaceOverlay))
 	f.healthy(); f.close()
 end)
 

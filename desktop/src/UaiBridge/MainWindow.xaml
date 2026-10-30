@@ -1,0 +1,581 @@
+<Window x:Class="ProjectUai.Bridge.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="UAI Bridge" Width="1120" Height="820" MinWidth="620" MinHeight="500"
+        WindowStartupLocation="CenterScreen" Background="{DynamicResource CanvasBrush}"
+        FontFamily="Segoe UI" Foreground="{DynamicResource InkBrush}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        WindowStyle="None"
+        AutomationProperties.Name="UAI Bridge">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="46" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"
+                      UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Theme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid Background="{DynamicResource CanvasBrush}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Grid.ColumnSpan="2" Background="{StaticResource CanvasBrush}"
+                BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Padding" Value="36,3,10,3" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsCompact}" Value="True">
+                            <Setter Property="Padding" Value="28,3,10,3" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="PROJECT UAI / LOCAL WORKSPACE" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"
+                           AutomationProperties.Name="Workspace label" />
+                <Border Grid.Column="1" Background="{StaticResource SoftGreenBrush}" CornerRadius="12" Padding="10,5"
+                         Margin="0,0,18,0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="6" Height="6" Margin="0,0,7,0" VerticalAlignment="Center">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="#89937D" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                            <Setter Property="Fill" Value="{StaticResource ForestBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                            <Setter Property="Fill" Value="#99822D" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                        <TextBlock Text="{Binding ActivityLabel}" FontSize="11" Foreground="{StaticResource ForestBrush}"
+                                   AutomationProperties.Name="Bridge activity" />
+                    </StackPanel>
+                </Border>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Stretch"
+                            WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Button x:Name="MinimizeButton" Content="&#xE921;" Style="{StaticResource WindowButton}"
+                            AutomationProperties.Name="Minimize window" />
+                    <Button x:Name="MaximizeButton" Content="&#xE922;" Style="{StaticResource WindowButton}"
+                            AutomationProperties.Name="Maximize or restore window" />
+                    <Button x:Name="CloseButton" Content="&#xE8BB;" Style="{StaticResource WindowCloseButton}"
+                            AutomationProperties.Name="Close window" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border x:Name="Sidebar" Grid.Row="1" Width="208" Background="{StaticResource DarkBrush}" Padding="22,30,22,20">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsCompact}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+            <Grid MinHeight="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel Margin="9,0,0,43">
+                    <TextBlock Text="Project Ptolemy" Foreground="{StaticResource AccentBrush}" FontSize="13"
+                               FontWeight="SemiBold" Margin="1,0,0,8" AutomationProperties.Name="Project UAI brand mark" />
+                    <TextBlock Text="UAI Bridge" Foreground="{StaticResource DarkTextBrush}" FontSize="23" FontWeight="SemiBold" />
+                    <TextBlock Text="A workspace, connected." Foreground="{StaticResource DarkMutedBrush}" FontSize="11" Margin="0,7,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Row="1" KeyboardNavigation.TabNavigation="Continue">
+                    <Button x:Name="WorkspaceNavigation" Content="Workspace" Style="{StaticResource WorkspaceNav}"
+                            Command="{Binding NavigateCommand}" CommandParameter="0" AutomationProperties.Name="Workspace" />
+                    <Button x:Name="ConnectionsNavigation" Content="Connections" Style="{StaticResource ConnectionsNav}"
+                            Command="{Binding NavigateCommand}" CommandParameter="1" AutomationProperties.Name="Connections" />
+                    <Button x:Name="UpdatesNavigation" Content="Updates" Style="{StaticResource UpdatesNav}"
+                            Command="{Binding NavigateCommand}" CommandParameter="2" AutomationProperties.Name="Updates" />
+                    <Button x:Name="SettingsNavigation" Content="Settings" Style="{StaticResource SettingsNav}"
+                            Command="{Binding NavigateCommand}" CommandParameter="3" AutomationProperties.Name="Settings" />
+                    <Button x:Name="TunnelsNavigation" Content="Tunnels" Style="{StaticResource TunnelsNav}"
+                            Command="{Binding NavigateCommand}" CommandParameter="4" AutomationProperties.Name="Tunnels" />
+                </StackPanel>
+                <StackPanel Grid.Row="3">
+                    <Border Height="1" Background="#3D483C" Margin="9,0,9,17" />
+                    <Button Content="Get help" Style="{StaticResource NavButton}" Command="{Binding HelpCommand}"
+                            FontSize="12" Padding="16,9" AutomationProperties.Name="Get help" />
+                    <Button Content="Project UAI" Style="{StaticResource NavButton}" Command="{Binding ProjectCommand}"
+                            FontSize="12" Padding="16,9" AutomationProperties.Name="Open Project UAI website" />
+                    <TextBlock Text="DESKTOP BRIDGE" Style="{StaticResource Eyebrow}"
+                               Foreground="{StaticResource DarkMutedBrush}" Margin="16,23,0,6" FontSize="9" />
+                    <TextBlock Text="{Binding Version}" Foreground="{StaticResource DarkTextBrush}" FontSize="12" Margin="16,0,0,0" />
+                </StackPanel>
+            </Grid>
+            </ScrollViewer>
+        </Border>
+
+        <Grid Grid.Column="1" Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Border x:Name="CompactNavigation" Grid.Row="0" Background="{StaticResource DarkBrush}" Padding="20,9">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsCompact}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <UniformGrid Rows="1">
+                    <Button Content="Workspace" Style="{StaticResource WorkspaceNav}" FontSize="12" Padding="8,10" Margin="2,0"
+                            HorizontalContentAlignment="Center" Command="{Binding NavigateCommand}" CommandParameter="0"
+                            AutomationProperties.Name="Workspace" />
+                    <Button Content="Connections" Style="{StaticResource ConnectionsNav}" FontSize="12" Padding="8,10" Margin="2,0"
+                            HorizontalContentAlignment="Center" Command="{Binding NavigateCommand}" CommandParameter="1"
+                            AutomationProperties.Name="Connections" />
+                    <Button Content="Updates" Style="{StaticResource UpdatesNav}" FontSize="12" Padding="8,10" Margin="2,0"
+                            HorizontalContentAlignment="Center" Command="{Binding NavigateCommand}" CommandParameter="2"
+                            AutomationProperties.Name="Updates" />
+                    <Button Content="Settings" Style="{StaticResource SettingsNav}" FontSize="12" Padding="8,10" Margin="2,0"
+                            HorizontalContentAlignment="Center" Command="{Binding NavigateCommand}" CommandParameter="3"
+                            AutomationProperties.Name="Settings" />
+                    <Button Content="Tunnels" Style="{StaticResource TunnelsNav}" FontSize="12" Padding="8,10" Margin="2,0"
+                            HorizontalContentAlignment="Center" Command="{Binding NavigateCommand}" CommandParameter="4"
+                            AutomationProperties.Name="Tunnels" />
+                </UniformGrid>
+            </Border>
+
+            <Border x:Name="NoticeBanner" Grid.Row="1" Background="#EAF0DA" BorderBrush="#D2DDC0" BorderThickness="0,0,0,1">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasNotice}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid Margin="28,10,22,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Notice}" FontSize="12" LineHeight="19" VerticalAlignment="Center"
+                               AutomationProperties.Name="Bridge notification" AutomationProperties.LiveSetting="Polite" />
+                    <Button Grid.Column="1" Content="Dismiss" Style="{StaticResource TextButton}" Margin="16,0,0,0"
+                            Command="{Binding DismissNoticeCommand}" AutomationProperties.Name="Dismiss notification" />
+                </Grid>
+            </Border>
+
+            <ScrollViewer x:Name="PageScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          PanningMode="VerticalOnly" Focusable="False" CanContentScroll="False"
+                          AutomationProperties.Name="Bridge page content">
+                <Grid>
+                    <Grid.Style>
+                        <Style TargetType="Grid">
+                            <Setter Property="Margin" Value="36,30,36,18" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsCompact}" Value="True">
+                                    <Setter Property="Margin" Value="28,25,28,15" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Grid.Style>
+
+                    <StackPanel x:Name="WorkspacePage">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedPage}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <TextBlock Text="YOUR WORKSPACE" Style="{StaticResource Eyebrow}" />
+                        <TextBlock Text="Room to build." Style="{StaticResource PageTitle}" />
+                        <TextBlock Text="Bring your browser, coding agent, and Roblox into one workspace."
+                                   Style="{StaticResource PageDescription}" />
+
+                        <Border x:Name="WorkspaceStatusCard" Background="{StaticResource DarkBrush}" CornerRadius="16" Padding="27,25" Margin="0,0,0,22">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,18">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="BRIDGE STATUS" Style="{StaticResource Eyebrow}" Foreground="{StaticResource DarkMutedBrush}" Margin="0" />
+                                    <Border Grid.Column="1" Background="#3B4B32" CornerRadius="10" Padding="9,4" Margin="12,-4,0,0">
+                                        <TextBlock FontSize="10" Foreground="{StaticResource AccentBrush}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="LOCAL" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                                            <Setter Property="Text" Value="CONNECTED" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
+                                </Grid>
+                                <TextBlock x:Name="BridgeState" Text="{Binding State}" Foreground="{StaticResource DarkTextBrush}"
+                                           FontSize="25" FontWeight="SemiBold" Margin="0,0,0,10"
+                                           AutomationProperties.Name="Bridge connection status" AutomationProperties.LiveSetting="Polite" />
+                                <TextBlock x:Name="BridgeDetail" Text="{Binding Detail}" Foreground="{StaticResource DarkMutedBrush}"
+                                           FontSize="13" LineHeight="21" Margin="0,0,0,24" AutomationProperties.Name="Connection instructions" />
+                                <WrapPanel>
+                                    <Button x:Name="StartButton" Content="{Binding StartLabel}" Style="{StaticResource HeroButton}"
+                                            Command="{Binding StartCommand}" IsEnabled="{Binding CanStart}" MinWidth="146" Margin="0,0,10,0"
+                                            AutomationProperties.Name="Start bridge or open workspace" />
+                                    <Button x:Name="StopButton" Content="Stop bridge" Style="{StaticResource HeroSecondaryButton}"
+                                            Command="{Binding StopCommand}" IsEnabled="{Binding CanStop}" MinWidth="113"
+                                            AutomationProperties.Name="Stop bridge" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Border Style="{StaticResource LeftCard}">
+                                <StackPanel>
+                                    <TextBlock Text="READY WHEN YOU ARE" Style="{StaticResource Eyebrow}" />
+                                    <TextBlock Text="Connect Roblox" Style="{StaticResource CardTitle}" />
+                                    <TextBlock Text="Run the client script in Roblox to bring your game into the workspace." Style="{StaticResource BodyText}" Margin="0,0,0,19" />
+                                    <Button x:Name="CopyClientButton" Content="Copy client script" Style="{StaticResource ActionButton}"
+                                            Command="{Binding CopyClientCommand}" HorizontalAlignment="Left"
+                                            AutomationProperties.Name="Copy Roblox client script" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource RightCard}">
+                                <StackPanel>
+                                    <TextBlock Text="ON YOUR COMPUTER" Style="{StaticResource Eyebrow}" />
+                                    <TextBlock Text="Runtime" Style="{StaticResource CardTitle}" />
+                                    <TextBlock x:Name="NodeState" Text="{Binding NodeState}" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,7"
+                                               AutomationProperties.Name="Node runtime status" />
+                                    <TextBlock Text="{Binding NodeDetail}" Style="{StaticResource BodyText}" Margin="0,0,0,19" />
+                                    <WrapPanel>
+                                        <Button x:Name="InstallNodeButton" Content="{Binding InstallLabel}" Style="{StaticResource PrimaryButton}"
+                                                Command="{Binding InstallNodeCommand}" IsEnabled="{Binding CanInstall}" Margin="0,0,8,8"
+                                                AutomationProperties.Name="Install Node runtime" />
+                                        <Button x:Name="RecheckNodeButton" Content="Check again" Style="{StaticResource ActionButton}"
+                                                Command="{Binding RecheckNodeCommand}" IsEnabled="{Binding CanRecheck}" Margin="0,0,0,8"
+                                                AutomationProperties.Name="Check Node runtime again" />
+                                    </WrapPanel>
+                                    <Button Content="Manual setup" Style="{StaticResource TextButton}" Command="{Binding NodeWebsiteCommand}"
+                                            HorizontalAlignment="Left" Padding="0,5" AutomationProperties.Name="Open manual Node setup" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                        <Border BorderThickness="0,1,0,0" BorderBrush="{StaticResource LineBrush}" Padding="0,15,0,0" Margin="0,3,0,0">
+                            <WrapPanel>
+                                <TextBlock Text="Make the workspace yours." Style="{StaticResource BodyText}" VerticalAlignment="Center" Margin="0,0,13,0" />
+                                <Button Content="Manage connections" Style="{StaticResource TextButton}" Command="{Binding NavigateCommand}" CommandParameter="1"
+                                        AutomationProperties.Name="Manage connections" />
+                            </WrapPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel x:Name="ConnectionsPage">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedPage}" Value="1">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <TextBlock Text="YOUR TOOLS, TOGETHER" Style="{StaticResource Eyebrow}" />
+                        <TextBlock Text="Connections." Style="{StaticResource PageTitle}" />
+                        <TextBlock Text="Choose how your coding tools reach the workspace." Style="{StaticResource PageDescription}" />
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,13">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,22,0">
+                                        <TextBlock Text="MCP access" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="Connect a compatible coding agent through MCP." Style="{StaticResource BodyText}" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="McpToggle" Grid.Column="1" Style="{StaticResource Switch}"
+                                              IsChecked="{Binding McpEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding CanConfigureConnections}" AutomationProperties.Name="Enable MCP access" />
+                                </Grid>
+                                <Border Background="{StaticResource SoftGreenBrush}" CornerRadius="7" Padding="12,9" Margin="0,4,0,14">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding McpStatus}" Foreground="{StaticResource ForestBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                        <TextBlock Text="{Binding McpDetail}" Style="{StaticResource BodyText}" />
+                                    </StackPanel>
+                                </Border>
+                                <Button x:Name="McpSetupButton" Content="MCP setup" Style="{StaticResource ActionButton}" Command="{Binding McpSetupCommand}"
+                                        HorizontalAlignment="Left" AutomationProperties.Name="Open MCP setup" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="{Binding SettingsNote}" Style="{StaticResource BodyText}" Margin="2,2,2,0" AutomationProperties.Name="Connection settings note" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="TunnelsPage">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedPage}" Value="4">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <TextBlock Text="MORE WAYS TO CONNECT" Style="{StaticResource Eyebrow}" />
+                        <TextBlock Text="Tunnels." Style="{StaticResource PageTitle}" />
+                        <TextBlock Text="Choose how free models reach UAI. Availability follows each provider's allowance." Style="{StaticResource PageDescription}" />
+                        <TextBlock Text="{Binding InstallationDetail}" Style="{StaticResource BodyText}" Margin="2,0,2,12" />
+                        <Button x:Name="RefreshInstallationsButton" Content="{Binding RefreshInstallationsLabel}"
+                                Command="{Binding RefreshInstallationsCommand}" Style="{StaticResource ActionButton}"
+                                HorizontalAlignment="Left" Margin="0,0,0,20" AutomationProperties.Name="Refresh installed apps" />
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,13">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,22,0">
+                                        <TextBlock Text="Cline tunnel" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="Use Cline's free models through its installed CLI." Style="{StaticResource BodyText}" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="ClineToggle" Grid.Column="1" Style="{StaticResource Switch}"
+                                              IsChecked="{Binding ClineEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding CanConfigureConnections}" AutomationProperties.Name="Enable Cline tunnel" />
+                                </Grid>
+                                <Border Background="{StaticResource SoftGreenBrush}" CornerRadius="7" Padding="12,9" Margin="0,4,0,14">
+                                    <StackPanel>
+                                        <TextBlock x:Name="ClineInstallationStatus" Text="{Binding ClineInstallation}" Foreground="{StaticResource ForestBrush}" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,5" />
+                                        <TextBlock Text="{Binding ClineStatus, StringFormat='Connection: {0}'}" Foreground="{StaticResource ForestBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                        <TextBlock Text="{Binding ClineDetail}" Style="{StaticResource BodyText}" />
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock Text="Install Cline CLI, then run this command in PowerShell to sign in. Restart the bridge after signing in." Style="{StaticResource BodyText}" />
+                                <TextBlock Text="{Binding ClineSignInText}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" Margin="0,12,0,16" />
+                                <WrapPanel>
+                                    <Button x:Name="ClineSetupButton" Content="Cline setup" Style="{StaticResource ActionButton}" Command="{Binding ClineWebsiteCommand}"
+                                            Margin="0,0,12,6" AutomationProperties.Name="Open Cline setup guide" />
+                                    <Button x:Name="ClineSignInButton" Content="Copy sign-in command" Style="{StaticResource ActionButton}" Command="{Binding CopyClineSignInCommand}"
+                                            Margin="0,0,0,6" AutomationProperties.Name="Copy Cline sign-in command" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,13">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,22,0">
+                                        <TextBlock Text="OpenCode tunnel" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="Give OpenCode a direct connection to this workspace." Style="{StaticResource BodyText}" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="OpenCodeToggle" Grid.Column="1" Style="{StaticResource Switch}"
+                                              IsChecked="{Binding OpenCodeEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding CanConfigureConnections}" AutomationProperties.Name="Enable OpenCode tunnel" />
+                                </Grid>
+                                <Border Background="{StaticResource SoftGreenBrush}" CornerRadius="7" Padding="12,9" Margin="0,4,0,14">
+                                    <StackPanel>
+                                        <TextBlock x:Name="OpenCodeInstallationStatus" Text="{Binding OpenCodeInstallation}" Foreground="{StaticResource ForestBrush}" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,5" />
+                                        <TextBlock Text="{Binding OpenCodeStatus, StringFormat='Connection: {0}'}" Foreground="{StaticResource ForestBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                        <TextBlock Text="{Binding OpenCodeDetail}" Style="{StaticResource BodyText}" />
+                                    </StackPanel>
+                                </Border>
+                                <Button Content="Install OpenCode" Style="{StaticResource ActionButton}" Command="{Binding OpenCodeWebsiteCommand}"
+                                        HorizontalAlignment="Left" AutomationProperties.Name="Open OpenCode installation website" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,13">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,22,0">
+                                        <TextBlock Text="Kilo tunnel" Style="{StaticResource CardTitle}" />
+                                        <TextBlock Text="Keep Kilo free requests moving after an address limit." Style="{StaticResource BodyText}" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="KiloToggle" Grid.Column="1" Style="{StaticResource Switch}"
+                                              IsChecked="{Binding KiloEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding CanConfigureConnections}" AutomationProperties.Name="Enable Kilo tunnel" />
+                                </Grid>
+                                <TextBlock Text="{Binding KiloStatus}" Foreground="{StaticResource ForestBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                <TextBlock Text="{Binding KiloDetail}" Style="{StaticResource BodyText}" />
+                                <TextBlock Text="The first quota recovery downloads a verified 22 MB helper. Provider keys and Windows proxy settings stay unchanged." Style="{StaticResource BodyText}" Margin="0,8,0,0" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="{Binding SettingsNote}" Style="{StaticResource BodyText}" Margin="2,2,2,0" AutomationProperties.Name="Tunnel settings note" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="UpdatesPage">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedPage}" Value="2">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <TextBlock Text="KEEP MOVING FORWARD" Style="{StaticResource Eyebrow}" />
+                        <TextBlock Text="Stay up to date." Style="{StaticResource PageTitle}" />
+                        <TextBlock Text="Keep the desktop app and bridge ready for your next session." Style="{StaticResource PageDescription}" />
+                        <Border x:Name="AppUpdateCard" Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="DESKTOP APP" Style="{StaticResource Eyebrow}" />
+                                <TextBlock x:Name="UpdateStatus" Text="{Binding UpdateStatus}" Style="{StaticResource CardTitle}"
+                                           AutomationProperties.Name="Desktop update status" AutomationProperties.LiveSetting="Polite" />
+                                <TextBlock Text="{Binding AppUpdateDetail}" Style="{StaticResource BodyText}" Margin="0,0,0,18" />
+                                <Border x:Name="ReadyUpdateBanner" Background="{StaticResource SoftGreenBrush}" CornerRadius="8" Padding="14,12" Margin="0,0,0,18">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsUpdateReady}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <StackPanel>
+                                        <TextBlock Text="Ready for a fresh start" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource ForestBrush}" Margin="0,0,0,4" />
+                                        <TextBlock Text="Restart to finish installing the downloaded update." Style="{StaticResource BodyText}" />
+                                    </StackPanel>
+                                </Border>
+                                <WrapPanel Margin="0,0,0,2">
+                                    <Button x:Name="UpdateButton" Content="{Binding UpdateActionLabel}" Style="{StaticResource PrimaryButton}"
+                                            Command="{Binding UpdateCommand}" IsEnabled="{Binding CanUpdate}" Margin="0,0,15,8"
+                                            AutomationProperties.Name="Check, download, or install desktop update" />
+                                    <StackPanel VerticalAlignment="Center" Margin="0,0,0,8">
+                                        <TextBlock Text="{Binding Version, StringFormat=Installed: {0}}" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                                        <TextBlock Text="{Binding AvailableVersion}" FontSize="11" Foreground="{StaticResource MutedBrush}" Margin="0,3,0,0" />
+                                    </StackPanel>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="BRIDGE WORKSPACE" Style="{StaticResource Eyebrow}" />
+                                <TextBlock Text="Bridge updates" Style="{StaticResource CardTitle}" />
+                                <TextBlock Text="{Binding BridgeUpdateDetail}" Style="{StaticResource BodyText}" Margin="0,0,0,16" />
+                                <TextBlock Text="{Binding BridgeVersionLine}" Style="{StaticResource BodyText}" Margin="0,0,0,16"
+                                           AutomationProperties.Name="Bridge and web UI version" />
+                                <Button x:Name="BridgeUpdateButton" Content="{Binding CheckBridgeLabel}" Style="{StaticResource ActionButton}"
+                                        Command="{Binding CheckBridgeCommand}" HorizontalAlignment="Left"
+                                        AutomationProperties.Name="Check for bridge updates" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="Manage automatic downloads in Settings." Style="{StaticResource BodyText}" Margin="2,2,0,6" />
+                        <Button Content="Update settings" Style="{StaticResource TextButton}" Command="{Binding NavigateCommand}" CommandParameter="3"
+                                HorizontalAlignment="Left" Padding="0,8" AutomationProperties.Name="Open automatic update settings" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="SettingsPage">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedPage}" Value="3">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <TextBlock Text="A LITTLE MORE PERSONAL" Style="{StaticResource Eyebrow}" />
+                        <TextBlock Text="Your way to work." Style="{StaticResource PageTitle}" />
+                        <TextBlock Text="Set up the small things that make every session easier." Style="{StaticResource PageDescription}" />
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Workspace behavior" Style="{StaticResource CardTitle}" Margin="0,0,0,22" />
+                                <Grid Margin="0,0,0,19">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,24,0">
+                                        <TextBlock Text="Open browser on start" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,5" />
+                                        <TextBlock Text="Go straight to the workspace when the bridge starts." Style="{StaticResource BodyText}" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="OpenBrowserToggle" Grid.Column="1" Style="{StaticResource Switch}"
+                                              IsChecked="{Binding OpenBrowserOnStart, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding CanConfigureSettings}" AutomationProperties.Name="Open browser when bridge starts" />
+                                </Grid>
+                                <Border Height="1" Background="{StaticResource LineBrush}" Margin="0,0,0,19" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,24,0">
+                                        <TextBlock Text="Start bridge on launch" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,5" />
+                                        <TextBlock Text="Start your bridge whenever you open this app." Style="{StaticResource BodyText}" />
+                                    </StackPanel>
+                                    <CheckBox x:Name="StartOnLaunchToggle" Grid.Column="1" Style="{StaticResource Switch}"
+                                              IsChecked="{Binding StartOnLaunch, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding CanConfigureSettings}" AutomationProperties.Name="Start bridge when app opens" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,24,0">
+                                    <TextBlock Text="Automatic app updates" Style="{StaticResource CardTitle}" />
+                                    <TextBlock Text="Download new desktop versions in the background. You choose when to restart." Style="{StaticResource BodyText}" />
+                                </StackPanel>
+                                <CheckBox x:Name="AutomaticUpdatesToggle" Grid.Column="1" Style="{StaticResource Switch}"
+                                          IsChecked="{Binding AutomaticAppUpdates, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          IsEnabled="{Binding CanConfigureSettings}" AutomationProperties.Name="Automatically download desktop updates" />
+                            </Grid>
+                        </Border>
+                        <Border BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="0,18,0,0" Margin="0,4,0,0">
+                            <StackPanel>
+                                <TextBlock Text="UAI Bridge" FontWeight="SemiBold" FontSize="14" />
+                                <TextBlock Text="{Binding Version}" Style="{StaticResource BodyText}" Margin="0,4,0,9" />
+                                <WrapPanel>
+                                    <Button Content="Project UAI" Style="{StaticResource TextButton}" Command="{Binding ProjectCommand}"
+                                            Padding="0,8" Margin="0,0,22,0" AutomationProperties.Name="Open Project UAI website" />
+                                    <Button Content="Get help" Style="{StaticResource TextButton}" Command="{Binding HelpCommand}"
+                                            Padding="0,8" AutomationProperties.Name="Get help" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </ScrollViewer>
+
+            <Border Grid.Row="3" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="28,11">
+                <TextBlock Text="Runs on your computer. Close the app to disconnect." Foreground="{StaticResource MutedBrush}" FontSize="10" />
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

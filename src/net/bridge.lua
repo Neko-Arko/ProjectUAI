@@ -27,7 +27,20 @@ return function(env)
 	local clientId = env.services.HttpService:GenerateGUID(false)
 	local alive, generation = false, 0
 	local opencode, nextHello, bridgeInstance = nil, 0, nil
+	local kiloStatus = env.require("net/kilo_status")
+	local kilo
+	local cline
 	local opencodeModels = {}
+	local clineModelIds = {}
+	local clineStates = { disabled = true, missing = true, starting = true, ["auth-required"] = true, ready = true, failed = true }
+	local function readCline(value)
+		if type(value) ~= "table" or value.schema ~= 1 then return nil end
+		local state = clineStates[value.state] and value.state or "unavailable"
+		local message = type(value.message) == "string" and util.trim(value.message) or ""
+		return { enabled = value.enabled == true, available = value.enabled == true and value.available == true and state == "ready",
+			state = state, message = util.truncate(message ~= "" and message or "Check the Cline connection in the Windows app's Tunnels tab.", 400),
+			version = type(value.version) == "string" and util.truncate(value.version, 80) or nil }
+	end
 	local uploadFailed, pollFailed = false, false
 	local function syncRuntime()
 		local value = M.online and "web" or "game"
@@ -175,12 +188,51 @@ return function(env)
 		return M.opencodeStatus().available and opencodeModels[tostring(id)] == true
 	end
 
+	function M.clineStatus()
+		if not M.online then return { enabled = false, available = false, state = "disconnected",
+			message = "Start UAI Bridge and connect Cowork before using Cline. Android and direct executor requests cannot use this provider." } end
+		if not cline then return { enabled = false, available = false, state = "unavailable",
+			message = "Update UAI Bridge to use the Cline connection, then enable it in Tunnels." } end
+		return util.copy(cline)
+	end
+
+	function M.clineHasModel(id)
+		return M.clineStatus().available and clineModelIds[tostring(id)] == true
+	end
+
+	function M.clineModels(opts)
+		local access = config.accessProblem()
+		if access then return nil, access end
+		opts = opts or {}
+		local status, mine, instance = M.clineStatus(), generation, bridgeInstance
+		if not status.enabled then return nil, status.message end
+		-- Authentication can become ready during this explicit catalog refresh.
+		local res, err = call({ url = base() .. "/api/tunnels/cline/models", method = "GET",
+			requiresAccess = true, timeout = opts.timeout or 20, aborted = opts.aborted })
+		if mine ~= generation or instance ~= bridgeInstance or not M.online or not M.clineStatus().enabled then
+			return nil, "Cline connection changed; fetch models again."
+		end
+		if not res or not res.ok then return nil, err or "Could not read Cline's free models. Check its sign-in and status in Tunnels." end
+		local value = #res.body <= 2097152 and util.decode(res.body)
+		if type(value) ~= "table" or type(value.data) ~= "table" or value.error then
+			return nil, "Cline returned an invalid model list."
+		end
+		local known = {}
+		for _, row in ipairs(value.data) do
+			if type(row) == "table" and type(row.id) == "string" and #row.id > 0 and #row.id <= 160 then known[row.id] = true end
+		end
+		clineModelIds = known
+		return value
+	end
+
 	function M.opencodeModels(opts)
+		local access = config.accessProblem()
+		if access then return nil, access end
 		opts = opts or {}
 		local support = env.require("runtime/support")
 		if not M.opencodeStatus().available then return nil, support.error(support.opencode()) end
 		local res, err = call({ url = base() .. "/api/opencode/models", method = "GET",
-			timeout = opts.timeout or 10, aborted = opts.aborted })
+			requiresAccess = true, timeout = opts.timeout or 10, aborted = opts.aborted })
 		if not res or not res.ok then return nil, env.require("provider/openai").errorText(res, err) end
 		local value = #res.body <= 2097152 and util.decode(res.body)
 		if type(value) ~= "table" or type(value.data) ~= "table" or value.error then
@@ -202,6 +254,8 @@ return function(env)
 		end
 		local sessions = env.require("agent/session")
 		local kind = tostring(command.type or "")
+		local access = config.accessProblem()
+		if access and kind ~= "abort" and kind ~= "subagent:stop" and kind ~= "loops:stop" then error(access, 0) end
 		local session = command.sessionId and sessions.threads[command.sessionId] or sessions.current()
 		if not session then error("Conversation no longer exists", 0) end
 
@@ -290,8 +344,9 @@ return function(env)
 		local moved = M.online or M.lastError == nil
 		local changed = M.online or M.lastError ~= reason
 		M.online = false
-		opencode, nextHello = nil, 0
+		opencode, nextHello, kilo, cline = nil, 0, nil, nil
 		opencodeModels = {}
+		clineModelIds = {}
 		M.lastError = reason
 		syncRuntime()
 		if moved then
@@ -502,6 +557,7 @@ return function(env)
 				completion = usage.session.completion,
 				total = usage.session.total,
 				cost = usage.session.cost,
+				unpriced = usage.session.unpriced or 0,
 				requests = usage.session.requests,
 				estimated = usage.session.estimated == true,
 			},
@@ -607,6 +663,7 @@ return function(env)
 				local instance = type(info) == "table" and info.protocol == 2 and info.instance
 				if type(instance) == "string" and #instance > 0 and #instance <= 160 then
 					if bridgeInstance and bridgeInstance ~= instance then
+						clineModelIds = {}
 						local mcp = env.loadedModules and env.loadedModules["net/mcp"]
 						if mcp then mcp.clear() end
 						-- Automatic worker updates keep manual credentials. A new worker
@@ -620,6 +677,10 @@ return function(env)
 				if mobile and type(inbox) == "table" and inbox.waitHeader == "X-UAI-Poll-Wait-Ms" then timeout = 5 end
 				local backend = type(capabilities) == "table" and capabilities.opencode
 				local previous = opencode
+				local previousKilo = kilo
+				local previousCline = cline
+				kilo = kiloStatus.read(type(capabilities) == "table" and capabilities.kilo)
+				cline = readCline(type(capabilities) == "table" and capabilities.cline)
 				opencode = nil
 				if type(backend) == "table" and backend.schema == 1 then
 					opencode = { available = backend.available == true, state = tostring(backend.state or "unavailable"),
@@ -627,7 +688,11 @@ return function(env)
 				end
 				nextHello = clock.ms() + 4000
 				if not opencode or not opencode.available then opencodeModels = {} end
+				if not cline or not cline.enabled or (previousCline and previousCline.available and not cline.available)
+					or (previousCline and cline and previousCline.version ~= cline.version) then clineModelIds = {} end
 				if util.encode(previous) ~= util.encode(opencode) then M.changed:fire() end
+				if util.encode(previousKilo) ~= util.encode(kilo) then M.changed:fire() end
+				if util.encode(previousCline) ~= util.encode(cline) then M.changed:fire() end
 			end
 			-- After a failed poll, prove the inbox is back without waiting through
 			-- another idle long poll before Web runtime can recover.
@@ -701,9 +766,10 @@ return function(env)
 		alive = false
 		M.running = false
 		M.online = false
-		opencode, nextHello = nil, 0
+		opencode, nextHello, kilo, cline = nil, 0, nil, nil
 		bridgeInstance = nil
 		opencodeModels = {}
+		clineModelIds = {}
 		syncRuntime()
 		if detach then pcall(detach) end
 		detach, attachedId = nil, nil
@@ -714,6 +780,8 @@ return function(env)
 	end
 
 	function M.start()
+		local access = config.accessProblem()
+		if access then return false, access end
 		if M.running then return true end
 		if not caps.has("http") then return false, caps.reason("http") end
 		if util.trim(connection.get().token) == "" then
@@ -760,6 +828,8 @@ return function(env)
 	-- One place decides whether the bridge should be up, so boot and the Settings
 	-- toggle cannot disagree about it.
 	function M.sync()
+		local access = config.accessProblem()
+		if access then return false, access end
 		connection.resume()
 		if connection.enabled() then return M.start() end
 		M.stop(true)
@@ -771,9 +841,12 @@ return function(env)
 			running = M.running,
 			online = M.online,
 			url = base(),
+			instance = bridgeInstance,
 			source = connection.get().source,
 			searching = connection.searching(),
 			opencode = M.opencodeStatus(),
+			kilo = M.online and kilo and util.copy(kilo) or nil,
+			cline = M.online and cline and util.copy(cline) or nil,
 			queued = #queue,
 			runtime = M.online and "web" or "game",
 			error = M.lastError,

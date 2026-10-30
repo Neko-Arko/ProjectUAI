@@ -132,8 +132,53 @@ for _, density in ipairs({ "comfortable", "compact" }) do
 		end
 	end
 end
+for _, mobile in ipairs({ false, true }) do
+	responsive.touch, responsive.pointer, responsive.console = mobile, not mobile, false
+	for _, density in ipairs({ "comfortable", "compact" }) do
+		for _, scale in ipairs({ 0.85, 1, 1.4 }) do
+			settings["ui.density"], settings["ui.fontScale"] = density, scale
+			theme.rebuild()
+			local field = P.field(root, { text = "Keep this draft\nand its selection", multiline = true, height = theme.size.control })
+			field.instance:CaptureFocus()
+			field.instance.CursorPosition, field.instance.SelectionStart = 8, 1
+			local padding = field.instance:FindFirstChildOfClass("UIPadding")
+			local function readable()
+				return field.shell.AbsoluteSize.Y - padding.PaddingTop.Offset - padding.PaddingBottom.Offset >= theme.text.body.height
+			end
+			local label = tostring(mobile) .. "/" .. density .. "/" .. scale
+			check("compact multiline draft fits its first line " .. label, readable())
+			field.shell.Size = U.new(1, 0, 0, theme.size.composerExpanded)
+			field.shell:GetPropertyChangedSignal("AbsoluteSize"):Fire()
+			check("expanded input restores its comfortable inset " .. label, padding.PaddingTop.Offset == theme.space.sm)
+			field.shell.Size = U.new(1, 0, 0, theme.size.control)
+			field.shell:GetPropertyChangedSignal("AbsoluteSize"):Fire()
+			check("contracting keeps readable text, focus and selection " .. label, readable() and focusedBox == field.instance
+				and field.get() == "Keep this draft\nand its selection" and field.instance.CursorPosition == 8 and field.instance.SelectionStart == 1)
+			local button = P.button(root, { text = "Save changes", size = "sm" })
+			check("small actions fit enlarged type " .. label, button.instance.Size.Y.Offset >= theme.text.small.height + theme.space.hair * 2)
+			button.instance:Destroy(); field.shell:Destroy()
+		end
+	end
+end
 settings["ui.density"], settings["ui.fontScale"] = nil, nil
-responsive.touch, responsive.console = false, false
+responsive.touch, responsive.pointer, responsive.console = false, true, false
+local function luminance(color)
+	local function channel(value) return value <= 0.04045 and value / 12.92 or ((value + 0.055) / 1.055) ^ 2.4 end
+	return 0.2126 * channel(color.R) + 0.7152 * channel(color.G) + 0.0722 * channel(color.B)
+end
+for accent in pairs(theme.ACCENTS) do
+	for _, palette in ipairs({ "light", "dark" }) do
+		settings["ui.accent"], settings["ui.codeTheme"] = accent, palette
+		theme.rebuild()
+		for _, token in ipairs({ "text", "keyword", "string", "number", "comment", "call" }) do
+			local foreground = luminance(token == "text" and theme.color.codeText or theme.code[token])
+			local background = luminance(theme.color.codeSelection)
+			local ratio = (math.max(foreground, background) + 0.05) / (math.min(foreground, background) + 0.05)
+			check("selected " .. token .. " remains readable in " .. palette .. "/" .. accent, ratio >= 4.5)
+		end
+	end
+end
+settings["ui.accent"], settings["ui.codeTheme"] = nil, nil
 theme.rebuild()
 
 -- Headshots must initiate loading without blocking UI construction. Exercise

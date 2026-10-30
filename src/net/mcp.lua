@@ -2,6 +2,7 @@
 -- Sessions belong to one authenticated bridge connection, never the active chat.
 return function(env)
 	local sessions = env.require("agent/session")
+	local config = env.require("runtime/config")
 	local registry = env.require("agent/registry")
 	local util = env.require("runtime/util")
 	local clock = env.require("runtime/clock")
@@ -69,6 +70,8 @@ return function(env)
 			return { cancelled = true }
 		end
 		if command.type ~= "mcp:call" then error("Unknown MCP command", 0) end
+		local access = config.accessProblem()
+		if access then return { ok = false, error = "vault required", text = access } end
 		if cancelled[id .. ":" .. command.callId] then
 			return { ok = false, error = "aborted", text = "MCP call was cancelled before dispatch." }
 		end

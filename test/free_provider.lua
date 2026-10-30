@@ -6,8 +6,18 @@ local suite = F.suite("Project UAI Free")
 local case, check = suite.case, suite.check
 local function has(text, part) return tostring(text):find(part, 1, true) ~= nil end
 
+-- The exact previous public bundle credential, encoded to avoid a raw copy.
+local function previousCommunityCredential()
+	local bytes = { 198, 227, 202, 59, 90, 97, 146, 170, 234, 24, 58, 50, 127, 137, 210, 197, 229, 59, 94, 138, 154, 190, 195, 20, 48, 40, 141, 113, 212, 184, 250, 64, 42, 100, 115, 217, 200, 15, 61, 72, 92, 135, 151, 224, 36, 60, 70, 79, 175, 221, 230 }
+	local out = {}
+	for index, value in ipairs(bytes) do out[index] = string.char((value - ((83 + (index - 1) * 37) % 256)) % 256) end
+	return table.concat(out)
+end
+
 case("an empty setup receives a usable free provider without network setup", function()
 	local f = F.new()
+	-- 12:00 UTC is 20:00 at the fixed UTC+8 opening, independent of host time.
+	f.env.require("runtime/clock").ms = function() return 1767268800000 + f.h.sched.now * 1000 end
 	local registry = f.env.require("provider/registry")
 	local free = f.env.require("provider/free")
 	free.start()
@@ -29,6 +39,183 @@ case("an empty setup receives a usable free provider without network setup", fun
 	end)
 	check("first conversation completes without configuration", reply and reply.content == "Ready")
 	free.stop(); f.healthy(); f.close()
+end)
+
+case("included access follows a fixed UTC+8 schedule from 20:00 to noon", function()
+	local f = F.new(); local registry = f.env.require("provider/registry")
+	local record = registry.blank("hcnsec"); local community = f.env.require("provider/community_key")
+	local base, hour = 1767225600000, 3600000 -- 08:00 UTC+8 on 1 January.
+	for _, sample in ipairs({ { 4 * hour - 1, true }, { 4 * hour, false }, { 8 * hour, false },
+		{ 12 * hour - 1, false }, { 12 * hour, true }, { 16 * hour, true }, { 24 * hour - 1, true },
+		{ 28 * hour, false }, { 36 * hour, true } }) do
+		local status = community.availability(record, base + sample[1])
+		check("opening, midday, midnight and closing boundaries honor UTC+8", status.applies and status.open == sample[2])
+	end
+	local closed = community.availability(record, base + 8 * hour)
+	check("closed guidance names the fixed zone and next opening", has(closed.message, "20:00-12:00 UTC+8 (Beijing/Singapore)")
+		and closed.nextOpenMs == base + 12 * hour and closed.nextCloseMs == base + 28 * hour)
+	local waiting = community.countdown(record, base + 8 * hour)
+	check("the countdown reports the wait until opening", waiting and not waiting.open and waiting.ms == 4 * hour
+		and waiting.text == "Opens in 4h 00m")
+	local open = community.countdown(record, base + 16 * hour)
+	check("the countdown reports the time until closing", open and open.open and open.ms == 12 * hour
+		and open.text == "Closes in 12h 00m")
+	check("remaining time reads as seconds, minutes and hours",
+		community.remaining(59000) == "59s" and community.remaining(61000) == "1m 01s"
+		and community.remaining(3 * hour + 12 * 60000) == "3h 12m")
+	record.apiKey = "personal-schedule-fixture"
+	check("personal HCNSEC credentials have no community schedule", not community.availability(record, base).applies
+		and community.problem(record, base) == nil and community.countdown(record, base) == nil)
+	community.apply(record); record.headers.Authorization = "Bearer personal-header-fixture"
+	check("a personal auth-header override has no community schedule", not community.availability(record, base).applies)
+	check("schedule inspection is entirely offline", f.h.http.requestCount == 0)
+	f.healthy(); f.close()
+end)
+
+case("the retired included credential migrates without changing personal access", function()
+	local f = F.new(); local registry = f.env.require("provider/registry")
+	local community = f.env.require("provider/community_key")
+	local credential = f.env.require("runtime/community_credential")
+	local previous = previousCommunityCredential()
+	check("only the actual previous public credential is retired", credential.isRetired(previous)
+		and not credential.isRetired(credential.key) and not credential.isRetired("personal-migration-fixture"))
+	local record = registry.blank("hcnsec")
+	record.id, record.apiKey = "retired-community-fixture", previous
+	record.headers = { Authorization = "Bearer " .. previous, ["x-api-key"] = previous, ["X-Route"] = "preserved" }
+	record.keyIds = { "11111111-1111-4111-8111-111111111111" }
+	record.keyNames, record.keyPaused, record.keyMode, record.selectedKey = { "Included label" }, { true }, "single", 1
+	record.keyRotation = { fixture = true }
+	f.env.require("runtime/config").set("providers.list", { record })
+	check("normal registry migration replaces the retired included credential", registry.migrate() == 1
+		and record.apiKey == credential.key and community.isApplied(record))
+	check("matching auth copies migrate and unrelated headers survive", record.headers.Authorization == "Bearer " .. credential.key
+		and record.headers["x-api-key"] == credential.key and record.headers["X-Route"] == "preserved")
+	check("credential replacement resets accounting identity but preserves key preferences", record.keyIds == nil and record.keyRotation == nil
+		and record.keyNames[1] == "Included label" and record.keyPaused[1] and record.keyMode == "single" and record.selectedKey == 1)
+	check("community credential migration is idempotent", registry.migrate() == 0)
+	for _, change in ipairs({ function(item) item.apiKey = "personal-migration-fixture" end,
+		function(item) item.apiKey = previous .. "\npersonal-migration-fixture" end,
+		function(item) item.baseUrl = "https://custom.fixture/v1" end,
+		function(item) item.preset = "custom" end }) do
+		local other = registry.blank("hcnsec"); other.apiKey = previous; change(other)
+		local expected = other.apiKey
+		check("personal pools and unrelated endpoints are never migrated", not community.migrate(other) and other.apiKey == expected)
+	end
+	local overridden = registry.blank("hcnsec"); overridden.apiKey = previous
+	overridden.headers = { Authorization = "Bearer personal-override-fixture", ["api-key"] = previous }
+	check("migration preserves explicit personal auth overrides", community.migrate(overridden)
+		and overridden.apiKey == credential.key and overridden.headers.Authorization == "Bearer personal-override-fixture"
+		and overridden.headers["api-key"] == credential.key and not community.isApplied(overridden))
+	check("community credential migration is offline", f.h.http.requestCount == 0)
+	f.healthy(); f.close()
+end)
+
+case("a saved community reference restores only its included key", function()
+	local f = F.new(); local registry = f.env.require("provider/registry")
+	local community = f.env.require("provider/community_key")
+	local record = registry.blank("hcnsec")
+	record.apiKey, record.communityCredential, record.authStyle = "", true, "x-api-key"
+	record.headers = { ["x-api-key"] = "personal-restoration-fixture" }
+	record.keyIds = { "11111111-1111-4111-8111-111111111111" }
+	record.keyNames, record.keyPaused, record.keyMode, record.selectedKey = { "Saved label" }, { true }, "single", 1
+	local headers, ids, names, pauses = record.headers, record.keyIds, record.keyNames, record.keyPaused
+	check("included reference restores the current credential", community.restore(record)
+		and record.apiKey == f.env.require("runtime/community_credential").key)
+	check("restoration preserves explicit personal headers, auth and metadata", record.headers == headers
+		and headers["x-api-key"] == "personal-restoration-fixture" and record.authStyle == "x-api-key"
+		and record.keyIds == ids and record.keyNames == names and record.keyPaused == pauses
+		and record.keyMode == "single" and record.selectedKey == 1 and not community.isApplied(record))
+	check("restoration cannot overwrite an existing credential", not community.restore(record))
+	record.apiKey, record.baseUrl = "", "https://custom.fixture/v1"
+	check("a reference cannot supply the included key to another endpoint", not community.restore(record) and record.apiKey == "")
+	check("reference restoration sends no requests", f.h.http.requestCount == 0)
+	f.healthy(); f.close()
+end)
+
+case("community references retain pause and accounting metadata across cold reload", function()
+	for _, remember in ipairs({ false, true }) do
+		local f = F.new(); local registry = f.env.require("provider/registry")
+		local config, credentials = f.env.require("runtime/config"), f.env.require("runtime/credentials")
+		local community, credential = f.env.require("provider/community_key"), f.env.require("runtime/community_credential")
+		local record = registry.blank("hcnsec")
+		record.id = "paused-community-reference"
+		record.keyIds = { "11111111-1111-4111-8111-111111111111" }
+		record.keyNames, record.keyPaused, record.keyMode, record.selectedKey = { "Paused included label" }, { true }, "single", 1
+		assert(registry.save(record)); assert(config.setRememberCredentials(remember)); assert(config.saveNow())
+		local diskText = assert(f.h.files["UAI/config.json"])
+		local stored = credentials.restore(f.h.json.decode(diskText)).providers.list[1]
+		check("disk stores a versioned community reference with no raw credential", stored.apiKey == "" and stored.communityCredential
+			and stored.communityKeyState.revision == credential.revision and not has(diskText, credential.key))
+		check("reference retains private metadata in both storage modes", stored.communityKeyState.keyPaused[1]
+			and stored.communityKeyState.keyNames[1] == "Paused included label"
+			and stored.communityKeyState.keyIds[1] == record.keyIds[1])
+		config.load()
+		local restored = registry.get(record.id)
+		check("cold reload keeps paused single-key access and its accounting identity", restored.apiKey == credential.key
+			and restored.keyPaused[1] and restored.keyMode == "single" and restored.selectedKey == 1
+			and restored.keyNames[1] == "Paused included label" and restored.keyIds[1] == record.keyIds[1]
+			and restored.communityKeyState == nil and #registry.requestKeys(restored) == 0)
+		local safe = credentials.sanitise({ providers = { list = { stored } } }).providers.list[1]
+		check("default export removes nested private community metadata", safe.communityKeyState == nil and safe.keyNames == nil and safe.keyIds == nil)
+		local private = credentials.restore(assert(credentials.privateCopy(config.data))).providers.list[1]
+		check("private transfer preserves community pause and labels as a reference", private.apiKey == "" and private.communityKeyState.keyPaused[1]
+			and private.communityKeyState.keyNames[1] == "Paused included label")
+		stored.communityKeyState.revision = "previous-revision"
+		stored.keyRotation = { fixture = true }
+		check("a changed community revision preserves preferences but resets accounting", community.restore(stored)
+			and stored.keyPaused[1] and stored.keyNames[1] == "Paused included label" and stored.keyMode == "single"
+			and stored.keyIds == nil and stored.keyRotation == nil and stored.communityKeyState == nil)
+		f.healthy(); f.close()
+	end
+end)
+
+case("retired community references cannot retain old accounting IDs", function()
+	local f = F.new(); local registry = f.env.require("provider/registry")
+	local record = registry.blank("hcnsec")
+	record.apiKey = previousCommunityCredential()
+	record.keyIds = { "11111111-1111-4111-8111-111111111111" }
+	record.keyNames, record.keyPaused = { "Preserved label" }, { true }
+	local referenced = f.env.require("runtime/credentials").referenceCommunity({ providers = { list = { record } } }).providers.list[1]
+	check("retired raw credentials become current references without old IDs", referenced.apiKey == "" and referenced.communityKeyState.keyIds == nil
+		and referenced.communityKeyState.keyPaused[1] and referenced.communityKeyState.keyNames[1] == "Preserved label")
+	check("a malformed reference cannot silently resume included access", not f.env.require("provider/community_key").restore({
+		preset = "hcnsec", baseUrl = "https://api.hcnsec.cn/v1", apiKey = "", communityCredential = true,
+		communityKeyState = { revision = "2026-10-29", keyPaused = { "invalid" } } }))
+	f.healthy(); f.close()
+end)
+
+case("closed included access can be saved but cannot start inference or discovery", function()
+	local f = F.new(); local registry = f.env.require("provider/registry")
+	-- 16:00 UTC+8: after the midday close and before the evening opening.
+	f.env.require("runtime/clock").ms = function() return 1767225600000 + 8 * 3600000 + f.h.sched.now * 1000 end
+	local record = registry.blank("hcnsec")
+	check("closed included access remains a valid saved provider", registry.validate(record) and registry.save(record))
+	local reply, why = f.run(function()
+		return f.env.require("provider/chat").complete(record, { messages = { { role = "user", content = "Hello" } }, stream = false })
+	end)
+	check("closed inference explains its next opening", reply == nil and has(why, "20:00-12:00 UTC+8") and has(why, "choose another provider"))
+	local found, note = f.run(function() return f.env.require("provider/models").discover(record) end)
+	check("closed discovery explains its schedule", #found == 0 and has(note, "20:00-12:00 UTC+8"))
+	check("closed admissions send no network requests", f.h.http.requestCount == 0)
+	record.apiKey = "personal-schedule-fixture"
+	check("personal HCNSEC requests remain eligible during daytime", registry.protocolProblem(record) == nil)
+	f.healthy(); f.close()
+end)
+
+case("an admitted free inference can settle after closing", function()
+	local f = F.new(); local registry = f.env.require("provider/registry")
+	f.env.require("runtime/clock").ms = function() return 1767326400000 - 1000 + f.h.sched.now * 1000 end
+	local record = registry.blank("hcnsec"); registry.save(record)
+	f.h.http.handler = function()
+		f.h.sched.wait(2)
+		return { StatusCode = 200, Body = f.h.json.encode({ choices = { { message = { role = "assistant", content = "Finished" }, finish_reason = "stop" } } }) }
+	end
+	local reply = f.run(function()
+		return f.env.require("provider/chat").complete(record, { messages = { { role = "user", content = "Hello" } }, stream = false })
+	end, 3)
+	check("closing does not cancel an accepted response", reply and reply.content == "Finished" and f.h.http.requestCount == 1)
+	check("the next inference is outside the schedule", has(registry.protocolProblem(record), "20:00-12:00 UTC+8"))
+	f.healthy(); f.close()
 end)
 
 case("saved providers and deliberately disabled selections are preserved", function()
@@ -191,6 +378,8 @@ case("free setup and introduction are available without key entry", function()
 	local intro = assert(f.h.byName("FreeIntroductionText"))
 	check("welcome thanks continued support and explains capacity", has(intro.Text, "continued use and support") and has(intro.Text, "availability vary") and has(intro.Text, "More free providers"))
 	check("Discord is directly visible", has(f.h.byName("FreeCommunityInvite").Text, "https://discord.gg/9xYyyYuKap"))
+	check("the card counts down to the next schedule change", has(assert(f.h.byName("FreeHoursTimer")).Text, "Closes in ")
+		and has(f.h.byName("FreeHoursTimer").Text, "20:00-12:00 UTC+8"))
 	check("all managed-provider models qualify for free filtering", f.env.require("provider/models").isFree(f.saved, "auto"))
 	check("setup and introduction send no inference", f.h.http.requestCount == 0)
 	f.healthy(); f.close()

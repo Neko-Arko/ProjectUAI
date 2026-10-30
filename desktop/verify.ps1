@@ -12,10 +12,13 @@ $standalone = Join-Path $evidence ('standalone-' + [guid]::NewGuid().ToString('N
 New-Item -ItemType Directory -Path $standalone -Force | Out-Null
 $isolated = Join-Path $standalone 'Cowork.exe'
 Copy-Item -LiteralPath $exe -Destination $isolated
-foreach ($mode in @('self-test','startup-test','smoke-test','window-test')) {
+foreach ($mode in @('self-test','startup-test','smoke-test','window-test','update-test')) {
     $result = Join-Path $evidence ($mode + '.json')
+    # The update test restarts real helper, parent and candidate windows for
+    # three scenarios; it needs a wider deadline than the offline checks.
+    $deadline = if ($mode -eq 'update-test') { 240000 } else { 60000 }
     $process = Start-Process -FilePath $isolated -ArgumentList @('--' + $mode,('"' + $result + '"')) -WindowStyle Hidden -PassThru
-    if (!$process.WaitForExit(60000)) { Stop-Process -Id $process.Id -Force; throw "Desktop $mode exceeded 60 seconds." }
+    if (!$process.WaitForExit($deadline)) { Stop-Process -Id $process.Id -Force; throw "Desktop $mode exceeded $($deadline / 1000) seconds." }
     if ($process.ExitCode -ne 0) { Get-Content -LiteralPath $result -ErrorAction SilentlyContinue; throw "Desktop $mode failed." }
     Get-Content -LiteralPath $result
 }
@@ -27,10 +30,22 @@ foreach ($size in @('normal', 'compact', 'narrow')) {
     if (!$process.WaitForExit(20000)) { Stop-Process -Id $process.Id -Force; throw 'Desktop preview exceeded 20 seconds.' }
     if ($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $preview)) { throw 'Desktop preview failed.' }
     Write-Output "Inspect native window preview: $preview"
+    if ($size -eq 'normal') {
+        foreach ($page in @('connections', 'updates', 'settings', 'tunnels', 'tunnels-bottom')) {
+            $pagePreview = Join-Path $evidence ("launcher-$page.png")
+            if (!(Test-Path -LiteralPath $pagePreview)) { throw "Desktop $page preview failed." }
+            Write-Output "Inspect native WPF page preview: $pagePreview"
+        }
+    }
     if ($size -eq 'narrow') {
         $bottomPreview = Join-Path $evidence 'launcher-narrow-bottom.png'
         if (!(Test-Path -LiteralPath $bottomPreview)) { throw 'Desktop narrow bottom preview failed.' }
         Write-Output "Inspect native window preview: $bottomPreview"
+        foreach ($suffix in @('tunnels', 'tunnels-bottom')) {
+            $tunnelPreview = Join-Path $evidence ("launcher-narrow-$suffix.png")
+            if (!(Test-Path -LiteralPath $tunnelPreview)) { throw "Desktop narrow $suffix preview failed." }
+            Write-Output "Inspect native WPF tunnel preview: $tunnelPreview"
+        }
     }
 }
 Write-Output 'Standalone executable verified without neighboring runtime or bridge folders.'

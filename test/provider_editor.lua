@@ -20,6 +20,11 @@ local function closeMenu(f)
 	if f.h.byName("MenuLayer") then f.h.press("Escape") end
 end
 
+local function auth(f, value)
+	click(f, "AuthStyle")
+	click(f, "Option_" .. value)
+end
+
 -- The preset control opens the provider gallery now, so a preset is chosen by
 -- clicking its card in the tier it belongs to. Custom is appended to every tier.
 local function preset(f, id)
@@ -42,14 +47,17 @@ local function chooseCustom(f)
 end
 
 local function key(f, value)
-	click(f, "SetKey")
-	field(f, "PromptField", value)
+	click(f, "ManageKeys")
+	click(f, f.h.byName("ReplaceKey_1") and "ReplaceKey_1" or "AddKey")
+	assert(f.h.byName("PromptField")):FindFirstChildOfClass("TextBox").Text = value
+	f.h.settle(0.1)
 	for _, node in ipairs(f.env.root:GetDescendants()) do
 		if node.ClassName == "TextLabel" and node.Text == "Save key" then
 			local button = node.Parent
 			while button and button.ClassName ~= "TextButton" do button = button.Parent end
 			assert(button, "missing key confirmation")
 			f.h.click(button)
+			click(f, "ApplyKeys")
 			return
 		end
 	end
@@ -89,7 +97,8 @@ for _, setting in ipairs({
 		local registry = f.env.require("provider/registry")
 		providers.add()
 		chooseCustom(f)
-		click(f, "Segment_" .. setting.value, f.h.byName(setting.control))
+		if setting.control == "AuthStyle" then auth(f, setting.value)
+		else click(f, "Segment_" .. setting.value, f.h.byName(setting.control)) end
 		if setting.field == "api" then
 			f.h.press("Escape")
 		else
@@ -188,7 +197,7 @@ end)
 local changes = {
 	{ "URL", function(f, changed) field(f, "BaseUrl", changed and "https://other.fixture/prefix/v1" or f.original.baseUrl) end },
 	{ "protocol", function(f, changed) click(f, "Segment_" .. (changed and "anthropic" or "openai"), f.h.byName("Protocol")) end },
-	{ "auth header", function(f, changed) click(f, "Segment_" .. (changed and "x-api-key" or "bearer"), f.h.byName("AuthStyle")) end },
+	{ "auth header", function(f, changed) auth(f, changed and "x-api-key" or "bearer") end },
 	{ "key", function(f, changed) key(f, changed and "fixture-replacement" or "fixture-key") end },
 	{ "preset", function(f, changed)
 		preset(f, changed and "ollama" or "custom")
@@ -283,18 +292,19 @@ end)
 
 case("switching to free access preserves an existing personal key until chosen", function()
 	local f = fixture()
+	local publicKey = f.env.require("runtime/community_credential").key
 	preset(f, "hcnsec")
 	check("official setup offers the free key", f.h.byName("CommunityKey").Visible)
 	check("opening setup preserves the supplied key", f.h.byName("KeyState").Text:find("-key", 1, true) ~= nil)
 	check("setup never creates a saved provider", f.env.require("provider/registry").count() == 0)
 	click(f, "UseCommunityKey")
-	check("the public key stays masked", f.h.byName("KeyState").Text:find("1luY", 1, true) ~= nil
-		and not f.h.textOf():find("sk-ysUaToxu", 1, true))
+	check("the public key stays masked", f.h.byName("KeyState").Text:find(publicKey:sub(-4), 1, true) ~= nil
+		and not f.h.textOf():find(publicKey, 1, true))
 	check("the original record stays unchanged until Save", f.original.apiKey == "fixture-key"
 		and f.env.require("provider/registry").count() == 0)
 	click(f, "SaveProvider")
 	check("saving opts in only this provider", f.saved and f.saved.preset == "hcnsec"
-		and f.saved.apiKey:sub(-4) == "1luY" and f.saved.apiKey ~= "fixture-key")
+		and f.saved.apiKey == publicKey and f.saved.apiKey ~= "fixture-key")
 	check("the model remains the user's selection", f.saved.model == "manual-model")
 	check("opting in never sends a request", f.h.http.requestCount == 0)
 	f.healthy(); f.close()
@@ -321,12 +331,14 @@ end)
 case("choosing the community key replaces an entire key pool and its rotation state", function()
 	local f = F.ui(390, 700)
 	local registry = f.env.require("provider/registry")
+	local publicKey = f.env.require("runtime/community_credential").key
 	local record = registry.blank("hcnsec")
 	record.apiKey, record.model, record.models = "first-personal-key\nsecond-personal-key", "my-model", { "my-model" }
 	record.keyRotation = { index = 2, cooldowns = { ["first-personal-key"] = 9999999999999 } }
 	f.env.require("ui/panels/providers").editor(record, function(id) f.saved = registry.get(id) end)
 	click(f, "UseCommunityKey"); click(f, "SaveProvider")
-	check("only the chosen community key remains in the pool", f.saved and #registry.keysOf(f.saved) == 1 and registry.nextKey(f.saved):sub(-4) == "1luY")
+	check("only the chosen community key remains in the pool", f.saved and #registry.keysOf(f.saved) == 1 and registry.nextKey(f.saved) == publicKey)
+	check("replacing the pool never displays the complete public key", not f.h.textOf():find(publicKey, 1, true))
 	check("old rotation and cooldown state are discarded", f.saved.keyRotation == nil)
 	check("the source record retains its personal pool until explicit save", record.apiKey == "first-personal-key\nsecond-personal-key" and record.keyRotation.index == 2)
 	f.healthy(); f.close()

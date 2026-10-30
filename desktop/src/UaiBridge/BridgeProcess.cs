@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -12,6 +13,9 @@ internal sealed class BridgeProcess : IAsyncDisposable
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly HttpClient http = new(new HttpClientHandler { UseProxy = false, AllowAutoRedirect = false })
         { Timeout = TimeSpan.FromSeconds(3) };
+    // Update checks download a full verified package before answering.
+    private readonly HttpClient slowHttp = new(new HttpClientHandler { UseProxy = false, AllowAutoRedirect = false })
+        { Timeout = TimeSpan.FromSeconds(60) };
     private Process? child;
     private ChildJob? job;
     private volatile bool stopping;
@@ -23,6 +27,11 @@ internal sealed class BridgeProcess : IAsyncDisposable
     public string OpenCodeState { get; private set; } = "stopped";
     public string? OpenCodeMessage { get; private set; }
     public string? OpenCodeVersion { get; private set; }
+    public string KiloState { get; private set; } = "disabled";
+    public string KiloDetail { get; private set; } = "Try another connection when anonymous Kilo free access reaches its hourly allowance.";
+    public string ClineState { get; private set; } = "stopped";
+    public string ClineDetail { get; private set; } = "Start the bridge to check your Cline sign-in.";
+    public string? ClineVersion { get; private set; }
     public bool McpEnabled { get; private set; } = true;
     public string OpenCodeDetail => OpenCodeState switch
     {
@@ -47,9 +56,9 @@ internal sealed class BridgeProcess : IAsyncDisposable
         Changed?.Invoke();
     }
 
-    public async Task StartAsync(BridgeLaunchOptions? options = null)
+    public async Task StartAsync(BridgeLaunchOptions? options = null, CancellationToken cancellationToken = default)
     {
-        await gate.WaitAsync();
+        await gate.WaitAsync(cancellationToken);
         try
         {
             if (child is { HasExited: false }) return;
@@ -57,8 +66,8 @@ internal sealed class BridgeProcess : IAsyncDisposable
             job?.Dispose(); job = null;
             token = null;
             SetState("Starting", "Starting your local Cowork bridge...");
-            string root = await Task.Run(EmbeddedPayload.Prepare);
-            var runtime = await NodeRuntime.FindAsync();
+            string root = await Task.Run(EmbeddedPayload.Prepare, cancellationToken);
+            var runtime = await NodeRuntime.FindAsync(cancellationToken);
             if (runtime is null) throw new IOException("Node.js is needed to run the bridge. Choose Download Node.js below, or install it from nodejs.org and check again.");
             string node = runtime.Path;
             string server = Path.Combine(root, "bridge", "server.js");
@@ -80,12 +89,19 @@ internal sealed class BridgeProcess : IAsyncDisposable
             McpEnabled = options?.McpEnabled ?? Environment.GetEnvironmentVariable("UAI_MCP_DISABLED") != "1";
             OpenCodeState = (options?.OpenCodeEnabled ?? Environment.GetEnvironmentVariable("UAI_OPENCODE_DISABLED") != "1") ? "starting" : "disabled";
             OpenCodeMessage = null; OpenCodeVersion = null;
+            KiloState = (options?.KiloEnabled ?? Environment.GetEnvironmentVariable("UAI_KILO_TUNNEL") != "0") ? "standby" : "disabled";
+            KiloDetail = KiloState == "disabled" ? "Kilo tunnel is off for this bridge session." : "Starts automatically after an anonymous Kilo quota response.";
+            ClineState = (options?.ClineEnabled ?? Environment.GetEnvironmentVariable("UAI_CLINE_DISABLED") != "1") ? "starting" : "disabled";
+            ClineDetail = ClineState == "disabled" ? "Cline is off for this bridge session." : "Checking your installed Cline CLI and sign-in.";
+            ClineVersion = null;
             process.Exited += (_, _) =>
             {
                 if (ReferenceEquals(child, process) && !stopping)
                 {
                     token = null;
                     OpenCodeState = "stopped"; OpenCodeMessage = null; OpenCodeVersion = null;
+                    KiloState = "disabled";
+                    ClineState = "stopped"; ClineVersion = null;
                     SetState("Could not connect", "The bridge stopped unexpectedly. Click Start Cowork to restart it.");
                 }
             };
@@ -99,10 +115,16 @@ internal sealed class BridgeProcess : IAsyncDisposable
             // A cached worker gets one bounded startup attempt before the
             // supervisor restores the packaged worker. This is startup only;
             // inference itself has no overall bridge request deadline.
-            string secret = await ready.Task.WaitAsync(TimeSpan.FromSeconds(40));
+            string secret = await ready.Task.WaitAsync(TimeSpan.FromSeconds(40), cancellationToken);
             if (process.HasExited) throw new IOException("The bridge exited during startup. Try again.");
             token = secret;
             SetState("Waiting for Roblox", "Load the updated UAI script in Roblox. It will connect automatically.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await StopCoreAsync();
+            SetState("Stopped", "Ready when you are.");
+            throw;
         }
         catch (Exception error)
         {
@@ -172,15 +194,16 @@ internal sealed class BridgeProcess : IAsyncDisposable
                 OpenCodeMessage = openCode.TryGetProperty("message", out var backendDetail) ? backendDetail.GetString() : null;
                 OpenCodeVersion = openCode.TryGetProperty("version", out var backendVersion) ? backendVersion.GetString() : null;
             }
+            if (capabilities.ValueKind == JsonValueKind.Object && capabilities.TryGetProperty("kilo", out var kilo))
+            {
+                KiloState = kilo.TryGetProperty("state", out var kiloState) ? kiloState.GetString() ?? "disabled" : "disabled";
+                KiloDetail = kilo.TryGetProperty("message", out var kiloMessage) ? kiloMessage.GetString() ?? "" : "";
+            }
+            else { KiloState = "unavailable"; KiloDetail = "Kilo status is unavailable. Check for bridge updates."; }
+            ApplyClineCapability(capabilities.ValueKind == JsonValueKind.Object && capabilities.TryGetProperty("cline", out var cline) ? cline : default);
             if (capabilities.ValueKind == JsonValueKind.Object && capabilities.TryGetProperty("mcp", out var mcp))
                 McpEnabled = !mcp.TryGetProperty("enabled", out var enabled) || enabled.GetBoolean();
-            if (doc.RootElement.TryGetProperty("update", out var update))
-            {
-                UpdateState = update.TryGetProperty("state", out var s) ? s.GetString() ?? "current" : "current";
-                BridgeVersion = update.TryGetProperty("currentVersion", out var v) ? v.GetString() ?? BridgeVersion : BridgeVersion;
-                AvailableVersion = update.TryGetProperty("availableVersion", out var a) ? a.GetString() : null;
-                UpdateError = update.TryGetProperty("error", out var e) ? e.GetString() : null;
-            }
+            if (doc.RootElement.TryGetProperty("update", out var update)) ApplyUpdate(update);
             SetState(connected ? "Connected to Roblox" : "Waiting for Roblox", connected
                 ? "Your conversation is ready in Cowork. Keep Roblox and this app running."
                 : "Load the updated UAI script in Roblox. It will connect automatically.");
@@ -188,8 +211,72 @@ internal sealed class BridgeProcess : IAsyncDisposable
         catch (Exception error) when (error is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException or InvalidOperationException)
         {
             if (secret == token && !stopping)
+            {
+                KiloState = "unavailable";
+                KiloDetail = "Waiting for the bridge to reconnect before checking Kilo.";
+                ClineState = "unavailable"; ClineVersion = null;
+                ClineDetail = "Waiting for the bridge to reconnect before checking Cline.";
                 SetState("Reconnecting", "The bridge is not responding. If this continues, stop it and start it again.");
+            }
         }
+    }
+
+    internal void ApplyClineCapability(JsonElement capability)
+    {
+        ClineState = "unavailable"; ClineVersion = null;
+        ClineDetail = "Cline status is unavailable. Check for bridge updates or restart the bridge.";
+        if (capability.ValueKind != JsonValueKind.Object || !capability.TryGetProperty("schema", out var schema) ||
+            schema.ValueKind != JsonValueKind.Number || !schema.TryGetInt32(out int version) || version != 1) return;
+        static string? Text(JsonElement value, string name, int limit)
+        {
+            if (!value.TryGetProperty(name, out var item) || item.ValueKind != JsonValueKind.String) return null;
+            string text = item.GetString() ?? "";
+            return text[..Math.Min(text.Length, limit)];
+        }
+        string? state = Text(capability, "state", 40);
+        if (state is not ("auth-required" or "starting" or "ready" or "failed" or "missing" or "disabled")) return;
+        if (state == "ready" && (!capability.TryGetProperty("enabled", out var enabled) || enabled.ValueKind != JsonValueKind.True ||
+            !capability.TryGetProperty("available", out var available) || available.ValueKind != JsonValueKind.True)) return;
+        ClineState = state;
+        ClineVersion = Text(capability, "version", 80);
+        string? detail = Text(capability, "message", 400);
+        ClineDetail = !string.IsNullOrWhiteSpace(detail) ? detail : state switch
+        {
+            "ready" => "Cline is ready for free-model requests.",
+            "auth-required" => "Sign in to Cline, then refresh models or restart the bridge.",
+            "disabled" => "Cline is off for this bridge session.",
+            "missing" => "Install Cline CLI, then restart the bridge.",
+            "starting" => "Checking your installed Cline CLI and sign-in.",
+            _ => "Check Cline setup and restart the bridge."
+        };
+    }
+
+    private void ApplyUpdate(JsonElement update)
+    {
+        UpdateState = update.TryGetProperty("state", out var s) ? s.GetString() ?? "current" : "current";
+        BridgeVersion = update.TryGetProperty("currentVersion", out var v) ? v.GetString() ?? BridgeVersion : BridgeVersion;
+        AvailableVersion = update.TryGetProperty("availableVersion", out var a) ? a.GetString() : null;
+        UpdateError = update.TryGetProperty("error", out var e) ? e.GetString() : null;
+    }
+
+    // The bridge supervisor owns bridge and web updates; this asks it to look now.
+    public async Task CheckUpdatesAsync()
+    {
+        string? secret = token;
+        if (secret is null || stopping) throw new IOException("Start the bridge before checking for its updates.");
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, Origin + "/api/desktop/update-check")
+                { Content = new StringContent("{}", Encoding.UTF8, "application/json") };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret);
+            using var response = await slowHttp.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            ApplyUpdate(doc.RootElement.GetProperty("update"));
+            Changed?.Invoke();
+        }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException or InvalidOperationException)
+        { throw new IOException("The bridge update check did not complete. It will retry automatically."); }
     }
 
     public async Task StopAsync()
@@ -209,6 +296,9 @@ internal sealed class BridgeProcess : IAsyncDisposable
         stopping = true;
         token = null;
         OpenCodeState = "stopped";
+        KiloState = "disabled";
+        ClineState = "stopped"; ClineVersion = null;
+        ClineDetail = "Start the bridge to check your Cline sign-in.";
         var process = child;
         try
         {
@@ -240,6 +330,7 @@ internal sealed class BridgeProcess : IAsyncDisposable
     {
         await StopAsync();
         http.Dispose();
+        slowHttp.Dispose();
         gate.Dispose();
     }
 }

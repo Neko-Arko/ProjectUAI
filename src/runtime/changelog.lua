@@ -19,6 +19,107 @@ return function(env)
 	local CATEGORY_ORDER = { "added", "improved", "fixed" }
 	local ENTRIES = {
 		{
+			version = "3.7.2",
+			revision = "2026-10-29-credential-choice-and-compact-progress",
+			date = "October 29, 2026",
+			title = "Password vault and scheduled free access",
+			highlights = "Choose password encryption or explicitly continue without it. Encryption and unlocking show a compact corner percentage, and password prompts fit their contents. The Claude Code Settings tab is now Project UAI.",
+			sections = {
+				{ category = "added", label = "Credential storage", items = {
+					"First setup offers password encryption or a red Continue without encryption option. The unprotected choice is saved and skips future password prompts. Encrypted vaults still require their password on every execution; existing keys and pool settings carry over after verified storage.",
+					"The vault uses AES-256-SIV and PBKDF2-HMAC-SHA256 entirely in Luau. Setup and password changes verify the encrypted save before switching. Cancel and failed writes preserve live keys; scripts sharing the executor can still intercept credentials during use.",
+					"New passwords use 100,000 PBKDF2 iterations. Older vaults retain their stored work factor until a password change rewrites them. Encryption and unlocking share a compact corner percentage with Cancel; startup password work leaves the game visible and interactive.",
+					"Privacy provides password changes, Lock now and the deliberate unprotected storage choice after unlocking. Forgotten-password removal discards saved vault credentials before returning to setup.",
+					"Older byte encoding is reversible and remains supported for migration. Replace exposed keys in the provider dashboard and revoke the old ones; UAI's Rotate keys only selects between existing keys. A forgotten vault password cannot be recovered.",
+				} },
+				{ category = "improved", label = "Copies and included access", items = {
+					"Normal configuration copies and diagnostics exclude connection credentials. Private copies retain encryption only when the vault is enabled; unprotected copies remain recoverable. Encrypted imports ask for their password before review. This device keeps its own storage choice and vault password.",
+					"Project UAI Free opens daily during 20:00–06:00 UTC+8 (Beijing/Singapore). Off-hours requests explain the schedule, and accepted replies continue after closing. Personal HCNSEC keys are unaffected.",
+					"The included community key has been replaced. Old included credentials migrate on the official endpoint; saved configs and exports use a reference. Bundle encoding deters simple searches but cannot make a client-held key secret.",
+				} },
+				{ category = "fixed", label = "Duplicate credential copies", items = {
+					"Custom headers, query/body overrides, URL credentials and learned scopes are protected with the key pool. Temporary rotation maps are never saved, because they can contain API keys.",
+					"Failed storage updates keep live keys and report the failure. Unreadable encoded records are preserved and cannot silently become anonymous requests. Older exports and backups remain under your control and may still contain plaintext credentials.",
+				} },
+				{ category = "fixed", label = "Reasoning levels", items = {
+					"Enabling reasoning support keeps its level buttons visible in short model pickers. Provider details and the caption compact first; extremely limited keyboard space keeps the levels available through Options.",
+				} },
+				{ category = "improved", label = "Settings", items = {
+					"The Claude Code Settings tab is now named Project UAI.",
+				} },
+			},
+		},
+		{
+			version = "3.7.1",
+			revision = "2026-10-25-key-usage-and-pausing",
+			date = "October 25, 2026",
+			title = "UI polish and individual API keys",
+			highlights = "Manage named API keys, pause individual entries and see their usage. Each conversation shows its AI request count. Rotation stays on by default, and modals have clearer spacing and fitted heights.",
+			sections = {
+				{ category = "added", label = "Individual API keys", items = {
+					"Manage API keys opens a dedicated modal from provider details or connection setup. Name each masked entry, replace or remove it, and add more keys individually or in one paste.",
+					"Rotate keys is the default. Choose Use one key to send this provider's requests through a specific entry; other keys stay saved. Removing the selected key restores rotation.",
+					"Apply saves key changes from provider details or returns them to an unfinished connection draft. Cancel keeps the original keys, names and request preference. Configuration transfers preserve the complete setup.",
+					"Pause a key without deleting its name or usage, then resume it when needed. Paused keys are skipped in rotation; a paused selected key stays pinned until you resume it or change your selection.",
+					"Each key shows locally recorded requests and input/output tokens, with estimates marked. Renaming or pausing keeps its usage; replacing the credential starts fresh.",
+				} },
+				{ category = "added", label = "Conversation requests", items = {
+					"The conversation header shows its AI request count. Retries, tool follow-ups, summaries and subagents are included; model discovery and relay polling are excluded.",
+					"Counts persist on this device from this update. Context breakdown explains the total; earlier untracked requests are not reconstructed.",
+				} },
+				{ category = "improved", label = "Modals and setup", items = {
+					"Log details and context usage fit their contents and scroll when needed. Modal bodies have balanced padding, including the tutorial, Discord invitation and donation options.",
+					"Provider setup groups access, model and connection settings, with the setup guide expanded by default. The gallery adapts its card columns to the available width.",
+					"Model search and actions remain reachable while the catalog scrolls. Settings, conversation controls and log previews have clearer spacing and wrapping on narrow screens.",
+				} },
+				{ category = "improved", label = "Code workspace", items = {
+					"Syntax colors stay visible while selecting code. Selection fills, preview line spacing, tabs, history and comparison views follow the active type size and code palette.",
+				} },
+				{ category = "fixed", label = "Keys and compact layouts", items = {
+					"Replacing one API key preserves the other entries. Duplicate or empty replacements leave the pool intact, and short credentials stay masked in both entry rows and the pool summary.",
+					"Compact controls reserve enough room for larger text. Multiline fields adjust their padding without replacing the field, draft or selection when keyboard space changes.",
+				} },
+			},
+		},
+		{
+			version = "3.7.0",
+			revision = "2026-10-25-models-tunnels-workflows",
+			date = "October 25, 2026",
+			title = "Models, tunnels and faster workflows",
+			highlights = "Find providers and models faster, use AgentRouter's supported GPT models, and manage desktop tunnels in one place. Tools, logs and usage history are clearer across the coordinated 3.7.0 apps.",
+			sections = {
+				{ category = "added", label = "Provider choices", items = {
+					"Add Vercel AI Gateway, Perplexity Orchestrator, FriendliAI, Venice, Nscale, Arcee AI and AI/ML API with current setup instructions. Vercel's free credits apply to eligible models; the other new presets require paid API access.",
+					"AgentRouter selects the supported GPT Responses route and reasoning controls while retaining Claude Messages. Fetch the models available to your account; a catalog entry does not guarantee capacity.",
+				} },
+				{ category = "added", label = "Tunnels and Cline", items = {
+					"The Windows app's Tunnels tab brings OpenCode, Kilo and Cline status and controls together. Install Cline separately, enable it and sign in, then choose Cline in the provider gallery and fetch its current free models.",
+					"Cline uses your existing Cline profile through the connected desktop bridge and supports text only. Missing sign-in or a disconnected bridge gives a clear setup message. Its credentials stay on the desktop.",
+				} },
+				{ category = "added", label = "Kilo recovery", items = {
+					"Kilo recovery is enabled by default in the Windows and Android apps and starts only after an explicit anonymous quota refusal. The original request stays within its deadline and can be stopped.",
+					"Change Kilo tunnel in the app's settings while the bridge or relay is stopped. Cowork in Roblox and the browser shows the helper's current status; direct executor requests need a connected helper to recover.",
+				} },
+				{ category = "improved", label = "Model selection", items = {
+					"The model picker shows your current provider and model together, with connection and free-model information. Search saved providers in the new switcher without losing your model search, effort controls or custom model options.",
+					"The picker gives touch controls more room and keeps reasoning settings reachable above the keyboard. Model menus and large saved catalogs support multiword search, with refresh and manual entry available when no models match.",
+					"Refresh pricing and context information for 1,760 model entries. Known non-chat API types are omitted from supported mixed catalogs, while manual model IDs stay available.",
+				} },
+				{ category = "improved", label = "Tools, logs and usage", items = {
+					"Search Tools and Logs with multiple words and open full details when needed. Tool discovery respects the current conversation's permissions and available tool groups.",
+					"Usage history distinguishes unknown prices from zero-cost work and keeps cache-write usage in cost estimates. Older history retains its known totals without inventing missing prices.",
+				} },
+				{ category = "improved", label = "Coordinated apps", items = {
+					"The client, bridge, Windows app and Android companion all ship as 3.7.0. The desktop app checks installed tunnel helpers before Cowork starts and shows their setup status.",
+					"Browser model dialogs cancel closed requests and ignore results from a previous provider. Unrelated status updates preserve the current model selection, focus and scroll position.",
+				} },
+				{ category = "fixed", label = "Bounded retries", items = {
+					"One alternate connection and one circuit retry are allowed after a complete quota refusal. Exhausted exits pause recovery for 60 seconds. Signed-in requests, other providers, partial replies and uncertain outcomes never switch connections.",
+					"Honor provider instructions not to retry a terminal refusal. Shared connections still have provider allowances, so recovery cannot guarantee unlimited requests.",
+				} },
+			},
+		},
+		{
 			version = "3.6.6",
 			revision = "2026-10-23-provider-gallery",
 			date = "October 23, 2026",

@@ -5,7 +5,7 @@ local passed = 0
 local function check(label, value) assert(value, label); passed = passed + 1; print("ok " .. label) end
 
 local h = envMock.new()
-local app = assert(h.boot()); h.settle(0.5)
+local app = assert(h.boot()); require("password_fixture")(h, app); h.settle(0.5)
 app.config.set("bridge.autoDiscover", false)
 app.config.set("relay.mode", "off")
 local http = app.env.require("net/http")

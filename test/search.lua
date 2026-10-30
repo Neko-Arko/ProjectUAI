@@ -1,0 +1,17 @@
+package.path = "test/?.lua;test/mock/?.lua;" .. package.path
+local F = require("workspace_fixture")
+local suite = F.suite("Bounded search")
+local check = suite.check
+suite.case("all words match plain fields with stable name preference", function()
+	local f = F.new(); local search = f.env.require("runtime/search")
+	check("separate fields satisfy a query", search.compile("workspace read")("file_read", "Read files", "workspace") ~= nil)
+	check("missing words exclude a result", search.compile("workspace delete")("file_read", "Read files", "workspace") == nil)
+	check("name separators match natural words", search.compile("FILE READ")("file_read") ~= nil)
+	check("patterns stay literal", search.compile("[x].*")("unrelated") == nil and search.compile("[x].*")("[x].*") ~= nil)
+	check("repeated words do not distort rank", search.compile("read read")("read") == search.compile("read")("read"))
+	check("exact names rank ahead of descriptions", search.compile("file read")("file_read") > search.compile("file read")("other", "file read"))
+	check("empty query includes all", search.compile("  ")() == 0)
+	check("a large field is bounded", search.compile("needle")(string.rep("x", 20000) .. "needle") == nil)
+	f.healthy(); f.close()
+end)
+suite.finish()

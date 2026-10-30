@@ -113,7 +113,10 @@ function build() {
   const stale = [];
   for (const [file, content] of files) {
     for (const destination of [file, 'docs/' + file]) {
-      if (read(destination).replace(/\r\n/g, '\n') === content.replace(/\r\n/g, '\n')) continue;
+      const existing = read(destination);
+      // Freshness tolerates Git's checkout line endings. A build still writes
+      // exact publishing copies, including when only line endings differ.
+      if (check ? existing.replace(/\r\n/g, '\n') === content.replace(/\r\n/g, '\n') : existing === content) continue;
       if (check) stale.push(destination);
       else fs.writeFileSync(path.join(root, destination), content, 'utf8');
     }

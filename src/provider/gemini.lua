@@ -31,7 +31,10 @@ return function(env)
 	end
 	function M.headers(record, key)
 		local auth = record
-		if record.authStyle == nil and not registry.isOpencodeGo(record) then auth = util.copy(record); auth.authStyle = "x-goog-api-key" end
+		if record.authStyle == nil and not registry.isOpencodeGo(record) then
+			key = key or registry.nextKey(record) or ""
+			auth = util.copy(record); auth.authStyle = "x-goog-api-key"
+		end
 		return headers.merge({ ["Content-Type"] = "application/json" }, registry.authHeaders(auth, key))
 	end
 	function M.errorText(response, err) return openai.errorText(response, err) end
@@ -303,7 +306,8 @@ return function(env)
 		local relayUnlimited = transport.unlimited(request)
 		local deadline = relayUnlimited and math.huge or math.min(tonumber(request.deadlineMs) or math.huge,
 			started + math.max(1, math.min(300, tonumber(timeout) or 120)) * 1000)
-		local pool, key = registry.keysOf(record), registry.nextKey(record)
+		local pool, key = registry.requestKeys(record), registry.nextKey(record)
+		local accounting = env.require("runtime/request_accounting").new(record, request)
 		local left = math.max(0, #pool - 1)
 		local function cancelled()
 			return not owned() or registry.compatibilityKey(record) ~= scope or request.aborted and request.aborted()
@@ -313,9 +317,12 @@ return function(env)
 		end
 		local function fire()
 			if cancelled() then return nil, "aborted" end
+			local outgoing = headers.merge(M.headers(record, key), registry.opencodeHeaders(record, request), record.headers,
+				{ Accept = wantStream and "text/event-stream" or "application/json" })
 			return http.send({ url = M.endpoint(record, wantStream), method = "POST", body = util.encode(body),
-				headers = headers.merge(M.headers(record, key), registry.opencodeHeaders(record, request), record.headers,
-					{ Accept = wantStream and "text/event-stream" or "application/json" }),
+				requiresAccess = true,
+				onDispatch = function() accounting.dispatch(key, outgoing) end,
+				headers = outgoing,
 				relay = transport.shouldRelay(env.require("runtime/images").hasReferences(request.messages)), sessionId = request.sessionId,
 				relayUnlimited = relayUnlimited,
 				identity = registry.identityFor(record), identityRequired = registry.requiresClaude(record),
@@ -351,6 +358,7 @@ return function(env)
 			local message = sse.looksStreamed(response.body) and ("malformed_stream: " .. tostring(parseError)) or tostring(parseError)
 			registry.markFail(record, message); return nil, message, response
 		end
+		accounting.attach(result)
 		if cancelled() then return nil, "aborted" end
 		if util.trim(result.content) == "" and #result.toolCalls == 0 then
 			local message = result.finish == "content_filter" and "Gemini filtered this response" or "Gemini returned no answer or function call"
