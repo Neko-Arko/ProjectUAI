@@ -1,30 +1,28 @@
-# Provider setup guides
+# 提供商设置指南
 
-Open **Providers > Add a provider**, choose the named preset, enter your key,
-fetch models, choose an exact ID and save. The preset fills in the URL, protocol
-and authentication style. It does not buy credits or confirm account access.
+打开 **Providers > Add a provider**，选择对应的预设，输入你的密钥，获取模型，
+选定准确的 ID 并保存。预设会填充 URL、协议与认证方式。它不会购买额度，
+也不会确认账户访问权。
 
-| Preset | Access and setup |
+| 预设 | 访问与设置 |
 | --- | --- |
-| [Vercel AI Gateway](vercel.md) | Monthly credits for eligible free-tier models; paid catalog is broader |
-| [Perplexity Orchestrator](perplexity.md) | Funded API account, separate from other Perplexity APIs |
-| [FriendliAI Model APIs](friendli.md) | Personal API key and team balance; shared serverless endpoint |
-| [Venice](venice.md) | Inference Only key, funded credits and per-key spending limits |
-| [Nscale](nscale.md) | API key and credits for serverless inference |
-| [Arcee AI](arcee.md) | Platform key, current hosted IDs and published token rates |
-| [AI/ML API](aimlapi.md) | Paid API access; documented free tier is paused |
+| [Vercel AI Gateway](vercel.md) | 符合条件的免费层模型每月额度；付费目录覆盖更广 |
+| [Perplexity Orchestrator](perplexity.md) | 已充值的 API 账户，独立于其他 Perplexity API |
+| [FriendliAI Model APIs](friendli.md) | 个人 API 密钥与团队余额；共享的无服务器端点 |
+| [Venice](venice.md) | Inference Only 密钥、已充值额度以及按密钥的支出上限 |
+| [Nscale](nscale.md) | 用于无服务器推断的 API 密钥与额度 |
+| [Arcee AI](arcee.md) | 平台密钥、当前托管的 ID 与公布的令牌费率 |
+| [AI/ML API](aimlapi.md) | 付费 API 访问；文档所述的免费层已暂停 |
 
-For other connections, see [AgentRouter](../AGENTROUTER.md),
-[Kilo quota recovery](../KILO_TUNNEL.md), [Cline desktop setup](../CLINE_TUNNEL.md)
-and the [provider compatibility contract](../PROVIDER_COMPATIBILITY.md).
+其他连接方式请参见 [AgentRouter](../AGENTROUTER.md)、
+[Kilo 配额恢复](../KILO_TUNNEL.md)、[Cline 桌面端设置](../CLINE_TUNNEL.md)
+以及 [提供商兼容性约定](../PROVIDER_COMPATIBILITY.md)。
 
-The public documentation and unauthenticated model catalogs used for these
-guides were checked on October 25, 2026. Paid inference was not exercised.
-Successful model discovery proves only that the catalog could be read; it does
-not prove a key is valid, funded, authorized for every model or below its limit.
+这些指南所用的公开文档与免认证模型目录已于 2026 年 10 月 25 日核对。
+未实际执行付费推断。模型发现成功仅证明该目录可被读取；并不证明密钥有效、
+已充值、对每个模型都已获授权或未超出其上限。
 
-Model menus support multiword search. Fetch and manual-entry actions remain
-available when a search has no matches. UAI hides explicitly incompatible catalog
-kinds on these providers' documented routes; manually entered IDs remain available.
-Choose a model that supports tool calling for agent work. A chat-compatible entry
-can still lack tools, image input or a particular reasoning setting.
+模型菜单支持多词搜索。当搜索没有匹配结果时，获取与手动输入操作仍然可用。
+在这些提供商文档化的路由上，UAI 会隐藏明确不兼容的目录类型；手动输入的 ID
+仍然可用。为智能体工作选择支持工具调用的模型。某个条目即便兼容聊天，
+也可能缺少工具、图像输入或特定的推理设置。

@@ -1,34 +1,31 @@
-# Finding tools efficiently
+# 高效查找工具
 
-Open **Tools** to search names, descriptions, groups and risk labels. Words can
-match different fields: `file read` finds file-reading actions even when the
-registered name uses underscores. The result count updates as you type.
-**Parameters & permissions** builds details only for the tool you open, keeping
-the full catalog cheaper to browse. Permission changes still apply immediately.
+打开 **Tools** 可搜索名称、描述、分组与风险标签。多个词可以匹配不同字段：
+即使注册名使用下划线，`file read` 也能找到读取文件的操作。结果数量会随输入
+实时更新。**Parameters & permissions** 仅为当前打开的工具构建详情，从而使
+浏览完整目录的开销更低。权限变更仍然立即生效。
 
-For model-driven work, the Lean and task-specific tool profiles reduce the
-declarations sent with each request. They preserve access to otherwise available
-tools through `tool_search`; a profile never grants an unavailable capability,
-disabled group, denied permission or tool outside the conversation's scope.
+在由模型驱动的工作中，Lean 与面向特定任务的工具配置会减少随每个请求发送的
+声明。它们通过 `tool_search` 保留对原本可用工具的访问；任何配置都不会授予
+不可用的能力、已禁用的分组、被拒绝的权限，或超出会话范围的工具。
 
 ```json
 {"action":"list","query":"workspace source","limit":10}
 ```
 
-Search requires every word, matches plain text rather than Lua patterns, and
-ranks exact tool names first. Queries are limited to 256 bytes and 16 distinct
-words. A blank query retains catalog order. `group` selects one exact group.
+搜索要求每个词都匹配，按纯文本而非 Lua 模式进行匹配，并将完全一致的工具名
+排在最前。查询限制为 256 字节与 16 个不同的词。空查询保留目录原有顺序。
+`group` 用于选择一个精确分组。
 
 ```json
 {"action":"describe","name":"file_read","limit":2000}
 ```
 
-Describe returns the normalized schema used in provider declarations. Its
-`limit` counts bytes; list limits count rows. List pages contain at most 100
-rows, and schema pages request at most 20,000 bytes within the configured tool
-result budget. Follow `nextOffset` to continue. This fixes the former shared
-100-byte schema limit, which made explicit schema-page reads unnecessarily small.
+Describe 返回提供商声明中使用的规范化模式。其 `limit` 以字节计数；列表的
+limit 则以行计数。列表分页最多包含 100 行，模式分页在配置的工具结果预算内
+最多请求 20,000 字节。通过 `nextOffset` 继续翻页。这修复了此前共享的 100 字节
+模式限制，该限制使显式的模式分页读取变得不必要地小。
 
-Call the discovered tool through `action=call` with its exact arguments. UAI
-checks its current permission and scope again at dispatch. Search/listing does
-not clone all nested schemas, and only describe materializes the selected one.
+通过 `action=call` 并传入准确参数来调用已发现的工具。UAI 在派发时会再次检查
+其当前权限与范围。搜索/列表不会克隆所有嵌套模式，只有 describe 会实例化
+所选的那一个。

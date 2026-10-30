@@ -1,115 +1,77 @@
-# Tool context, evidence and support
+# 工具上下文、证据与支持
 
-Three capabilities share one goal: keep the agent's context small without taking
-capabilities away, keep its evidence after the context is compacted, and make a
-failure report useful without exposing credentials.
+三项能力共享一个目标：在不削减能力的前提下保持智能体的上下文精简，在上下文被压缩后保留其证据，并让失败报告在不暴露凭据的情况下有用。
 
-## Tool profiles
+## 工具配置档
 
-Every offered tool's schema is part of every provider request. The full catalogue
-is roughly 27k tokens; a profile declares a smaller set while leaving every tool
-callable.
+每个提供的工具的 schema 都会包含在每次提供商请求中。完整目录约为 27k token；配置档只声明较小的集合，同时让所有工具仍可调用。
 
-| Profile | Declares |
+| 配置档 | 声明内容 |
 | --- | --- |
-| **All tools** (default) | Every available tool, exactly as before. |
-| **Lean** | A core set of files, execution, instance, memory and delegation tools. |
-| **Inspect** | Core plus remotes, screen, diagnostics, metadata, web and capture. |
-| **Build** | Core plus the code workspace, interface and project tools. |
-| **Script UI** | Core plus the code workspace and interface tools. |
-| **Integrations** | Core plus Gravity, Infinite Yield, players, character, world and remotes. |
-| **Chat** | Core plus in-game chat and players. |
+| **所有工具**（默认） | 所有可用工具，与之前完全一致。 |
+| **精简** | 文件、执行、实例、记忆与委派工具的核心集合。 |
+| **检视** | 核心集合加上远程、屏幕、诊断、元数据、网页与捕获。 |
+| **构建** | 核心集合加上代码工作区、界面与项目工具。 |
+| **脚本 UI** | 核心集合加上代码工作区与界面工具。 |
+| **集成** | 核心集合加上 Gravity、Infinite Yield、玩家、角色、世界与远程。 |
+| **聊天** | 核心集合加上游戏内聊天与玩家。 |
 
-Set it in **Settings → Agent → Tool profile** or `agent.toolProfile` in
-configuration. The default stays **All**, so existing behavior is unchanged.
+在 **Settings → Agent → Tool profile** 或配置中的 `agent.toolProfile` 设置它。默认仍为 **All**，因此现有行为不变。
 
-A profile only changes the declarations sent to the provider. It never changes
-dispatch scope, permission rules or the conversation's tool groups. Hidden tools
-remain reachable through `tool_search`:
+配置档只改变发送给提供商的声明。它绝不改变调度范围、权限规则或对话的工具分组。隐藏的工具仍可通过 `tool_search` 访问：
 
-- `action = "list"` finds names by query or group.
-- `action = "describe"` returns the exact schema pages.
-- `action = "call"` runs the tool with its declared arguments.
+- `action = "list"` 按查询或分组查找名称。
+- `action = "describe"` 返回精确的 schema 页面。
+- `action = "call"` 以声明的参数运行工具。
 
-A tool that is denied, outside the conversation's scope, in a disabled group, or
-missing a capability is not listed and cannot be called through the toolbox.
+被拒绝、超出对话范围、位于已禁用分组或缺某项能力的工具不会被列出，也无法通过工具箱调用。
 
-## Persistent evidence ledger
+## 持久证据账本
 
-Substantial tool results are copied under the app root
-(`evidence/<conversation>/`) with a compact per-conversation index. The normal
-inline result is unchanged, so this is additive rather than a replacement.
+较大的工具结果会复制到应用根目录下（`evidence/<conversation>/`），并附带按对话的紧凑索引。常规的内联结果保持不变，因此这是追加而非替代。
 
-The default **Large results** policy keeps results at or above 8 KiB, deduplicates
-identical results and skips tools that already have a durable home: source and
-file reads, memory, conversation reads, the toolbox and the capture readers. A
-small result costs more to index than to call again. **Settings → Agent → Tool
-evidence** can switch to **All results** or **Off**.
+默认的 **Large results** 策略保留 8 KiB 及以上的结果，对相同结果去重，并跳过已有持久归宿的工具：源码与文件读取、记忆、对话读取、工具箱以及捕获读取器。小结果建立索引的成本高于再次调用。**Settings → Agent → Tool evidence** 可切换为 **All results** 或 **Off**。
 
-Writes are batched off the tool path: at most 64 queued results / 4 MiB are held,
-then flushed in short batches of 8 / 2 MiB. If a fast model produces results
-faster than they can be written, new entries are dropped and counted rather than
-blocking a tool call or growing memory without bound. Each text/data field is
-capped at 256 KiB.
+写入在工具路径之外批处理：最多保留 64 条排队结果 / 4 MiB，然后以 8 条 / 2 MiB 的小批次刷新。若快速模型产生结果的速度超过写入速度，新条目会被丢弃并计数，而不是阻塞工具调用或让内存无界增长。每个文本/数据字段上限为 256 KiB。
 
-The `evidence` tool reads it:
+`evidence` 工具读取它：
 
-- `list` / `search` — receipts with tool, time, bytes and a short preview.
-- `read` — full `text`, structured `data`, or a `summary`, paged by byte offset.
-- `evidence_clear` — remove this conversation's ledger.
+- `list` / `search` —— 凭条，含工具、时间、字节数与简短预览。
+- `read` —— 完整的 `text`、结构化的 `data` 或 `summary`，按字节偏移分页。
+- `evidence_clear` —— 删除此对话的账本。
 
-This is most useful after compaction removes an earlier tool result. The ledger
-is conversation-scoped: another conversation's records are not readable. The
-index keeps the newest 200 results / 16 MiB per conversation and removes the
-oldest record files. Removing a conversation removes its ledger. Evidence is
-local; it is excluded from the support bundle.
+这在压缩移除了较早的工具结果之后最有价值。账本是对话范围的：其他对话的记录不可读。索引按每个对话保留最新的 200 条结果 / 16 MiB，并删除最旧的记录文件。删除对话会删除其账本。证据是本地存储的；它被排除在支持包之外。
 
-## Compaction archive
+## 压缩归档
 
-Compaction replaces older messages with a structured handover, but it does not
-discard them. The removed messages are kept as plain text inside the conversation
-file, in segments of at most 64 KiB and at most 512 KiB total. The handover
-system message is followed by a short line naming the segments, so the agent knows
-what exists without carrying their text in every request.
+压缩会用结构化交接替换较早的消息，但不会丢弃它们。被移除的消息以纯文本形式保存在对话文件内，分段不超过 64 KiB，总计不超过 512 KiB。交接系统消息之后会跟一行简短文字，指明这些分段，因此智能体知道它们存在，而无需在每次请求中携带其文本。
 
-`context_archive` reads only this conversation's archive:
+`context_archive` 只读取此对话的归档：
 
-- `list` -- segment ids, message counts, sizes and a preview.
-- `search` -- literal matches with segment id and byte offset.
-- `read` -- a UTF-8 byte page of one segment, with `nextOffset`.
+- `list` —— 分段 id、消息数、大小与预览。
+- `search` —— 字面匹配，含分段 id 与字节偏移。
+- `read` —— 某个分段的一页 UTF-8 字节，附带 `nextOffset`。
 
-Use it to recover exact earlier wording or a receipt that the handover summarised.
-It is read-only: it does not restore messages to the live context, re-run tools or
-change the conversation. The archive is saved and restored with the conversation
-and removed with it.
+用它来恢复确切的早期措辞或交接摘要所概括的凭条。它是只读的：不会把消息恢复到活动上下文，不会重新运行工具，也不会改变对话。归档随对话一起保存与恢复，并随其删除。
 
-## Support bundle
+## 支持包
 
-`support_bundle` writes a versioned `uai-support` JSON file under
-`exports/uai-support-<time>.json` and returns its verified path. The same action
-is available as **Create support bundle** in **Settings → Developer →
-Diagnostics**.
+`support_bundle` 会在 `exports/uai-support-<time>.json` 下写入带版本号的 `uai-support` JSON 文件，并返回其经验证的路径。相同操作也可通过 **Settings → Developer → Diagnostics** 中的 **Create support bundle** 使用。
 
-It contains:
+它包含：
 
-- build/version, PlaceId and workspace identity
-- capabilities, HTTP transport and executor identity
-- redacted configuration shape and provider health
-- permission mode and rules
-- enabled tool groups and profile
-- session metadata (ids, titles, message counts — not messages)
-- recent HTTP failures without response bodies
-- recent redacted log lines
-- viewport, input mode and UI settings
+- 构建/版本、PlaceId 与工作区身份
+- 能力、HTTP 传输与执行器身份
+- 脱敏后的配置形态与提供商健康状况
+- 权限模式与规则
+- 已启用的工具分组与配置档
+- 会话元数据（id、标题、消息数——不含消息内容）
+- 最近的 HTTP 失败（不含响应体）
+- 最近已脱敏的日志行
+- 视口、输入模式与 UI 设置
 
-It deliberately excludes API keys, authorization/cookie values, custom header
-values, memory entries and custom instructions, conversation text, file contents
-and captured payloads. It is local-only; nothing is uploaded. A full
-configuration export is still the separate, key-bearing migration path.
+它有意排除 API 密钥、authorization/cookie 值、自定义头部值、记忆条目与自定义指令、对话文本、文件内容以及捕获的载荷。它仅存于本地；不会上传任何内容。完整配置导出仍是独立的、含密钥的迁移路径。
 
-## Verification
+## 验证
 
-`test/tool_profiles.lua`, `test/evidence.lua` and `test/support_bundle.lua` cover
-the profile schema reduction, toolbox scope and permission checks, durable
-receipts, truncation and cross-conversation isolation, and bundle redaction and
-filesystem failure.
+`test/tool_profiles.lua`、`test/evidence.lua` 与 `test/support_bundle.lua` 覆盖了配置档 schema 缩减、工具箱范围与权限检查、持久凭条、截断与跨对话隔离，以及支持包脱敏与文件系统失败。

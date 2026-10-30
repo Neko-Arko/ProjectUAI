@@ -1,25 +1,20 @@
-# Finding a failed request
+# 查找失败的请求
 
-Open **Logs & traces > Requests**. Search for a provider hostname, HTTP status,
-tool tag or transport. Several words can match different fields: `kilo 429`
-narrows the list to quota responses from Kilo. Clear the search to restore all
-retained requests. Filtering never deletes evidence.
+打开 **Logs & traces > Requests**。可搜索提供商主机名、HTTP 状态、工具标签
+或传输方式。多个词可以匹配不同字段：`kilo 429` 会把列表缩小到来自 Kilo 的
+配额响应。清除搜索即可恢复所有保留的请求。筛选从不会删除证据。
 
-Select a row for its duration, response size, transport, request identity and
-bounded error details. Requests with no HTTP response may be network failures or
-cancelled work; an HTTP status describes a response received from the endpoint.
-Use **Log** for application events. Its search includes source, level, message
-and detail, so a request ID or status in the detail can be found directly.
+选中一行可查看其耗时、响应大小、传输方式、请求标识与有界的错误详情。
+没有 HTTP 响应的请求可能是网络故障或已取消的工作；HTTP 状态描述的是从端点
+收到的响应。**Log** 用于查看应用事件，其搜索涵盖来源、级别、消息与详情，
+因此详情中的请求 ID 或状态可以被直接找到。
 
-**Copy** exports retained diagnostics, including rows outside the current
-filter. **Copy details** exports only the selected row. A clipboard operation
-that returns failure is shown as **Retry**. Provider request bodies and raw
-headers are excluded from the request export; recognized credentials are
-redacted. Review any diagnostic text before sharing your own application data.
+**Copy** 会导出保留的诊断信息，包括当前筛选之外的行。**Copy details** 仅导出
+所选的那一行。写入剪贴板失败的操作会显示为 **Retry**。提供商请求体与原始标头
+不包含在请求导出中；已识别的凭据会被脱敏。在分享你自己的应用数据之前，
+请先检查其中的诊断文本。
 
-Application logs retain at most 400 entries and drop old entries in batches.
-Each stored source, message and detail is bounded, with a visible omission
-marker for long values. Redaction runs before trimming, including retained
-tails. Bursts are coalesced for display while retaining the latest event.
-These limits bound diagnostic storage; they do not truncate model context or
-tool source files.
+应用日志最多保留 400 条条目，并按批丢弃旧条目。每个存储的来源、消息与详情
+都有长度上限，过长的值会带有可见的省略标记。脱敏在裁剪之前执行，包括保留的
+尾部内容。突发事件在显示时会被合并，同时保留最新的事件。这些限制约束的是
+诊断存储；它们不会截断模型上下文或工具源文件。

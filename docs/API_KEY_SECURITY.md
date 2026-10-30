@@ -1,199 +1,189 @@
-# API key security
+# API 密钥安全
 
-Project UAI 3.7.2 offers a password vault by default and a red **Continue without
-encryption** option. A vault encrypts saved provider credentials with AES-256-SIV
-and PBKDF2-HMAC-SHA256. Continuing without encryption saves keys using reversible
-byte encoding, leaves them unprotected, and skips future password prompts on this
-device. The vault password is never stored in the configuration or bundle. The
-implementation runs in bundled Luau and needs no external cryptography app.
+Project UAI 3.7.2 默认提供密码保险库，以及一个红色的 **不加密继续** 选项。保险库使用
+AES-256-SIV 和 PBKDF2-HMAC-SHA256 加密已保存的提供商凭据。选择不加密继续时，密钥以
+可逆的字节编码保存，保持不受保护，并在此设备上跳过后续的密码提示。保险库密码从不存储在
+配置或打包文件中。该实现运行在打包的 Luau 中，无需外部加密应用。
 
-Someone who obtains only the encrypted file must recover or guess the password
-to decrypt its protected fields. Use a long passphrase of several unrelated words.
-Scripts sharing the executor can still inspect live credentials, intercept requests
-or capture the password while you enter it. Encryption at rest does not isolate
-UAI from a hostile executor or another script in the same process.
+只拿到加密文件的人必须找回或猜出密码，才能解密其中受保护的字段。请使用由若干互不相关的
+词组成的长口令。与执行器共享进程的脚本仍可查看活跃凭据、拦截请求，或在你输入时捕获密码。
+静态加密并不能把 UAI 与恶意执行器或同一进程中的其他脚本隔离开。
 
-## Upgrading the version you already used
+## 升级你已在使用的版本
 
-1. Load the updated client with your existing `UAI/config.json`. Both the older
-   plaintext format and the recently introduced byte-encoded format still load.
-   Your existing keys are retained while you choose how to store them.
-2. Enter and confirm a new master password in that prompt, then choose **Set
-   password**. Use at least 12 characters, preferably
-   several unrelated words. Setup prominently warns **NO PASSWORD RECOVERY**:
-   keep the password somewhere safe, such as a password manager. If you forget it,
-   resetting removes the credentials saved in this vault, and you must add them again.
-3. After submission, the password dialog hides while a small panel at the bottom
-   right shows an operation title, the percentage, **Cancel** and **Exit**. Wait
-   for the verified-save confirmation. UAI carries over key pools, names, pauses,
-   selection, accounting IDs and custom authentication. No key re-entry is needed. Cancelling derivation
-   leaves the existing configuration intact and keeps access blocked.
-4. With encryption enabled, later executions require that password again.
-   Cancelling a running operation returns to password entry; choose **Exit** to
-   leave UAI. Re-execution and build updates preserve credentials without granting
-   password-free access.
+1. 用现有的 `UAI/config.json` 加载更新后的客户端。旧的明文格式和近期引入的字节编码格式
+   都仍可加载。在你选择存储方式期间，现有密钥会被保留。
+2. 在该提示中输入并确认新的主密码，然后选择 **设置密码**。请至少使用 12 个字符，最好是
+   若干互不相关的词。设置过程会醒目地警告 **无密码找回**：
+   请把密码保存在安全的地方，例如密码管理器中。如果忘记，重置会移除保存在该保险库中的
+   凭据，你必须重新添加它们。
+3. 提交后，密码对话框会隐藏，而右下角的小面板会显示操作名称、百分比、**取消** 和 **退出**。
+   等待已验证保存的确认。UAI 会沿用密钥池、名称、暂停状态、
+   选择、核算 ID 和自定义认证。无需重新输入密钥。取消派生
+   会保持现有配置不变，并继续阻止访问。
+4. 启用加密后，后续每次执行都需要再次输入该密码。
+   取消正在运行的操作会回到密码输入；选择 **退出** 则
+   离开 UAI。重新执行和构建更新会保留凭据，但不会给出免密码访问。
 
-To save keys without a password, choose the red **Continue without encryption**
-action instead. UAI verifies the byte-encoded save before remembering this choice
-as `security.credentialProtection = "unprotected"`. Key pools and their metadata
-are retained, but anyone who can read the file can recover those credentials.
-This is **not encryption**. Later runs skip password entry until you enable a
-vault from Privacy. An existing encrypted vault must first be unlocked for the
-current execution, or explicitly reset to discard its keys, before opting out.
-An old session-only preference alone does not make this choice for you.
+若要在不设密码的情况下保存密钥，请改选红色的 **不加密继续**
+操作。UAI 会在把该选择记为 `security.credentialProtection = "unprotected"` 之前，验证
+字节编码的保存结果。密钥池及其元数据
+会被保留，但任何能读取该文件的人都能恢复这些凭据。
+这 **不是加密**。后续运行会跳过密码输入，直到你在「隐私」中
+启用保险库。现有的加密保险库必须先为本次执行解锁，或
+显式重置以丢弃其密钥，然后才能选择退出。
+仅有旧的仅会话偏好不会替你做出这个选择。
 
-Embedding with `{ ui = false }` follows the same storage choice. With a vault,
-password entry still appears on each execution, including same-build reuse.
-The normal app stays hidden after the choice or unlock until explicitly opened.
-An unlocked client may retain its private key to protect pending saves, but a
-fresh execution still verifies the password and retains the latest live edits.
-Inference, free providers, tool calls and remote commands wait until setup/unlock
-or the explicit unprotected-storage choice succeeds.
+以 `{ ui = false }` 嵌入时遵循相同的存储选择。若使用保险库，
+每次执行仍会出现密码输入，包括同一构建内的复用。
+做出选择或解锁后，正常应用保持隐藏，直到显式打开。
+已解锁的客户端可能保留其私钥以保护待处理的保存，但
+全新执行仍会验证密码并保留最新的活跃编辑。
+推理、免费提供商、工具调用和远程命令都会等待，直到设置/解锁
+或显式的无保护存储选择成功。
 
-During password derivation for setup or unlock, the compact progress panel replaces
-the centered dialog and its full-screen backdrop. It names the operation above
-the percentage at the bottom right so the game remains visible and usable. UAI's
-own access stays blocked throughout the wait. Failure or cancellation reopens
-password entry with cleared password fields and an explanation; successful setup
-or unlock releases the access gate. Cancel and Exit remain available in the progress row,
-subject to the storage operation's existing cancellation and unload checks.
+在设置或解锁的密码派生期间，紧凑的进度面板会取代
+居中的对话框及其全屏背景。它在右下角
+百分比的上方标明操作名称，使游戏保持可见可用。UAI
+自身的访问在整个等待期间一直被阻止。失败或取消会重新打开
+密码输入，清空密码字段并给出说明；设置或解锁成功
+则解除访问限制。取消和退出在进度行中始终可用，
+受存储操作既有的取消与卸载检查约束。
 
-The encrypted configuration is first written to `UAI/config.vault.pending.json`
-and read back before the main configuration is changed. The main save is also
-verified. If it fails, UAI keeps live keys and the previous active setting and
-attempts to restore the prior bytes from memory. Keep the current session open
-when a storage error is reported. A retained encrypted pending file allows startup
-recovery if an interrupted write left the primary configuration missing or unreadable,
-or a failed removal left a session-only primary beside the remaining encrypted copy.
-Cancelled setup removes or invalidates its staged vault. If that cleanup fails,
-the storage warning remains visible so the recovery file is not silently ignored.
-No extra plaintext backup is created. Existing exports and historical files are
-not automatically removed.
+加密配置会先写入 `UAI/config.vault.pending.json`
+并回读，之后才修改主配置。主保存也会被
+验证。如果失败，UAI 会保留活跃密钥和上一个生效设置，并
+尝试从内存恢复先前的字节。报告存储错误时请保持当前会话开启。
+保留的加密待处理文件可在写入被中断、导致主配置缺失或不可读时
+用于启动恢复，或在移除失败、导致仅会话主配置与残留的加密副本并存时使用。
+取消的设置会移除或作废其暂存的保险库。如果该清理失败，
+存储警告会保持可见，以免恢复文件被静默忽略。
+不会创建额外的明文备份。现有导出和历史文件
+不会被自动删除。
 
-## Vault lifecycle and format
+## 保险库生命周期与格式
 
-**Lock now** saves current credentials before removing them from UAI's live
-configuration. Unlock restores them with the same key-pool metadata. A wrong
-password or changed ciphertext releases no credentials. Locked providers cannot
-send anonymously or accept connection edits that would overwrite the saved pool.
-Already accepted requests may hold their own snapshots until they finish.
+**立即锁定** 会先保存当前凭据，再把它们从 UAI 的活跃
+配置中移除。解锁会用相同的密钥池元数据恢复它们。密码
+错误或密文发生变化都不会释放任何凭据。已锁定的提供商不能
+匿名发送，也不能接受会覆盖已保存密钥池的连接编辑。
+已接受的请求可以持有自己的快照直到完成。
 
-Configuration loads and saves run one at a time. Credential edits wait for a save
-to finish; ordinary preference changes during a save are retained for a following
-save. UAI stays open if unload or a changed-build update is requested while password
-derivation or storage is busy. Finish the operation, or cancel derivation, then
-retry unloading or updating. Unloading after normal edits saves their latest
-encrypted values even when the usual save delay has not elapsed.
+配置的加载和保存逐个执行。凭据编辑会等待保存
+完成；保存在进行中发生的普通偏好变更会保留到下一次
+保存。若在密码派生或存储繁忙时请求卸载或切换构建更新，
+UAI 会保持开启。请完成该操作，或取消派生，然后
+重试卸载或更新。正常编辑后卸载时，即使通常的保存延迟尚未过去，
+也会保存其最新的加密值。
 
-**Change master password** requires an unlocked vault and verifies the new
-encrypted save before accepting it. **Continue without encryption** in unlocked
-vault management instead verifies byte-encoded storage before removing encryption;
-current keys are preserved. When you forget the password, **Remove saved
-credentials** explicitly discards the encrypted pool and returns to the storage
-choice. Ordinary settings remain; whether you set a new password or continue
-without encryption, you must supply provider credentials again. There is no password
-recovery or reset that retains the vault's saved credentials. Forgetting the password
-does not automatically delete anything. Resetting the vault does not revoke keys at their providers or
-erase existing exports and backups; revoke or replace provider keys separately.
+**更改主密码** 需要已解锁的保险库，并在接受之前验证新的
+加密保存。在已解锁的保险库管理中，**不加密继续**
+则会在移除加密前验证字节编码存储；
+当前密钥会被保留。忘记密码时，**移除已保存的
+凭据** 会显式丢弃加密密钥池并回到存储
+选择。普通设置会保留；无论你设置新密码还是继续
+不加密，都必须重新提供提供商凭据。不存在能保留
+保险库已保存凭据的密码找回或重置。忘记密码
+不会自动删除任何内容。重置保险库不会在提供商处吊销密钥，也不会
+抹除现有导出和备份；请在提供商处单独吊销或更换密钥。
 
-The version-1 envelope uses RFC 5297 AES-256-SIV, with two 256-bit AES keys derived
-by PBKDF2-HMAC-SHA256. New vaults and explicit password changes use **100,000
-iterations**. Existing vaults retain their recorded count, including **600,000**;
-opening or saving them does not silently change it. To rewrite an older vault at
-100,000 iterations, unlock it and use **Change master password**. You may enter
-the same existing password. Fewer derivation rounds reduce waiting and also reduce
-the work needed for offline password guesses, so use a strong passphrase. Actual
-time depends on the host.
+版本 1 的信封使用 RFC 5297 AES-256-SIV，两个 256 位 AES 密钥
+由 PBKDF2-HMAC-SHA256 派生。新保险库和显式更改密码使用 **100,000
+次迭代**。现有保险库保留其记录的次数，包括 **600,000**；
+打开或保存它们不会静默改变该数值。如需以
+100,000 次迭代重写较旧的保险库，请解锁并使用 **更改主密码**。你可以输入
+现有的同一密码。更少的派发轮次会减少等待时间，也会减少
+离线猜密码所需的工作量，因此请使用强口令。实际
+耗时取决于主机。
 
-The public GUID-based salt distinguishes vaults; it is not a secret.
-The format header and provider identities are bound to the authenticated data.
-Authentication is checked before decoded credentials are released. Unlike modes
-that require a unique random nonce for every save, SIV can
-safely operate without one; unchanged protected contents under the same key can
-produce identical ciphertext. This reveals equality, not the protected contents.
+基于公开 GUID 的盐用于区分不同保险库；它不是秘密。
+格式头和提供商标识会绑定到认证数据。
+只有在认证通过后，解码后的凭据才会被释放。与每次保存
+都要求唯一随机 nonce 的模式不同，SIV 可以在没有 nonce 的情况下
+安全运行；在相同密钥下未变动的受保护内容可能
+产生相同的密文。这只揭示了相等性，而不是受保护的内容。
 
-Password entry is masked by default, with an explicit Show action. Password fields
-are cleared after submission and on close. Only the derived key is retained in the
-vault module's private state for the unlocked run. Lock and unload release that
-reference. Lua strings and garbage collection do not guarantee secure erasure of
-all previous memory copies. Derivation yields and reports progress so cancellation
-remains available; actual unlock time depends on the host.
+密码输入默认以掩码显示，并提供显式的显示操作。密码字段
+在提交后和关闭时会被清空。在解锁运行期间，只有派生密钥保留在
+保险库模块的私有状态中。锁定和卸载会释放该
+引用。Lua 字符串和垃圾回收并不保证能安全擦除
+所有先前的内存副本。派生过程会让出并报告进度，以便保持
+可取消；实际解锁时间取决于主机。
 
-## Legacy storage compatibility
+## 旧版存储兼容性
 
-Older configurations may contain plaintext keys, reversible `storedCredentials`
-byte envelopes, or a session-only preference. These formats remain readable so
-either verified storage choice can preserve existing keys. The deliberate
-**Continue without encryption** choice uses that same byte encoding for future
-saves. A byte-envelope checksum detects accidental corruption; it does not provide
-confidentiality or authenticate the file.
+较旧的配置可能包含明文密钥、可逆的 `storedCredentials`
+字节信封，或仅会话偏好。这些格式仍然可读，以便
+任一经过验证的存储选择都能保留现有密钥。刻意选择
+**不加密继续** 时，后续保存会使用同样的字节编码。字节信封的
+校验和能检测意外损坏；它不提供机密性，也不认证该文件。
 
-Malformed or unsupported records are preserved and cannot become anonymous
-requests. Invalid encoded imports are rejected before replacing the current
-configuration. Encoding or encryption failures never fall back to plaintext.
-If the selected storage format cannot be verified, access remains blocked and
-the existing keys remain available for recovery in the current session. Both
-saved-storage choices need working filesystem support.
+格式错误或不支持的记录会被保留，且不能变成匿名
+请求。无效的编码导入会在替换当前配置之前被拒绝。
+编码或加密失败绝不会回退到明文。
+如果所选存储格式无法验证，访问会保持阻止，
+而现有密钥仍可在当前会话中用于恢复。两种
+已保存存储的选择都需要可用的文件系统支持。
 
-Credentials omitted by an earlier session-only save must be entered again after
-choosing storage. The temporary key-rotation map is never persisted because it can
-contain duplicate raw keys. Bridge and companion implementations are unchanged;
-their pairing-token persistence remains independent of the provider vault.
+被先前仅会话保存省略的凭据，在选择存储后必须重新输入。
+临时密钥轮换映射从不持久化，因为它可能
+包含重复的原始密钥。桥接和伴随端实现未变；
+它们的配对令牌持久化仍独立于提供商保险库。
 
-## Copies, diagnostics and old files
+## 副本、诊断与旧文件
 
-The normal configuration copy omits provider credentials, identity headers,
-bridge/relay tokens and recognized secret fields. The separately labelled private
-copy preserves vault encryption when enabled, or includes reversibly encoded
-credentials when encryption is disabled. It also includes existing connection
-tokens for a deliberate transfer. It remains a private document.
-Imports replace the provider configuration and retain the receiving device's
-storage choice and vault password, if any. An encrypted import asks for its source
-password before review. The destination must complete setup/unlock or deliberately
-choose unprotected storage before using imports or exports.
-Older encoded copies remain importable after that choice. Copies without credentials
-require re-entry, except included community access, which restores from a reference.
+普通配置副本会省略提供商凭据、身份头、
+桥接/中继令牌和已识别的秘密字段。单独标注的私密
+副本在启用加密时会保留保险库加密，在禁用加密时则包含可逆编码的
+凭据。它还会包含现有连接令牌，以便进行刻意的传输。它仍是
+一份私密文档。
+导入会替换提供商配置，并保留接收设备的
+存储选择和保险库密码（如果有）。加密的导入会在预览前要求其源
+密码。目标设备必须完成设置/解锁，或刻意
+选择无保护存储，才能使用导入或导出。
+在此选择之后，较旧的编码副本仍可导入。不含凭据的副本
+需要重新输入，但包含的社区访问除外，它从引用恢复。
 
-Diagnostics use the same connection sanitization. These are not universal secret
-detectors: a key manually pasted into a provider label, memory, custom instructions,
-arbitrary extension data or a URL path can still be present there. Review personal
-content before sharing. Existing exports, clipboard history, backups and old files
-are not automatically found or erased. Deleting a current copy cannot revoke a key
-already stolen or guarantee erasure from filesystem history.
+诊断使用相同的连接净化处理。这些不是通用的秘密
+检测器：手动粘贴到提供商标签、内存、自定义指令、
+任意扩展数据或 URL 路径中的密钥仍可能出现在那里。分享前
+请检查个人内容。现有导出、剪贴板历史、备份和旧文件
+不会被自动查找或擦除。删除当前副本不能吊销已被窃取的密钥，
+也不能保证从文件系统历史中抹除。
 
-## Rotate keys at the provider
+## 在提供商处轮换密钥
 
-Project UAI recommends regularly replacing personal API keys, preferably daily
-where practical. Create the replacement in the provider dashboard, update UAI,
-then **revoke the old key**. If theft is suspected, revoke the exposed key promptly
-and inspect usage/billing. Set separate project keys, least-privilege permissions,
-spending limits and alerts where the provider supports them.
+Project UAI 建议定期更换个人 API 密钥，在可行时最好每天一次。
+在提供商仪表板中创建替换密钥，更新 UAI，
+然后 **吊销旧密钥**。如果怀疑被盗，请尽快吊销
+暴露的密钥并检查用量/计费。在提供商支持的情况下，设置独立的项目密钥、
+最小权限、支出上限和告警。
 
-UAI's **Rotate keys** option distributes requests among keys already in a pool.
-It does not issue new keys, expire them or revoke old keys. Pausing/removing a key
-inside UAI also does not revoke it at the provider. Daily replacement reduces the
-lifetime of a stolen credential; it cannot prevent immediate abuse, or theft of the
-replacement by a script that remains active.
+UAI 的 **轮换密钥** 选项会在密钥池中已有的密钥之间分配请求。
+它不会签发新密钥、不会使密钥过期，也不会吊销旧密钥。在 UAI 内
+暂停/移除密钥同样不会在提供商处吊销它。每日更换能缩短
+被盗凭据的有效期；它无法阻止即时滥用，也无法阻止仍活跃的脚本
+窃取替换后的密钥。
 
-## Included community access
+## 包含的社区访问
 
-**Project UAI Free opens daily from 8 PM to 12 PM noon, GMT+8 / Beijing / Singapore.**
-That is 20:00 inclusive through 12:00 exclusive the following midday, using a fixed
-UTC+8 offset. New requests, discovery and background probes observe this window.
-Replies already accepted can finish. Personal HCNSEC keys and other providers do
-not inherit the schedule. Shared capacity and upstream limits still apply.
+**Project UAI Free 每日 20:00 至次日 12:00 开放，GMT+8 / 北京 / 新加坡时间。**
+即使用固定的 UTC+8 偏移，从 20:00（含）到次日中午
+12:00（不含）。新请求、发现和后台探测都遵守该窗口。
+已接受的回复可以完成。个人 HCNSEC 密钥和其他提供商
+不继承该时间表。共享容量和上游限制仍然适用。
 
-The included credential is distributed to every client. Its encoded bundle
-representation deters simple literal searches; the client must reconstruct it to
-authenticate, so the encoding is **reversible obfuscation, not encryption or strong
-secrecy**. Configurations and exports keep a community reference instead of its raw
-value. Exact retired included credentials migrate on the official endpoint;
-unrelated personal keys are preserved. Local references retain the included key's
-pause state, name and selection; its accounting ID changes when the credential is
-replaced. References at other endpoints cannot silently send without a key.
-Updating the client does not revoke credentials at the provider.
+包含的凭据会分发给每个客户端。其编码打包
+表示可以遏制简单的字面搜索；客户端必须重建它才能
+认证，因此该编码是 **可逆混淆，而不是加密或强
+保密**。配置和导出会保留社区引用，而不是其原始
+值。已退役的确切包含凭据会在官方端点上迁移；
+无关的个人密钥会被保留。本地引用会保留包含密钥的
+暂停状态、名称和选择；当凭据被替换时，其核算 ID 会改变。
+其他端点上的引用无法在没有密钥的情况下静默发送。
+更新客户端不会在提供商处吊销凭据。
 
-Enforcement of community hours and quotas belongs at the provider. Modified clients
-can bypass local schedule checks. The client cannot establish whether the upstream
-service enforces the announcement, and rotating a distributed shared key does not
-make its new value private.
+社区时段和配额的强制实施属于提供商的责任。修改过的客户端
+可以绕过本地时间表检查。客户端无法确定上游
+服务是否执行该公告，而轮换分发的共享密钥也不会
+使其新值变为私有。

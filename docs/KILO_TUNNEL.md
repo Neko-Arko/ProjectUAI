@@ -1,104 +1,102 @@
-# Kilo quota recovery
+# Kilo 配额恢复
 
-Project UAI 3.7.0 can recover anonymous Kilo free inference after the public IP
-allowance is exhausted. Start UAI Bridge on Windows or UAI Relay on Android,
-connect Roblox, and choose the Kilo preset with a free model. No additional
-provider or API key is needed. The first request goes directly to Kilo.
+Project UAI 3.7.0 可以在公共 IP 允许量耗尽后恢复匿名 Kilo 免费推理。在 Windows 上启动 UAI Bridge，或在 Android
+上启动 UAI Relay，连接 Roblox，并选择带有免费模型的 Kilo 预设。无需额外的
+提供商或 API 密钥。第一个请求直接发往 Kilo。
 
-After a completed HTTP 429 with `PROMOTION_MODEL_LIMIT_REACHED`, the app starts
-a private Tor connection and tries the same request. If that exit is also
-limited, it asks Tor for another circuit and retries once. A second tunnel
-refusal is returned with `x-should-retry: false`; subsequent jobs receive that
-refusal locally for 60 seconds to avoid repeated sends. Status displays **Quota
-reached** during this cooldown. A circuit change does
-not guarantee a different exit or a fresh allowance.
+在收到带有 `PROMOTION_MODEL_LIMIT_REACHED` 的完整 HTTP 429 之后，应用会启动
+一条私有 Tor 连接，并尝试同一请求。如果该出口同样
+受限，它会向 Tor 请求另一条线路并重试一次。第二次隧道
+拒绝会以 `x-should-retry: false` 返回；后续作业会在本地收到该
+拒绝 60 秒，以避免重复发送。在该冷却期间，状态显示 **配额
+已达上限**。更换线路并不
+保证获得不同的出口或新的允许量。
 
-## What was verified
+## 已验证的内容
 
-Kilo's [merged quota change](https://github.com/Kilo-Org/cloud/pull/8456), merged
-October 22, 2026, specifies **100 anonymous requests/hour/IP**, down from 200,
-and **300 authenticated requests/hour/account**. The numeric firewall settings
-are outside the public source; the account allowance was not live-tested.
-Free models share their quota, so switching models does not reset it.
+Kilo 于 2026 年 10 月 22 日合并的[配额变更](https://github.com/Kilo-Org/cloud/pull/8456)规定
+**每个 IP 每小时 100 次匿名请求**（从 200 次下调），
+以及 **每个账号每小时 300 次已认证请求**。数值化的防火墙设置
+不在公开源码中；账号允许量未经实际测试。
+免费模型共享其配额，因此切换模型不会重置配额。
 
-A controlled sequential test reached an explicit quota refusal on attempt 100
-(97 successes, two timeouts, one quota refusal). A single request through a
-different verified outbound IP then succeeded, and the original IP still
-returned 429. The bridge's real streaming inference module also completed a
-Kilo tool-call response through the tunnel. These tests establish IP-scoped
-anonymous recovery, not unlimited capacity or a guaranteed number of requests.
+一次受控的顺序测试在第 100 次尝试时收到了明确的配额拒绝
+（97 次成功、两次超时、一次配额拒绝）。随后通过另一个已验证的出站 IP
+发出的单个请求成功，而原始 IP 仍
+返回 429。桥接的真实流式推理模块也通过隧道完成了一次
+Kilo 工具调用响应。这些测试确立的是 IP 范围内的
+匿名恢复，而不是无限容量或保证的请求数量。
 
-Shared exits can already be limited, blocked or slow. Kilo can change its
-service or limits. There is no promise that every request beyond 100 will work.
-The feature cannot increase an authenticated account's allowance.
+共享出口可能已被限制、被封禁或速度很慢。Kilo 可能更改其
+服务或限制。并不保证超过 100 次后的每个请求都能成功。
+该功能无法提高已认证账号的允许量。
 
-## Free models to try
+## 可试用的免费模型
 
-Checked against the [live Kilo catalog](https://api.kilo.ai/api/gateway/models)
-on October 25, 2026. These entries report free access, zero input/output token
-prices, tool calling and reasoning support. Recommendations follow the catalog's
-descriptions and capabilities; they are not comparative benchmark results.
+已于 2026 年 10 月 25 日对照[实时 Kilo 目录](https://api.kilo.ai/api/gateway/models)
+核对。这些条目报告了免费访问、零输入/输出令牌
+价格、工具调用和推理支持。建议依据目录的
+描述和能力；并非对比性基准测试结果。
 
-| Model ID | Good starting use | Advertised context |
+| 模型 ID | 适合的起步用途 | 标称上下文 |
 | --- | --- | --- |
-| `kilo-auto/free` | Simplest default; Kilo chooses an available free model | 256,000 |
-| `reflection/beam-free` | Agent coding with reasoning; the one free route spelled with a dash | 1,048,576 |
-| `recursive/flint-v1.0:free` | Agent coding and repository changes | 262,144 |
-| `cohere/north-mini-code:free` | Coding tasks and tool use | 256,000 |
-| `nvidia/nemotron-3.5-super-vl:free` | Screenshot/image questions and text | 1,000,000 |
-| `nvidia/nemotron-3-ultra-550b-a55b:free` | Reasoning and planning | 1,000,000 |
+| `kilo-auto/free` | 最简单的默认项；由 Kilo 选择一个可用的免费模型 | 256,000 |
+| `reflection/beam-free` | 带推理的智能体编码；唯一用连字符拼写的免费路由 | 1,048,576 |
+| `recursive/flint-v1.0:free` | 智能体编码与仓库修改 | 262,144 |
+| `cohere/north-mini-code:free` | 编码任务与工具使用 | 256,000 |
+| `nvidia/nemotron-3.5-super-vl:free` | 截图/图片问答与文本 | 1,000,000 |
+| `nvidia/nemotron-3-ultra-550b-a55b:free` | 推理与规划 | 1,000,000 |
 
-Enter the exact ID in the Kilo provider's model field. Model availability and
-promotions can change. Free models share the same allowance; changing models
-does not reset it. The catalog flags these routes as allowing training on prompts.
-See Kilo's [free-model guide](https://kilo.ai/docs/advanced-usage/free-and-budget-models)
-for current terms. Poolside Laguna S 2.1 and XS 2.1 also appear as free coding
-options, but their catalog promotion expires October 31, 2026.
+在 Kilo 提供商的模型字段中输入确切的 ID。模型的可用性和
+促销可能变化。免费模型共享同一允许量；切换模型
+不会重置它。目录将这些路由标记为允许用提示进行训练。
+当前条款见 Kilo 的[免费模型指南](https://kilo.ai/docs/advanced-usage/free-and-budget-models)。
+Poolside Laguna S 2.1 和 XS 2.1 也作为免费编码
+选项出现，但其目录促销将于 2026 年 10 月 31 日到期。
 
-## Controls and status
+## 控制与状态
 
-- **Windows:** Tunnels > Kilo tunnel. Enabled by default; stop Cowork to
-  change it. The first quota recovery downloads a checksum-verified 22 MB Tor
-  Expert Bundle. Startup can take up to 150 seconds; use an adequate inference
-  deadline or the bridge's existing unlimited-wait setting.
-- **Android:** Settings > Kilo tunnel. Enabled by default; stop the relay to
-  change it. Native Tor is included in the APK and starts only after a refusal.
-  Initial setup waits at most 120 seconds, within the original request deadline.
-- **Web UI:** Tunnels and Connection display the current helper state and setup message.
-- **Roblox:** Cowork displays the connected bridge or companion's state. The
-  script delegates tunneling to that local app; direct executor HTTP does not
-  create a Tor process. Without a connected app, ordinary Kilo limits apply.
-- **Node bridge:** set `UAI_KILO_TUNNEL=0` before starting to disable recovery.
-  Set it to `1` or leave it unset to enable. Windows x64 is automatically
-  provisioned; Windows arm64 can use x64 emulation. Other platforms require an
-  installed Tor executable at an absolute `UAI_KILO_TOR_BINARY` path.
+- **Windows：** 隧道 > Kilo 隧道。默认启用；请先停止 Cowork 再
+  更改。首次配额恢复会下载一个经校验和验证的 22 MB Tor
+  Expert Bundle。启动最多可能需要 150 秒；请使用足够的推理
+  截止时间，或桥接现有的无限等待设置。
+- **Android：** 设置 > Kilo 隧道。默认启用；请先停止中继再
+  更改。原生 Tor 已包含在 APK 中，仅在收到拒绝后才启动。
+  初始设置最多等待 120 秒，仍在原始请求截止时间内。
+- **Web UI：** 隧道和连接页面显示当前辅助程序状态和设置消息。
+- **Roblox：** Cowork 显示已连接的桥接或伴随端的状态。脚本
+  把隧道处理委托给该本地应用；执行器直接发起的 HTTP 不会
+  创建 Tor 进程。没有已连接的应用时，适用 Kilo 的普通限制。
+- **Node 桥接：** 启动前设置 `UAI_KILO_TUNNEL=0` 可禁用恢复。
+  将其设为 `1` 或不设置则启用。Windows x64 会自动
+  准备；Windows arm64 可以使用 x64 模拟。其他平台需要在绝对路径
+  `UAI_KILO_TOR_BINARY` 处安装 Tor 可执行文件。
 
-The Windows archive is cached under the user's Project UAI local application
-data. Every startup rechecks its SHA-256 and extracts a fresh private session.
-The owned process and session are cleaned up when the bridge stops. Android's
-bound native service is stopped with the relay. Neither app changes the system
-VPN, global proxy settings or another provider's connection.
+Windows 归档会缓存在用户的 Project UAI 本地应用
+数据下。每次启动都会重新检查其 SHA-256，并解压出全新的私有会话。
+桥接停止时，其拥有的进程和会话会被清理。Android 的
+绑定原生服务随中继一起停止。两个应用都不会更改系统
+VPN、全局代理设置或其他提供商的连接。
 
-## Scope and replay rules
+## 范围与重放规则
 
-Only HTTPS port 443 on `api.kilo.ai` or `ai-gateway.kilo.ai`, known gateway
-inference paths, and models whose id ends in `free` behind a separator — `:free`,
-`/free` (for example `kilo-auto/free`, `openrouter/free`) or `-free`
-(`reflection/beam-free`) — qualify. URL credentials,
-query strings, authorization, API-key, token, cookie or organization headers
-exclude the request. Signed-in requests remain direct. To use a Kilo account in
-the client, select **Bearer** and enter the Kilo key; the no-key preset's
-**None** authentication style does not send a saved key.
+仅限 `api.kilo.ai` 或 `ai-gateway.kilo.ai` 上的 HTTPS 443 端口、已知的网关
+推理路径，以及 id 以分隔符后的 `free` 结尾的模型——`:free`、
+`/free`（例如 `kilo-auto/free`、`openrouter/free`）或 `-free`
+（`reflection/beam-free`）——符合条件。URL 中的凭据、
+查询字符串、authorization、API 密钥、令牌、cookie 或组织头
+会排除该请求。已登录的请求保持直连。要在客户端中使用
+Kilo 账号，请选择 **Bearer** 并输入 Kilo 密钥；无密钥预设的
+**None** 认证方式不会发送已保存的密钥。
 
-Timeouts, cancellation, ordinary failures, partial responses and interrupted
-streams do not trigger route replay. Both apps keep the caller's single finite
-deadline across setup and retry, while preserving the existing zero-timeout
-contract. Retries retain the original relay job and payload; Roblox's normal
-tool execution and permission checks are unchanged. TLS remains end to end to
-Kilo, including certificate and hostname verification through HTTP CONNECT.
+超时、取消、普通失败、部分响应和中断的
+流不会触发路由重放。两个应用在设置和重试过程中都会保留调用方单一的有限
+截止时间，同时保持现有的零超时
+约定。重试会保留原始的中继作业和载荷；Roblox 的常规
+工具执行和权限检查不变。到 Kilo 的 TLS 保持端到端，
+包括通过 HTTP CONNECT 的证书和主机名验证。
 
-The tunnel carries anonymous prompts and replies. Tor exits see the destination
-and encrypted traffic, and Kilo sees the exit IP. No provider account is created
-or switched by this feature.
+隧道承载匿名的提示和回复。Tor 出口能看到目的地
+和加密流量，Kilo 能看到出口 IP。该功能不会创建或切换任何提供商账号。
 
-Implementation and verification: [3.7.0 testing](TESTING_3.7.0.md).
+实现与验证：[3.7.0 测试](TESTING_3.7.0.md)。

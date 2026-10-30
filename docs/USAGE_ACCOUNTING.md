@@ -1,22 +1,17 @@
-# Token and cost estimates
+# 令牌与成本估算
 
-UAI records provider token counters when they are finite, nonnegative numbers.
-Missing or invalid counters use the existing request/reply estimate for that
-side of the exchange. Partial or estimated usage is labelled; a malformed
-counter cannot turn session totals negative or infinite.
+当提供商的令牌计数器为有限且非负的数值时，UAI 会记录它们。缺失或无效的
+计数器会使用该次交换对应一侧现有的请求/回复估算值。部分用量或含估算成分的
+用量会被标注；格式错误的计数器不会使会话总计变为负数或无穷大。
 
-Cached input and newly written cache tokens form parts of total input.
-Reasoning tokens form part of total output. Their counters are bounded by those
-totals to prevent double counting, and cache-write totals survive history reload.
+缓存输入与新增写入的缓存令牌构成总输入的一部分。推理令牌构成总输出的一部分。
+它们的计数器以这些总计为界，以防重复计数，缓存写入总计在历史重新加载后仍会保留。
 
-Costs use the [dated provider catalog](PROVIDER_COMPATIBILITY.md#model-prices-and-limits)
-in USD per million text tokens. A zero-cost documented route and an unknown
-price are different states. Known costs are summed, while requests without a
-known rate are counted separately. Home's per-model history shows how many
-requests had unknown cost; those counts survive restarts and remain scoped to
-the selected time range.
+成本依据 [带日期的提供商目录](PROVIDER_COMPATIBILITY.md#model-prices-and-limits)，
+以每百万文本令牌的美元数计。文档化的零成本路由与未知价格是两种不同的状态。
+已知成本会被累加，而没有已知费率的请求则单独计数。Home 的按模型历史记录会显示
+有多少请求的成本未知；这些计数在重启后仍然保留，并始终限定在所选时间范围内。
 
-Older history has no per-request cost-coverage record. UAI does not invent
-coverage for that history. Catalog prices can change and may omit request,
-image/audio, service-tier or account-specific charges. The totals are estimates,
-not billing statements.
+较早的历史记录没有逐请求的成本覆盖记录。UAI 不会为该历史凭空补造覆盖信息。
+目录价格可能变化，并且可能未包含请求、图像/音频、服务层级或账户特定的费用。
+总计为估算值，并非账单明细。
