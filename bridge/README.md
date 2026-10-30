@@ -1,294 +1,264 @@
-# Cowork bridge
+# Cowork 桥接
 
-Use UAI in your browser while Roblox runs your tools and keeps the conversation.
-Run both on the same computer. The [Windows desktop app](../desktop/README.md)
-detects installed Node.js and offers a verified download if needed. Open the
-single [UAI-Bridge-3.7.0-win-x64.exe](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.7.0/UAI-Bridge-3.7.0-win-x64.exe)
-download, complete Node setup, click **Start
-Cowork**, and load the updated UAI script. The browser opens and Roblox connects
-automatically on dedicated port **28791**. No terminal or token copying is needed.
+在浏览器中使用 UAI，同时由 Roblox 运行你的工具并保留对话。两者需运行在同一台电脑上。
+[Windows 桌面应用](../desktop/README.md) 会检测已安装的 Node.js，并在需要时提供经校验的下载。
+打开那一个 [UAI-Bridge-3.7.0-win-x64.exe](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.7.0/UAI-Bridge-3.7.0-win-x64.exe)
+下载，完成 Node 配置，点击 **开始 Cowork**，并加载更新后的 UAI 脚本。浏览器会自动打开，
+Roblox 会在专用端口 **28791** 上自动连接。无需终端，也无需复制 token。
 
-The terminal workflow below needs **Node.js 18 or newer** and has no production
-npm dependencies. It retains port 8790 and manual pairing.
+下文的终端工作流需要 **Node.js 18 或更高版本**，且没有生产环境的 npm 依赖。它保留端口 8790
+和手动配对方式。
 
-Join the [Project UAI Discord](https://discord.gg/9xYyyYuKap) for help, provider
-availability updates and new free options. Project UAI Free is the default for
-users without a provider; thank you for continuing to use and support Project UAI.
+加入 [Project UAI Discord](https://discord.gg/9xYyyYuKap) 以获取帮助、提供方可用性更新以及
+新的免费选项。Project UAI Free 是未配置提供方用户的默认选择；感谢你继续使用并支持 Project UAI。
 
-## Free model tunnels
+## 免费模型隧道
 
-Open **Tunnels** in the Windows app or Cowork to inspect OpenCode, Kilo and
-Cline. The Windows switches apply on the next bridge start. Cline requires a
-separately installed CLI and a signed-in Cline profile;
-choose **Cline (Bridge)** in Providers and fetch its current free models.
-The Windows app checks CLI installation before Cowork starts and provides
-**Refresh installed apps** independently of connection and sign-in checks.
-Kilo starts its private connection only after a completed anonymous quota refusal.
-See [Cline setup](../docs/CLINE_TUNNEL.md) and [Kilo setup](../docs/KILO_TUNNEL.md).
-Quotas and free promotions remain controlled by each service.
+在 Windows 应用或 Cowork 中打开 **隧道** 可查看 OpenCode、Kilo 和 Cline。Windows 端的开关
+在下次启动桥接时生效。Cline 需要单独安装的 CLI 和已登录的 Cline 配置文件；
+在提供方中选择 **Cline（桥接）** 并获取其当前的免费模型。
+Windows 应用会在 Cowork 启动前检查 CLI 安装情况，并提供 **刷新已安装应用**，
+该操作独立于连接与登录检查。
+Kilo 仅在一次已完成的匿名配额拒绝之后才启动其私有连接。
+参见 [Cline 配置](../docs/CLINE_TUNNEL.md) 和 [Kilo 配置](../docs/KILO_TUNNEL.md)。
+配额和免费促销仍由各服务自行控制。
 
-## OpenCode on desktop
+## 桌面端 OpenCode
 
-For external harnesses that should run Roblox tools directly, the bridge also
-provides native MCP over Streamable HTTP and stdio. Open **Settings → MCP** for
-connection details, or follow the [MCP setup guide](MCP.md) for Claude Code,
-Codex, Cursor, OpenCode and command-based MCP clients. Roblox retains permission
-decisions and executes tools in isolated external sessions.
+对于应当直接运行 Roblox 工具的外部 harness，桥接还通过 Streamable HTTP 和 stdio 提供原生 MCP。
+打开 **设置 → MCP** 查看连接详情，或按 [MCP 配置指南](MCP.md) 为 Claude Code、Codex、Cursor、
+OpenCode 以及基于命令的 MCP 客户端完成配置。权限决定仍由 Roblox 掌握，工具在隔离的外部会话中执行。
 
-The existing direct desktop workaround remains supported. Version 3.2 also adds
-an optional native route through an **already installed OpenCode CLI**. Install
-[OpenCode Desktop](https://opencode.ai), restart Cowork, and wait for its OpenCode
-status to become ready. UAI does not download or package the OpenCode binary.
-OpenCode free models require the UAI Relay app from Discord on mobile; install and
-start the app, then connect it in UAI. Project UAI Free also remains available.
-The retired OpenCode HTTPS proxy is never used; the proxy supports AgentRouter only.
+现有的桌面直连变通方案仍然受支持。3.2 版本还新增了一条经由**已安装的 OpenCode CLI** 的可选原生
+路径。安装 [OpenCode Desktop](https://opencode.ai)，重启 Cowork，并等待其 OpenCode 状态变为就绪。
+UAI 不会下载或打包 OpenCode 二进制文件。
+移动端的 OpenCode 免费模型需要来自 Discord 的 UAI Relay 应用；安装并启动该应用，然后在 UAI 中连接它。
+Project UAI Free 也仍然可用。
+已停用的 OpenCode HTTPS 代理绝不会被使用；该代理仅支持 AgentRouter。
 
-**OpenCode Go subscriptions use a separate endpoint:**
-`https://opencode.ai/inference/go/v1`, with your Go API key. The legacy
-`https://opencode.ai/zen/go/v1` route also remains accepted. Go requests use that
-endpoint directly and never enter the isolated native free-model connection.
-The desktop-only free-model restriction does not apply to Go subscriptions.
+**OpenCode Go 订阅使用单独的端点：**
+`https://opencode.ai/inference/go/v1`，并使用你的 Go API key。旧有的
+`https://opencode.ai/zen/go/v1` 路由也仍然被接受。Go 请求直接使用该端点，
+绝不会进入隔离的原生免费模型连接。
+仅限桌面端的免费模型限制不适用于 Go 订阅。
 
-The bridge detects OpenCode Desktop's per-user and all-user Windows installations,
-macOS app bundles, native `opencode-cli`/`opencode` binaries on PATH, and
-`~/.opencode/bin`. It also finds native payloads behind npm and Bun shims, including
-the Windows user npm folder when the desktop app inherited an older PATH, active
-nvm paths, and custom `NPM_CONFIG_PREFIX`/`BUN_INSTALL` locations. For the current
-standalone v2 CLI, use `npm install -g @opencode/cli`; the legacy `opencode-ai`
-package may still install an incompatible v1 server. After installing, stop and
-start Cowork. Quoted PATH folders are supported. A custom native binary may be
-selected with the absolute `UAI_OPENCODE_BINARY` environment variable; an invalid
-override is reported as missing instead of silently selecting another installation.
-Shell shims and the Electron Desktop launcher are not executed.
-`UAI_OPENCODE_DISABLED=1` disables this optional route.
-OpenCode's v2 server API is required (verified with CLI 2.0.32). The bridge checks
-all required routes before accepting requests and reports the selected binary's
-actual version. Incompatible installations produce an update instruction.
-If more than one native installation is present, setup checks the next candidate
-after stopping an incompatible or failed one. An older CLI on PATH cannot hide a
-working v2 installation. This happens before inference; a running request never
-switches CLI processes or repeats inference. An explicit binary override selects
-only that installation.
-The desktop app's **OpenCode tunnel** switch persists between launches and applies
-when Cowork starts. It controls this private local connection, not a public tunnel.
+桥接会检测 OpenCode Desktop 在 Windows 上的按用户与所有用户安装、macOS 应用包、
+PATH 上的原生 `opencode-cli`/`opencode` 二进制文件，以及 `~/.opencode/bin`。
+它还能发现 npm 和 Bun shim 背后的原生载荷，包括桌面应用继承了较旧 PATH 时的 Windows 用户
+npm 文件夹、处于活动状态的 nvm 路径，以及自定义的 `NPM_CONFIG_PREFIX`/`BUN_INSTALL` 位置。
+对于当前独立的 v2 CLI，请使用 `npm install -g @opencode/cli`；旧版 `opencode-ai`
+包可能仍会安装不兼容的 v1 服务器。安装后，请停止并重新启动 Cowork。支持带引号的 PATH 文件夹。
+可用绝对路径的 `UAI_OPENCODE_BINARY` 环境变量选择自定义原生二进制文件；无效的覆盖值会被
+报告为缺失，而不会静默选择另一个安装。
+不会执行 shell shim 和 Electron Desktop 启动器。
+`UAI_OPENCODE_DISABLED=1` 会禁用这条可选路径。
+需要 OpenCode 的 v2 服务器 API（已用 CLI 2.0.32 验证）。桥接在接受请求前会检查所有必需的
+路由，并报告所选二进制文件的实际版本。不兼容的安装会给出更新指引。
+如果存在多个原生安装，配置流程会在停止一个不兼容或失败的安装后检查下一个候选。
+PATH 上较旧的 CLI 无法掩盖可用的 v2 安装。此过程发生在推理之前；运行中的请求绝不会切换
+CLI 进程或重复推理。显式的二进制覆盖只会选择该安装。
+桌面应用的 **OpenCode 隧道** 开关在多次启动之间保持，并在 Cowork 启动时生效。它控制的是这条
+私有本地连接，而非公共隧道。
 
-The bridge starts `serve` privately on a random loopback port with a random Basic
-Auth password and isolated configuration/data directories. It never reads the
-user's OpenCode account credentials or forwards a provider key to that process.
-Only models reported by the native public catalog route through it; paid/custom
-models and installations without a ready native backend retain the direct path.
-Model discovery uses authenticated `GET /api/opencode/models`; `/api/hello` exposes
-`capabilities.opencode = {schema:1, enabled, available, state, models, binary?, version?, message?}`
-without CLI credentials. Disabled, missing, starting, ready and failed states are
-distinct; `binary` is only the executable's filename.
+桥接会在随机回环端口上以随机的 Basic Auth 密码和隔离的配置/数据目录私有地启动 `serve`。
+它绝不会读取用户的 OpenCode 账户凭据，也不会把提供方密钥转发给该进程。
+只有原生公共目录所报告的模型会经由它路由；付费/自定义模型以及没有就绪原生后端的安装保留直连路径。
+模型发现使用经过认证的 `GET /api/opencode/models`；`/api/hello` 会在不需要 CLI 凭据的情况下
+暴露 `capabilities.opencode = {schema:1, enabled, available, state, models, binary?, version?, message?}`。
+已禁用、缺失、启动中、就绪和失败这几种状态相互区分；`binary` 只包含可执行文件的文件名。
 
-Each request gets a temporary native session and location. UAI tools are exposed
-through a private MCP server, collected after the provider stream completes, and
-returned as ordinary tool calls for Roblox to execute. Native desktop actions are
-never approved. A private plugin adds an execution permission gate even when a
-native tool wrapper omits its own permission request. Exact UAI tool names on the
-private remote MCP server remain available; other host execution must ask.
-The native built-in schemas remain visible, as hiding them causes upstream
-`FreeTierError`. The bridge waits for a tool's matching pending permission,
-including requests that appear after its tool state. A desktop tool choice with
-that permission becomes a reserved `opencode_host_action` refusal
-receipt after the stream finishes and interruption is confirmed. The next normal
-Roblox agent step can use an available tool; the bridge never repeats the native
-prompt or approves that desktop action. Mixed batches retain provider order even
-when MCP calls arrive out of order. Text/reasoning previews and image
-attachments pass through the native API. Stop interrupts and deletes the session;
-bridge shutdown stops the owned CLI and removes its temporary data. Requests keep
-their original bridge ID across polling retries. No inference deadline is added.
-Usage totals include cached input and reasoning output; cache reads, cache writes,
-and reasoning counts remain available separately for UAI's usage accounting.
+每个请求都会获得一个临时的原生会话和位置。UAI 工具通过一个私有 MCP 服务器暴露，
+在提供方数据流结束后收集，并作为普通工具调用返回给 Roblox 执行。原生桌面操作绝不会被批准。
+即使某个原生工具封装省略了自己的权限请求，一个私有插件也会加上执行权限关卡。
+私有远程 MCP 服务器上的确切 UAI 工具名仍然可用；其他宿主执行必须请求许可。
+原生内置 schema 保持可见，因为隐藏它们会引发上游的 `FreeTierError`。
+桥接会等待工具对应的待处理权限，包括在工具状态之后才出现的请求。
+带有该权限的桌面工具选择会在数据流结束并确认中断之后，变成保留的
+`opencode_host_action` 拒绝回执。接下来的正常 Roblox 智能体步骤可以使用可用的工具；
+桥接绝不会重复原生提示，也不会批准该桌面操作。即使 MCP 调用乱序到达，混合批次仍保持提供方顺序。
+文本/推理预览和图片附件会通过原生 API 传递。停止会中断并删除会话；
+桥接关闭时会停止其拥有的 CLI 并删除其临时数据。请求在多次轮询重试之间保持其原始桥接 ID。
+不会额外添加推理截止时间。用量总计包含缓存输入和推理输出；
+缓存读取、缓存写入和推理计数仍分别可用，以供 UAI 的用量核算。
 
-## Start in three steps
+## 三步启动
 
-1. **Download and start.** In Roblox, open **UAI → Cowork → Download bridge files**.
-   Open a terminal in your executor's workspace folder—the folder containing
-   `UAI`—and run:
+1. **下载并启动。** 在 Roblox 中打开 **UAI → Cowork → 下载桥接文件**。
+   在执行器的工作区文件夹（即包含 `UAI` 的文件夹）中打开终端，并运行：
 
    ```powershell
    node UAI/bridge/start.txt
    ```
 
-   From a Git checkout instead, open a terminal in the repository folder and run
-   `node bridge/server.js`.
-2. **Connect Roblox.** The terminal prints a **Token**, a port (normally `8790`),
-   and a browser link. Paste the token into **UAI → Cowork**, match the port,
-   and turn **Enabled** on.
-3. **Open the browser link.** Choose a provider and model, then send a message.
-   Keep Roblox and the terminal open while you work. Press `Ctrl+C` in the
-   terminal when you want to stop the bridge.
+   若是从 Git 检出副本运行，则在仓库文件夹中打开终端并运行
+   `node bridge/server.js`。
+2. **连接 Roblox。** 终端会打印一个 **Token**、一个端口（通常为 `8790`）
+   和一个浏览器链接。把 token 粘贴到 **UAI → Cowork** 中，匹配端口，
+   并打开 **Enabled**。
+3. **打开浏览器链接。** 选择提供方和模型，然后发送消息。
+   工作时保持 Roblox 和终端开启。想停止桥接时，在终端中按 `Ctrl+C`。
 
-No `npm install` or manual file renaming is needed. The download uses `.txt`
-files because some executors block executable file extensions. Node checks their
-sizes and Git blob hashes, restores their original names inside the downloaded
-package, and starts the bridge. Downloads use one pinned revision and a new
-package folder; the launcher changes only after all downloaded files are saved.
+无需 `npm install`，也无需手动重命名文件。下载使用的是 `.txt`
+文件，因为某些执行器会阻止可执行文件的扩展名。Node 会检查它们的大小和 Git blob 哈希，
+在下载的包内恢复其原始名称，并启动桥接。下载使用同一个固定修订版本和新的
+包文件夹；只有在所有下载文件都保存完成后，启动器才会变更。
 
-After a manual restart, open the **new** browser link and paste the **new** token into
-Roblox. To use a different port, append `--port 8791` to the start command and
-enter that port in Roblox too.
+手动重启后，请打开**新的**浏览器链接，并把**新的** token 粘贴到
+Roblox 中。要使用其他端口，请在启动命令后追加 `--port 8791`，并在 Roblox 中
+也填写该端口。
 
-## Automatic updates
+## 自动更新
 
-The bridge checks official stable GitHub releases after startup and every 15
-minutes, downloads compatible releases and verifies the package and file SHA-256
-hashes. It activates updates only when inference, commands, agents and retained
-receipts/pictures are idle. Pairing tokens survive automatic worker restarts.
-Failed downloads or startup keep a working version. Git checkouts and executor
-download packages are never overwritten; updates live in a per-install user cache.
-The desktop app can also trigger one immediate supervised check through the
-authenticated `POST /api/desktop/update-check`; the supervisor answers with its
-update state before any restart it causes. The cache keeps the active version
-and recent entries, and prunes stale predecessors and quarantine folders.
+桥接会在启动后以及每隔 15 分钟检查 GitHub 官方稳定版本，下载兼容的版本并校验包与文件的 SHA-256
+哈希。只有在推理、命令、智能体和保留的回执/图片都空闲时，它才会启用更新。配对
+token 在自动工作进程重启后仍然有效。下载或启动失败会保留可用的版本。Git 检出副本和
+执行器下载包绝不会被覆盖；更新存放在按安装划分的用户缓存中。
+桌面应用还可以通过经过认证的 `POST /api/desktop/update-check` 触发一次立即的
+受监督检查；监督进程会在其引发的任何重启之前返回更新
+状态。缓存保留活动版本和近期条目，并清理过期的前驱版本和隔离文件夹。
 
-Publish `dist/bridge-release.json` and `dist/uai-bridge-package.json` on the same
-official `v3.6.7` GitHub release together with the matching desktop assets; the
-client and Android companion continue from their own current releases. Generate
-the bundles with
-`node tools/build_bridge.js` after reviewing final bridge/web inputs, inspect
-the outputs, then run `node tools/build_bridge.js --check` and focused tests.
-Later releases must bump `bridge/release.js` and use the matching release tag.
-The release builder embeds OpenCode, MCP and support helpers into the original
-permitted root filenames so installed 3.1 updaters can verify and activate 3.6.7. Checkout,
-executor downloads and desktop payloads retain the separate source modules.
+在同一个官方 `v3.6.7` GitHub 版本上发布 `dist/bridge-release.json` 和
+`dist/uai-bridge-package.json`，并附带匹配的桌面资源；客户端和 Android 伴生端
+则从各自当前的版本继续。在审阅最终的 bridge/web 输入后，用
+`node tools/build_bridge.js` 生成打包产物，检查
+输出，然后运行 `node tools/build_bridge.js --check` 和针对性测试。
+后续版本必须提升 `bridge/release.js` 并使用匹配的发布标签。
+发布构建器会把 OpenCode、MCP 和支持辅助文件嵌入原本允许的根文件名中，以便已安装的 3.1
+更新器可以校验并启用 3.6.7。检出副本、
+执行器下载和桌面载荷保留各自的独立源模块。
 
-The 3.6.7 release supplies the matching bridge, web and Windows app versions;
-the Roblox client remains 3.6.6. Existing compatible installs receive bridge and web updates while idle.
-Refresh an open browser page to load changed web assets. The desktop's **Copy
-client script** uses its embedded client; update the desktop app to refresh that
-copy. See [3.6.5 verification](../docs/TESTING_3.6.5.md) and the earlier
-[bridge 3.6.2 record](../docs/TESTING_3.6.2.md).
+3.6.7 版本提供了匹配的桥接、web 和 Windows 应用版本；
+Roblox 客户端仍为 3.6.6。现有的兼容安装会在空闲时收到桥接和 web 更新。
+刷新已打开的浏览器页面以加载变更后的 web 资源。桌面端的 **复制
+客户端脚本** 使用其内嵌的客户端；更新桌面应用即可刷新该
+副本。参见 [3.6.5 验证](../docs/TESTING_3.6.5.md) 以及更早的
+[桥接 3.6.2 记录](../docs/TESTING_3.6.2.md)。
 
-The [desktop app](../desktop/README.md) independently downloads its own release
-and applies it on restart. An old 1.0 desktop ZIP needs one manual upgrade first.
+[桌面应用](../desktop/README.md) 会独立下载自己的版本
+并在重启时应用。旧的 1.0 桌面 ZIP 需要先手动升级一次。
 
-## Working in the browser
+## 在浏览器中工作
 
-- **Streaming is real when the provider supplies it.** Cowork reads incoming SSE
-  chunks and pushes text/reasoning deltas to the browser as they arrive. Roblox
-  also displays those deltas through short status polls, roughly once a second,
-  when both the bridge and script include the native-preview update. Restart the
-  bridge and reload the script to use it. Old bridges, direct executor HTTP and
-  providers that return only a final answer cannot show text before delivery.
-  The installed OpenCode route reads its evolving local response; it cannot
-  expose output that the installed CLI has not returned yet.
-- **Chat** follows the active Roblox conversation. Use the sidebar to find or
-  start conversations; draft text and code files stay with their conversation.
-  An empty conversation centers the prompt and composer, with quick ideas below.
-  Live answers format as they arrive; new text fades in while completed paragraphs
-  and code remain steady. Thinking and tool details open when you want to read them.
-  Each user turn has one response heading and continuous answer text. Tools,
-  thinking and delegated updates share a collapsed **Activity** drawer below the
-  answer. Progress and failures remain visible in its summary; permission prompts
-  stay outside it. **Copy response** copies the answer without internal activity.
-  Expand reasoning for its formatted text and separate Copy action. Error cards
-  explain the problem and show recovery actions; the original diagnostic remains
-  available under technical details.
-- **Runtime follows the connection.** Successful authenticated bridge contact
-  selects Web automatically, with live responses when the provider supports
-  streaming. Disconnecting restores Game for subsequent requests. Roblox owns
-  conversations and tools in both modes; reconnecting never resends a message.
-- **Bridged requests have no overall time limit.** Cowork waits for completion,
-  Stop, or a real provider/connection failure. This is permanent, with no timeout
-  setting. Individual status polls stay short and reuse the original request ID;
-  a stalled poll does not submit the provider request again.
-  Waiting inference jobs do not occupy the native HTTP slots needed for those
-  polls. The bridge cannot remove a provider's own timeout or a tool's execution
-  deadline.
-- **Attach text or code** with the paperclip, drag a file onto the composer, or
-  paste long text. Large inputs become verified files that the agent can read.
-  Limits: 10 MiB per file/input, 16 text files and 16 MiB per draft.
-- **Attach pictures** with the image button, paste, or drop. PNG, JPEG and WebP
-  are sent as **actual image content** to your selected model; choose one that
-  supports vision. Reload the updated game client and restart the bridge first.
-  Limits: 8 pictures, 5 MiB each, 20 MiB held by the
-  bridge, 4096 × 4096 and 12 megapixels. Animated images are not supported.
-- **Stop** cancels the current turn. Closing or refreshing the browser does not.
-  If delivery is unclear, use **Check delivery** before sending again.
-- **Follow-ups** can be sent while an answer is running. They wait visibly above
-  the composer and enter the conversation in order at a safe turn boundary.
-  Expand a numbered message to read or copy it, edit inline text, or move it up
-  or down. Images stay attached; file-backed inputs keep their verified text.
-  Clear removes only the messages reviewed in its confirmation. Stale changes
-  are rejected and your current composer draft remains intact. Remove a pending
-  message or use Resume queue after Stop, a failure, or a budget limit pauses
-  the queue. Stop stays separate from the follow-up send action.
-- **Connection, Providers, Tools, Subagents, Chat loops, Memory & skills, and
-  Activity** open in a modal workspace above your conversation. Switch views in
-  its top navigation; nested provider and tool dialogs return to the same view.
-  Connection shows the browser, bridge, and Roblox status with guided setup and
-  quick access to the bridge token. Close the workspace to return to your draft.
-- **Settings** opens a focused modal above your conversation. General offers
-  Light, Dark, System, and Roblox theme previews. Appearance, Agent, Advanced,
-  and Data organize your remaining preferences; changes save as you go.
-  **Settings → MCP → Copy setup prompt** gives your desktop agent the detected
-  connection details and instructions to configure and verify MCP for you.
-  The MCP section also offers configuration snippets for individual harnesses.
-  Free models have a rounded green border and Free label in the picker, the
-  composer, and provider summaries. Available auto-routing probe status is
-  displayed without promising the same latency on future requests.
-  The model picker pairs searchable model cards with context/output limits and
-  the selected model’s supported reasoning controls. Temperature handling can
-  follow known model/provider support automatically or explicitly send/omit the
-  shared value for a model. Provider setup supports Gemini generateContent as
-  well as OpenAI-compatible and Anthropic Messages APIs. The composer’s context ring
-  opens a token breakdown and compaction threshold; partial estimates and unknown
-  context limits are labelled explicitly.
-  **Subagents → Preview** opens live output, expandable tool progress/results,
-  and task/access details in separate tabs. Reading position, open calls and
-  follow-up drafts survive live updates. When the run finishes, send a follow-up
-  into its retained context or copy its report; Stop remains independent.
-  Browser previews retain bounded excerpts and up to 12 active/recent tool calls.
-  Conversation text scaling keeps sidebar labels compact. Dialogs keep their
-  headings and actions available while long forms scroll, and restore focus
-  when dismissed. Client animations are permanently enabled; browser system
-  reduced-motion preferences still apply to browser transitions.
-  Exported conversations include picture metadata, not image bytes. A full
-  configuration export includes API keys.
+- **提供方支持时，流式输出是真实的。** Cowork 会读取传入的 SSE
+  分块，并在文本/推理增量到达时推送到浏览器。当桥接和脚本都包含原生预览
+  更新时，Roblox 还会通过大约每秒一次的状态短轮询显示这些增量。重启
+  桥接并重新加载脚本即可使用。旧的桥接、执行器直连 HTTP 以及
+  只返回最终答案的提供方无法在交付前显示文本。
+  已安装的 OpenCode 路由会读取其不断演进的本地响应；它无法
+  暴露已安装 CLI 尚未返回的输出。
+- **聊天** 跟随活动的 Roblox 对话。使用侧边栏查找或
+  开始对话；草稿文本和代码文件会随其对话保留。
+  空对话会将提示框和输入区居中，下方显示快捷想法。
+  实时答案在到达时进行格式化；新文本淡入，而已完成的段落
+  和代码保持稳定。思考和工具详情在你想要阅读时打开。
+  每个用户轮次有一个响应标题和连续的答案文本。工具、
+  思考和委派更新共享答案下方收起的 **活动** 抽屉。
+  进度和失败仍在其摘要中可见；权限提示
+  位于其外。**复制响应** 会复制答案，不含内部活动。
+  展开推理可查看其格式化文本和单独的复制操作。错误卡片
+  会解释问题并显示恢复操作；原始诊断信息仍可
+  在技术详情下查看。
+- **运行时随连接变化。** 经过认证的桥接连接成功后
+  会自动选择 Web，并在提供方支持流式输出时提供实时响应。断开连接后，
+  后续请求恢复为 Game。两种模式下对话和工具都由 Roblox 掌握；
+  重新连接绝不会重发消息。
+- **桥接请求没有总时限。** Cowork 会等待完成、
+  停止或真正的提供方/连接失败。这是永久性的，没有超时
+  设置。单次状态轮询保持短暂，并复用原始请求 ID；
+  轮询停滞不会再次提交提供方请求。
+  等待中的推理任务不会占用这些轮询所需的原生 HTTP 槽位。
+  桥接无法移除提供方自身的超时或工具的执行
+  截止时间。
+- **附加文本或代码**：使用回形针、把文件拖到输入区，或
+  粘贴长文本。大型输入会变成智能体可以读取的经校验文件。
+  限制：每个文件/输入 10 MiB，每个草稿 16 个文本文件和 16 MiB。
+- **附加图片**：使用图片按钮、粘贴或拖放。PNG、JPEG 和 WebP
+  会作为**真实的图片内容**发送给你所选的模型；请选择
+  支持视觉的模型。请先重新加载更新后的游戏客户端并重启桥接。
+  限制：8 张图片，每张 5 MiB，桥接持有 20 MiB，
+  4096 × 4096 且 12 百万像素。不支持动态图片。
+- **停止** 会取消当前轮次。关闭或刷新浏览器则不会。
+  如果交付情况不明，请在再次发送前使用 **检查交付**。
+- **后续消息** 可以在答案运行期间发送。它们会可见地等待在
+  输入区上方，并在安全的轮次边界按顺序进入对话。
+  展开带编号的消息以阅读或复制、就地编辑文本，或将其上移
+  或下移。图片保持附加；以文件为载体的输入保留其经校验的文本。
+  清除仅移除其确认中所列的消息。过期的变更
+  会被拒绝，你当前的输入区草稿保持完整。移除待处理的
+  消息，或在停止、失败或预算限制暂停队列后使用恢复队列。
+  停止与后续消息的发送操作保持分离。
+- **连接、提供方、工具、子智能体、聊天循环、记忆与技能以及
+  活动** 会在你对话上方的模态工作区中打开。在其顶部导航中
+  切换视图；嵌套的提供方和工具对话框会返回同一视图。
+  连接会显示浏览器、桥接和 Roblox 状态，并提供引导式配置和
+  桥接 token 的快捷访问。关闭工作区即可返回草稿。
+- **设置** 会在你对话上方打开一个聚焦的模态窗口。常规提供
+  浅色、深色、系统和 Roblox 主题预览。外观、智能体、高级
+  和数据组织其余偏好；更改会即时保存。
+  **设置 → MCP → 复制配置提示** 会把检测到的
+  连接详情以及为你配置和验证 MCP 的说明交给你的桌面智能体。
+  MCP 部分还提供适用于各个 harness 的配置片段。
+  免费模型在选择器、输入区和提供方摘要中带有圆角绿色边框和 Free 标签。
+  可用的自动路由探测状态会被显示，但不承诺未来请求具有相同延迟。
+  模型选择器把可搜索的模型卡片与上下文/输出限制以及
+  所选模型支持的推理控制配对。温度处理可以
+  自动跟随已知的模型/提供方支持，也可以显式地为某个模型发送/省略
+  共享值。提供方配置支持 Gemini generateContent 以及
+  OpenAI 兼容和 Anthropic Messages API。输入区的上下文环
+  会打开 token 明细和压缩阈值；部分估算和未知的
+  上下文限制会被明确标注。
+  **子智能体 → 预览** 会在单独的标签页中打开实时输出、可展开的工具进度/结果
+  以及任务/访问详情。阅读位置、打开的调用和
+  后续草稿在实时更新中保持不变。运行结束后，可以向其保留的
+  上下文发送后续消息，或复制其报告；停止保持独立。
+  浏览器预览保留有界的摘录和最多 12 个活动/近期工具调用。
+  对话文本缩放可让侧边栏标签保持紧凑。对话框在长表单滚动时
+  保持其标题和操作可用，并在关闭时恢复焦点。
+  客户端动画永久启用；浏览器的系统减少动效偏好
+  仍适用于浏览器过渡。
+  导出的对话包含图片元数据，而不含图片字节。完整的
+  配置导出包含 API key。
 
-Commands can arrive immediately while Roblox's long poll is waiting. Desktop
-polls can wait 18 seconds; touch-only mobile clients request one-second polls
-with short request deadlines. Game updates are batched about
-every 150 ms, live browser text paints about every 60 ms, and command receipts
-are checked every 250 ms. These are batching intervals, not an end-to-end latency
-guarantee; executor scheduling and the provider's response time also matter.
+当 Roblox 的长轮询正在等待时，命令仍可立即到达。桌面
+轮询可以等待 18 秒；仅触屏的移动客户端请求一秒轮询，
+并带有较短的请求截止时间。游戏更新大约
+每 150 ms 批量一次，浏览器实时文本大约每 60 ms 绘制一次，命令回执
+每 250 ms 检查一次。这些是批量处理间隔，而非端到端延迟
+保证；执行器调度和提供方的响应时间也有影响。
 
-## If something is stuck
+## 遇到卡住的情况
 
-| What you see | What to do |
+| 你看到的现象 | 该怎么办 |
 | --- | --- |
-| `node` is not recognized | Install Node.js 18+, close the terminal, and open a new terminal. |
-| The start file cannot be found | Open the terminal in the executor workspace containing `UAI`. Download the files again if `UAI/bridge/start.txt` is missing. |
-| Download failed | Retry in Cowork. A failed download keeps the existing launcher; HTTP, file read/write, and folder creation are required. |
-| Package verification failed | Download again. Do not edit or rename the downloaded `.txt` files. |
-| Roblox is waiting to connect | Keep the terminal open. Check the port, paste its latest token, then enable Cowork. Both must run on this computer. |
-| The token no longer works | The bridge may have restarted. Use its latest token and browser link. |
-| Live responses are unavailable | Check that Cowork says connected and Web runtime, then check provider SSE support. Non-streaming providers still return a complete reply. |
-| A picture is expired or unavailable | Attach it again. Pictures expire after 15 minutes of inactivity and disappear when the bridge stops. |
-| The bridge is reconnecting | Keep your draft in the tab and restart/reconnect the bridge. Review the conversation if a delivery receipt was lost. |
-| A deadline error appears | Use the highlighted Discord tutorial link. Cowork imposes no overall deadline, but an upstream provider or transport can still fail. |
-| OpenCode reports `FreeTierError` | Keep the direct desktop workaround enabled, or install/update OpenCode Desktop and restart Cowork for the native route. On mobile, use the UAI Relay app from Discord. [Discord help](https://discord.gg/9xYyyYuKap). |
+| 提示 `node` 不是可识别的命令 | 安装 Node.js 18+，关闭终端，然后打开新的终端。 |
+| 找不到启动文件 | 在包含 `UAI` 的执行器工作区中打开终端。如果 `UAI/bridge/start.txt` 缺失，请重新下载文件。 |
+| 下载失败 | 在 Cowork 中重试。下载失败会保留已有的启动器；需要 HTTP、文件读写和文件夹创建能力。 |
+| 包校验失败 | 重新下载。不要编辑或重命名下载的 `.txt` 文件。 |
+| Roblox 正在等待连接 | 保持终端打开。检查端口，粘贴其最新的 token，然后启用 Cowork。两者必须在这台电脑上运行。 |
+| token 不再有效 | 桥接可能已重启。使用其最新的 token 和浏览器链接。 |
+| 无法使用实时响应 | 检查 Cowork 是否显示已连接且运行时为 Web，然后检查提供方的 SSE 支持。非流式提供方仍会返回完整回复。 |
+| 图片已过期或不可用 | 重新附加它。图片在 15 分钟无活动后过期，并在桥接停止时消失。 |
+| 桥接正在重新连接 | 在标签页中保留草稿，并重启/重新连接桥接。如果交付回执丢失，请查看对话。 |
+| 出现截止时间错误 | 使用高亮的 Discord 教程链接。Cowork 不施加总截止时间，但上游提供方或传输仍可能失败。 |
+| OpenCode 报告 `FreeTierError` | 保持桌面直连变通方案启用，或安装/更新 OpenCode Desktop 并重启 Cowork 以使用原生路径。在移动端，请使用来自 Discord 的 UAI Relay 应用。[Discord 帮助](https://discord.gg/9xYyyYuKap)。 |
 
-## Development and tests
+## 开发与测试
 
-`server.js` owns authenticated loopback routes, command receipts and browser SSE.
-`inference.js` owns provider requests and bounded preview replay. `picture-store.js`
-keeps validated image bytes in memory. `launcher.js` restores executor downloads.
-`opencode.js` owns the external native server, temporary sessions and MCP handoff;
-`support.js` supplies consistent Discord error help.
-`supervisor.js` owns the worker process, token and idle replacement;
-`updater.js` validates releases and maintains the isolated cache.
-`web/` contains the dependency-free UI, Markdown, previews, pictures, themes and
-asynchronous draft storage. Roblox remains authoritative in both runtimes.
+`server.js` 负责经过认证的回环路由、命令回执和浏览器 SSE。
+`inference.js` 负责提供方请求和有界预览重放。`picture-store.js`
+在内存中保存经过校验的图片字节。`launcher.js` 恢复执行器下载。
+`opencode.js` 负责外部原生服务器、临时会话和 MCP 交接；
+`support.js` 提供一致的 Discord 错误帮助。
+`supervisor.js` 负责工作进程、token 和空闲替换；
+`updater.js` 校验版本并维护隔离缓存。
+`web/` 包含无依赖的 UI、Markdown、预览、图片、主题和
+异步草稿存储。两种运行时中 Roblox 都是权威来源。
 
-All bridge tests live in `tests/`. Shared utilities are in `tests/helpers/` and
-synthetic game/image inputs in `tests/fixtures/`. The JPEG/WebP fixtures are real
-encoded images; tests generate valid PNG chunks without additional dependencies.
+所有桥接测试位于 `tests/`。共享工具位于 `tests/helpers/`，
+合成的游戏/图片输入位于 `tests/fixtures/`。JPEG/WebP 测试素材是真实
+编码的图片；测试会在不引入额外依赖的情况下生成有效的 PNG 数据块。
 
-Finish implementation, documentation and test edits before running verification:
+在运行验证前完成实现、文档和测试的修改：
 
 ```powershell
 luajit tools/bundle.lua --native
@@ -298,58 +268,57 @@ luajit test/web_runtime.lua
 luajit test/bridge_install.lua
 ```
 
-For real browser checks, install Playwright **outside this repository**, including
-its Chromium browser. Set `PLAYWRIGHT_MODULE` to that package's absolute directory
-if it is not on the normal module path. Optionally set `UAI_SCREENSHOTS` to an
-output directory, then run:
+若要进行真实浏览器检查，请**在本仓库之外**安装 Playwright，包括
+其 Chromium 浏览器。如果不在常规模块路径上，请将 `PLAYWRIGHT_MODULE` 设置为该包的绝对值
+目录。可选地将 `UAI_SCREENSHOTS` 设置为
+输出目录，然后运行：
 
 ```powershell
 node bridge/tests/run.js --browser-only
 ```
 
-The browser suites cover navigation, forms, streaming, picture ownership/replay,
-upload cancellation, receipt races, full drafts, themes, drawer focus, token
-recovery, CSP, reduced motion, and 320–1440px layouts. The UI audit suite also checks
-short screens with full drafts, long task lists and model names, live question and
-selection updates, dialog errors, keyboard focus, contrast, and forced colors.
-The model picker also follows provider additions, renames and removals while
-open, and preserves its rows, focus and scroll position on unrelated workspace
-updates. Malformed and duplicate model IDs are ignored. The lifecycle fixture
-checks these behaviors with an 800-model catalog.
+浏览器测试套件覆盖导航、表单、流式输出、图片归属/重放、
+上传取消、回执竞态、完整草稿、主题、抽屉焦点、token
+恢复、CSP、减少动效以及 320–1440px 布局。UI 审计套件还会检查
+带完整草稿的小屏幕、长任务列表和模型名称、实时问题与
+选择更新、对话框错误、键盘焦点、对比度和强制颜色。
+模型选择器在打开状态下还会跟随提供方的新增、重命名和移除，
+并在无关的工作区更新中保持其行、焦点和滚动位置。
+格式错误和重复的模型 ID 会被忽略。生命周期测试素材
+用 800 个模型的目录检查这些行为。
 
-Tunnels opens a loading dialog immediately when fetching free models. Closing
-that dialog cancels its browser request, and a late response cannot reopen it
-over a different page. Failed reads offer **Try again** inside the same dialog.
-Connection usage shows **Unknown** when no request has a known cost. Mixed
-usage labels the known estimate and states how many unpriced requests it
-excludes; a confirmed zero-cost model remains distinct from missing pricing.
-Inspect the saved screenshots as well as checking geometry. These fixtures do not
-replace a live executor check. See the [UI audit](UI_AUDIT.md) for the findings.
-The [3.6.5 verification record](../docs/TESTING_3.6.5.md) records the current
-release checks. The [3.6.0 record](../docs/TESTING_3.6.0.md),
-[3.5.6 record](../docs/TESTING_3.5.6.md) and
-[3.3.5 record](../docs/TESTING_3.3.5.md) remain available for the earlier releases.
+隧道在获取免费模型时会立即打开加载对话框。关闭
+该对话框会取消其浏览器请求，迟到的响应无法在另一个页面上重新打开它。
+读取失败会在同一对话框内提供 **重试**。
+当没有任何请求具有已知成本时，连接用量会显示 **Unknown**。混合
+用量会标注已知估算值，并说明排除了多少个未定价请求；
+已确认的零成本模型与缺失定价保持区别。
+除检查几何布局外，还要查看保存的截图。这些测试素材不能
+替代实时执行器检查。发现的问题见 [UI 审计](UI_AUDIT.md)。
+[3.6.5 验证记录](../docs/TESTING_3.6.5.md) 记录了当前的
+版本检查。[3.6.0 记录](../docs/TESTING_3.6.0.md)、
+[3.5.6 记录](../docs/TESTING_3.5.6.md) 和
+[3.3.5 记录](../docs/TESTING_3.3.5.md) 仍可用于更早的版本。
 
-Protocol remains version 2. `/api/hello` advertises optional picture and normalized
-stream capabilities. `--legacy` disables pictures and uses compatibility delta
-frames. Raw provider response bodies remain separate from browser preview rings;
-oversized or truncated responses fail explicitly. Picture capability v2 uses
-`provider-image-content`; game state advertises `imageInput = true`. The bridge
-rejects image sends to older clients instead of substituting text markers.
+协议仍为版本 2。`/api/hello` 会通告可选的图片能力和规范化
+流能力。`--legacy` 会禁用图片并使用兼容性增量
+帧。原始提供方响应体与浏览器预览环保持分离；
+超大或被截断的响应会明确失败。图片能力 v2 使用
+`provider-image-content`；游戏状态会通告 `imageInput = true`。桥接
+会拒绝向较旧客户端发送图片，而不是用文本标记替代。
 
-Image sends carry compact, conversation-scoped references into model context.
-At inference dispatch, the bridge expands them to Chat Completions `image_url`
-data URLs, Anthropic base64 `image` blocks or Responses `input_image` blocks.
-Image-bearing requests use the relay in either
-runtime. Tokens, image bytes, and provider keys are never added to browser event
-frames. A missing current image fails explicitly; expired earlier images become
-a clear unavailable-image text block so a later text-only turn can continue.
-Request retries use their original ID before resolving images, so expiry cannot
-cause a second provider dispatch. Active upload bodies and provider bodies are
-bounded separately. Model vision support remains provider-specific.
+图片发送会把紧凑的、按对话作用域的引用带入模型上下文。
+在推理分发时，桥接会把它们展开为 Chat Completions 的 `image_url`
+data URL、Anthropic 的 base64 `image` 块或 Responses 的 `input_image` 块。
+含图片的请求在任一运行时都使用中继。token、图片字节和提供方密钥绝不会加入浏览器事件
+帧。缺失当前图片会明确失败；更早过期的图片会成为
+一个清晰的不可用图片文本块，以便后续纯文本轮次可以继续。
+请求重试在解析图片之前使用其原始 ID，因此过期不会
+导致第二次提供方分发。活动上传体和提供方响应体
+分别受限。模型的视觉支持仍取决于提供方。
 
-The bridge binds to loopback, rotates its bearer token on restart,
-checks browser origins and serves local assets under a same-origin CSP. Desktop
-mode adds a native-only local discovery route with exact Host checking, a custom
-POST header, browser-header rejection and no CORS. See the desktop guide for its
-local-program trust boundary and launcher lifecycle tests.
+桥接绑定到回环地址，在重启时轮换其 bearer token，
+检查浏览器来源，并在同源 CSP 下提供本地资源。桌面
+模式会增加一条仅限原生的本地发现路由，带有精确的 Host 检查、自定义
+POST 头、浏览器头拒绝以及不支持 CORS。其
+本地程序信任边界和启动器生命周期测试见桌面指南。

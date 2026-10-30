@@ -1,313 +1,119 @@
-# Code workspace: native testing guide
+# Code 工作区：原生测试指南
 
-Current testing guide for release 2.8.0, October 12, 2026. Use synthetic workspaces
-and an isolated fixture place; do not touch a user's live Roblox session or private
-usage/accounting files. Current features and limits are in
-[NATIVE_CLIENT.md](NATIVE_CLIENT.md), with internal contracts in [SPEC.md](../SPEC.md).
+适用于 2.8.0 版的当前测试指南，2026 年 10 月 12 日。请使用合成工作区与隔离的夹具场景；不要触碰用户的实时 Roblox 会话或私有用量/计费文件。当前功能与限制见 [NATIVE_CLIENT.md](NATIVE_CLIENT.md)，内部约定见 [SPEC.md](../SPEC.md)。
 
-For the 2.8.0 execution, agent, provider, runtime and interface changes, use the
-[focused release checklist](TESTING_2.8.0.md). It covers the changed behavior and
-required build checks without running the full native suite or image previews.
-The comprehensive commands below remain for broader changes.
+针对 2.8.0 的执行、代理、服务商、运行时与界面变更，请使用[专项发布检查清单](TESTING_2.8.0.md)。它覆盖已变更的行为与必需的构建检查，无需运行完整的原生套件或图像预览。下方的完整命令仍适用于范围更大的变更。
 
-## Capability contract
+## 能力约定
 
-| Surface | Current behavior |
+| 界面 | 当前行为 |
 | --- | --- |
-| Editor | Native multiline TextBox with visible caret, selection and escaped syntax colors while editing. Enter adds a line; Run is explicit. |
-| Workspace files | Expandable folders under UAI, Open, Save and Save as with disk-conflict checks. |
-| Source Run | Shared managed Luau engine, requires a compiler, captures output and supports cooperative Stop. |
-| Direct remote calls | Shared managed callable operation, no compiler required, exact packed arguments/returns. |
-| Filesystem | Two verified Code snapshots; no filesystem means session-only source. Failed saves preserve live drafts. |
-| Clipboard | Selectable native text fallback when copying is unavailable. |
-| Explorer | Accessible hierarchy and a curated **supported properties** catalog; no hidden-property forcing. |
-| Script source | Readable Source or available decompiler, structured provenance, immutable documents and explicit editable extraction. No server-source guarantee. |
-| Incoming capture | Event subscriptions. No replacement/interception of function callbacks. |
-| Outgoing capture | Explicit namecall or direct backend, owned detached routing probes, reusable forwarding cells. Probes do not invoke the predecessor; host network behavior remains unverified. |
-| Intercepted Invoke outcomes | Separate unverified coverage. Original calls are forwarded without claiming observed completion. |
-| UAI call outcomes | Observed returns when completed; timeout/Stop after dispatch reports outstanding and never retries. |
-| Game Undo | Recorded property/attribute changes with conflict checks. Tags, hierarchy, arbitrary scripts and remote effects are outside coverage. |
-| Exports | Verified bounded metadata/capture files and split parts. No full-map saving or unverified saveinstance adapter. |
-| Offline import | Inert records. Rebind the current target and expired Instance arguments before separately reviewing replay. |
+| 编辑器 | 原生多行 TextBox，编辑时显示光标、选择与转义语法着色。回车插入换行；运行需显式触发。 |
+| 工作区文件 | UAI 下的可展开文件夹，提供打开、保存与另存为，并检查磁盘冲突。 |
+| 源码运行 | 共享的托管 Luau 引擎，需要编译器，捕获输出并支持协作式停止。 |
+| 直接远程调用 | 共享的托管可调用操作，无需编译器，参数/返回值按打包原样传递。 |
+| 文件系统 | 两个经验证的 Code 快照；无文件系统时源码仅存在于会话中。保存失败会保留实时草稿。 |
+| 剪贴板 | 无法复制时回退为可选中的原生文本。 |
+| Explorer | 可访问层级，以及经过整理的**受支持属性**目录；不支持隐藏属性强制。 |
+| 脚本源码 | 可读的 Source 或可用的反编译器、结构化的来源信息、不可变文档与显式的可编辑提取。不提供服务端源码保证。 |
+| 入站捕获 | 事件订阅。不替换/拦截函数回调。 |
+| 出站捕获 | 显式的 namecall 或直接后端、自有的分离路由探针、可复用的转发单元。探针不会调用前驱；宿主网络行为仍未验证。 |
+| 被拦截的 Invoke 结果 | 单独的未验证覆盖范围。原始调用会被转发，但不声称观察到其完成。 |
+| UAI 调用结果 | 完成时给出实际观察到的返回值；派发后超时/停止报告为未决，且绝不重试。 |
+| 游戏撤销 | 记录属性/特性变更并检查冲突。标签、层级、任意脚本与远程调用影响不在覆盖范围内。 |
+| 导出 | 经验证的有界元数据/捕获文件与拆分分片。不支持全地图保存或未经验证的 saveinstance 适配器。 |
+| 离线导入 | 惰性记录。在单独审阅回放之前，重新绑定当前目标与已过期的 Instance 参数。 |
 
-LuaJIT mocks establish synthetic behavior only. Lune is not Roblox's GUI renderer;
-Chromium previews are approximate. Neither proves IME, native selection/touch/
-gamepad, executor forwarding, server effects or client performance. Record native
-outcomes with actual capabilities and host details, not just an executor brand.
+LuaJIT mock 只能确立合成行为。Lune 不是 Roblox 的 GUI 渲染器；Chromium 预览只是近似。两者都无法证明输入法、原生选择/触摸/手柄、执行器转发、服务器端影响或客户端性能。记录原生结果时应写明实际能力与宿主详情，而不只是执行器品牌。
 
-For the manual review gate, audit changed inputs first, run
-`node tools/test_native.js --build-only`, inspect the generated bundles, manifest
-and site mirror, then run `node tools/test_native.js --verify-only`. The second
-command checks freshness before tests and never rebuilds those outputs. Review
-each fix, rebuild if needed, inspect outputs and restart verification. Neither
-command generates image previews.
+对于人工审阅关口，先审计变更的输入，运行 `node tools/test_native.js --build-only`，检查生成的包、清单与站点镜像，然后运行 `node tools/test_native.js --verify-only`。第二条命令会在测试前检查新鲜度，且从不重建这些输出。审阅每项修复，必要时重新构建，检查输出并重新开始验证。两条命令都不会生成图像预览。
 
-For 2.5.5, also open and close confirmations, Settings and Quick Chat rapidly,
-including closing before the first layout frame and opening a replacement while
-the prior card exits. Confirm that text stays at its final size, focus follows
-the current surface, and reduced motion settles immediately. Check grouped
-labels/help text, long provider notes and collapsed sidebar navigation at both
-densities. Offline lifecycle checks do not verify Roblox fade quality.
+对于 2.5.5，还需快速反复打开和关闭确认框、Settings 与 Quick Chat，包括在首个布局帧之前关闭，以及在前一张卡片退出时打开替代卡片。确认文字保持最终尺寸、焦点跟随当前界面、启用“减少动态效果”时立即稳定。在两种密度下检查成组标签/帮助文本、较长的服务商说明与折叠的侧边栏导航。离线生命周期检查不验证 Roblox 的淡出质量。
 
-For 2.5.6, resize an open modal repeatedly and change wrapped descriptions and
-footer content. Confirm fitting settles without deferred re-entrancy errors,
-including closing during layout. Run parallel subagents and check their Details
-monitor while tools start, report progress and finish out of order. Confirm the
-main agent performs independent work, checks status periodically, reads completed
-reports and only then finishes. Stop, unload and parent limits must also stop
-queued children. Repeat with buffered HTTP and genuine streaming; output cannot
-appear before the transport delivers it. Check profile name/provider spacing at
-both densities and enlarged text settings. Focused offline regressions are in
-`modal_fit.lua`, `subagent_activity.lua`, `subagent_background.lua`,
-`subagent_tools.lua`, `subagent_coordination.lua` and `native_performance.lua` under
-`test/`; these do not establish native rendering or frame-time measurements.
+对于 2.5.6，反复调整已打开弹窗的尺寸，并改变换行描述与页脚内容。确认适配过程能稳定结束且不出现延迟重入错误，包括在布局期间关闭。并行运行多个子代理，在其工具启动、报告进度与乱序完成时检查它们的 Details 监视器。确认主代理执行独立工作、定期检查状态、读取已完成的报告，然后才结束。停止、卸载与父级限制也必须停止排队中的子项。分别在缓冲式 HTTP 与真实流式传输下重复；输出不可能在传输交付之前出现。在两种密度与放大文字设置下检查个人资料名称/服务商间距。相关的离线回归位于 `test/` 下的 `modal_fit.lua`、`subagent_activity.lua`、`subagent_background.lua`、`subagent_tools.lua`、`subagent_coordination.lua` 与 `native_performance.lua`；这些并不构成原生渲染或帧耗时测量。
 
-Exercise 320/390px portrait phones, 667/844px landscape phones and a
-tablet in both orientations, with the keyboard open and closed. Check compact
-typing, explicit expansion, long model names, wrapped attachments, history
-search, provider forms, category switching, Code tabs and Find. Confirm that the
-desktop header, sidebar, welcome view and composer remain present at reduced
-dimensions, with the text and icon readability floors. Select Auto, Sheet, Panel
-and Window in Settings; placement must change while fields and drafts stay mounted.
-Scroll across sliders vertically, then drag them horizontally;
-only the latter changes values.
-Rotate Quick Chat with a selected draft and press Return; retain the text and
-selection, and insert a newline without sending. Repeat at enlarged text scale.
-Verify the Discord prompt waits for idle use, respects dismissal and opt-out,
-and does not open over another dialog or a running request. Provider recovery
-and the shared key setup have synthetic tests; proxy reachability and native
-keyboard/rendering behavior still require real host checks.
+请测试 320/390px 竖屏手机、667/844px 横屏手机以及两种方向下的平板，分别覆盖键盘打开与关闭的情况。检查紧凑输入、显式展开、长模型名、换行的附件、历史搜索、服务商表单、分类切换、Code 标签页与查找。确认桌面页头、侧边栏、欢迎视图与输入区在缩减尺寸下仍然存在，并满足文字与图标的可读性下限。在 Settings 中选择 Auto、Sheet、Panel 与 Window；位置必须变化，而字段与草稿保持挂载。纵向划过滑块，再横向拖动它们；只有后者会改变数值。
+在已选中草稿的情况下旋转 Quick Chat 并按回车；应保留文本与选择，并插入换行而不发送。在放大文字比例下重复上述步骤。
+验证 Discord 提示会等待空闲使用、遵循关闭与不再显示选项，且不会在其他对话框或运行中的请求之上打开。服务商恢复与共享密钥设置已有合成测试；代理可达性与原生键盘/渲染行为仍需真实宿主检查。
 
-## Conversation reading
+## 对话阅读
 
-For the Roblox chat revamp, also exercise a conversation with at least 100 turns
-and long Markdown replies. Scroll up and down over the same few screens, reverse
-direction quickly, and drag the scrollbar to distant history. Check that visible
-text takes priority and repeated backtracking does not repeatedly reconstruct it.
-While reading, receive new replies, resize the window, and rotate a touch device;
-the visible paragraph should stay in place. Even a small upward scroll should
-release follow, and Latest should resume it explicitly.
+对于 Roblox 聊天改版，还需测试一个至少包含 100 个回合以及长 Markdown 回复的对话。在同一几屏内容上上下滚动，快速反向滚动，并把滚动条拖到久远的历史位置。检查可见文本优先，且重复回退不会反复重建它。阅读期间接收新回复、调整窗口大小并旋转触摸设备；可见段落应保持原位。即使小幅向上滚动也应取消跟随，并且“最新”应能显式恢复跟随。
 
-Open an Activity summary during a parallel tool batch, then inspect one tool's
-inputs and output. Finish successful and failed calls while that section is open
-and closed; neither outcome should change the chosen disclosure. Inspect multiple
-delegated tasks, including their reports and folded tool activity. Navigate away,
-return, minimize, restore, and switch conversations; completed outcomes must stay
-in their original cards without duplicate reports. Confirm wheel, touch and
-gamepad focus behavior in Roblox; offline fixtures do not measure native frames.
+在并行工具批次期间展开一个 Activity 摘要，然后查看某个工具的输入与输出。在该分区展开和收起时分别完成成功与失败的调用；两种结果都不应改变已选定的展开状态。检查多个委派任务，包括其报告与折叠的工具活动。离开页面、返回、最小化、恢复并切换对话；已完成的结果必须保留在原始卡片中，且不出现重复报告。在 Roblox 中确认滚轮、触摸与手柄焦点行为；离线夹具不测量原生帧。
 
-## Editor, history and actions
+## 编辑器、历史与操作
 
-1. Open Code; create, type, rename, switch, close and reopen scripts from Library.
-   Read the just-typed draft with `code_read` before autosave. Identity/source
-   survive rotation, navigation and theme/layout rebuild. Closing does not delete.
-   At the 50-script limit, use Select and Select matches across two searches. Check
-   the hidden-selection count, rebuild the panel, and delete the chosen entries
-   with one confirmation. Edit or rename one selected script, save a version, or
-   add a proposal while confirmation is open: the whole batch must be retained.
-   Confirm again and verify unselected scripts/actions and disk files survive.
-2. Exercise 2,000 lines, CJK/emoji, tabs, CRLF, quotes, long bracket strings/comments
-   and long horizontal lines. Scroll both axes and edit near the bottom. The gutter
-   aligns, the caret stays visible, and highlighting never changes raw source.
-3. Verify mobile Return/Done never runs. Test Ctrl/Command+Enter, Find advancing/
-   wrapping, Go to line, Tab/Shift+Tab, Save version, native Undo while focused and
-   shared source Undo/Redo outside input focus. Use the visible menus on controllers.
-4. Run a fixture that prints/warns and returns `false, nil, 7, nil`. Output identifies
-   its run/document/revision even if source changes during execution. Stop managed
-   waits/loops, inspect errors, and navigate while running without implicit cancellation.
-5. Save a version, propose a change, compare in compact and wide panes, apply and
-   restore. Change source while comparison is open: stale Apply must fail without
-   overwriting. Repeated Apply cannot edit twice. Source and game histories stay separate.
-6. Create an action with typed required/default/optional inputs; read them via
-   `local inputs = ...`. Test false, zero, empty strings, omissions and invalid ranges.
-   Original-source edits must not alter its saved snapshot. Updates require explicit
-   comparison and current action/source revisions. Opening or updating never runs it.
-7. Test no compiler, no clipboard and no filesystem. Inject failed/truncated writes
-   in mock storage; verify backup recovery, preserved corrupt/legacy files and
-   protection of future/unreadable formats. Changed-build replacement must refuse
-   to lose unsaved or active workspace work. Never inject faults in real user files.
+1. 打开 Code；从 Library 创建、输入、重命名、切换、关闭并重新打开脚本。在自动保存之前用 `code_read` 读取刚输入的草稿。身份/源码在旋转、导航与主题/布局重建后仍然保持。关闭不会删除。在 50 个脚本上限时，跨两次搜索使用“选择”与“选择匹配项”。检查隐藏的选择数量，重建面板，并用一次确认删除所选条目。在确认框打开期间编辑或重命名其中一个所选脚本、保存一个版本或添加提案：整批操作都必须被保留。再次确认，并验证未选中的脚本/操作与磁盘文件均存活。
+2. 测试 2,000 行、CJK/emoji、制表符、CRLF、引号、长括号字符串/注释以及长横向行。沿两个轴滚动并在底部附近编辑。行号槽保持对齐，光标保持可见，高亮从不改变原始源码。
+3. 验证移动端回车/完成绝不会触发运行。测试 Ctrl/Command+Enter、查找的前进/回绕、跳转到行、Tab/Shift+Tab、保存版本、聚焦时的原生撤销，以及输入焦点之外共享源码的撤销/重做。在手柄上使用可见菜单。
+4. 运行一个会打印/警告并返回 `false, nil, 7, nil` 的夹具。即使执行期间源码发生变化，输出也标明其运行/文档/修订。停止托管的等待/循环，检查错误，并在运行期间导航而不触发隐式取消。
+5. 保存一个版本、提交变更提案、在紧凑与宽幅窗格中比较、应用并还原。在比较打开时修改源码：过期的“应用”必须失败且不覆盖。重复“应用”不能编辑两次。源码历史与游戏历史保持独立。
+6. 创建一个带类型化必填/默认/可选输入的操作；通过 `local inputs = ...` 读取它们。测试 false、零、空字符串、缺省与非法范围。对原始源码的编辑不得改变其已保存的快照。更新需要显式比较以及当前的操作/源码修订。打开或更新永远不会运行它。
+7. 测试无编译器、无剪贴板与无文件系统的情况。在 mock 存储中注入失败/截断的写入；验证备份恢复、保留损坏/旧版文件以及对未来/不可读格式的保护。更换构建时必须拒绝丢失未保存或活动的工作区工作。绝不在真实用户文件中注入故障。
 
-## Explorer and supported Undo
+## Explorer 与受支持的撤销
 
-Use duplicate-named Parts, nested Models, a LocalScript, RemoteEvent/RemoteFunction
-and an externally changing attribute.
+使用同名 Parts、嵌套 Models、一个 LocalScript、RemoteEvent/RemoteFunction 以及一个外部变化的特性。
 
-1. Browse lazy children, expand/collapse, page large sibling lists and search by
-   literal/pattern name, class and tag. Replace a running query. Malformed, expired
-   or changed-filter cursors fail; partial/unreadable/capped scans remain visible.
-2. Select the second duplicate by ID, rename/move it and retain its identity. Delete
-   it and create a replacement at the same path: the old reference must not target it.
-3. Test Ctrl/Command toggles, Shift ranges and visible Select mode for touch/gamepad.
-   Selection caps at 20; multiple differing fields say Mixed. Test explicit attribute
-   types, nil/absent/empty/unreadable distinctions, full CFrame and enum domains.
-4. Search with a matching parent and child while the parent is expanded: each
-   match must appear once. Switch destinations and rebuild the panel: preserve the
-   search and root. Check Up, Focus subtree and the ancestor menu, then Select
-   multiple and Clear selection without modifier keys. Filter an Inspector field
-   by its value and copy both the value and field name without writing.
-   Open a draft, change its live field, then Apply: report conflict and retain the
-   draft/newer value. Apply a fresh batch and Undo after observed readback. A conflict
-   anywhere prevents all Undo writes. Inject partial write/readback/recovery failures
-   and report unresolved changes honestly.
-5. Test create, duplicate, move, detach and delete with overlapping selections,
-   cycles, changed parents and destroyed destinations. Keep hierarchy outside Undo.
-6. Open script snapshots read-only, extract a separate editable copy, refresh source
-   and preserve the editable draft. Empty Source is a successful empty snapshot.
-   Test missing/failed decompilers, deduplication, stale completion, expiry and pins.
-   Source above 256,000 bytes uses the bounded reader, up to 2 MiB, with search,
-   reference-copy and selection extraction. Existing file sources retain their path.
-7. Reveal a remote without starting capture or sending traffic. Exercise bookmarks,
-   explicit nil-root refresh, world pointer/touch picking and controller aim. Escape/
-   Back, mode change, minimize and focus loss release picker bindings/highlight.
-8. Export metadata at depths 0 and 2. Verify scope, IDs, omissions, file readback
-   and refusal to silently overwrite an existing destination.
+1. 浏览懒加载子项、展开/收起、对较大的同级列表分页，并按字面量/模式名称、类与标签搜索。替换正在运行的查询。格式错误、已过期或过滤条件改变的游标会失败；部分/不可读/达到上限的扫描保持可见。
+2. 按 ID 选择第二个同名对象，重命名/移动它并保持其身份。删除它并在同一路径创建替代对象：旧引用不得指向它。
+3. 测试 Ctrl/Command 切换、Shift 范围选择，以及为触摸/手柄提供的可见选择模式。选择上限为 20；多个不同字段显示为“混合”。测试显式特性类型、nil/缺失/空/不可读的区分、完整 CFrame 与枚举域。
+4. 在父项展开的情况下，搜索同时匹配父项与子项：每个匹配必须只出现一次。切换目标并重建面板：保留搜索与根。检查“向上”“聚焦子树”与祖先菜单，然后在不使用修饰键的情况下测试“多选”与“清除选择”。按 Inspector 字段的值过滤，并在不写入的情况下复制值以及字段名。
+   打开草稿，修改其实时字段，然后应用：应报告冲突并保留草稿/较新的值。在观察到回读后应用新的批次并撤销。任何位置的冲突都会阻止所有撤销写入。注入部分写入/回读/恢复失败，并如实报告未解决的变更。
+5. 在存在重叠选择、循环、变更的父项与已销毁目标的情况下，测试创建、复制、移动、分离与删除。将层级操作置于撤销之外。
+6. 以只读方式打开脚本快照，提取独立可编辑副本，刷新源码并保留可编辑草稿。空 Source 是一个成功的空快照。测试缺失/失败的反编译器、去重、过期完成、到期与固定。超过 256,000 字节的源码使用有界阅读器（上限 2 MiB），支持搜索、引用复制与选择提取。既有文件源码保留其路径。
+7. 在不启动捕获或发送流量的情况下定位某个远程调用。测试书签、显式 nil 根刷新、世界指针/触摸拾取与手柄瞄准。Esc/返回、模式切换、最小化与焦点丢失都会释放拾取器绑定/高亮。
+8. 在深度 0 与 2 导出元数据。验证范围、ID、省略项、文件回读，以及拒绝静默覆盖已存在的目标。
 
-## Capture, replay and lifecycle
+## 捕获、回放与生命周期
 
-1. Before Start, importing modules/catalogs and reading state creates zero hooks,
-   subscriptions or traffic. Explicitly test UAI-only, incoming, outgoing and
-   combined capture. Mandatory unsupported directions fail visibly. Inspect scope,
-   backend, monitored/omitted count, owner and duration; UI and tools default to 30
-   seconds. No selected remote means default Start remains idle. Select all-game,
-   exact selection or primary subtree scope explicitly before widening capture.
-   Check the visible duration selector, countdown, actual active scope and Pause
-   explanation. A timed paused capture still expires and keeps retained calls.
-2. Capture zero args, one nil, an empty table, `false, nil, "text", nil`, supported
-   Roblox types, aliases/cycles, sparse tables, binary data and oversized strings.
-   Inspect graph/byte pages. Incomplete/opaque/cyclic/sparse data cannot replay as
-   exact. Snapshotting cannot invoke arbitrary table metamethods.
-3. Edit a pending call's replay draft and let its outcome arrive: the draft remains.
-   Scroll away during a burst; Latest explicitly resumes following. Exercise name,
-   direction, method, origin and outcome filters. Admission exclusion never blocks traffic.
-   Inspect the Summary as a late result or error arrives. Use Only calls to this
-   remote and Reset; those view filters must preserve every recorded call and
-   leave capture admission/rules unchanged. `luajit test/remotes_ui.lua` covers
-   these controls, timer cleanup, and narrow/short geometry with synthetic events.
-4. Prepare a replay, change target/rules/record revision, cancel before dispatch and
-   repeat its plan ID. An accepted plan sends once. A dispatched timeout remains
-   outstanding; no retry. Bound source expires with its runtime; portable source
-   rejects ambiguous paths. Require current review before copying/exporting portable
-   source. Incoming calls have diagnostic/caller actions without replay controls.
-   Open/decompile a captured caller and check name/path matches and provenance.
-   Source generation/opening/import never executes.
-5. In the isolated fixture, add/remove exact event blocking and function local-error
-   rules. Pause stops recording while rules remain visible; Stop/unload/reset and
-   agent authorization revocation disarm them. Unrelated revocation preserves a
-   user-owned observation session. Confirm temporary `remote_watch` remains independent.
-6. Export a frozen selection and a split capture with completion manifest. Fail a
-   part write: no completed export is reported. Import parts offline, explicitly
-   rebind current targets/Instance args, and separately review replay.
-7. Overfill count/byte/pending/pin/subscription budgets and inspect gaps/counters.
-   Navigation/minimize/theme rebuild must not duplicate hooks/listeners/timers.
-   The launcher shows REC/PAUSED/RULES. Unload stops behavior and invalidates callbacks.
-8. Native forwarding tests must verify predecessor exactly once, receiver identity,
-   full nil arity, original error objects, yielding calls, nested calls, observer
-   failure and UAI correlation. Test hooks installed before/after UAI, external
-   removal, Stop/restart and changed-build replacement. Owned routing probes alone
-   do not prove these guarantees; keep unverified coverage labelled until measured.
+1. 在开始之前，导入模块/目录以及读取状态不得创建任何钩子、订阅或流量。分别显式测试仅 UAI、入站、出站与组合捕获。强制不支持的方向会以可见方式失败。检查范围、后端、监控/省略计数、所有者与时长；界面与工具默认 30 秒。没有所选远程调用时，默认的“开始”保持空闲。在扩大捕获范围之前，显式选择全游戏、精确选择或主子树范围。检查可见的时长选择器、倒计时、实际活动范围与暂停说明。定时捕获暂停后仍会到期，并保留已记录的调用。
+2. 捕获零参数、一个 nil、空表、`false, nil, "text", nil`、受支持的 Roblox 类型、别名/循环、稀疏表、二进制数据与超大字符串。查看图/字节分页。不完整/不透明/循环/稀疏数据无法按精确方式回放。快照过程不能调用任意表元方法。
+3. 编辑待处理调用的回放草稿，并让结果到达：草稿仍然保留。在流量突发时滚开；“最新”可显式恢复跟随。测试名称、方向、方法、来源与结果筛选。准入排除绝不会阻断流量。在迟到结果或错误到达时查看 Summary。使用“仅显示发往此远程调用的调用”与“重置”；这些视图筛选必须保留所有已记录的调用，并使捕获准入/规则保持不变。`luajit test/remotes_ui.lua` 用合成事件覆盖这些控件、定时器清理以及窄/矮几何布局。
+4. 准备一次回放，修改目标/规则/记录修订，在派发前取消并重复其计划 ID。被接受的计划只发送一次。已派发的超时保持未决；不重试。绑定源码随其运行时过期；可移植源码拒绝歧义路径。复制/导出可移植源码前需要当前审阅。入站调用具有诊断/调用方操作，但没有回放控件。打开/反编译被捕获的调用方，并检查名称/路径匹配与来源信息。源码生成/打开/导入永不执行。
+5. 在隔离夹具中，添加/移除精确事件阻断与函数本地错误规则。暂停会停止记录，而规则仍然可见；停止/卸载/重置以及代理授权撤销会解除它们。无关的撤销会保留用户自有的观察会话。确认临时 `remote_watch` 保持独立。
+6. 导出冻结的选择与带完成清单的拆分捕获。让某个分片写入失败：不得报告已完成的导出。离线导入分片，显式重新绑定当前目标/Instance 参数，并单独审阅回放。
+7. 超出数量/字节/待处理/固定/订阅预算，并检查缺口/计数器。导航/最小化/主题重建不得重复钩子/监听器/定时器。启动器显示 REC/PAUSED/RULES。卸载会停止行为并使回调失效。
+8. 原生转发测试必须验证前驱恰好调用一次、接收者身份、完整 nil 元数、原始错误对象、让出调用、嵌套调用、观察者失败与 UAI 关联。测试在 UAI 之前/之后安装的钩子、外部移除、停止/重启与更换构建。仅有自有的路由探针不能证明这些保证；在实测之前应保持未验证覆盖范围的标注。
 
-## Platform and performance matrix
+## 平台与性能矩阵
 
-Test wide desktop, a 400px-wide UAI window, phone landscape with keyboard, short
-landscape, portrait, tablet, hybrid touch/keyboard and gamepad/console. Repeat with
-text-size presets, theme rebuilds, focus in forms and modal Stop. Actions must remain
-reachable without hover. Record native caret/selection/IME behavior separately.
+测试宽屏桌面、400px 宽的 UAI 窗口、带键盘的手机横屏、矮横屏、竖屏、平板、触摸/键盘混合以及手柄/主机。重复使用文字大小预设、主题重建、表单聚焦与弹窗停止。操作必须在不悬停的情况下仍可触达。单独记录原生光标/选择/输入法行为。
 
-Visible capture/property refresh is coalesced to 10 Hz; hidden views suspend costly
-rendering. Measure pooled rows, large sibling/deep-tree scans, and hook snapshot
-cost. GetChildren/getnilinstances still allocate native arrays; virtualization does
-not remove that engine cost. Do not claim native performance from mocks.
+可见的捕获/属性刷新以 10 Hz 合并；隐藏视图暂停开销较大的渲染。测量池化行、大同级/深树扫描以及钩子快照成本。GetChildren/getnilinstances 仍会分配原生数组；虚拟化并不能消除这项引擎开销。不要用 mock 结果声称原生性能。
 
-Use the named budgets in [NATIVE_CLIENT.md](NATIVE_CLIENT.md). Include maximum-size
-autosave, external conflicts, interrupted writes, source/cache eviction, pinned
-late outcomes and frozen exports during concurrent capture. Editor columns count
-Unicode code points; input offsets and source ranges are UTF-8 bytes with exclusive
-ends. Native grapheme/IME behavior needs separate observation.
+使用 [NATIVE_CLIENT.md](NATIVE_CLIENT.md) 中的具名预算。涵盖最大尺寸自动保存、外部冲突、写入中断、源码/缓存淘汰、固定记录的迟到结果以及并发捕获期间的冻结导出。编辑器列按 Unicode 码位计数；输入偏移与源码范围是以右端不含的 UTF-8 字节表示。原生的字素/输入法行为需要单独观察。
 
-## End-stage checks
+## 收尾检查
 
-Manually audit source, documentation and test changes before building. Run from
-the repository root, and inspect generated outputs between these two commands:
+构建之前，手动审计源码、文档与测试变更。在仓库根目录下运行，并在这两条命令之间检查生成的输出：
 
 ```powershell
 node tools/test_native.js --build-only
 node tools/test_native.js --verify-only
 ```
 
-Prerequisites: Node.js, LuaJIT and the official Luau compiler. The command uses
-`LUAJIT` and `LUAU_COMPILE` when set, then `luajit`/`luau-compile` on PATH; the
-compiler may also be placed in `refer/native-tools/luau/`. This workspace prepared
-the official Luau 0.739 release there. Missing compiler support fails the sequence;
-it is never silently reported as passed. `luau-analyze` without Roblox and executor
-type definitions is not a meaningful strict typecheck, so no such result is claimed.
+前置条件：Node.js、LuaJIT 与官方 Luau 编译器。该命令会在设置时使用 `LUAJIT` 与 `LUAU_COMPILE`，否则使用 PATH 上的 `luajit`/`luau-compile`；编译器也可放在 `refer/native-tools/luau/` 下。本工作区已在那里准备好官方 Luau 0.739 版本。缺少编译器支持会使该序列失败；绝不会被静默报告为通过。在没有 Roblox 与执行器类型定义的情况下，`luau-analyze` 并不是有意义的严格类型检查，因此不声称得到此类结果。
 
-The command performs these stages in order:
+该命令按顺序执行以下阶段：
 
-1. `luajit tools/bundle.lua --native`, then native tool-catalog/site generation.
-2. `node tools/build_site.js --bundle-only --check` (bundle, manifest and embedded
-   icons), then `node tools/build_site.js --check` (generated catalog/mirrors).
-3. `luajit test/check.lua --native` for native dialect, parsing, imports and globals.
-4. `luajit test/run.lua --native` against the assembled bundle.
-5. Every focused top-level native `.lua` suite, followed by the mock self-test.
-6. `luajit test/native_performance.lua` for deterministic work/retention contracts.
-7. `luau-compile --null` for native modules, bootstrap and assembled bundle, then
-   Node syntax checks of the native verification/build scripts.
+1. `luajit tools/bundle.lua --native`，然后生成原生工具目录/站点。
+2. `node tools/build_site.js --bundle-only --check`（包、清单与内嵌图标），然后 `node tools/build_site.js --check`（生成的目录/镜像）。
+3. `luajit test/check.lua --native`，检查原生方言、解析、导入与全局变量。
+4. 针对组装后的包运行 `luajit test/run.lua --native`。
+5. 运行每个专项顶层原生 `.lua` 套件，随后运行 mock 自测。
+6. `luajit test/native_performance.lua`，检查确定性的工作/保留约定。
+7. 对原生模块、引导文件与组装包运行 `luau-compile --null`，然后对原生验证/构建脚本进行 Node 语法检查。
 
-Focused suites run the new/native workspace, execution and cancellation regressions
-first, then the remaining suites alphabetically. Discovery excludes fixture/helper
-files, the approximate image exporter
-and non-native suites. Main native mode excludes non-native scenario names; native
-static scope is explicit in `tools/native_scope.lua`. Distribution assembly keeps
-existing dependencies unchanged. No browser, live account or Roblox session is used.
+专项套件会先运行新的/原生工作区、执行与取消相关回归，然后按字母顺序运行其余套件。发现范围排除夹具/辅助文件、近似图像导出器以及非原生套件。主原生模式排除非原生场景名称；原生静态范围在 `tools/native_scope.lua` 中显式定义。分发包组装保持既有依赖不变。不使用浏览器、实时账号或 Roblox 会话。
 
-Each stage saves a log plus duration, exit status and suite summaries under ignored
-`refer/native-verification/`; `results.json` is complete only when every stage passes.
-This reports synthetic behavioral coverage, not a line-coverage percentage. The new
-`native_improvements.lua` covers source deadlines and view cancellation, identity,
-display-limit boundaries, interrupted-save readback, recent-thread restoration,
-durable logs, capture, one-shot dispatch and stale removal confirmations. It also
-covers stopped-worker resume, cancellable queued follow-ups, duplicate dispatch,
-configured subagent concurrency and unlimited versus limited queue budgets.
-`context_compaction.lua` checks prepared overhead, dispatch-time calibration and
-provider/endpoint changes; `chat_regressions.lua` checks category widths, refresh
-coalescing, inspector cleanup, immediate buffered replies, preview/final
-reconciliation and retained model attribution. The main suite checks removal of the executor ceiling for both
-adapters, including explicit budgets, legacy settings and native HTTP fallback;
-non-native assertions in that shared case are skipped in native mode.
-The main suite also covers the in-game What's new modal on desktop and phone
-layouts, existing-version users receiving revised notes, and read markers surviving
-a settings reload.
-`native_performance.lua` checks reused work, row
-pools and memory budgets.
-`chat_stability.lua` checks dialogue retention through heavy activity, replay,
-resize/maximize, refresh and cleanup. The provider compatibility and transport
-suites cover all 23 presets with synthetic responses; `provider_editor.lua`
-checks local preset defaults, manual models and discovery races through real UI
-controls. None of these tests requires a hosted model or paid inference.
-Existing focused suites cover layouts, shortcuts, replay and execution. Elapsed
-fixture times are diagnostic, not native-device performance claims.
+每个阶段都会在忽略目录 `refer/native-verification/` 下保存日志以及耗时、退出状态与套件摘要；只有当所有阶段都通过时，`results.json` 才是完整的。这报告的是合成行为覆盖情况，而不是行覆盖率百分比。新增的 `native_improvements.lua` 覆盖源码超时与视图取消、身份、显示上限边界、中断保存的回读、近期线程恢复、持久日志、捕获、一次性派发与过期移除确认。它还覆盖已停止工作线程的恢复、可取消的排队后续消息、重复派发、已配置的子代理并发，以及不限量与限量队列预算。`context_compaction.lua` 检查已准备的开销、派发时校准与服务商/端点变更；`chat_regressions.lua` 检查分类宽度、刷新合并、检查器清理、缓冲回复的即时显示、预览/最终归并以及保留的模型归因。主套件检查两个适配器对执行器上限的移除，包括显式预算、旧设置与原生 HTTP 回退；该共享用例中的非原生断言在原生模式下会被跳过。主套件还覆盖桌面与手机布局下的游戏内 What's new 弹窗、既有版本用户收到修订说明，以及设置在重新加载后仍保留已读标记。`native_performance.lua` 检查复用的工作、行池与内存预算。`chat_stability.lua` 检查在重度活动、回放、调整大小/最大化、刷新与清理过程中的对话保留。服务商兼容与传输套件用合成响应覆盖全部 23 个预设；`provider_editor.lua` 通过真实界面控件检查本地预设默认值、手动模型与发现竞态。这些测试都不需要托管模型或付费推理。既有专项套件覆盖布局、快捷键、回放与执行。夹具耗时仅用于诊断，不是原生设备性能声明。
 
-For the conversation renderer, keep several chats and workers active in an
-isolated fixture while resizing, maximizing, minimizing and reopening the app.
-Older dialogue, live previews and drafts should remain visible. Scroll into older
-messages, change width/theme/text size, and verify the reading anchor. Exercise
-large tables/code, folded worker feeds and **Refresh conversation** during and
-after a turn; timings and totals should remain stable without duplicate rows.
-GPU rendering, native text measurement, touch and IME still require this host check.
+对于对话渲染器，在隔离夹具中保持多个聊天与工作线程活动，同时调整大小、最大化、最小化并重新打开应用。较早的对话、实时预览与草稿应保持可见。滚动到较早消息，改变宽度/主题/文字大小，并验证阅读锚点。在回合进行期间与之后测试大表格/代码、折叠的工作线程流与 **Refresh conversation**；耗时与总计应保持稳定且不出现重复行。GPU 渲染、原生文本测量、触摸与输入法仍需在该宿主上检查。
 
-Stop at the first failure, finish and manually review each fix, rebuild and inspect
-changed outputs, then restart `node tools/test_native.js --verify-only`. After it
-passes, inspect the complete scoped diff, whitespace, accidental secrets, generated files and requirement
-accounting in [NATIVE_COMPLETION.md](NATIVE_COMPLETION.md). Keep changes uncommitted.
+在首次失败处停止，完成并手动审阅每项修复，重新构建并检查变更的输出，然后重新启动 `node tools/test_native.js --verify-only`。通过之后，检查完整的范围化差异、空白、意外密钥、生成文件以及 [NATIVE_COMPLETION.md](NATIVE_COMPLETION.md) 中的需求核对。保持变更未提交。
 
-The site generator synchronizes root `index.html`, `style.css`, `script.js` and
-their `docs/` mirrors with the bundle. Regenerate; do not hand-edit generated files.
-Record native validation with the client version, host capabilities, viewport and
-input mode. Automated source and geometry checks do not establish native renderer
-or executor coverage.
+站点生成器会将根目录的 `index.html`、`style.css`、`script.js` 及其 `docs/` 镜像与包同步。请重新生成；不要手工编辑生成的文件。记录原生验证时应包含客户端版本、宿主能力、视口与输入模式。自动化源码与几何检查并不构成原生渲染器或执行器覆盖。
 
-For native UI verification, resize Providers between its column and horizontal
-strip layouts and confirm Add is centered vertically in the strip. With buffered
-HTTP, confirm elapsed waiting followed by immediate replies; with a compatible
-fixture socket, confirm in-place text/reasoning, Stop, reopen and final-message
-deduplication. Do not mistake post-response animation for transport streaming.
+对于原生界面验证，在 Providers 的列布局与横向条带布局之间调整大小，并确认“添加”在条带中垂直居中。使用缓冲式 HTTP 时，确认先有等待耗时、随后立即收到回复；使用兼容的夹具套接字时，确认文本/推理就地更新、停止、重新打开以及最终消息去重。不要把回复后的动画误认为传输流式输出。

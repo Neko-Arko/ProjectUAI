@@ -1,262 +1,252 @@
-# UAI Bridge desktop launcher
+# UAI Bridge 桌面启动器
 
-A Windows 10/11 x64 app that starts the local bridge and opens the Cowork browser
-workspace. The Roblox client discovers the running desktop bridge automatically.
-The desktop project uses the existing server in `--desktop` mode on
-**127.0.0.1:28791**.
-Manual terminal startup keeps port 8790 and its existing token workflow.
+一个 Windows 10/11 x64 应用，用于启动本地桥接并打开 Cowork 浏览器
+工作区。Roblox 客户端会自动发现正在运行的桌面桥接。
+桌面项目在 **127.0.0.1:28791** 上以 `--desktop` 模式使用现有服务器。
+手动终端启动仍保留端口 8790 及其现有的 token 工作流。
 
-Download and open [UAI-Bridge-3.7.0-win-x64.exe](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.7.0/UAI-Bridge-3.7.0-win-x64.exe), then click
-**Start Cowork** on **Workspace**. It detects Node.js 18+ on your computer. If
-none is available, choose **Get Node.js** or **Manual setup** in the Workspace
-runtime card, then **Check again**.
+下载并打开 [UAI-Bridge-3.7.0-win-x64.exe](https://github.com/Project-Ptolemy/ProjectUAI/releases/download/v3.7.0/UAI-Bridge-3.7.0-win-x64.exe)，然后在 **工作区** 上点击
+**开始 Cowork**。它会检测你电脑上的 Node.js 18+。如果
+不可用，请在 **工作区** 运行时卡片中选择 **获取 Node.js** 或 **手动配置**，
+然后点击 **重新检查**。
 
-Desktop 3.7.0 uses native WPF with a redesigned, responsive interface, its own
-title bar with custom window controls, keyboard navigation, and accessible controls. The sidebar
-becomes horizontal navigation on smaller windows, and page content scrolls so
-actions remain reachable. Five pages organize the app:
+桌面 3.7.0 使用原生 WPF，配备重新设计的响应式界面、自带的
+自定义窗口控件标题栏、键盘导航和无障碍控件。侧边栏
+在较小窗口中变为水平导航，页面内容可滚动，使
+操作始终可达。应用由五个页面组成：
 
-| Page | What you can do |
+| 页面 | 你可以做什么 |
 | --- | --- |
-| Workspace | Start or stop the bridge, open Cowork, copy the client script, and install or recheck Node.js. |
-| Connections | Enable MCP and connect external coding agents to the workspace. |
-| Updates | Check for desktop updates, see download and staging status, restart to apply an update, and inspect bridge update status. |
-| Settings | Choose browser, launch, and automatic app update preferences. |
-| Tunnels | Enable Cline, OpenCode and Kilo routes, inspect readiness, and follow setup instructions. |
+| 工作区 | 启动或停止桥接、打开 Cowork、复制客户端脚本，以及安装或重新检查 Node.js。 |
+| 连接 | 启用 MCP 并把外部编码智能体连接到工作区。 |
+| 更新 | 检查桌面更新、查看下载与暂存状态、重启以应用更新，并查看桥接更新状态。 |
+| 设置 | 选择浏览器、启动和自动应用更新偏好。 |
+| 隧道 | 启用 Cline、OpenCode 和 Kilo 路由、查看就绪状态，并按照配置说明操作。 |
 
-Tunnels checks whether OpenCode and Cline are **Installed** or **Not found** as
-soon as the app opens, before Cowork starts. Use **Refresh installed apps** after
-installing or removing a CLI. This checks local files with the same detectors
-the bridge uses; it does not launch either CLI or read their account settings.
-Installation is separate from the connection's enabled, sign-in and ready state.
-If Node.js is missing, the app shows **Not checked** with Workspace setup guidance.
+隧道会在应用打开后、Cowork 启动之前检查 OpenCode 和 Cline 是 **已安装** 还是 **未找到**。
+安装或移除 CLI 后请使用 **刷新已安装应用**。这会用与桥接相同的检测器
+检查本地文件；它不会启动任一 CLI，也不会读取它们的账户设置。
+安装状态与连接的启用、登录和就绪状态是分开的。
+如果缺少 Node.js，应用会显示 **未检查** 并给出工作区配置指引。
 
-Chat remains in the existing Cowork browser workspace; the desktop window
-does not embed chat. A second launch brings the existing window forward,
-including requests made during startup. The first launch also recovers an
-unowned mutex left by a previous instance.
+聊天仍位于现有的 Cowork 浏览器工作区中；桌面窗口
+不内嵌聊天。再次启动会把现有窗口置于前台，
+包括在启动过程中发起的请求。首次启动还会恢复上一个实例遗留的
+无主互斥体。
 
-The app downloads the current Windows x64 LTS executable from nodejs.org, checks
-its official SHA-256, and installs it for your account without administrator
-access.
+应用会从 nodejs.org 下载当前的 Windows x64 LTS 可执行文件，校验
+其官方 SHA-256，并在无需管理员权限的情况下为你的账户安装它。
 
-The single executable includes .NET, the bridge, browser assets, the matching
-client and license notices. It verifies and prepares its embedded files in a
-private user cache automatically. There is no ZIP to extract or supporting
-folder to keep beside the executable. Node.js is installed separately through
-the app or detected on your computer. Roblox and the UAI script must remain running.
+单个可执行文件包含 .NET、桥接、浏览器资源、匹配的
+客户端和许可声明。它会自动在私有用户缓存中校验并准备其内嵌文件。
+没有需要解压的 ZIP，也没有需要放在可执行文件旁边的支持
+文件夹。Node.js 通过应用单独安装或在你的电脑上检测。
+Roblox 和 UAI 脚本必须保持运行。
 
-## Optional OpenCode native workaround
+## 可选的 OpenCode 原生变通方案
 
-Install [OpenCode Desktop](https://opencode.ai) separately, then restart the bridge.
-The OpenCode card on **Tunnels** reports when its free models are ready. The
-bridge detects the installed native CLI, starts its authenticated loopback server privately, and
-routes models in its public catalog through the native connection. OpenCode is
-**not bundled, downloaded or copied into the desktop distribution**. The app uses
-its existing Windows Job Object to own the bridge and its CLI descendant; Stop
-and closing the window shut them down. The bridge also supports an absolute
-`UAI_OPENCODE_BINARY` override; see the [bridge guide](../bridge/README.md).
+单独安装 [OpenCode Desktop](https://opencode.ai)，然后重启桥接。
+**隧道** 上的 OpenCode 卡片会在其免费模型就绪时报告。桥接
+会检测已安装的原生 CLI，私有地启动其经过认证的回环服务器，并
+让公共目录中的模型经由原生连接路由。OpenCode
+**不会被打包、下载或复制到桌面发行版中**。应用使用
+其现有的 Windows Job Object 来拥有桥接及其 CLI 子进程；停止
+和关闭窗口会将它们关闭。桥接还支持绝对路径的
+`UAI_OPENCODE_BINARY` 覆盖；参见 [桥接指南](../bridge/README.md)。
 
-The existing direct desktop workaround still works without this app. This native
-route provides an additional desktop option; on mobile, OpenCode requires the UAI
-Relay app from Discord.
-UAI tools are returned to Roblox for execution. The bundled bridge includes the private
-execution guard and matching permission handling before returning
-blocked-action feedback. The CLI never receives permission to run local
-desktop tools. Provider keys and existing OpenCode credentials are not
-copied into its isolated session. OpenCode's retired HTTPS proxy is not used.
+现有的桌面直连变通方案在没有此应用时仍然可用。这条原生
+路径提供了一个额外的桌面选项；在移动端，OpenCode 需要来自 Discord 的 UAI
+Relay 应用。
+UAI 工具会被返回给 Roblox 执行。打包的桥接会在返回
+被阻止操作的反馈之前，包含私有的执行保护与匹配的权限处理。
+CLI 绝不会获得运行本地
+桌面工具的权限。提供方密钥和现有的 OpenCode 凭据不会被
+复制到其隔离会话中。不使用 OpenCode 已停用的 HTTPS 代理。
 
-OpenCode Go subscriptions use `https://opencode.ai/inference/go/v1` and your Go API
-key directly. They do not use this native free-model route. That mobile relay
-requirement applies to OpenCode free models, not Go subscriptions.
+OpenCode Go 订阅直接使用 `https://opencode.ai/inference/go/v1` 和你的 Go API
+key。它们不使用这条原生免费模型路由。该移动端中继
+要求适用于 OpenCode 免费模型，而不适用于 Go 订阅。
 
-Project UAI Free is available by default when no provider is configured. Thank you
-for your continued use and support. Join [our Discord](https://discord.gg/9xYyyYuKap)
-for help, availability updates and news about more free providers.
+未配置提供方时，默认可用 Project UAI Free。感谢你
+持续的使用与支持。加入 [我们的 Discord](https://discord.gg/9xYyyYuKap)
+以获取帮助、可用性更新以及关于更多免费提供方的消息。
 
-The window reports bridge startup separately from Roblox connection. Minimize
-keeps Cowork in the taskbar. Closing the window stops the owned bridge and its
-OpenCode process, then exits; the app never hides in the notification area.
-Repeated launches restore the existing window. Occupied ports produce an error;
-the app never chooses an undiscoverable random port or kills another application.
+窗口会分别报告桥接启动与 Roblox 连接。最小化
+会把 Cowork 保留在任务栏中。关闭窗口会停止其拥有的桥接及其
+OpenCode 进程，然后退出；应用绝不会隐藏在通知区域。
+重复启动会恢复现有窗口。端口被占用会产生错误；
+应用绝不会选择无法发现的随机端口，也不会结束其他应用程序。
 
-## Cline free models
+## Cline 免费模型
 
-Install the official [Cline CLI](https://docs.cline.bot/cline-cli/overview), then
-open **Tunnels > Cline tunnel**. Cline is enabled by default. Run the following
-command in PowerShell, or use **Copy sign-in command** in the desktop app:
+安装官方 [Cline CLI](https://docs.cline.bot/cline-cli/overview)，然后
+打开 **隧道 > Cline 隧道**。Cline 默认启用。在 PowerShell 中运行以下
+命令，或使用桌面应用中的 **复制登录命令**：
 
 ```powershell
 cline auth cline
 ```
 
-Restart the bridge after signing in. The card shows **Sign in needed** until the
-profile is authenticated, and **Ready** only after the bridge validates the
-current official free-model catalog. Each request must retain that exact model
-in the native CLI. Cline is installed separately and is not bundled or
-automatically downloaded. Its provider allowances still apply. Native Cline
-owns authentication; UAI does not copy its tokens into provider settings.
-The bridge prefers a dedicated UAI profile if one already exists; otherwise it
-uses your standard Cline sign-in. See the [Cline guide](../docs/CLINE_TUNNEL.md)
-for that optional profile setup.
+登录后重启桥接。在配置文件通过认证之前，卡片会显示 **需要登录**，
+只有桥接校验了当前的官方免费模型目录后才会显示 **Ready**。每个请求都必须在
+原生 CLI 中保留确切的模型。Cline 单独安装，不会被打包或
+自动下载。其提供方配额仍然适用。原生 Cline
+掌握认证；UAI 不会把其 token 复制到提供方设置中。
+如果已存在专用的 UAI 配置文件，桥接会优先使用它；否则
+使用你标准的 Cline 登录。该可选配置文件设置见 [Cline 指南](../docs/CLINE_TUNNEL.md)。
 
-## Desktop preferences
+## 桌面偏好设置
 
-The app saves seven controls for this installation and retains them across
-verified app updates:
+应用为此安装保存七个控件，并在经校验的应用更新之间
+保留它们：
 
-| Control | Page | Default | Behavior |
+| 控件 | 页面 | 默认值 | 行为 |
 | --- | --- | --- | --- |
-| OpenCode tunnel | Tunnels | On | Uses the installed CLI for native free models. Turn off to avoid starting OpenCode. |
-| Cline tunnel | Tunnels | On | Uses the installed CLI and your Cline sign-in for current free models; prefers the dedicated UAI profile when present. |
-| Kilo tunnel | Tunnels | On | Starts quota recovery after an explicit anonymous Kilo free-model refusal. |
-| MCP access | Connections | On | Allows external coding agents to connect to UAI's MCP endpoint. Turning it off rejects MCP sessions. |
-| Open browser on start | Settings | On | Opens Cowork after successful bridge startup. **Open Cowork** always opens it manually. |
-| Start bridge on launch | Settings | Off | Starts the bridge after Node.js detection; does not register Windows startup. |
-| Automatic app updates | Settings | On | Checks and downloads desktop updates automatically. **Check for updates** on Updates remains available when off. |
+| OpenCode 隧道 | 隧道 | 开 | 使用已安装的 CLI 提供原生免费模型。关闭可避免启动 OpenCode。 |
+| Cline 隧道 | 隧道 | 开 | 使用已安装的 CLI 和你的 Cline 登录获取当前免费模型；存在专用 UAI 配置文件时优先使用。 |
+| Kilo 隧道 | 隧道 | 开 | 在一次显式的匿名 Kilo 免费模型拒绝之后启动配额恢复。 |
+| MCP 访问 | 连接 | 开 | 允许外部编码智能体连接到 UAI 的 MCP 端点。关闭会拒绝 MCP 会话。 |
+| 启动时打开浏览器 | 设置 | 开 | 桥接成功启动后打开 Cowork。**打开 Cowork** 始终可手动打开它。 |
+| 启动时启动桥接 | 设置 | 关 | 在检测 Node.js 后启动桥接；不注册 Windows 开机启动。 |
+| 自动应用更新 | 设置 | 开 | 自动检查并下载桌面更新。关闭时，**更新** 页面上的 **检查更新** 仍然可用。 |
 
-Stop the bridge before changing any tunnel or MCP. The next start receives the
-saved settings; existing tool calls are never silently interrupted by a switch.
-The OpenCode card shows readiness, the detected CLI version, or a setup problem.
-MCP access controls external agents; OpenCode's private tool relay remains
-independent. App preferences contain no credentials, and malformed preference
-files recover to defaults. Disabling automatic app downloads lets a download
-already in progress finish. Closing always exits, including when an update is
-staged; the new version starts the next time you open the desktop app. **Restart
-to update app** on **Updates** applies a staged update after you stop the bridge
-on **Workspace**.
-Bridge worker updates continue automatically when work is idle. **Check for
-bridge updates** on **Updates** asks a running bridge to look immediately; the
-bridge and web UI version it reports ships as one package.
+更改任何隧道或 MCP 之前，请先停止桥接。下一次启动会接收
+已保存的设置；现有工具调用绝不会因开关而被静默中断。
+OpenCode 卡片会显示就绪状态、检测到的 CLI 版本或配置问题。
+MCP 访问控制外部智能体；OpenCode 的私有工具中继保持
+独立。应用偏好设置不含凭据，格式错误的偏好
+文件会恢复为默认值。禁用自动应用下载会让已在进行的下载
+完成。关闭始终退出，包括在更新已暂存时；下次打开桌面
+应用时会启动新版本。在你于 **工作区** 停止桥接后，
+**更新** 上的 **重启以更新应用** 会应用已暂存的更新。
+工作空闲时，桥接工作进程更新会继续自动进行。**检查桥接
+更新** 会在 **更新** 上让正在运行的桥接立即查看；它报告的
+桥接与 web UI 版本作为一个包一起发布。
 
-## Automatic connection
+## 自动连接
 
-External AI harnesses can use the same desktop bridge as an MCP server. Click
-**MCP setup** on **Connections** in the running desktop app to open its browser
-setup panel, or open
-**Settings → MCP** in Cowork to copy the configuration for your harness. The
-single executable accepts `--mcp-stdio`, runs its verified embedded adapter with
-the detected Node runtime, and discovers the already-running desktop bridge.
-This command does not open a window or start another bridge. The HTTP endpoint
-is `http://127.0.0.1:28791/mcp`. UAI retains control of tool permissions and uses
-an isolated ephemeral conversation per MCP connection. See [MCP setup](../bridge/MCP.md).
+外部 AI harness 可以把同一个桌面桥接用作 MCP 服务器。点击正在运行的桌面应用中
+**连接** 上的 **MCP 配置** 以打开其浏览器
+配置面板，或在 Cowork 中打开
+**设置 → MCP** 以复制适用于你的 harness 的配置。该
+单一可执行文件接受 `--mcp-stdio`，使用检测到的 Node 运行时运行其经校验的内嵌适配器，
+并发现已在运行的桌面桥接。
+该命令不会打开窗口或启动另一个桥接。HTTP 端点为
+`http://127.0.0.1:28791/mcp`。UAI 保持对工具权限的控制，并为每个 MCP 连接使用
+隔离的临时对话。参见 [MCP 配置](../bridge/MCP.md)。
 
-`bridge.autoDiscover` defaults to true. Desktop clients probe the dedicated port
-every four seconds, with a two-second request deadline. Touch-only mobile clients
-skip this Windows discovery route. An enabled manual bridge takes
-priority. Turn off **Manual bridge enabled** in Cowork to use the desktop app.
-Disable **Find desktop app automatically** to opt out. `bridge.stop()` suspends
-discovery until `bridge.sync()` or a connection-setting change. Unloading releases
-the discovery worker and ignores pending results.
+`bridge.autoDiscover` 默认为 true。桌面客户端每四秒探测一次专用端口，
+请求超时为两秒。仅触屏的移动客户端会
+跳过这条 Windows 发现路由。已启用的手动桥接
+优先。在 Cowork 中关闭 **手动桥接已启用** 以使用桌面应用。
+禁用 **自动查找桌面应用** 以退出。`bridge.stop()` 会暂停
+发现，直到 `bridge.sync()` 或连接设置发生变化。卸载会释放
+发现工作进程并忽略待处理结果。
 
-Authenticated bridge contact selects Web runtime automatically;
-disconnecting restores Game for subsequent requests. Stopping or restarting the
-launcher does not resend an inference request.
+经过认证的桥接连接会自动选择 Web 运行时；
+断开连接后，后续请求恢复为 Game。停止或重启
+启动器不会重发推理请求。
 
-## Automatic updates
+## 自动更新
 
-Bridge releases download automatically, are verified, and activate only when
-active work and retained receipts/pictures are idle. An automatic worker restart
-keeps the same pairing token. The browser reconnects to the updated bridge.
-Refresh an open browser page to load changed web assets. **Copy client script**
-on **Workspace** copies the client embedded in the desktop executable. Desktop
-3.7.0 aligns the embedded bridge, browser and client with the companion release.
+桥接版本会自动下载、校验，并仅在活动工作和保留的
+回执/图片空闲时启用。自动工作进程重启会
+保留相同的配对 token。浏览器会重新连接到更新后的桥接。
+刷新已打开的浏览器页面以加载变更后的 web 资源。**工作区**
+上的 **复制客户端脚本** 会复制桌面可执行文件中内嵌的客户端。桌面
+3.7.0 使其内嵌的桥接、浏览器和客户端与伴生端版本对齐。
 
-**Tunnels > Kilo tunnel** enables anonymous Kilo quota recovery by default.
-After an explicit quota refusal, the bridge starts a private Tor helper and
-makes a bounded retry through another connection. The first use downloads a
-verified 22 MB archive. Each exit still has an allowance; shared exits may
-already be limited. Stop Cowork to change the switch. See
-[Kilo setup and evidence](../docs/KILO_TUNNEL.md).
+**隧道 > Kilo 隧道** 默认启用匿名 Kilo 配额恢复。
+在一次显式的配额拒绝之后，桥接会启动私有的 Tor 辅助进程，
+并通过另一个连接进行有界重试。首次使用会下载一个
+经校验的 22 MB 归档。每个出口仍有配额；共享出口可能
+已被限制。停止 Cowork 以更改该开关。参见
+[Kilo 配置与证据](../docs/KILO_TUNNEL.md)。
 
-When automatic app updates are enabled, the desktop app separately checks stable
-releases in `Project-Ptolemy/ProjectUAI` on startup and every 15 minutes. It
-downloads and verifies a compatible desktop executable in the background.
-**Updates** shows the check, download, and staged result.
-A ready update applies on restart; **Restart to update app** is available once
-the bridge is stopped. Updates never automatically stop an active conversation.
-Malformed or unrelated entries in the GitHub release list are skipped without
-preventing discovery of a valid desktop release.
+启用自动应用更新后，桌面应用会在启动时以及每隔 15 分钟单独检查
+`Project-Ptolemy/ProjectUAI` 中的稳定版本。它会在后台下载并
+校验兼容的桌面可执行文件。**更新** 会显示检查、下载和暂存结果。
+就绪的更新会在重启时应用；桥接停止后即可使用 **重启以更新应用**。
+更新绝不会自动停止活动对话。GitHub 版本列表中格式错误或
+无关的条目会被跳过，且不会妨碍发现有效的桌面版本。
 
-Desktop versions are staged in a private per-install cache under LocalAppData.
-Extracted payloads, staged versions and quarantine folders that are older than
-an hour and no longer referenced are pruned automatically, so the caches stay
-bounded across updates.
-The original executable is retained. The launcher remembers a verified
-new version only after the replacement app reports successful startup. For an
-immediate restart, the current app waits for the update helper to acknowledge
-ownership of the handoff before exiting. The helper then checks the replacement's
-startup receipt and falls back to the retained executable if startup fails.
-The original shortcut continues to work, and bridge cache identity stays stable
-across desktop updates. A candidate that failed to start is not retried by
-automatic checks; choose **Check for updates** manually to retry that candidate.
-Failed network or integrity checks leave the current app usable.
+桌面版本会被暂存在 LocalAppData 下按安装划分的私有缓存中。
+解压的载荷、暂存的版本和超过一小时且不再被引用的隔离文件夹
+会被自动清理，因此缓存会在多次更新之间保持有界。
+原始可执行文件会被保留。只有在替换后的应用报告成功启动之后，
+启动器才会记住经校验的新版本。为了
+立即重启，当前应用会等待更新辅助进程确认接手所有权后才退出。
+随后辅助进程会检查替换版本的启动
+回执，若启动失败则回退到保留的可执行文件。
+原始快捷方式继续可用，桥接缓存标识在桌面更新之间保持稳定。
+启动失败的候选版本不会被自动检查重试；请手动选择 **检查更新** 以重试该候选版本。
+网络或完整性校验失败会让当前应用保持可用。
 
-Desktop 1.0 has no updater, so its users need one manual download of 3.7.0 first.
-For each future release, publish `desktop-release.json`,
-`UAI-Bridge-<version>-win-x64.exe`, and its adjacent `.sha256` on the same official
-`v<version>` or `desktop-v<version>` GitHub release. The manifest includes the
-exact version, platform, executable name, byte size and SHA-256. Bridge updates independently need `bridge-release.json`
-and `uai-bridge-package.json`; see the [bridge guide](../bridge/README.md).
+桌面 1.0 没有更新器，因此其用户需要先手动下载一次 3.7.0。
+对于今后每个版本，请在同一个官方 `v<version>` 或 `desktop-v<version>` GitHub 版本上
+发布 `desktop-release.json`、
+`UAI-Bridge-<version>-win-x64.exe` 及其相邻的 `.sha256`。清单包含
+确切的版本、平台、可执行文件名、字节大小和 SHA-256。桥接更新独立地需要 `bridge-release.json`
+和 `uai-bridge-package.json`；参见 [桥接指南](../bridge/README.md)。
 
-Desktop credentials live only in memory and rotate at each app start. The app
-and native executor discover through a desktop-only POST endpoint requiring the
-exact loopback Host, a custom header and JSON. Browser Origin and Fetch Metadata
-headers are rejected, with no CORS support. Native programs on this computer are
-inside this trust boundary; this is not authentication against local malware.
-All ordinary bridge routes still require the bearer token.
+桌面凭据只存在于内存中，并在每次应用启动时轮换。应用
+和原生执行器通过一条仅限桌面的 POST 端点进行发现，该端点要求精确的回环 Host、
+自定义头和 JSON。浏览器 Origin 与 Fetch Metadata
+头会被拒绝，且不支持 CORS。此电脑上的原生程序
+位于该信任边界之内；这并非针对本地恶意软件的认证。
+所有普通桥接路由仍然需要 bearer token。
 
-Discovery returns a fixed product marker, schema, port, instance and token. The
-client validates these before attaching and uses one shared effective connection
-for commands, web inference and pictures. Credentials never replace saved manual
-settings. A changed connection terminates an outstanding relay request rather
-than resending it to a new process.
+发现会返回固定的产品标记、schema、端口、实例和 token。
+客户端在附加之前会校验这些内容，并为命令、web 推理和图片使用
+同一个共享的有效连接。凭据绝不会替代已保存的手动
+设置。连接发生变化时，会终止未完成的中继请求，而不是把它
+重发给新进程。
 
-## Build and verification
+## 构建与验证
 
-Install the .NET 10 SDK for Windows and Node.js 18+ for verification. The package
-build does not download Node, OpenCode or Cline. There are no NuGet library dependencies.
-`desktop/make-icon.ps1` draws the executable's native connection glyph, the
-sidebar brand mark is typeset text, and the window draws its own title bar —
-drag to move, with custom minimize, maximize and close buttons — while resizing,
-snapping and taskbar behavior stay native. Manually audit all
-changed source, documentation and tests first, then build:
+安装适用于 Windows 的 .NET 10 SDK 和用于验证的 Node.js 18+。包
+构建不会下载 Node、OpenCode 或 Cline。没有 NuGet 库依赖。
+`desktop/make-icon.ps1` 绘制可执行文件的原生连接图标，
+侧边栏品牌标记是排版的文本，窗口绘制自己的标题栏——
+拖动可移动，配有自定义的最小化、最大化和关闭按钮——而调整大小、
+贴靠和任务栏行为保持原生。先手动审计所有
+变更的源代码、文档和测试，然后构建：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File desktop/build.ps1
 # Optional local SDK: -Dotnet C:/path/to/dotnet.exe
 ```
 
-The desktop build embeds the existing `dist/uai.lua` alongside the bridge and
-browser assets. A desktop-only change does not require rebuilding the client.
-Inspect the generated payload, executable, release manifest and SHA-256, then verify:
+桌面构建会把现有的 `dist/uai.lua` 与桥接和
+浏览器资源一起嵌入。仅桌面端的更改不需要重新构建客户端。
+检查生成的载荷、可执行文件、发布清单和 SHA-256，然后验证：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File desktop/verify.ps1
 ```
 
-Optional bridge compatibility checks use the existing offline Node harness:
+可选的桥接兼容性检查使用现有的离线 Node 测试框架：
 
 ```powershell
 node --test bridge/tests/desktop.test.js bridge/tests/opencode-native.test.js bridge/tests/updater.test.js
 ```
 
-The desktop verification checks the release executable and embedded file hashes,
-single-file startup, and the absence of bundled Node/OpenCode runtimes. It exercises
-detected Node, repeated startup, discovery, simulated game status, graceful stop
-and restart with a new token. It checks persisted preferences, launch switches,
-native minimize/restore, window-close shutdown, responsive page layout, and updater
-validation and handoff fixtures. It also renders native WPF content previews in
-`desktop/.build/verification/`: `launcher.png`, `launcher-connections.png`,
-`launcher-updates.png`, `launcher-settings.png`, `launcher-tunnels.png`,
-`launcher-tunnels-bottom.png`, `launcher-compact.png`, `launcher-narrow.png`,
-`launcher-narrow-bottom.png`, `launcher-narrow-tunnels.png`, and
-`launcher-narrow-tunnels-bottom.png`. Inspect each preview.
-The previews capture WPF content; native title-bar behavior is checked separately.
-These offline checks do not claim a live executor/Roblox connection.
-Manually review each fix before rebuilding or retesting.
+桌面验证会检查发布可执行文件和内嵌文件的哈希、
+单文件启动，以及没有打包 Node/OpenCode 运行时。它会演练
+检测 Node、重复启动、发现、模拟游戏状态、优雅停止
+以及使用新 token 重启。它还会检查持久化的偏好设置、启动开关、
+原生最小化/恢复、关闭窗口退出、响应式页面布局，以及更新器
+校验与交接测试素材。它还会在
+`desktop/.build/verification/` 中渲染原生 WPF 内容预览：`launcher.png`、`launcher-connections.png`、
+`launcher-updates.png`、`launcher-settings.png`、`launcher-tunnels.png`、
+`launcher-tunnels-bottom.png`、`launcher-compact.png`、`launcher-narrow.png`、
+`launcher-narrow-bottom.png`、`launcher-narrow-tunnels.png` 和
+`launcher-narrow-tunnels-bottom.png`。请检查每个预览。
+预览捕获的是 WPF 内容；原生标题栏行为会单独检查。
+这些离线检查并不声称存在实时执行器/Roblox 连接。
+在重新构建或重新测试之前，请手动审阅每项修复。
 
-Build outputs, dependency caches and intermediate files are ignored by Git.
-Publish the executable, release manifest and adjacent SHA-256 as release assets.
-This local build is unsigned; signing and public release publication are separate
-distribution steps.
+构建输出、依赖缓存和中间文件由 Git 忽略。
+将可执行文件、发布清单和相邻的 SHA-256 作为发布资源发布。
+此本地构建未签名；签名和公开发布是独立的
+发行步骤。

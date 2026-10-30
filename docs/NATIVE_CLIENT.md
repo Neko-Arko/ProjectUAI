@@ -1,453 +1,154 @@
-# Native client features and limits
+# 原生客户端功能与限制
 
-Current native feature contract for **3.3.5**, October 18, 2026.
-Internal APIs are described in
-[SPEC.md](../SPEC.md); verification and native-device scenarios are in
-[CODE_WORKSPACE_TESTING.md](CODE_WORKSPACE_TESTING.md).
+适用于 **3.3.5** 的当前原生功能约定，2026 年 10 月 18 日。
+内部 API 见 [SPEC.md](../SPEC.md)；验证与原生设备场景见 [CODE_WORKSPACE_TESTING.md](CODE_WORKSPACE_TESTING.md)。
 
-In-game release notes are under **App menu → What's new**, also available from
-**About → What's new**. Reload the updated native bundle to see the latest notes.
-Revised notes restore the unread marker even when the client version stays the same.
+游戏内更新说明位于 **App menu → What's new**，也可从 **About → What's new** 打开。重新加载更新后的原生包即可看到最新说明。修订后的说明即使在客户端版本不变时也会恢复未读标记。
 
-Version 3.3.5 strengthens main and worker tool-use instructions and preserves
-access to tools beyond provider declaration limits. Pending follow-ups can be
-reviewed, edited, reordered and cleared without interrupting the active response.
-The desktop bridge gains persistent integration switches and closes normally
-instead of hiding in the tray; browser replies and tool receipts are refined.
-See the [release notes](../CHANGELOG.md) and
-[verification record](TESTING_3.3.5.md).
+3.3.5 版加强了主代理与工作线程的工具使用指令，并保留对超出服务商声明上限的工具的访问能力。待处理的后续消息可审阅、编辑、重排与清除，且不会中断正在进行的回复。桌面桥接新增持久化集成开关，并且会正常关闭而不再隐藏到托盘；浏览器回复与工具回执均有改进。参见[更新说明](../CHANGELOG.md)与[验证记录](TESTING_3.3.5.md)。
 
-The [script development manual](SCRIPT_DEVELOPMENT.md) is also bundled for
-models through the read-only `scripting_docs` tool. Its quickstart leads into
-task-specific instructions and examples for saved scripts, Code documents,
-source inspection, debugging, cleanup and script-owned interfaces.
+[脚本开发手册](SCRIPT_DEVELOPMENT.md) 也通过只读的 `scripting_docs` 工具一并提供给模型。其快速入门会引导至针对具体任务的说明与示例，涵盖已保存脚本、Code 文档、源码查看、调试、清理以及脚本自有的界面。
 
-The client uses portable ASCII names for new game folders and one unchanged
-`files/...` path across file tools, search, compilation and execution. Existing
-accessible folders retain their names and locations; incomplete host listings
-return usable entries with an explicit warning.
+客户端为新游戏文件夹使用可移植的 ASCII 名称，并在文件工具、搜索、编译与执行之间统一使用不变的 `files/...` 路径。既有可访问文件夹保留其名称与位置；宿主列表不完整时会返回可用条目，并给出明确警告。
 
-New configurations use Low reasoning effort. Saved choices remain effective in
-**Settings → Agent → Effort**. The model modal edits this same global setting for
-documented reasoners and models with **Options → Reasoning support** enabled.
-Provider default is available there too. **Models → Options → Temperature** offers
-Automatic, Send and Omit for the selected model without shrinking the model list;
-its numeric value is shared across models. Automatic
-uses documented support and provider rejections. Controls update when settings change.
-Thinking estimates describe visible text; clipped
-traces say **Excerpt**. Folded traces defer Markdown formatting and measurement
-until opened, reuse parsed text during resizing, and retain plain text if formatting
-fails. Provider stream errors retain useful bounded details without
-retrying an uncertain dispatch. See [provider behavior](PROVIDER_COMPATIBILITY.md)
-and the [release verification record](TESTING_3.3.1.md).
+新配置使用低推理强度。已保存的选择在 **Settings → Agent → Effort** 中继续生效。模型弹窗会为已有文档说明的推理模型以及启用了 **Options → Reasoning support** 的模型编辑同一全局设置。服务商默认值也可在其中选择。**Models → Options → Temperature** 为所选模型提供 Automatic、Send 与 Omit 三种方式，且不会缩减模型列表；其数值在各模型之间共享。Automatic 会依据已记录的支持情况与服务商的拒绝结果判断。设置变更时控件会同步更新。
+思考预估描述的是可见文本；被裁剪的轨迹会标注 **Excerpt**。折叠的轨迹在展开之前推迟 Markdown 格式化与测量，调整尺寸期间复用已解析文本，格式化失败时保留纯文本。服务商流式错误会保留有用的有界细节，但不会重试状态不确定的派发。参见[服务商行为](PROVIDER_COMPATIBILITY.md)与[发布验证记录](TESTING_3.3.1.md)。
 
-New access settings default to **Allow everything**, allowing reads, writes and
-execution unless an explicit tool rule says otherwise. Saved access modes and
-rules are preserved. The composer chip names the active mode.
-Live reasoning and answer previews disclose their limits independently, and
-game-folder discovery checks each unreadable candidate only once.
+新的访问设置默认为 **Allow everything**，允许读取、写入与执行，除非某条显式工具规则另有规定。已保存的访问模式与规则会保留。输入区标签会标明当前生效的模式。
+实时推理与回答预览各自独立披露其限制，游戏文件夹发现对每个不可读候选项只检查一次。
 
-With the updated Cowork bridge connected, Roblox receives genuine text and
-reasoning previews through its existing short status polls, roughly once per
-second. The browser receives provider deltas directly from the bridge. Both use
-the completed response as the final result. Direct executor HTTP and older
-bridges still return the whole response at completion; no typing is simulated.
-Waiting bridge jobs do not occupy native HTTP slots between polls and have no
-local overall inference deadline. Stop, changed credentials and actual provider
-failures still end the request.
+连接更新后的 Cowork 桥接后，Roblox 通过其现有的短轮询状态请求获得真实的文本与推理预览，约每秒一次。浏览器直接从桥接接收服务商增量。两者都以完成后的回复作为最终结果。直连执行器 HTTP 与旧版桥接仍在完成时返回完整回复；不模拟逐字输入。等待中的桥接任务在轮询之间不占用原生 HTTP 槽位，也没有本地整体推理超时。停止、凭据变更以及服务商的真实失败仍会终止请求。
 
-Send stays available while a conversation works. Follow-ups enter a visible queue
-and are consumed in order between complete model/tool exchanges. The pending bar
-opens a review modal where individual messages can be removed. Up to 16 messages
-can wait; attachment preparation reserves their order before reading bytes. Stop
-ends active work and holds messages that have not been consumed. Use Resume after
-reviewing them to continue. Ordinary saved conversations restore pending text and
-compact attachment references in a held state; unavailable attachments must be
-reattached. Ephemeral conversations do not persist this queue.
+在对话处理期间“发送”始终可用。后续消息进入可见队列，并在完整的模型/工具交互之间按序处理。待处理条会打开审阅弹窗，可逐条移除消息。最多可有 16 条消息等待；附件准备会在读取字节之前先预留其顺序。停止会结束当前工作，并保留尚未处理的消息。审阅后使用“继续”即可恢复。普通已保存对话会以保留状态恢复待处理文本与压缩的附件引用；不可用的附件必须重新附加。临时对话不会持久化该队列。
 
-**Settings → Agent → Automatic free routing** is enabled by default. Included
-HCNSEC access with model `auto` may choose a compatible model from recent measured
-probes. A conversation notice names the chosen model and points back to this
-setting. Disable it to keep future requests on the saved provider/model; an
-already dispatched request continues. Choosing an explicit model also prevents
-automatic selection. The provider's own `auto` routing remains its responsibility.
+**Settings → Agent → Automatic free routing** 默认启用。内置的 HCNSEC 访问配合模型 `auto` 时，可从近期实测探测结果中选择兼容模型。对话中的提示会标明所选模型，并指回该设置。将其禁用可让后续请求固定在已保存的服务商/模型上；已派发的请求会继续执行。选择显式模型同样会阻止自动选择。服务商自身的 `auto` 路由仍由其自行负责。
 
-The profile menu's ProjectUAI entry and support modal use the client's frame-drawn
-brand mark, which needs no image download. What's New remains a separate entry.
+个人资料菜单中的 ProjectUAI 入口与支持弹窗使用客户端以帧绘制的品牌标识，无需下载图片。What's New 仍是独立入口。
 
-Modals, Settings and Quick Chat enter and exit with short opacity transitions at
-their final dimensions. They do not scale their text or reflow controls during
-the animation. Reduced motion applies the final state immediately. Form labels,
-inputs and help text stay grouped, with compact headers and consistent section
-spacing; description-only confirmations reserve no empty content band.
-Modal fitting coalesces layout signals across frames, skips unchanged dimensions
-and releases pending work on close. The sidebar profile keeps its name and
-provider lines together.
+弹窗、Settings 与 Quick Chat 以最终尺寸出现和退出，仅伴随短暂的透明度过渡。动画过程中不会缩放文字或重排控件。启用“减少动态效果”时直接呈现最终状态。表单标签、输入框与帮助文本保持成组，标题紧凑、分区间距一致；仅含说明的确认框不会预留空白内容带。
+弹窗适配会跨帧合并布局信号，跳过未变化的尺寸，并在关闭时释放待处理工作。侧边栏个人资料将名称与服务商行保持在一起。
 
-Subagent **Details** is a live monitor with the current step, provider/model,
-tool progress and results, latest delivered text and reasoning, elapsed time,
-final report and Stop. Overview, Tools, and Task & access tabs separate output,
-call details, and the task with its granted tool groups. A follow-up draft survives
-live updates and tab changes. Send it after the run ends to reuse the retained
-context; Stop remains a separate action. Existing cards update in place at most ten times per
-second; hidden register views suspend drawing. Activity and message previews
-are bounded. Streaming output appears when delivered; buffered connections
-cannot show text before their response arrives.
+子代理 **Details** 是一个实时监视器，显示当前步骤、服务商/模型、工具进度与结果、最新交付的文本与推理、已用时间、最终报告以及停止。Overview、Tools 和 Task & access 标签页分别呈现输出、调用详情，以及任务及其已授予的工具组。后续消息草稿在实时更新与标签切换后仍能保留。运行结束后发送它即可复用保留的上下文；停止仍是独立操作。已有卡片就地更新，每秒最多十次；隐藏的登记视图暂停绘制。活动与消息预览均有上限。流式输出在交付时即时显示；缓冲式连接在回复到达前无法显示文本。
 
-`dispatch_agent` and `agent_followup` start background work by default and return
-an ID immediately. The main agent continues independent work, checks
-`agent_status` periodically, and reads the child's report before its final
-answer. Status checks support bounded waits and paginated reports; explicit
-`background=false` retains blocking dispatch. Stop and terminal parent exits
-stop unfinished descendants, including queued work. Background admissions and
-uncollected reports are bounded.
+`dispatch_agent` 与 `agent_followup` 默认启动后台工作并立即返回 ID。主代理继续执行独立工作，定期检查 `agent_status`，并在给出最终答复前读取子代理的报告。状态检查支持有界等待与分页报告；显式设置 `background=false` 可保留阻塞式派发。停止与父级终止退出会停止未完成的后代任务，包括排队中的工作。后台准入与未收取的报告均有上限。
 
-The optional Discord invitation waits for five minutes of use and at least 30
-seconds without input. It appears only in visible idle Chat/Home, with no active
-request, unsent draft, focused field, keyboard, other dialog or scrolled-back chat.
-It appears at most once per client load and once per 14 days, with the cooldown
-saved in configuration. **Not now** keeps that cooldown. **Don't show again** and
-a successful **Copy invite** disable reminders; **Join Discord** in the menu
-still opens the invitation. UI-free SDK clients never schedule the modal.
+可选的 Discord 邀请会在使用满五分钟且至少 30 秒无输入后出现。它仅出现在可见且空闲的 Chat/Home 中，此时没有正在进行的请求、未发送草稿、聚焦的输入框、键盘、其他对话框或回滚的聊天记录。每次客户端加载最多出现一次，且每 14 天最多一次，冷却时间保存在配置中。**Not now** 会保留该冷却。**Don't show again** 与成功的 **Copy invite** 会关闭提醒；菜单中的 **Join Discord** 仍可打开邀请。无界面的 SDK 客户端从不安排该弹窗。
 
-## Script UI library
+## 脚本 UI 库
 
-The independent [UI LIB](UI_LIBRARY.md) is now v1.3.0. Agents declare script
-controls and callbacks through its bundled reference. The library owns layout,
-input, configuration, cleanup, and the fixed `Project UAI | UI LIB.` footer.
-Navigation, action labels, and disclosure/selection states use text; the
-frame-drawn brand mark and minimize/close/resize glyphs remain. The sidebar
-profile supplies a Roblox headshot, display name, username, and game. Transitions
-are owned and reversible, respect reduced motion, and settle during cleanup.
-The agent client remains its own application.
+独立的 [UI LIB](UI_LIBRARY.md) 现为 v1.3.0。代理可通过其随附参考声明脚本控件与回调。该库负责布局、输入、配置、清理，以及固定的 `Project UAI | UI LIB.` 页脚。导航、操作标签与展开/选择状态均使用文本；以帧绘制的品牌标识以及最小化/关闭/调整大小图标保留。侧边栏个人资料提供 Roblox 头像、显示名、用户名与游戏。过渡由该库掌控且可逆，遵循“减少动态效果”，并在清理时结束。代理客户端仍是独立应用。
 
-## Chat viewport
+## 聊天视口
 
-**New conversation** lets you choose the current game, **Universal**, or a custom
-folder and optionally name the chat. **Move to folder** is in each conversation's
-actions. **Conversation folders** creates and renames custom folders; removing a
-folder moves its chats to Universal and keeps their messages. Folders organize
-history without changing game context or conversation tool permissions. Older
-conversations retain their original game grouping.
+**New conversation** 可选择当前游戏、**Universal** 或自定义文件夹，并可选择性地为对话命名。**Move to folder** 位于每个对话的操作中。**Conversation folders** 用于创建和重命名自定义文件夹；移除文件夹会将其中的对话移至 Universal 并保留消息。文件夹只用于组织历史记录，不改变游戏上下文或对话的工具权限。较早的对话保留其原有的游戏分组。
 
-Mobile uses the desktop interface at 55% of its native layout dimensions, spacing
-and radii before density settings, with a 15px control minimum. Text starts at
-10px minimum before text scaling, and standard icons at 12px, keeping their
-strokes visible within the compact layout. Auto keeps the compact placement;
-Sheet, Panel and Window select bottom, right and centred placement and retain
-separate saved positions without replacing live fields. The header, sidebar,
-welcome view, composer, Quick Chat and Code tabs share their desktop structure.
-The normal sidebar collapse control, app menu and conversation search remain.
-Settings categories and providers reflow between columns and scrolling strips.
-Menus remain anchored to their controls and scroll within the available space.
+移动端在应用密度设置之前，以桌面界面的原生布局尺寸、间距与圆角的 55% 呈现，控件最小为 15px。文字在文本缩放前最小为 10px，标准图标为 12px，从而在紧凑布局中保持笔画可见。Auto 保持紧凑位置；Sheet、Panel 与 Window 分别选择底部、右侧与居中位置，并各自保留已保存的位置，而不替换实时字段。页头、侧边栏、欢迎视图、输入区、Quick Chat 与 Code 标签页沿用其桌面结构。常规的侧边栏折叠控件、应用菜单与对话搜索仍然保留。设置分类与服务商在列布局与滚动条带之间重排。菜单仍锚定于其控件，并在可用空间内滚动。
 
-Ordinary mobile typing stays compact in both orientations; explicit expansion
-opens the longer draft editor. Mobile Return adds a newline in Chat and Quick
-Chat. Rotation keeps the native fields, selections and drafts mounted. When a
-landscape keyboard leaves too little space, form actions join the scrollable
-body; dismissing it restores the pinned actions. Focused fields account for the
-keyboard edge and clipping ancestors without repeating nested scroll movement.
+普通移动端输入在两种方向下都保持紧凑；显式展开会打开更长的草稿编辑器。移动端回车在 Chat 与 Quick Chat 中插入换行。旋转会保持原生字段、选择与草稿处于挂载状态。横屏键盘占用空间过多时，表单操作会并入可滚动主体；收起键盘后恢复固定操作。聚焦字段会考虑键盘边缘与裁剪祖先，且不重复嵌套滚动位移。
 
-Code, tables and reasoning resize their nested scroll areas above the keyboard.
-Source metadata yields to Copy in narrow headers. Vertical swipes over settings
-sliders scroll without changing values. Settings categories preserve their
-mounted drafts and individual scroll positions when revisited.
-When a Code surface is too short, the original arrangement scrolls as a whole.
+代码、表格与推理会在键盘上方调整其嵌套滚动区域。窄页头中，源码元信息让位于“复制”。在设置滑块上纵向下滑会滚动而不改变数值。再次进入设置分类时会保留其挂载的草稿与各自的滚动位置。
+当 Code 界面过矮时，原始排布整体滚动。
 
-Conversation history stays in the session while the view uses measured spacers
-for offscreen messages and mounts nearby Markdown chunks. Recently read chunks
-stay warm within a bounded nearby cache, so short backtracking reuses the same
-renderers. Visible text is built before prefetch, and ordinary scrolling reuses
-the layout index. Long lists split into small drawing batches; code and tables
-retain their existing bounded previews.
-At most four chunks are built in a scheduled slice, with an approximately 6 ms
-cooperative budget between builds. This is not a hard limit on a single engine
-layout or Markdown operation. Small upward scrolls immediately stop following.
-Reflow anchors the visible chunk within a long reply; the Latest control reports
-new replies received below the reader. Minimize and native tab navigation suspend
-drawing while keeping the bounded text cache, live preview and expanded sections
-ready. Returning immediately reveals the same renderers and queues only unseen
-events; unchanged history takes no replay slices. Clear, conversation switches and
-destruction still release old content. Retention limits and the composer draft
-are unchanged.
+对话历史保留在会话中，视图对屏幕外消息使用实测占位块，并挂载附近的 Markdown 块。最近阅读过的块在有界邻近缓存中保持温热，因此短暂回退可复用同一批渲染器。可见文本在预取之前构建，普通滚动复用布局索引。长列表拆分为小的绘制批次；代码与表格保留其现有的有界预览。
+每个调度切片最多构建四个块，构建之间约有 6 ms 的协作式预算。这并不是对单次引擎布局或 Markdown 操作的硬性限制。小幅向上滚动会立即停止跟随。重排会把可见块锚定在长回复中的位置；“最新”控件会提示读者下方收到的新回复。最小化与原生标签切换会暂停绘制，同时保持有界文本缓存、实时预览与已展开区域就绪。返回时立即显示相同的渲染器，并且只排队未见事件；未变化的历史不占用回放切片。清除、切换对话与销毁仍会释放旧内容。保留上限与输入区草稿保持不变。
 
-Tool work appears in compact Activity summaries with counts and status. Open a
-summary to inspect its calls, then open a call for its inputs and output. Hidden
-details are built on demand. Opening an activity keeps its header in view, and
-new results leave chosen sections open or closed. Delegated tasks have a distinct
-goal, status and report with a separate folded activity feed. Completed outcomes
-retain their original rows when returning from another panel.
+工具工作以紧凑的 Activity 摘要呈现，包含计数与状态。展开摘要可查看其调用，再展开某个调用可查看其输入与输出。隐藏的详情按需构建。展开活动时会保持其页头可见，新结果不会改变已选分区的展开或收起状态。委派任务有独立的目标、状态与报告，并配有单独的折叠活动流。从其他面板返回时，已完成的结果保留其原始行。
 
-The desktop sidebar rounds its own outer left corners to match the window;
-its inner divider stays straight. The window remains a plain Frame.
+桌面侧边栏将自身外侧左角设为圆角以与窗口匹配；其内部分隔线保持平直。窗口仍是普通 Frame。
 
-## Request and application diagnostics
+## 请求与应用诊断
 
-Successful HTTP responses keep an empty transport-error field. HTTP refusals and
-actual transport failures remain distinct. Select a request or application log
-entry to inspect its recorded details in a popup and copy the redacted evidence.
-Request details include status, timing, transport and available server/trace
-metadata. Opening a log never repeats its request.
+成功的 HTTP 响应会保留空的传输错误字段。HTTP 拒绝与实际传输失败保持区分。选择一条请求或应用日志条目，可在弹窗中查看其记录详情，并复制已脱敏的证据。请求详情包含状态、耗时、传输方式以及可用的服务端/链路元数据。打开日志绝不会重发其请求。
 
-The browser batches snapshot layout, preserves reading position, and defers
-live preview painting while its document is hidden. Native
-Roblox performance and input need live-client validation.
+浏览器会批量处理快照布局、保持阅读位置，并在文档隐藏时推迟实时预览绘制。Roblox 原生性能与输入仍需在真实客户端中验证。
 
 ## Explorer
 
-Explorer browses accessible hierarchy, supported properties, typed attributes and
-tags. Lazy pages, literal/Lua-pattern search, class/tag/subtree filters, breadcrumbs,
-reveal, copy path/ID, bookmarks and picking use stable runtime-scoped object IDs.
-Selected IDs, primary, anchor, focus, clicked object, revision, epoch and selection
-mode are distinct. Replace/add/remove/clear/range selection reconcile destroyed
-objects and external updates. Inspector hierarchy actions validate the displayed
-selection and expected parents before writing. A stale Inspector cannot silently
-retarget a different object. Field drafts retain conflicts instead of overwriting.
+Explorer 可浏览可访问的层级、受支持的属性、带类型的特性与标签。懒加载分页、字面量/Lua 模式搜索、类/标签/子树过滤、面包屑、定位、复制路径/ID、书签与拾取均使用稳定的运行时作用域对象 ID。所选 ID、主对象、锚点、焦点、点击对象、修订、纪元与选择模式彼此区分。替换/添加/移除/清除/范围选择会协调已销毁对象与外部更新。Inspector 的层级操作在写入前会校验当前显示的选择与预期父对象。过期的 Inspector 无法静默改为指向其他对象。字段草稿会保留冲突而不是覆盖。
 
-Runtime services own branch/query cursors and merge returned pages. Cancelled or
-superseded queries cannot publish completion. The UI shows filter chips, retry/error
-states and partial/truncated/unreadable counts. Unknown totals stay unknown.
-Visible Select mode and menus provide touch/gamepad alternatives to modifier keys.
-Actual navigation, focus and hit targets still require native-device verification.
+运行时服务负责分支/查询游标并合并返回的分页。已取消或被取代的查询无法发布完成结果。界面会显示过滤标签、重试/错误状态以及部分/截断/不可读计数。未知的总数保持未知。可见的选择模式与菜单为触摸/手柄提供了替代修饰键的操作方式。实际的导航、焦点与命中目标仍需在原生设备上验证。
 
-The root menu names the current subtree and lists its ancestors; Up and Focus
-subtree provide direct navigation. Filters, Clear search, Select multiple and
-Clear selection are visible controls. Search results are flat, so expanded tree
-branches do not duplicate matches. Searches and the chosen root survive switching
-destinations and rebuilding the panel. Inspector search matches field names and
-displayed values, and field menus can copy a value or its name without editing.
+根菜单会标明当前子树并列出其祖先；“向上”与“聚焦子树”提供直接导航。筛选、清除搜索、多选与清除选择都是可见控件。搜索结果采用扁平结构，因此展开的树分支不会重复匹配项。搜索条件与所选根在切换目标和重建面板后仍然保留。Inspector 搜索会匹配字段名与显示值，字段菜单可在不编辑的情况下复制值或其名称。
 
-## Code and source
+## Code 与源码
 
-Documents, revisions, source history, proposals and saved actions are shared by UI
-and tools. The native TextBox owns input/IME; escaped syntax overlays supply color,
-caret, multiline selection and match highlights. Unchanged shifted lines reuse
-syntax spans and widths. Long lines use chunked measurement and horizontal windows.
-Syntax checks are coalesced/cancellable. Typing emits small revision events; delayed
-autosave, rather than every keystroke, serializes the workspace.
-Library retains up to 50 scripts and 50 saved actions. Use Select to choose several
-entries, or Select matches after a search, then Delete selected for one confirmation.
-The count includes selections hidden by search, and selections survive a panel
-rebuild. Done clears the selection. Removal checks every selected source, name,
-saved version and pending proposal before changing anything; a stale confirmation
-deletes nothing. Unselected actions and workspace files remain available.
-Unvirtualized Markdown blocks above 32,000 bytes and unknown languages use escaped
-plain text; the editor/reader keep their bounded syntax windows.
+文档、修订、源码历史、变更提案与已保存操作由界面和工具共享。原生 TextBox 负责输入/输入法；转义的语法覆盖层提供着色、光标、多行选择与匹配高亮。未变化的移位行复用语法片段与宽度。长行采用分块测量与横向窗口。语法检查会合并/可取消。输入会产生小的修订事件；工作区的持久化依赖延迟自动保存，而非每次按键。
 
-Find offers current/total matches, case sensitivity and whole-word matching.
-Offsets are **one-based UTF-8 byte positions with exclusive ends**. Status columns
-count Unicode code points. Case folding is ASCII; whole-word boundaries treat
-ASCII letters/digits/underscore and non-ASCII bytes as word constituents. There is
-no Unicode linguistic case folding, grapheme clustering or UTF-16 coordinate API.
-Full-snapshot search finds matches across large-reader page boundaries. Native text
-layout can still differ for combining characters, bidi, tabs and host fonts.
+Library 最多保留 50 个脚本与 50 个已保存操作。使用“选择”可挑选多个条目，或在搜索后使用“选择匹配项”，然后通过“删除所选”一次性确认。计数包含被搜索隐藏的选择，选择在面板重建后仍然有效。“完成”会清除选择。删除会在做任何更改前校验每个所选源码、名称、已保存版本与待处理提案；过期的确认不会删除任何内容。未选中的操作与工作区文件仍然可用。超过 32,000 字节且未虚拟化的 Markdown 块以及未知语言使用转义纯文本；编辑器/阅读器保留其有界语法窗口。
 
-Source inspection uses one service for host-readable Source, decompiled text,
-captured/generated source and file snapshots; authored documents expose the same
-provenance model. Results identify the object/path, epoch, method, status, byte
-count, hash, capture time and diagnostics. Empty source is successful. Unsupported
-objects, unavailable source/decompiler, decompiler failure, invalid/oversized text,
-stale requests and expired snapshots are distinct errors. Content hashes identify
-snapshots, not authenticity or trust.
+查找提供当前/总匹配数、区分大小写与全词匹配。偏移量是**从 1 开始、右端不含的 UTF-8 字节位置**。状态列按 Unicode 码位计数。大小写折叠仅针对 ASCII；全词边界将 ASCII 字母/数字/下划线以及非 ASCII 字节视为词内成分。不存在 Unicode 语言学大小写折叠、字素簇处理或 UTF-16 坐标 API。全快照搜索可跨大文件阅读器的分页边界找到匹配。对于组合字符、双向文本、制表符与宿主字体，原生文本布局仍可能不同。
 
-Only explicit requests can decompile. Requests deduplicate by object, method and
-generation; refresh/cancellation/runtime changes discard stale results. Visible
-editors/readers pin snapshots and release them when hidden or destroyed. Host
-Source and decompiled documents remain read-only, including after restoration from
-disk. Extract a selection or whole document into a separate editable script before
-editing, running, proposing changes or saving an action. Opening/extracting never
-runs source. There is no live write-back, server-source guarantee or automatic
-execution of decompiled text. Expiry offers refresh/reopen recovery; persisted
-read-only text can be extracted without recovering the old runtime handle.
-Source refreshes and caller-source requests cannot reclaim navigation after their
-view is hidden, replaced or destroyed.
+源码查看使用同一服务处理宿主可读的 Source、反编译文本、捕获/生成的源码与文件快照；自撰文档暴露相同的来源模型。结果会标明对象/路径、纪元、方法、状态、字节数、哈希、捕获时间与诊断信息。空源码属于成功结果。不支持的对象、源码/反编译器不可用、反编译失败、文本无效或过大、过期请求以及过期快照都是不同的错误。内容哈希标识的是快照，而不是真实性或可信度。
 
-Two verified workspace files protect autosave. Maximum-size editable documents
-fit the ordinary write path. Interrupted writes retain drafts and release the save
-lock; Retry can repair this runtime's partial write or verify a successful write
-whose readback was interrupted. Temporarily unreadable files require Retry.
-External changes produce
-Conflict. Corrupt supported snapshots are preserved before replacement; unreadable
-or future formats remain protected. Source Undo/Redo, revision-guarded proposals
-and Game changes are separate histories. States include Saving, Saved, Retry
-required, Conflict and Expired source snapshot. Compact layouts use one active
-destination, scrolling action strips, visible overflow and scoped shortcuts; safe
-areas, keyboard obstruction and reduced motion follow the shared native UI.
-Editor and Library deletion require a current confirmation; edits made after that review
-invalidate it. A retained run snapshot can dispatch only once, and read-only
-protection is rechecked at dispatch.
+只有显式请求才会触发反编译。请求按对象、方法与代次去重；刷新/取消/运行时变化会丢弃过期结果。可见的编辑器/阅读器会固定快照，并在隐藏或销毁时释放。宿主 Source 与反编译文档保持只读，包括从磁盘恢复之后。如需编辑、运行、提交变更或保存操作，必须先将选中内容或整个文档提取为独立可编辑脚本。打开/提取永远不会运行源码。不存在实时回写、服务端源码保证，也不会自动执行反编译文本。过期时会提供刷新/重新打开两种恢复方式；已持久化的只读文本可在不恢复旧运行时句柄的情况下提取。源码刷新与调用方源码请求在其视图被隐藏、替换或销毁后，无法重新夺回导航。
 
-## Conversation context
+两个经验证的工作区文件用于保护自动保存。最大尺寸的可编辑文档仍适配普通写入路径。写入中断会保留草稿并释放保存锁；“重试”可修复本次运行时的部分写入，或校验一次读取被中断但其实已成功的写入。暂时不可读的文件需要“重试”。外部变更会产生冲突。损坏的受支持快照会在替换前保留；不可读或未来格式仍受保护。源码撤销/重做、受修订保护的提案与游戏变更属于彼此独立的历史。状态包括“保存中”“已保存”“需要重试”“冲突”与“源码快照已过期”。紧凑布局使用单一活动目的地、可滚动操作条带、可见的溢出项与作用域内快捷键；安全区域、键盘遮挡与“减少动态效果”遵循共享的原生界面。
+编辑器与 Library 的删除需要当前有效的确认；在该审阅之后所做的编辑会使其失效。保留的运行快照只能派发一次，并在派发时重新检查只读保护。
 
-Provider connections implement Chat Completions and Anthropic Messages. The
-[provider contract](PROVIDER_COMPATIBILITY.md) documents endpoint/auth handling,
-the local-server matrix and offline protocol fixtures. Ordinary local servers use
-HTTP. Native WebSockets require a separate gateway implementing UAI's envelope,
-receive the same auth/identity headers as HTTP, and open once per completion.
-Their full provider path/query is preserved; only failures before `Send` can fall
-back to HTTP. Messages does not use this socket protocol. Socket and HTTP limits
-remain in effect regardless of the output-token setting.
+## 对话上下文
 
-Requests use the configured output budget and provider/model limits. The old
-8,192-token executor ceiling is removed from both adapters and native HTTP
-fallback; an old saved `agent.executorReplyCeiling` has no effect. Output-limit
-finishes are visible even when all generated text was reasoning. The horizontal
-provider list centers its Add control and returns to top alignment in column mode.
+服务商连接实现 Chat Completions 与 Anthropic Messages。[服务商约定](PROVIDER_COMPATIBILITY.md)记录了端点/鉴权处理、本地服务器矩阵与离线协议夹具。普通本地服务器使用 HTTP。原生 WebSocket 需要单独的网关来实现 UAI 信封，接收与 HTTP 相同的鉴权/身份请求头，并且每次补全只打开一次。其完整的服务商路径/查询参数会被保留；只有在 `Send` 之前的失败才能回退到 HTTP。Messages 不使用该套接字协议。无论输出令牌设置如何，套接字与 HTTP 的限制始终生效。
 
-Buffered HTTP cannot expose a response before the host returns it. Received replies
-render immediately without simulated typing. The agent prompt requests brief
-progress messages between work steps; it cannot force a provider to yield text
-during its internal reasoning. When the configured native socket transport really
-delivers chunks, text and reasoning previews update in place, survive reopening
-the transcript, and reconcile to one final message. Previews are bounded to 64 KiB
-per text/reasoning channel and coalesce at 100 ms; the full final response replaces
-them. Cancelled, failed and completed requests cannot publish late previews.
-Reply labels retain the model reported by the provider, including when it differs
-from the requested model; missing model metadata falls back to the dispatched model.
+请求使用已配置的输出预算以及服务商/模型限制。旧的 8,192 令牌执行器上限已从两个适配器与原生 HTTP 回退中移除；旧的已保存项 `agent.executorReplyCeiling` 不再生效。即使生成的全部文本都是推理内容，触达输出上限的结束状态仍会显示。横向服务商列表会将其“添加”控件居中，并在列模式下恢复为顶部对齐。
 
-The composer and context inspector use the same pressure calculation as automatic
-compaction: messages, rolling summary, and system prompt/tool-schema overhead.
-Prepared requests supply an initial overhead estimate before a provider reply.
-Provider token usage calibrates against the history sent, scoped to provider ID,
-endpoint and model. Prompt/schema changes adjust that estimate; switching providers
-does not carry over the prior provider's calibration. Before any request is
-prepared, totals are explicitly partial. The inspector shows its model/window,
-compaction point, unused space and any over-limit amount. Counts remain estimates,
-and visible category totals sum to the displayed pressure. Updates coalesce to
-100 ms and subscriptions end when the inspector closes or its conversation is
-removed.
+缓冲式 HTTP 无法在宿主返回回复之前暴露它。已收到的回复会立即渲染，不模拟逐字输入。代理提示会请求在工作步骤之间给出简短进度消息；但它无法迫使服务商在其内部推理期间输出文本。当配置的原生套接字传输真正交付分块时，文本与推理预览会就地更新，重新打开记录后仍然存在，并归并为一条最终消息。每个文本/推理通道的预览上限为 64 KiB，并以 100 ms 合并；完整的最终回复会替换它们。已取消、失败与已完成的请求无法发布迟到的预览。回复标签保留服务商报告的模型，即使它与所请求的模型不同；缺少模型元数据时回退为派发时使用的模型。
+
+输入区与上下文检查器使用与自动压缩相同的压力计算：消息、滚动摘要以及系统提示/工具架构开销。已准备的请求会在服务商回复之前给出初始开销估算。服务商令牌用量会针对已发送的历史进行校准，范围限定于服务商 ID、端点与模型。提示/架构变化会调整该估算；切换服务商不会沿用先前服务商的校准结果。在任何请求被准备之前，总计明确为部分值。检查器显示其模型/窗口、压缩点、未使用空间以及任何超限数量。计数仍为估算值，且可见分类总计之和等于所显示的压力值。更新以 100 ms 合并，订阅在检查器关闭或其对话被移除时结束。
 
 ## Remote Spy
 
-Capture begins only with explicit Start. The UI defaults to selected-remote scope
-and 30 seconds; no selection means Start stays idle. Game-wide/selected-subtree
-scopes and continuous lifetime are explicit. The shared resolver uses the displayed
-Explorer snapshot, with primary as the selected-remote/subtree target. Exact remote
-targets remain independent of unrelated selection changes.
+只有在显式开始后才会捕获。界面默认采用所选远程调用范围与 30 秒；没有选择时“开始”保持空闲。全游戏/所选子树范围与持续生命周期都需要显式指定。共享解析器使用当前显示的 Explorer 快照，并以主对象作为所选远程调用/子树目标。精确的远程调用目标不受无关选择变化影响。
 
-Passive incoming events, outgoing hook installation, admission filters, traffic
-suppression, local function errors, replay and script generation are distinct
-actions. Incoming function callbacks are unsupported. Outgoing attribution is
-`hooked_unknown` unless verified. Detached routing probes do not invoke the
-predecessor, but network behavior depends on the host. Stop removes owned behavior
-and reports an inert forwarding wrapper when one must remain. Permission, group,
-session and runtime revocation invalidate agent-owned behavior promptly. Failed
-reconfiguration clearly reports that the previous capture was stopped.
+被动的入站事件、出站钩子安装、准入过滤、流量抑制、本地函数错误、回放与脚本生成都是彼此独立的操作。不支持入站函数回调。出站归因除非经过验证，否则为 `hooked_unknown`。分离的路由探针不会调用前驱，但网络行为取决于宿主。停止会移除自身拥有的行为，并在必须保留时报告一个惰性转发包装器。权限、分组、会话与运行时撤销会及时使代理拥有的行为失效。重配置失败会明确报告先前的捕获已停止。
 
-Incoming records provide diagnostics, caller inspection/source/Explorer navigation
-and metadata export. Outgoing records additionally provide argument editing,
-review, generated scripts and one-shot replay. Caller identity is captured with
-the record; resolution and decompilation run after capture, outside hooks. Caller
-source opens read-only and highlights bounded remote name/path text matches. These
-are likely sites, not proof of which call executed. Dynamic aliases may have no
-match. Export carries capture and source provenance together.
+入站记录提供诊断、调用方查看/源码/Explorer 导航以及元数据导出。出站记录还额外提供参数编辑、审阅、生成的脚本与一次性回放。调用方身份随记录一并捕获；解析与反编译在捕获之后、钩子之外进行。调用方源码以只读方式打开，并高亮有界的远程调用名称/路径文本匹配。这些只是可能的位置，并不能证明是哪次调用实际执行。动态别名可能没有匹配项。导出会同时携带捕获来源与源码来源信息。
 
-Portable scripts preserve supported typed values and exact nil arity, use ordinary
-Luau path resolution and do not depend on the UAI runtime. Copy/export requires a
-current reviewed digest and revalidates target paths. Bound scripts expire with
-their runtime bindings. Replay validates target/rules/record revision and consumes
-its plan once. A dispatched timeout is outstanding, never retried automatically.
-No client action can roll back remote server effects.
+可移植脚本保留受支持的类型化值与精确的 nil 元数，使用普通 Luau 路径解析，且不依赖 UAI 运行时。复制/导出需要当前已审阅的摘要，并会重新校验目标路径。绑定脚本随其运行时绑定一同过期。回放会校验目标/规则/记录修订，并且只消费其计划一次。已派发的超时属于未决状态，绝不会自动重试。任何客户端操作都无法回滚远程服务端的影响。
 
-Capture states and following/paused views remain visible. Late outcomes update
-byte accounting even for pinned records. Stop invalidates pending completion
-acceptance. Export freezes record content and sequence boundaries before paging;
-later traffic cannot enter the snapshot. Split files receive a completion manifest
-only after verified writes. Offline imports are inert and require explicit rebind
-and fresh replay review.
+捕获状态以及跟随/暂停视图始终可见。迟到的结果即使对于已固定的记录也会更新字节计数。停止会使待处理的完成接受失效。导出会在分页之前冻结记录内容与序列边界；后续流量无法进入该快照。拆分文件只有在写入经验证后才会获得完成清单。离线导入是惰性的，需要显式重新绑定并重新进行回放审阅。
 
-The capture toolbar exposes duration presets and a live countdown. Its active
-scope and direction reflect the running capture, including captures started by a
-tool. Pause explains that a timed capture still expires; expiry retains recorded
-calls. The status control opens actual backend coverage. Retained-call filters
-show a summary and Reset action, and any captured remote can narrow the list to
-its exact reference without changing capture admission or traffic rules.
+捕获工具栏提供时长预设与实时倒计时。其活动范围与方向反映正在运行的捕获，包括由工具启动的捕获。暂停会说明定时捕获仍会到期；到期后保留已记录的调用。状态控件会打开实际的后端覆盖情况。已保留调用的筛选会显示摘要与“重置”操作，任何已捕获的远程调用都可把列表收窄到其精确引用，而不改变捕获准入或流量规则。
 
-Selecting a call opens a Summary with direction, outcome, argument/return counts,
-duration, origin, errors, and the record reference. It updates as a pending call
-finishes. Arguments and Results tabs include their counts; direct actions filter
-that remote, reveal it in Explorer, or open an identified calling script. Narrow
-views keep the filter strip and list on the existing scrollable workspace surface.
+选择某个调用会打开 Summary，显示方向、结果、参数/返回值数量、耗时、来源、错误以及记录引用。当待处理调用完成时它会更新。Arguments 与 Results 标签页包含各自的数量；直接操作可筛选该远程调用、在 Explorer 中定位它，或打开已识别的调用脚本。窄视图会在现有的可滚动工作区界面上保留筛选条与列表。
 
-## Named resource budgets
+## 具名资源预算
 
-| Resource | Bound |
+| 资源 | 上限 |
 | --- | --- |
-| Documents / open views | 24 / 10 |
-| Editable source / inspected source | 256,000 bytes / 2 MiB |
-| Source versions / aggregate history / workspace envelope | 12 per document / 4 MiB / 12 MiB |
-| Saved actions / proposals | 24 / 3 per document |
-| Source cache / TTL | 8 snapshots, 8 MiB / 5 minutes when unpinned |
-| Source workers / waiter deadline / display page | 4 / 15 seconds / 6,000 bytes |
-| Editor rows / measurement chunks / search matches | 160 / 2 KiB / 10,000 retained |
-| Explorer branches / query snapshots / matches per query | 64 / 8 / 1,000 |
-| Branch children / scan visits / displayed rows / reveal depth | 20,000 / 20,000 / 4,000 / 64 |
-| Selection / edit batch | 20 objects / 100 operations |
-| Capture ring / pending outcomes / incoming subscriptions | 1,000 records within 4 MiB / 128 / 2,048 |
-| Capture pins / frozen page | 10 within 1 MiB / 100 records |
-| Typed graph / string / depth / values | 32 KiB / 16 KiB / 12 / 1,024 |
-| Export part / replay and review lifetime | 2 MiB / 5 minutes |
-| Native HTTP workers / body / request wall | 8 / 8 MiB / at most 300 seconds including retries |
-| Native socket workers and connections | 4 each |
-| Stream frame / chunks / tool calls / arguments | 1 MiB / 200,000 / 64 / 256,000 bytes per call |
-| Restored conversations / idle persisted retention target / running workers | 64 / 64 / 8 |
-| Subagent running workers / queue ceiling | Configurable 1–12 / 45 seconds |
-| Transcript dialogue / worker summaries / detailed activity | 512 within 1 MiB / 128 within 256 KiB / 256 within 256 KiB |
-| Transcript field target / replay slice | 24,000 bytes / 12 events or approximately 6 ms |
-| Live text/reasoning preview / refresh | 64 KiB each / 100 ms, first chunk immediate |
+| 文档 / 打开的视图 | 24 / 10 |
+| 可编辑源码 / 已查看源码 | 256,000 字节 / 2 MiB |
+| 源码版本 / 累计历史 / 工作区总量 | 每个文档 12 / 4 MiB / 12 MiB |
+| 已保存操作 / 提案 | 24 / 每个文档 3 |
+| 源码缓存 / TTL | 8 个快照，8 MiB / 未固定时 5 分钟 |
+| 源码工作线程 / 等待者超时 / 显示分页 | 4 / 15 秒 / 6,000 字节 |
+| 编辑器行 / 测量分块 / 搜索匹配 | 160 / 2 KiB / 保留 10,000 |
+| Explorer 分支 / 查询快照 / 每次查询匹配 | 64 / 8 / 1,000 |
+| 分支子项 / 扫描访问 / 显示行 / 定位深度 | 20,000 / 20,000 / 4,000 / 64 |
+| 选择 / 编辑批次 | 20 个对象 / 100 次操作 |
+| 捕获环形缓冲 / 待处理结果 / 入站订阅 | 4 MiB 内 1,000 条记录 / 128 / 2,048 |
+| 捕获固定项 / 冻结分页 | 1 MiB 内 10 项 / 100 条记录 |
+| 类型化图 / 字符串 / 深度 / 值 | 32 KiB / 16 KiB / 12 / 1,024 |
+| 导出分片 / 回放与审阅有效期 | 2 MiB / 5 分钟 |
+| 原生 HTTP 工作线程 / 请求体 / 请求总时长 | 8 / 8 MiB / 含重试最多 300 秒 |
+| 原生套接字工作线程与连接 | 各 4 |
+| 流帧 / 分块 / 工具调用 / 参数 | 1 MiB / 200,000 / 64 / 每次调用 256,000 字节 |
+| 恢复的对话 / 空闲持久化保留目标 / 运行中的工作线程 | 64 / 64 / 8 |
+| 子代理运行工作线程 / 队列上限 | 可配置 1–12 / 45 秒 |
+| 记录对话 / 工作线程摘要 / 详细活动 | 1 MiB 内 512 / 256 KiB 内 128 / 256 KiB 内 256 |
+| 记录字段目标 / 回放切片 | 24,000 字节 / 12 个事件或约 6 ms |
+| 实时文本/推理预览 / 刷新 | 各 64 KiB / 100 ms，首个分块立即显示 |
 
-These bound application work and retention, not engine allocations. GetChildren,
-getnilinstances, TextBox updates and executor calls can still allocate or block
-inside the host. Uncancellable host work continues to consume worker capacity
-until it returns; its abandoned result is ignored. Text splitting remains linear
-in the bounded document size. No hard real-time responsiveness is claimed.
-The 64-thread memory target evicts only idle, successfully persisted conversations;
-busy, preparing, ephemeral and unsaved/no-filesystem threads are preserved and can
-exceed it. A hard resident-thread bound without losing unsaved conversations is
-unsupported. Restore selects the newest 64 saved conversations by activity, keeps
-older files on disk, and scans metadata from the host's full directory listing.
-It does not expose an archive browser for those older files.
+这些限制针对应用层的工作与保留量，而非引擎分配。GetChildren、getnilinstances、TextBox 更新以及执行器调用仍可能在宿主内部进行分配或阻塞。不可取消的宿主工作会持续占用工作线程容量直到返回；其被放弃的结果会被忽略。文本拆分仍随有界文档规模线性增长。不声称具备硬实时响应能力。64 线程的内存目标只会淘汰空闲且已成功持久化的对话；繁忙、准备中、临时以及未保存/无文件系统的线程会被保留，且可能超出该目标。在不丢失未保存对话的前提下实现硬性常驻线程上限是不受支持的。恢复会按活动时间选取最新的 64 个已保存对话，将较早文件保留在磁盘上，并从宿主的完整目录列表中扫描元数据。它不为这些较早文件提供归档浏览器。
 
-## Lifecycle and verification limits
+## 生命周期与验证限制
 
-Disposal continues after individual errors, disconnects listeners and invalidates
-late callbacks. Signals bound recursive dispatch and release cleared callbacks.
-Sessions bound durable logs and resident workers. Turn boundaries are retained;
-progress/status and detailed tool events cannot spend the dialogue budget. Saved
-transcripts use the same retention policy; call/result pairs and worker summaries
-stay together. Limits/recovery are disclosed. Legacy files can recover dialogue
-still in saved context, but cannot recover text absent from both stores.
+清理会在个别错误之后继续进行，断开监听器并使迟到的回调失效。信号机制限制递归派发并释放已清除的回调。会话对持久日志与常驻工作线程设限。回合边界会被保留；进度/状态与详细工具事件不能占用对话预算。已保存的记录使用相同的保留策略；调用/结果对与工作线程摘要保持在一起。限制与恢复方式均会披露。旧版文件可恢复仍存在于已保存上下文中的对话，但无法恢复在两处存储中都不存在的文本。
 
-Live transcript rows and nested code rows are released with expired activity.
-Replay subscribes before rendering, queues new events, and cancels on switch,
-clear and destruction. Maximize keeps the existing view mounted; all devices use a
-plain window Frame. **Message options → Refresh conversation** redraws a busy chat
-without changing its work or draft. Reading position and follow preference survive
-refresh and layout rebuilds. Native texture/layout behavior still needs client testing.
+实时记录行与嵌套代码行会随过期活动一同释放。回放会在渲染之前订阅，排队新事件，并在切换、清除与销毁时取消。最大化会保持现有视图挂载；所有设备都使用普通窗口 Frame。**Message options → Refresh conversation** 会重绘繁忙的聊天，而不改变其工作或草稿。阅读位置与跟随偏好可在刷新和布局重建后保留。原生纹理/布局行为仍需在客户端测试。
 
-Old/removed-session tool callbacks cannot
-publish. Idle Stop invalidates old contexts while allowing fresh manual work;
-clearing/removing a conversation cancels only its own child agents and clearing
-starts a fresh context. Subagent follow-ups clear old stop state, register as queued
-before waiting, reject duplicate dispatch and remain cancellable while queued.
-Stopped or failed workers clear their pending Stop label on completion.
-The concurrency setting is honored up to its displayed maximum of 12. Unlimited
-subagents have no execution budget; their queue still has a 45-second ceiling.
-Limited runs also charge queue time against their own budget.
-Native HTTP and sockets
-enforce deadlines, response limits, protected
-retry callbacks and terminal malformed-stream errors. Timeouts/unknown outcomes
-cannot trigger adaptive retries or provider fallback. Diagnostic errors are bounded
-and redacted; raw decompiler/hook failures are omitted. File paths reject traversal,
-control characters, trailing spaces/dots and reserved device names.
+旧会话/已移除会话的工具回调无法发布。空闲状态下的“停止”会使旧上下文失效，同时允许新的手动工作；清除/移除对话只会取消其自身的子代理，而清除会开启新的上下文。子代理后续消息会清除旧的停止状态，在等待前登记为排队状态，拒绝重复派发，并在排队期间保持可取消。已停止或失败的工作线程会在完成时清除其待处理的停止标签。并发设置在其显示的最大值 12 以内生效。不限量的子代理没有执行预算；其队列仍有 45 秒上限。限量运行还会把排队时间计入自身的预算。
+原生 HTTP 与套接字会强制执行超时、响应限制、受保护的重试回调以及终止性的畸形流错误。超时/结果未知的情况无法触发自适应重试或服务商回退。诊断错误是有界且已脱敏的；原始的反编译器/钩子失败会被省略。文件路径会拒绝路径穿越、控制字符、尾部空格/点以及保留设备名。
 
-Automated evidence comes from synthetic Roblox fixtures, deterministic work/count
-contracts and the official Luau compiler. Strict Roblox/executor type analysis is
-unsupported without matching type definitions. Native renderer, IME, controller,
-screen reader, font measurement, host hook coexistence, permission propagation and
-server effects are not proven by these checks. Full-map export, hidden property
-forcing, general game Undo and preemption of arbitrary native calls are unsupported.
+自动化证据来自合成的 Roblox 夹具、确定性的工作/计数约定以及官方 Luau 编译器。在没有匹配类型定义的情况下，严格的 Roblox/执行器类型分析不受支持。原生渲染器、输入法、手柄、屏幕阅读器、字体测量、宿主钩子共存、权限传播与服务器端影响并未被这些检查证明。全地图导出、隐藏属性强制、通用游戏撤销以及对任意原生调用的抢占均不受支持。
 
-Before publishing, run the isolated native-device scenarios in the testing guide,
-record capabilities/device/input mode and check hook forwarding with an owned test
-remote. Any implementation correction requires the complete native sequence again.
+发布之前，请运行测试指南中的隔离原生设备场景，记录能力/设备/输入模式，并使用自有的测试远程调用检查钩子转发。任何实现层面的修正都需要重新执行完整的原生验证序列。
