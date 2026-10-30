@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "entries": {
+    "Launch a background subagent that watches Roblox chat and answers players in real time using the active provider. It keeps its own conversation context and read-only game tools (instances, players, environment, chat history), so it can check the place before answering. It batches rapid messages, ignores self/system echoes and tagged bots, suppresses duplicate inputs and repeated replies, and adds a reply prefix. Do not also reply with chat_send. Stop or inspect it through chat_loop_stop/chat_loop_status.": "启动一个后台子代理，监听 Roblox 聊天并用当前提供商实时回答玩家。它有自己的对话上下文与只读游戏工具（实例、玩家、环境、聊天历史），因此可以先查看场景再回答。它会合并密集消息、忽略自己/系统回声与带标签的机器人、抑制重复输入与重复回复，并加上回复前缀。不要再通过 chat_send 回复。用 chat_loop_stop/chat_loop_status 停止或查看。",
+    "List managed chat loops and chat agents, progress, failures, and quiz scores.": "列出受管理的聊天循环与聊天代理、进度、失败与测验得分。"
+  }
+}

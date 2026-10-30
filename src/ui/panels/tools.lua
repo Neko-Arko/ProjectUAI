@@ -53,7 +53,7 @@ return function(env)
 		local summary = P.text(head, {
 			text = #stats.unavailable > 0
 				and env.t("%{count} unavailable on this host. %{list}", { count = #stats.unavailable, list = caps.summary() })
-				or env.t("All tools are available on this host. Open a tool to review its parameters and permissions.")
+				or env.t("All tools are available on this host. Open a tool to review its parameters and permissions."),
 			role = "caption",
 			color = theme.color.textTertiary,
 			wrap = true,

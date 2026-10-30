@@ -2,24 +2,26 @@
 
 
 ## src/agent/registry.lua
-- L366   Stopped before 
-- L450   Approval for 
-- L453   Approval for 
-- L460   The user did not approve 
-- L517   Stopped before 
-- L525   Stopped waiting for 
-- L626   Internal error running the tool: 
+- L338   vault required
+- L373   vault required
+- L379   Stopped before 
+- L463   Approval for 
+- L466   Approval for 
+- L473   The user did not approve 
+- L530   Stopped before 
+- L540   Stopped waiting for 
+- L641   Internal error running the tool: 
 
 ## src/agent/session.lua
-- L490   The native agent stopped after an internal error
-- L589   New chat
+- L510   The native agent stopped after an internal error
+- L611   New chat
 
 ## src/agent/stats.lua
-- L40    Harry Potter and the Philosopher's Stone
+- L41    Harry Potter and the Philosopher's Stone
 
 ## src/agent/subagent.lua
 - L637   the subagent failed: 
-- L855   the subagent failed: 
+- L856   the subagent failed: 
 
 ## src/agent/tool_result.lua
 - L70    Structured result needs a tool result budget of at least 256 bytes. Narrow the query or increase the budget.
@@ -27,142 +29,132 @@
 - L110   Structured details omitted: no available detail reader or retention limit reached. Narrow the original query.
 
 ## src/runtime/changelog.lua
-- L25    A provider gallery and a clearer queue
-- L28    Provider gallery
-- L32    Provider labels
-- L38    Queue and settings
-- L53    Reliable connections and a refreshed desktop
-- L56    Network capture
-- L60    Tools and diagnostics
-- L69    Mobile transport
-- L83    OpenCode tunnel tool recovery
-- L86    OpenCode tunnel
-- L90    Patch update
-- L99    Clearer conversations and reliable connections
-- L102   Project UAI website
-- L105   Bridge conversations
-- L109   OpenCode discovery
-- L113   Companion message decoding
-- L117   UAI Relay setup
-- L127   Mobile relay reliability and automatic updates
-- L130   Android companion updates
-- L134   Companion requests and deadlines
-- L139   Connection and activity
-- L149   Stronger agents and desktop bridge
-- L152   Agent reliability
-- L156   Desktop and OpenCode
-- L160   Conversation and follow-ups
-- L170   Live bridge previews and interface fixes
-- L173   Model picker and queued messages
-- L177   Bridge progress and tool results
-- L188   MCP, bridge redesign and queued follow-ups
-- L191   MCP connections
-- L195   Follow-ups while working
-- L198   Gemini and temperature controls
-- L202   Subagents and environment guidance
-- L206   Bridge workspace
-- L210   Adaptive free routing
-- L214   Picture attachments
-- L217   Code workspace
-- L221   Editor selection
-- L230   Project UAI Free and OpenCode desktop
-- L233   Project UAI Free
-- L241   OpenCode desktop
-- L245   Model pricing and limits
-- L248   Provider routes and help
-- L259   Bridge improvements
-- L262   Cowork workspace
-- L271   Connections and inference
-- L282   Less repeated work, clearer tool outcomes
-- L285   Focused script workflows
-- L289   Less repeated work
-- L295   Observed outcomes and cleanup
-- L309   Reliable scripting and clearer failures
-- L312   Script development reference
-- L315   Script execution and projects
-- L321   Agents and providers
-- L330   Attachments and uploads
-- L333   Code and failure review
-- L338   Source and decompiler fallbacks
-- L343   Runtime tools
-- L354   Focused agents and portable files
-- L357   October 10: focused agent work
-- L364   October 10: permission handling
-- L369   October 10: provider attempts
-- L372   Routine work and response speed
-- L379   Paths and provider feedback
-- L388   Project identity
-- L392   Project links and app attribution
-- L395   October 11: script source fallback
-- L407   Reliable context, game files and theme controls
-- L410   Project and appearance
-- L415   Context and tool work
-- L420   Files and conversation reliability
-- L432   Live subagents and lower client overhead
-- L435   Live subagent details
-- L440   Client performance
-- L444   Modal layout and profile
-- L454   Tighter spacing and calmer dialogs
-- L457   Dialog transitions
-- L461   Layout and spacing
-- L465   Chat and navigation
-- L475   Desktop layout on mobile and script projects
-- L478   Script creation tools
-- L487   Shared mobile interface
-- L493   Clarity and layout settings
-- L504   Mobile spacing, touch workflows and provider recovery
-- L507   Mobile interface
-- L513   Provider connections
-- L527   Modal polish, workspace cleanup and donations
-- L534   Workspace files
-- L538   Script sources
-- L557   Long replies and capture-view reliability
-- L564   Remote Spy
-- L574   Mobile improvements and conversation folders
-- L582   Project UAI on mobile
-- L587   UI LIB v1.2.1
-- L592   Embedding SDK 1.0.0
-- L603   Smoother reading and organized activity
-- L606   Roblox conversations
-- L615   Chat and images
-- L621   UI LIB v1.2.0
-- L633   Project UAI UI LIB
-- L636   Script interfaces
-- L642   Agent guidance
-- L653   Cowork browser workspace
-- L656   Browser workspace
-- L660   Installation and conversations
-- L665   Layout and interaction
-- L677   Chat stability, provider compatibility and native improvements
-- L680   Providers and gateway streaming
-- L688   Chat history and resizing
-- L695   Replies and progress
-- L700   Context and provider controls
-- L704   Source and decompilation
-- L708   Explorer and editing
-- L713   Remote Spy
-- L719   Conversation and subagent reliability
-- L729   Code workspace
-- L738   Coding navigation and review
-- L744   Shared behavior
-- L750   Editing and live inspection
-- L760   File attachments and Project Gravity
-- L791   IY controls and executor timeout recovery
-- L829   Batch tools and a refreshed public showcase
-- L854   Reliable code execution and clearer tool workflows
-- L883   UI repair, Markdown tables, and managed chat loops
-- L911   OpenCode Zen workaround, compact composer and response polish
-- L944   Infinite Yield, key pools and skills
-- L983   Asking, standing instructions and the workspace
-- L1012  The executor wall and provider polish
-- L1043  Web bridge and the landing page
-- L1065  Chat, input and mobile
-- L1088  Delegation that finishes
-- L1111  The interface revamp
-- L1134  Open, embeddable, licensed
-- L1162  The Messages API and quick chat
-- L1190  Making a turn visible
-- L1207  Initial release
+- L25    Password vault and scheduled free access
+- L28    Credential storage
+- L35    Copies and included access
+- L40    Duplicate credential copies
+- L44    Reasoning levels
+- L56    UI polish and individual API keys
+- L59    Individual API keys
+- L66    Conversation requests
+- L70    Modals and setup
+- L78    Keys and compact layouts
+- L88    Models, tunnels and faster workflows
+- L91    Provider choices
+- L95    Tunnels and Cline
+- L99    Kilo recovery
+- L103   Model selection
+- L108   Tools, logs and usage
+- L112   Coordinated apps
+- L116   Bounded retries
+- L129   Provider gallery
+- L133   Provider labels
+- L139   Queue and settings
+- L157   Network capture
+- L170   Mobile transport
+- L187   OpenCode tunnel
+- L191   Patch update
+- L203   Project UAI website
+- L206   Bridge conversations
+- L210   OpenCode discovery
+- L218   UAI Relay setup
+- L331   Project UAI Free and OpenCode desktop
+- L334   Project UAI Free
+- L342   OpenCode desktop
+- L346   Model pricing and limits
+- L349   Provider routes and help
+- L360   Bridge improvements
+- L363   Cowork workspace
+- L372   Connections and inference
+- L383   Less repeated work, clearer tool outcomes
+- L386   Focused script workflows
+- L390   Less repeated work
+- L396   Observed outcomes and cleanup
+- L410   Reliable scripting and clearer failures
+- L413   Script development reference
+- L416   Script execution and projects
+- L422   Agents and providers
+- L431   Attachments and uploads
+- L434   Code and failure review
+- L439   Source and decompiler fallbacks
+- L444   Runtime tools
+- L455   Focused agents and portable files
+- L458   October 10: focused agent work
+- L465   October 10: permission handling
+- L470   October 10: provider attempts
+- L473   Routine work and response speed
+- L480   Paths and provider feedback
+- L489   Project identity
+- L493   Project links and app attribution
+- L496   October 11: script source fallback
+- L508   Reliable context, game files and theme controls
+- L511   Project and appearance
+- L516   Context and tool work
+- L521   Files and conversation reliability
+- L533   Live subagents and lower client overhead
+- L536   Live subagent details
+- L541   Client performance
+- L545   Modal layout and profile
+- L555   Tighter spacing and calmer dialogs
+- L558   Dialog transitions
+- L562   Layout and spacing
+- L566   Chat and navigation
+- L576   Desktop layout on mobile and script projects
+- L579   Script creation tools
+- L588   Shared mobile interface
+- L594   Clarity and layout settings
+- L605   Mobile spacing, touch workflows and provider recovery
+- L608   Mobile interface
+- L614   Provider connections
+- L628   Modal polish, workspace cleanup and donations
+- L635   Workspace files
+- L639   Script sources
+- L658   Long replies and capture-view reliability
+- L665   Remote Spy
+- L675   Mobile improvements and conversation folders
+- L683   Project UAI on mobile
+- L688   UI LIB v1.2.1
+- L693   Embedding SDK 1.0.0
+- L704   Smoother reading and organized activity
+- L707   Roblox conversations
+- L716   Chat and images
+- L722   UI LIB v1.2.0
+- L734   Project UAI UI LIB
+- L737   Script interfaces
+- L743   Agent guidance
+- L754   Cowork browser workspace
+- L757   Browser workspace
+- L761   Installation and conversations
+- L766   Layout and interaction
+- L778   Chat stability, provider compatibility and native improvements
+- L781   Providers and gateway streaming
+- L789   Chat history and resizing
+- L796   Replies and progress
+- L801   Context and provider controls
+- L805   Source and decompilation
+- L809   Explorer and editing
+- L814   Remote Spy
+- L820   Conversation and subagent reliability
+- L839   Coding navigation and review
+- L845   Shared behavior
+- L851   Editing and live inspection
+- L861   File attachments and Project Gravity
+- L892   IY controls and executor timeout recovery
+- L930   Batch tools and a refreshed public showcase
+- L955   Reliable code execution and clearer tool workflows
+- L984   UI repair, Markdown tables, and managed chat loops
+- L1012  OpenCode Zen workaround, compact composer and response polish
+- L1045  Infinite Yield, key pools and skills
+- L1084  Asking, standing instructions and the workspace
+- L1113  The executor wall and provider polish
+- L1144  Web bridge and the landing page
+- L1166  Chat, input and mobile
+- L1189  Delegation that finishes
+- L1212  The interface revamp
+- L1235  Open, embeddable, licensed
+- L1263  The Messages API and quick chat
+- L1291  Making a turn visible
+- L1308  Initial release
 
 ## src/runtime/changes.lua
 - L38    This game-change batch has expired
@@ -171,9 +163,12 @@
 - L72    Undo could not finish; inspect field outcomes
 - L75    Restored 
 
+## src/runtime/chatagent.lua
+- L168   chat agent
+
 ## src/runtime/chatloops.lua
-- L189   Quiz 
-- L192   Time's up! Answer: 
+- L192   Quiz 
+- L195   Time's up! Answer: 
 
 ## src/runtime/code_store.lua
 - L332   Before restore
@@ -187,7 +182,6 @@
 - L486   The Project Gravity loader ran but no live context is visible. If it is still loading, wait and read gravity_status; otherwise the loader aborted -- check its in-game warnings.
 
 ## src/runtime/instance_edits.lua
-- L110   Deleted 
 - L134   Created locally; outside Undo coverage
 - L169   Hierarchy operation completed; outside Undo coverage
 
@@ -220,7 +214,6 @@
 - L459   UTF-8 byte offset for read; begin at 1 and follow nextOffset.
 - L460   Maximum bytes for read.
 - L533   The new title, under about 60 characters: a few specific words, not a sentence.
-- L565   Ask the user one question and wait for their answer. Use when a request is genuinely ambiguous -- two ways to read it, a choice of targets, a preference you cannot infer -- and answering it wrong would waste work. Offer concrete options when the plausible answers are few; omit them for an open question. The answer comes back as this call's result. You cannot ask from a subagent.
 - L572   The question itself, one or two sentences, in the words you would use to the user.
 - L577   The concrete answers to pick from, 2 to 4. Omit entirely for an open question.
 - L645   Short snake_case key, e.g. 'preferred_shape' or 'main_build_path'.
@@ -265,15 +258,17 @@
 - L8     Seconds between messages; quiz answer window. Default 15 (quiz 30).
 - L9     Messages/replies/quiz rounds before completing; default 10 or number of questions.
 - L10    Maximum run time in seconds, default 600.
-- L27    Chatbot personality and topic instructions. Defaults to friendly, casual, helpful conversation.
-- L28    Reply prefix, default [AGENT]. Use an empty string for no prefix.
-- L29    Only reply to these players; omitted means everyone except self/system/tagged bots.
-- L30    Minimum seconds between replies; default 5.
-- L31    Maximum replies; default 100. Inference attempts are capped at three times this count.
-- L34    At most 200 Unicode code points.
-- L41    Match the whole message instead of a substring.
-- L44    Exact loop ID from a start receipt; omit to inspect the bounded recent loop history.
-- L66    Exact loop ID, or all to stop every loop.
+- L27    Launch a background subagent that watches Roblox chat and answers players in real time using the active provider. It keeps its own conversation context and read-only game tools (instances, players, environment, chat history), so it can check the place before answering. It batches rapid messages, ignores self/system echoes and tagged bots, suppresses duplicate inputs and repeated replies, and adds a reply prefix. Do not also reply with chat_send. Stop or inspect it through chat_loop_stop/chat_loop_status.
+- L29    What the agent should do and how it should answer. Defaults to friendly, casual, helpful conversation.
+- L30    Reply prefix, default [AGENT]. Use an empty string for no prefix.
+- L31    Only answer these players; omitted means everyone except self/system/tagged bots.
+- L32    Minimum seconds between replies; default 5.
+- L33    Maximum replies; default 20. Preparation steps are capped at three times this count.
+- L36    At most 200 Unicode code points.
+- L43    Match the whole message instead of a substring.
+- L45    List managed chat loops and chat agents, progress, failures, and quiz scores.
+- L46    Exact loop ID from a start receipt; omit to inspect the bounded recent loop history.
+- L68    Exact loop ID, or all to stop every loop.
 
 ## src/tools/code_runner.lua
 - L66    Execution harness error: 
@@ -284,13 +279,11 @@
 - L107   Required for choice inputs; distinct string values.
 
 ## src/tools/evidence.lua
-- L12    Read retained tool results for this conversation after compaction. action=list returns compact receipts; action=search filters by tool or text; action=read pages one record's full text, structured data or summary. Offsets are bytes. The ledger never executes captured content.
 - L17    Case-insensitive tool name or text filter for list/search.
 - L18    Evidence id from list/search.
 - L19    Default text.
 - L20    1-based row or byte offset.
 - L21    Rows (default 20) or text bytes (default 4000).
-- L59    Delete retained tool evidence for this conversation. Does not delete files, conversations or captured records.
 
 ## src/tools/execution.lua
 - L129   Nothing to compile.
@@ -313,64 +306,43 @@
 - L79    Typed node, e.g. {kind='number', value=10}.
 
 ## src/tools/fs.lua
-- L28    List files in a workspace directory. Returned files/ paths can be used unchanged with every file tool. Start with the current game path from the environment; omit path for all games.
 - L32    Subfolder, relative to your workspace. Omit for the root of it.
 - L33    Resume with the returned nextOffset; default 1.
 - L34    Entries per page, default 60; also bounded by the result budget.
 - L49    Incomplete listing: 
-- L69    Read a contiguous slice of a workspace file or saved paste. Use file_read_many for several known files or slices. The result includes a continuation offset when more remains.
 - L73    Path relative to your workspace, e.g. 'notes/plan.txt'. Pasted long messages are under 'pastes/'.
 - L78    Maximum bytes in this slice. Default 6000; also bounded by the tool result budget.
 - L79    1-based byte offset. Use the continuation offset from the previous result to read the rest.
-- L99    Replace exact text in a workspace file without rewriting the whole file. Read it first. Refuses missing or ambiguous matches unless replace_all is true, and refuses an edit if the file changed while it was being prepared. Files and edited output are limited to 2 MB.
 - L104   Exact existing text to replace, including whitespace. Must not be empty.
 - L105   Replacement text; empty deletes the matched text.
 - L106   Replace all non-overlapping occurrences. Default false requires exactly one match.
-- L118   Create a workspace file or replace most of its content (up to 2 MiB per call). Parent folders are created. For existing files, prefer file_edit or file_edit_many for targeted changes. Build large new scripts in small sections with sequential file_write then file_append calls.
-- L140   Append up to 2 MiB to a workspace file, creating it if needed. Prefer small additions.
-- L162   Delete a file or folder from your workspace. This cannot be undone.
 - L179   Use the returned files/... path unchanged, or a legacy workspace-relative path. Omit the app/host root.
 
 ## src/tools/fs_bulk.lua
-- L220   Find workspace or saved-paste files by filename glob without reading their contents. Use when you know a name or extension; returns sorted reusable paths and offset pages. Searches subfolders within bounded inventory; incomplete results are explicit. Narrow path to the current game or known source directory.
 - L222   Directory under files/, or explicit pastes/; defaults to all workspace games.
 - L223   Filename glob, e.g. *controller*.lua or *.luau. ASCII case-insensitive; * and ? supported. Default *.
 - L224   Resume with nextOffset; restart if files change.
 - L225   Paths per page, default 60; also bounded by the result budget.
-- L231   Find literal text in a known file or directory before reading relevant slices with file_read_many. Returns reusable files/ paths, matching lines, byte offsets and a continuation cursor. Searches subfolders; skips binary/files over 2 MB. Narrow path to the current game or known source directory to avoid unrelated games/dumps.
 - L233   Single-line literal; not a regex.
 - L234   Use a returned files/... path, the current game path from the environment, or an explicit pastes/... path. Omit only to search all games.
 - L235   Filename glob at any depth, e.g. *.lua. Default *.
 - L236   Default false.
 - L237   Matching lines per page. Default 20.
 - L240   Returned byte offset to resume without rescanning earlier lines.
-- L247   Read up to 12 workspace files or saved pastes in one call, sharing the result budget. Each slice includes continuation offsets. Individual failures preserve other results.
 - L251   Use the returned files/... or pastes/... path unchanged; legacy workspace-relative paths also work.
 - L253   Bytes per file, default 6000; shares the result budget fairly. Request smaller slices when only a section is needed.
 - L256   Resume at this 1-based request index if the previous page filled.
-- L262   Apply up to 20 exact edits to one workspace file in one write. Edits are evaluated in order. All must validate before writing; refuses stale contents. Empty new_text deletes. File/output limit 2 MB.
 - L264   Use the returned files/... path unchanged; legacy workspace-relative paths also work.
 - L269   Default false requires a unique match.
 
 ## src/tools/gravity.lua
-- L22    Download and run the official Project Gravity loader in this client, then report the live status. Use this when gravity_status shows Gravity is not loaded. If Gravity is already connected this reports that without reloading; pass force=true to re-run the loader, which reloads Gravity and releases held parts. This fetches and executes remote code from the Project Gravity repository.
 - L24    Run the loader even when Gravity is already connected. Reloads the session and releases held parts.
-- L27    List the live Gravity shape catalog, or pass name to inspect a shape's real control keys, values, buttons and stored-unit slider ranges. No hardcoded catalog.
-- L33    Control Gravity using native handlers: start/recenter (defaults to your character), stop and release parts, pause/resume, enable/disable, reroll, reset_settings (all engine/shape settings and keybinds to defaults), or launch/charge a manually controlled Slingshot.
 - L37    For reset_settings: defaults to true.
-- L40    Change Gravity engine, formation, interface, performance and Part Control panel defaults using native names. Validates the whole batch, applies native effects, refreshes controls and requests a save. PartCtl* are panel defaults; use gravity_part_control to change selected parts. Read gravity_status first.
 - L43    Default true requests a save; false changes this session only.
-- L46    Select a Gravity shape, configure its control keys, or press one real Button. Inspect gravity_shapes(name=...) first. Values use stored units (display divided by Div). Buttons require that shape to be selected and never become settings.
 - L49    Exact shape name; defaults to current shape.
 - L50    Button key or its Name when no Key exists.
-- L54    Set Gravity's anchor to yourself or all players, add/remove a specific target, or clear targeting. Ambiguous player names are refused. Preserves the native Targets table.
 - L57    Exact username or user ID preferred; unique username prefixes and display names also work.
-- L60    Set or clear one native Gravity hotkey on desktop or mobile. Provide action or shape, and a Roblox KeyCode name (e.g. E, F5); key="" unbinds it. Refuses conflicts with other core/shape bindings. Read current keybinds in gravity_status.
-- L66    Add/remove shape favorites or clear all favorites in Gravity's native selector. List favorite flags with gravity_shapes. Saves by default; persist=false keeps this session only.
-- L72    Inspect held Gravity parts with stable session-scoped IDs, paths, positions, selections and overrides. Paginated and sorted by claim ID; read nextOffset for more. IDs expire when the part is released or Gravity reloads.
-- L78    Use native Gravity Part Control. select/add/deselect require IDs from gravity_parts; clear deselects without releasing overrides. select_all/select_overridden/invert replace the selection, capped at Gravity's native 512 parts. assign/move/ride/physics/release affect the current selection. assign supports pin/manual/shape/normal; a supplied position is shared by all assigned parts. move preserves group offsets and sets manual targets: use position for the group's center or offset for relative movement. physics replaces overrides; {} restores inheritance. release_all clears even unselected overrides. Selection and overrides are live session state.
 - L92    Refresh official source; otherwise pagination reuses a bounded five-minute snapshot. Local source is always read fresh.
-- L101   Create/update a real GravityShapes/<plugin>.lua file from a saved source path or inline source. Prefer path for long scripts. Checks syntax and verifies disk contents. By default evaluates setup once with a deadline, validates f2/Controls and registers the module in Gravity. load=false saves without executing. overwrite=true is required for replacement. Does not select an inactive shape; existing active shapes reload with cleanup. Plugin callbacks need their own cleanup.
 - L104   Workspace or pastes/ path containing the full module source. Use source or path, not both.
 - L105   Default true loads the module into Gravity; false only saves syntax-checked source.
 
@@ -382,7 +354,6 @@
 - L138   Include text beneath hidden frames or disabled screens; default false.
 - L139   Case-insensitive literal text filter.
 - L177   GUI text scan cancelled.
-- L197   Press a GUI button by firing the handlers connected to it. Needs a host that exposes signal introspection.
 - L201   Dotted path to a TextButton or ImageButton.
 - L205   Which signal to fire. Default Activated, which most modern interfaces use.
 - L248   Path to the ClickDetector, or to a part containing one.
@@ -390,7 +361,6 @@
 - L299   1-30. Default 6.
 - L300   Outline colour as 'r, g, b' or '#rrggbb'.
 - L341   One line, under about 90 characters.
-- L357   Put text on the user's clipboard.
 
 ## src/tools/helpers.lua
 - L139   Failed: 
@@ -447,17 +417,13 @@
 - L128   Create an instance detached, validate/apply properties, then parent it. Legacy property maps use sorted property names. Failed setup destroys only the new owned instance.
 
 ## src/tools/iy.lua
-- L39    Run an Infinite Yield command by its command string, exactly as typed into IY's own bar: 'speed 100', 'noclip', 'tp PlayerName', 'esp players'. Supports IY's repeat prefixes ('5^speed 100', 'inf^0.5^esp'). When the setting is on but IY is not loaded, this call loads it.
 - L43    The command string, without IY's ';' prefix. Returns dispatch acceptance, not completion.
-- L67    List Infinite Yield commands, optionally filtered by a keyword or limited to one plugin's commands. Shows names, aliases, plugin origin, and argument signatures and descriptions when IY exposes them. Use it before iy_cmd to check syntax.
 - L71    Case-insensitive substring to match against command names and aliases.
 - L72    Only commands from this plugin, e.g. 'emotemanager.iy'.
 - L73    Maximum lines. Default 80; the result budget can reduce the page.
 - L74    Continue at nextOffset with the same filters; restart after commands change.
-- L163   Resolve an IY selector to concrete names in the live server (read-only). Keywords: all, others, me, random, #<n>, %<team>, allies, enemies, team, nonteam, friends, nonfriends, guests, bacons, age<n>, nearest, farthest, group<id>, alive, dead, rad<n>, cursor, npcs. Supports + include/- exclude, comma-separated lists, and @name for username-only prefix matching. Uses the running IY's selector behavior; resolve targets before iy_cmd.
 - L165   IY selector, e.g. all, others, rad50, PlayerName.
 - L166   Maximum names shown; default 50.
-- L187   Inspect and configure Infinite Yield's saved events, keybinds, aliases, waypoints and settings. Inspect first for current 1-based binding indexes, event fields and defaults. Supports OnExecute, OnSpawn, OnDied, OnDamage, OnKilled, OnJoin, OnLeave and OnChatted. Event commands can use $1/$2 arguments; native IY ignores commands containing 'plugin'. Edits refresh IY's editor and request its normal save. Waypoints default to the current place. Use iy_cmd to execute commands, iy_plugin_write for plugins/custom events. stop_loops sends breakloops.
 - L192   What to inspect. Default all.
 - L193   Native event name; required for event actions, optional inspect filter.
 - L194   Current 1-based binding index from inspect, for update/remove.
@@ -484,39 +450,30 @@
 - L231   IY 
 - L239   Plain plugin filename, with or without .iy. Omit for the template.
 - L241   Maximum source bytes; limited by the tool result budget.
-- L255   Create or update a custom Infinite Yield .iy plugin. Get the template with iy_plugin_read. Source may declare shared locals/globals above local Plugin, and must return a table with PluginName, PluginDescription and Commands. Each command has ListName, Description, Aliases and Function(args, speaker). Prefer a saved path for long source. Checks syntax before saving. By default executes setup once, validates the returned table and loads/reloads it through IY, returning actual registered command names. load=false only saves syntax-checked source. Set overwrite=true to replace an existing file. Reloading replaces commands; plugin-owned event connections or loops need cleanup in the plugin's own setup/unload command.
 - L257   Plain filename, e.g. myplugin.iy. Paths and IY_FE.iy are refused.
 - L258   Complete Luau plugin source, including return Plugin; multiple commands and top-level globals are supported.
 - L259   Workspace or pastes/ source path; provide source or path, not both. Maximum 256000 source bytes.
 - L260   Explicitly replace an existing file; default false.
 - L261   Load/reload after saving. Default true; false never executes the source.
-- L273   Saved 
-- L280   Search the Infinite Yield community plugin store (iyplugins.pages.dev, several hundred plugins) by name, author or filename. Returns matches with their authors. Use it when the user asks for a feature core IY does not have, then install with iy_plugin_install.
 - L284   What to look for, e.g. 'dex', 'esp', 'aimlock'.
 - L285   Maximum results. Default 10.
 - L286   Continue at nextOffset with the same query.
-- L311   Install a plugin from the Infinite Yield store: downloads its .iy file, saves it to the workspace and registers it with the running Infinite Yield, whose commands then work through iy_cmd. Accepts the plugin name ('dexrecontinued'), a filename ('dexrecontinued.iy') or the store id.
 - L315   The plugin's name, filename or store id.
 - L332   The plugin's name or filename.
 
 ## src/tools/meta.lua
 - L76    Place or asset id. Defaults to the current place.
-- L122   Look up a Roblox account by username or id.
-- L174   Report the current Roblox client release version.
 
 ## src/tools/native_helpers.lua
 - L96    Retained fields; follow path arrays for larger values
 - L125   Text bytes (default fits result budget), or fields (default 20, maximum 100).
 
 ## src/tools/net.lua
-- L46    GET a URL. HTTP errors fail the call. Large bodies retain a five-minute result reference for http_result_read without another request.
 - L52    Total request deadline in seconds, default 20.
 - L53    Extra request headers.
 - L54    Maximum UTF-8 body bytes in this page; bounded by result budget. Default 5000.
-- L75    Send one HTTP request with method and body. Writes are never retried. HTTP errors fail the call; large responses remain readable through http_result_read.
 - L82    Total request deadline in seconds, default 20.
 - L84    Request body. JSON should be sent as a string.
-- L107   GET JSON and read a field by dotted path or exact keys (including keys containing dots). Large values retain a reference for http_result_read; false is a valid value and HTTP errors fail.
 - L113   Dotted path into the response. Array indexes are 1-based. Omit for the whole document.
 - L114   Exact keys; array indexes as strings. Use instead of path for keys containing dots.
 - L115   Total request deadline in seconds, default 20.
@@ -568,7 +525,6 @@
 - L112   Seconds to wait, 1-20. Default 8.
 
 ## src/tools/screen.lua
-- L11    Raycast from a viewport fraction and return exact instance identity, hit position, normal, distance and material. Defaults to the crosshair, 10,000 studs, excluding your character and water. Does not capture pixels or infer ownership.
 - L15    Viewport X fraction. Default 0.5.
 - L16    Viewport Y fraction. Default 0.5.
 - L17    Maximum ray length in studs, default 10000.
@@ -578,11 +534,9 @@
 - L19    index lists topics; quickstart supplies the normal workflow. Read relevant sections and their continuations, not the whole guide as setup.
 - L20    Continue the same section from the returned nextOffset until eof.
 - L21    Bytes in this page, also bounded by the result budget. Default 3500.
-- L46    Run bounded Luau on the local client. Provide inline source in 'code', or 'path' to run a workspace file directly without reading it back first. Captures print/warn, tables and all return values; waits for functions started with task.spawn/defer/delay. Stop or the deadline cancels managed tasks. Loop checkpoints yield automatically. Prefer a specific tool when one exists. This is not a security sandbox; dynamically loaded code and engine calls can bypass cooperative guards.
 - L51    The source to run inline. Use print() for output; return values or tables to report results. Provide this or 'path', not both.
 - L52    Use the same files/... or pastes/... path returned by file tools, unchanged (up to 2 MiB). Runs the saved source locally without reading it into the conversation. Provide this or code, not both.
 - L53    Execution deadline in seconds, including spawned tasks. Default 10. Use managed chat tools for persistent chat automation.
-- L63    Check Luau syntax without executing code or changing the game. Provide inline 'code' or a saved file 'path', not both. Prefer path for scripts you wrote or edited so their source need not be sent again. Returns compile errors for correction before run_luau.
 - L67    Inline Luau source to compile without running it. Provide this or path.
 - L68    Use the same files/... or pastes/... path returned by file tools, unchanged. Provide this or code.
 - L81    Where to search. Defaults to game.
@@ -595,22 +549,17 @@
 - L17    Find script instances by root, kind and optional name substring. Returns source references and a stable continuation cursor. Default 25, maximum 100 per page; bounded tree scans disclose incomplete coverage. Read only relevant sources.
 
 ## src/tools/skills.lua
-- L21    List the installed markdown skills (playbooks) with their one-line descriptions and whether each is enabled. A bounded enabled index appears in the environment; use this for omitted entries or to refresh the inventory, including switched-off ones. Filter by name/filename/description with query to find relevant guidance. Follow continuation offsets to see every entry.
 - L23    1-based byte offset from a previous page. Default 1.
 - L24    Maximum bytes in this inventory page.
 - L25    Case-insensitive literal substring of a skill name, filename or description.
-- L50    Read an enabled skill requested by the user or relevant to the task before applying it. Follow continuation offsets for the complete body; inventory descriptions are not bodies. Reuse unchanged bodies still in context; skip unrelated skills.
 - L54    The skill's name or filename, e.g. 'Ponytail' or 'ponytail.md'.
 - L55    1-based byte offset from a previous page. Default 1.
 - L56    Maximum bytes of body. Default 12000, bounded by the tool result budget.
-- L70    Save a skill: a named playbook with a one-line description and a markdown body. Overwrites an existing skill of the same name. Use it when the user asks to keep a working approach -- 'save that as a skill' -- or when you worked something out that a later session will need again.
 - L74    Short name, e.g. 'Ponytail'. Becomes the filename.
 - L75    One line, written to be matched against a task: what the skill is for.
 - L76    The playbook: instructions, rules, code patterns, in markdown.
-- L94    Install a skill from GitHub: give owner/repo (e.g. 'DietrichGebert/ponytail'), a github.com URL, or a raw.githubusercontent.com URL. The .md is fetched, given proper frontmatter if it lacks it, and saved into skills/.
 - L98    owner/repo, or a GitHub or raw URL to the .md file.
 - L99    Path to the file inside the repo, when it is not the default SKILL.md. Leading slash optional.
-- L116   Delete a skill file. Its entry leaves the environment block from the next turn.
 - L120   The skill's name or filename.
 
 ## src/tools/support_bundle.lua
@@ -625,23 +574,20 @@
 - L163   Validate and re-encode a JSON string
 - L195   Show this one template's code and parameters.
 - L196   Resume a template detail page from nextOffset.
-- L238   Run a script template by id with the given values. The expanded code appears in the permission prompt before it runs -- what you approve is what runs, because placeholders are filled before the permission decision, not after.
 - L242   Template id from template_list.
 - L245   The template's values. Keys are the parameter names template_list showed.
 - L247   Shared managed execution deadline, default 10 seconds.
 
 ## src/tools/tool_search.lua
-- L34    Case-insensitive name or description filter for list.
-- L35    Exact tool group for list.
-- L36    Exact tool name for describe or call.
-- L37    The target tool's exact arguments for call.
-- L38    1-based result or schema byte offset.
-- L39    Rows or schema bytes; default 20 rows or 6000 bytes.
+- L35    Words matched across tool name, description and group; exact names rank first.
+- L36    Exact tool group for list.
+- L37    Exact tool name for describe or call.
+- L38    The target tool's exact arguments for call.
+- L39    1-based result or schema byte offset.
+- L40    List rows (max 100) or schema bytes (max 20000, within the result budget); default 20 rows or 6000 bytes.
 
 ## src/tools/web.lua
-- L52    Search the web and return titles, URLs and snippets. Use when the answer depends on something current or outside the game.
 - L57    Results to return, 1-10. Default 5.
-- L120   Fetch a web page as readable text or JSON. Returns contiguous UTF-8 pages: continue with page_id and offset without downloading it again. Snapshots last five minutes; four pages / 4 MiB retained. Reading does not execute page scripts.
 - L125   Returned snapshot ID for continuation; provide this or url.
 - L126   One-based UTF-8 byte offset from nextOffset.
 - L127   Maximum bytes in this contiguous page, also bounded by the result budget. Default 4000.
@@ -664,14 +610,15 @@
 - L229   'x, y, z'.
 
 ## src/ui/app.lua
-- L67    You may now support Project Ptolemy by donating via Robux or Ko-fi. This is completely optional -- any donation would be appreciated.
-- L73    Robux donations go to the Project Ptolemy donation place; supporters are thanked in our Discord. Ko-fi copies its link, which you can open in a browser.
-- L105   Roblox will move you to the Project Ptolemy donation place. Your conversations and settings are saved before you leave.
-- L1389  UAI 
-- L1390  An agent running inside a Roblox client, identifying itself on the wire as the Claude Code CLI.
+- L111   Optional donations help keep the project and shared free access running.
+- L117   Choose how to support us
+- L1483  UAI 
 
-## src/ui/changelog.lua
-- L33    Every release this client has shipped, newest first.
+## src/ui/chat/context.lua
+- L92    AI calls in this conversation, including retries, tool follow-ups, summaries and subagents. Counted on this device from this update; earlier requests are not reconstructed.
+
+## src/ui/chat/loops.lua
+- L19    Ask UAI to start a chat agent, quiz, or auto-chat.
 
 ## src/ui/chat/prompts.lua
 - L6     Explore this game. Inspect the workspace and tell me what is here, how it is organised, and what we could do next.
@@ -679,40 +626,120 @@
 - L10    Check client performance, memory usage, and network latency. Explain the results and suggest practical improvements.
 - L12    Inspect my character and explain its position, humanoid state, and any useful attributes or attached scripts.
 
-## src/ui/chat/queue.lua
-- L31    Follow-ups run in this order after the current response or tool batch. Your draft stays in the composer, and the active turn is never interrupted.
+## src/ui/community.lua
+- L17    Get Project UAI updates, ask for help, and share what you build.
+- L24    Discord invite
+- L41    Open this link in your browser or Discord.
+- L44    Joining is optional. Reminders appear at most once every two weeks and stop after you copy the invite.
 
-## src/ui/code/diff_view.lua
-- L24    This version matches the current source.
+## src/ui/credentialvault.lua
+- L25    Enter your password
+- L84    Credential vault
+- L289   NO PASSWORD RECOVERY
+- L292   Project UAI cannot recover your password. If you forget it, you cannot unlock your saved API keys. Resetting the vault permanently removes every API key saved in this vault from UAI. You must enter them again.
+- L294   Keep this password safe and back up your provider keys. Reset does not revoke keys at your providers or erase existing backups.
+- L302   Use at least 12 characters. Several unrelated words make a strong passphrase.
+- L306   Progress and Cancel appear in the corner while encryption is prepared.
+- L310   Forgot password? Remove saved credentials
+- L312   Remove saved credentials?
+- L313   This permanently removes every API key and credential saved in this vault from UAI's active configuration. You must choose storage protection and enter your keys again. Your other settings remain. Keys at your providers and existing backups are not revoked or erased. There is no undo.
+- L320   Change master password
+- L322   Lock now
+- L328   Without encryption, saved API keys are unprotected. Anyone who can read UAI's files can recover them. Your existing keys and key-pool settings will carry over.
+- L330   Continue without encryption
 
-## src/ui/code/history.lua
-- L251   All 
-- L251   Undoable 
-- L251   Undone 
-- L254   All 
-- L254   Versions 
-- L254   Proposals 
+## src/ui/panels/agents.lua
+- L85    Follow delegated work in one place. Open Details for live progress, messages, reports and follow-ups.
+- L430   Delegated tasks appear here while they run. Their reports stay available when the work is finished.
+- L461   Agent settings
 
-## src/ui/panels/code.lua
-- L99    Retry workspace autosave
-- L99    Delete script…
-- L111   Workspace storage
-- L136   This removes the library draft and its history. Workspace files stay on disk.
-- L142   Line number
-- L250   Ln 
+## src/ui/panels/home.lua
+- L424   Project UAI Free hours
+- L427   Thank you for your continued use and support of Project UAI. Free access powered by HCNSEC is included daily 20:00-12:00 UTC+8 (Beijing/Singapore), through the following midday, with no account or personal key needed. Outside these hours, choose another provider or return at 20:00 UTC+8. Speed and availability vary with shared capacity. More free providers may be available soon.
+
+## src/ui/panels/logs.lua
+- L202   Search host, status, tool or message
+
+## src/ui/panels/modelpicker.lua
+- L62    Choose a model below
+- L69    Search models...
+- L72    Free only
+- L334   Reasoning effort
+- L338   Free models only
+
+## src/ui/panels/providerpicker.lua
+- L32    Add a provider to get started
+- L45    Desktop CLI connected
+- L47    No API key / 
+- L59    Switch provider
+- L78    Search saved providers...
+- L80    Your saved connections
+- L120   No matching providers. Add a connection in Manage providers.
+
+## src/ui/panels/providers.lua
+- L315   Choose a hosted API or a local server. You'll review the connection before saving.
+- L614   Set up
+- L782   Connection details
+- L782   Name and endpoint. Preset defaults stay editable.
+- L1176  Manage API keys
+- L1413  Fetch catalog
+- L1415  Enter model ID
+- L1447  Test connection
+- L1996  Credential vault locked
+- L1997  Unlock saved credentials before changing providers or making requests.
+- L1998  Unlock credential vault
+- L2082  Your endpoint, authentication and recent connection health.
+- L2124  Edit connection
+- L2130  Manage API keys
+- L2211  Search this provider's models...
+- L2214  No matching models. Clear the search or fetch the latest catalog.
+- L2282  Preferences for this provider. Global settings still apply.
+- L2298  Streaming responses
+
+## src/ui/panels/tools.lua
+- L234   Permission rule
+- L255   Search tools, groups or actions
 
 ## src/ui/project.lua
-- L17    An open-source AI agent for Roblox. Explore your game, build scripts, and work with your own models and tools.
 - L25    Project UAI
-- L26    Enjoying ProjectUAI?
-- L44    Star us on GitHub
-- L54    Copy link
+
+## src/ui/providerkeys.lua
+- L48    API keys
+- L58    Change this in Settings / Privacy. Other scripts sharing the executor can still intercept keys while they are in use.
+- L62    Saved credentials were omitted. After applying keys, open Edit connection to review custom authentication and save the full connection before sending requests.
+- L83    How to use your keys
+- L93    Rotate keys
+- L93    Use one key
+- L108   Rotate keys only takes turns between existing keys. Replace keys at the provider and revoke the old ones to rotate credentials securely. Revoke immediately if a key is stolen.
+- L142   Add API key
+- L144   Add API key
+- L144   Paste one key per line to add several. Existing keys and names stay in place.
+- L145   Paste API key
+- L153   Usage is recorded on this device from this update. Requests include retries; estimated tokens are marked.
+- L177   No API keys yet
+- L178   Add a key to get started. You can add more whenever you need them.
+- L194   API key 
+- L225   Name this key
+- L225   Choose a name you recognize. Leave blank to use its number.
+- L226   API key 
+- L235   Replace API key
+- L235   Paste a replacement for 
+- L236   Paste replacement key
+- L258   Apply changes
 
 ## src/ui/settingspanes.lua
-- L498   local function greet(name)
-- L499   return "Hello, " .. name
-- L500   return string.format("Hi %s!", name)
-- L1700  Claude Code
+- L299   Set master password
+- L546   local function greet(name)
+- L547   return "Hello, " .. name
+- L548   return string.format("Hi %s!", name)
+- L617   Monospace fonts available on this device. Used for code and diagnostic details.
+- L631   The font for menus, navigation and messages. Shows the families available on this device.
+- L709   Import configuration
+- L710   Paste a configuration copy and review it before replacing your settings. Private copies can contain credentials.
+- L748   Applying replaces providers, credentials, permissions and preferences. Copies that exclude credentials require you to enter them again. This device keeps its storage choice and any vault password. Conversations, activity history, workspace files and skill files stay on this device.
+- L846   Copy config without credentials
+- L857   Copy private config including credentials
+- L1795  Project UAI
 
 ## src/ui/theme.lua
 - L139   Builder Sans

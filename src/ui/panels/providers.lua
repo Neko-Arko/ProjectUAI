@@ -1323,8 +1323,7 @@ return function(env)
 			if fetchButton then fetchButton.setEnabled(true) end
 			overlay.prompt({
 				title = "Model id",
-				description = "Type it exactly as the provider expects it. It is saved with this "
-					.. "provider and selected.",
+				description = "Type it exactly as the provider expects it. It is saved with this provider and selected.",
 				placeholder = "model id",
 				confirmText = "Use it",
 				onConfirm = function(text)
@@ -1969,8 +1968,7 @@ return function(env)
 					elseif value == "add" then
 						overlay.prompt({
 							title = "Add a model to " .. record.label,
-							description = "Type the id exactly as the provider expects it. "
-								.. "It is saved to this provider and selected.",
+							description = "Type the id exactly as the provider expects it. It is saved to this provider and selected.",
 							placeholder = "model id",
 							confirmText = "Add",
 							onConfirm = function(text)
@@ -2287,8 +2285,7 @@ return function(env)
 			R.toggle(behaviour, {
 				name = "Enabled",
 				label = "Enabled",
-				hint = "A disabled provider is skipped by the fallback chain. Disabling the active "
-					.. "one leaves it flagged active while requests go elsewhere.",
+				hint = "A disabled provider is skipped by the fallback chain. Disabling the active one leaves it flagged active while requests go elsewhere.",
 				value = record.enabled ~= false,
 				layoutOrder = 1,
 				onChange = function(value)
@@ -2299,8 +2296,7 @@ return function(env)
 			R.toggle(behaviour, {
 				name = "Stream",
 				label = "Streaming responses",
-				hint = "Streamed replies carry reasoning text and token counts. Turning this off "
-					.. "always takes effect; turning it on only does while Settings has streaming on.",
+				hint = "Streamed replies carry reasoning text and token counts. Turning this off always takes effect; turning it on only does while Settings has streaming on.",
 				value = record.stream ~= false,
 				layoutOrder = 2,
 				onChange = function(value)
@@ -2316,9 +2312,7 @@ return function(env)
 				R.toggle(behaviour, {
 					name = "ClaudeUa",
 					label = "Send the Claude Code identity",
-					hint = "The claude-cli User-Agent and its client headers. Turning this off suppresses "
-						.. "the whole set for this endpoint whatever the global switch says, which is the "
-						.. "one lever this client has when a CDN in front of an API refuses the request.",
+					hint = "The claude-cli User-Agent and its client headers. Turning this off suppresses the whole set for this endpoint whatever the global switch says, which is the one lever this client has when a CDN in front of an API refuses the request.",
 					value = record.claudeUa ~= false,
 					layoutOrder = 3,
 					onChange = function(value)
@@ -2332,15 +2326,13 @@ return function(env)
 			local advanced = R.section(detail.instance, {
 				name = "Advanced",
 				title = "Transport",
-				description = "Optional gateway streaming and extra headers, body fields and query parameters. "
-					.. "HTTP works without a socket; the provider and host still set request limits.",
+				description = "Optional gateway streaming and extra headers, body fields and query parameters. HTTP works without a socket; the provider and host still set request limits.",
 				layoutOrder = order(),
 			})
 			R.field(advanced, {
 				name = "SocketUrl",
 				label = "Gateway socket URL",
-				hint = "Optional, for Chat completions only. Requires a gateway implementing UAI's envelope protocol. "
-					.. "Ordinary local servers and OpenAI Responses/Realtime sockets use different protocols. The gateway receives your provider headers.",
+				hint = "Optional, for Chat completions only. Requires a gateway implementing UAI's envelope protocol. Ordinary local servers and OpenAI Responses/Realtime sockets use different protocols. The gateway receives your provider headers.",
 				value = record.wsUrl or "",
 				placeholder = "wss://your-uai-gateway.example/stream",
 				layoutOrder = 1,
@@ -2408,8 +2400,7 @@ return function(env)
 			local danger = R.section(detail.instance, {
 				name = "Remove",
 				title = "Remove",
-				description = "The endpoint and its key are deleted from this device. This cannot "
-					.. "be undone.",
+				description = "The endpoint and its key are deleted from this device. This cannot be undone.",
 				layoutOrder = order(),
 			})
 			R.actions(danger, {

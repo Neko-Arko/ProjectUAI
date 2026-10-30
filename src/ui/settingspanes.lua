@@ -243,8 +243,7 @@ return function(env)
 		local build = builder(container)
 
 		local where = build.section("Where your data goes",
-			"Enabled providers and connected local relays are listed below. The selected route receives "
-			.. "your messages and relevant tool results. Tools can make additional requests when used.")
+			"Enabled providers and connected local relays are listed below. The selected route receives your messages and relevant tool results. Tools can make additional requests when used.")
 
 		local list = {}
 		for _, record in ipairs(providers.list()) do
@@ -285,11 +284,9 @@ return function(env)
 			storageStatus.TextColor3 = (unverified or not vault.enabled) and theme.color.warn or theme.color.textSecondary
 		end
 		R.paragraph(storage,
-			"The vault covers provider keys, custom headers, query parameters and body overrides. Existing copies, clipboard history, backups and other scripts are outside the vault. "
-			.. "Review remaining configuration before sharing it; notes and other text can contain anything you entered.", { layoutOrder = 2 })
+			"The vault covers provider keys, custom headers, query parameters and body overrides. Existing copies, clipboard history, backups and other scripts are outside the vault. Review remaining configuration before sharing it; notes and other text can contain anything you entered.", { layoutOrder = 2 })
 		R.paragraph(storage,
-			"Replace personal keys regularly at the provider and revoke the old keys. Revoke immediately if theft is suspected. Daily replacement can shorten exposure, but it does not stop a malicious script stealing the replacement. "
-			.. "UAI's Rotate keys option only takes turns between keys; it does not renew or revoke them.", { layoutOrder = 3 })
+			"Replace personal keys regularly at the provider and revoke the old keys. Revoke immediately if theft is suspected. Daily replacement can shorten exposure, but it does not stop a malicious script stealing the replacement. UAI's Rotate keys option only takes turns between keys; it does not renew or revoke them.", { layoutOrder = 3 })
 		refreshStorage()
 		local unsubscribeStorage = config.changed:connect(function(path)
 			if path == nil or path == "security" or path == "security.vault" then refreshStorage() end
@@ -320,8 +317,7 @@ return function(env)
 		vaultSection.Destroying:Connect(unsubscribeVault)
 
 		local secrets = build.section("Logs and exports",
-			"Request logs mask recognised credentials. Configuration and diagnostic exports exclude credential fields by default. "
-			.. "Only the explicitly labelled private configuration copy includes credentials; keep it private.")
+			"Request logs mask recognised credentials. Configuration and diagnostic exports exclude credential fields by default. Only the explicitly labelled private configuration copy includes credentials; keep it private.")
 		R.toggle(secrets, {
 			label = "Mirror the log to the console",
 			hint = "Also print every entry with print/warn, which a developer console can read.",
@@ -880,9 +876,7 @@ return function(env)
 		})
 
 		local out = build.section("Diagnostic export",
-			"Writes a copy of your settings and the activity history into the client's own "
-			.. "folder. Credential fields, custom headers, query parameters, body overrides and connection tokens "
-			.. "are excluded. Review remaining text before sharing.")
+			"Writes a copy of your settings and the activity history into the client's own folder. Credential fields, custom headers, query parameters, body overrides and connection tokens are excluded. Review remaining text before sharing.")
 		local outPath = EXPORT_DIR .. "/uai-export.json"
 		local result = P.text(out, {
 			name = "ExportResult",
@@ -1339,8 +1333,7 @@ return function(env)
 			"Maximum generated tokens per request, including reasoning where the provider counts it. Model limits, available context and learned provider caps may lower it. This does not require the model to use the whole allowance.",
 			"agent.maxTokens", REPLY_STOPS)
 		R.choice(response, "Effort",
-			"Low is the faster default; raise it for difficult tasks. Existing saved choices are kept. "
-			.. "Sent as the provider's effort level where supported; raw provider parameters can override it. Provider default omits the effort field and may still think extensively. The Thinking row shows visible text, not a 5,999-token limit.",
+			"Low is the faster default; raise it for difficult tasks. Existing saved choices are kept. Sent as the provider's effort level where supported; raw provider parameters can override it. Provider default omits the effort field and may still think extensively. The Thinking row shows visible text, not a 5,999-token limit.",
 			"agent.effort",
 			{ "low", "medium", "high", "xhigh", "max", "off" },
 			{ "Low", "Medium", "High", "Very high", "Max", "Provider default" },
