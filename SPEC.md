@@ -1726,7 +1726,7 @@ outputs and rerunning affected checks. Use native static checks, deterministic
 freshness checks and the official Luau compiler where applicable.
 
 The 3.3.0 plan and actual outcomes belong in
-[docs/TESTING_3.3.0.md](docs/TESTING_3.3.0.md). The entire native suite is not part
+docs/TESTING_3.3.0.md (archived). The entire native suite is not part
 of that release pass. `tools/test_native.js --verify-only` is a separate full-suite
 workflow, not a substitute for selected checks. The broader command reference
 below includes independent product/site workflows; it does not require running

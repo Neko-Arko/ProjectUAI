@@ -4,7 +4,7 @@ Reviewed October 12, 2026 against `AUDIT_COMBINED.md` and its two source reports
 The audit mixes confirmed defects, already-correct behavior, proposed product
 changes and references to findings that are not included in the repository.
 Changes below preserve SPEC's runtime/presentation boundary and managed execution
-contract. Verification is recorded in [TESTING_2.8.0.md](TESTING_2.8.0.md).
+contract. Verification is recorded in TESTING_2.8.0.md (archived).
 
 ## Scripting harness investigation
 
@@ -88,7 +88,7 @@ retain their worker slots until they return. These limits cannot force an
 executor's blocked native call to terminate.
 
 Focused offline coverage and any synthetic live-service probe are recorded in
-[TESTING_2.8.0.md](TESTING_2.8.0.md). Availability of an external decompiler and
+TESTING_2.8.0.md (archived). Availability of an external decompiler and
 reconstruction fidelity for arbitrary game bytecode remain separate from the
 correctness of the client pipeline.
 

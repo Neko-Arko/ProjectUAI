@@ -297,7 +297,7 @@ node bridge/tests/run.js --browser-only
 替代实时执行器检查。发现的问题见 [UI 审计](UI_AUDIT.md)。
 [3.6.5 验证记录](../docs/TESTING_3.6.5.md) 记录了当前的
 版本检查。[3.6.0 记录](../docs/TESTING_3.6.0.md)、
-[3.5.6 记录](../docs/TESTING_3.5.6.md) 和
+3.5.6 记录（已归档） 和
 [3.3.5 记录](../docs/TESTING_3.3.5.md) 仍可用于更早的版本。
 
 协议仍为版本 2。`/api/hello` 会通告可选的图片能力和规范化

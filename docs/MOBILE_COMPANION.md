@@ -108,7 +108,7 @@ request budget and the Android server's existing limits. Individual executor
 polls are bounded to five seconds. The original plan's shared-timeout references
 below describe the pre-3.1.0 implementation.
 
-See [3.1.0 verification](TESTING_3.1.0.md) for the focused client checks. This
+See 3.1.0 verification (archived) for the focused client checks. This
 release does not change or claim new device verification for the Android app.
 
 Implemented: the client decoupling (`relay.*` config, `net/relay_link`,

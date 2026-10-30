@@ -3,7 +3,7 @@
 **Status:** historical October 16 plan, superseded by the expanded 3.3.0 work.
 The October 17 scope includes browser workspaces, MCP setup, provider controls,
 queued follow-ups, native client improvements, and regenerated release packages.
-See the [3.3.0 verification record](../docs/TESTING_3.3.0.md) for current build and
+See the 3.3.0 verification record (archived) for current build and
 test evidence. The scope and deferred-build notes below describe the original
 appearance pass, rather than current release constraints. **Reference:** the
 Zola-style chat screenshot supplied by the maintainer (white, near-chrome-less
