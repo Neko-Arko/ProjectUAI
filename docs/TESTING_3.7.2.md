@@ -62,7 +62,7 @@ exact selected unpaused key, custom and identity headers, URL/query/body overrid
 and a successful simulated response. Build-replacement tests also cover the live
 credential handoff and genuine unload/restart behavior.
 
-Schedule tests cover 20:00 opening, 06:00 closing, midnight, the personal-key
+Schedule tests cover 20:00 opening, 12:00 closing, midnight, the personal-key
 exemption, background-probe admission and completion of accepted replies across
 closing. UI checks exercise the storage controls, migration notice, private copy
 and provider/key-manager flows in the offline harness.

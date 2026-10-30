@@ -12,8 +12,8 @@ return function(env)
 			}, required = { "message" } },
 			run = function(args)
 				for _, job in ipairs(env.require("runtime/chatloops").running()) do
-					if job.kind == "bot" and job.channel == chat.channel(args.channel) then
-						return H.fail("chat_bot " .. job.id .. " owns this channel's replies. Stop it with chat_loop_stop before sending manually.")
+					if job.kind == "agent" and job.channel == chat.channel(args.channel) then
+						return H.fail("chat_agent " .. job.id .. " owns this channel's replies. Stop it with chat_loop_stop before sending manually.")
 					end
 				end
 				local ok, channel = chat.send(args.message, args.channel)

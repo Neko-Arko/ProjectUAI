@@ -8,11 +8,11 @@ return function(env)
 	local chat = env.require("runtime/gamechat")
 	local sessions = env.require("agent/session")
 	local permissions = env.require("agent/permissions")
-	local chatbot = env.require("runtime/chatbot")
+	local chatbot = env.require("runtime/chatagent")
 	local M = { jobs = {}, changed = signal.new("chat loops") }
 	local alive, sending, nextSend = true, false, 0
 	local cursor = 0
-	local TOOL = { auto = "auto_chat", quiz = "quiz_bot", reply = "auto_reply", bot = "chat_bot" }
+	local TOOL = { auto = "auto_chat", quiz = "quiz_bot", reply = "auto_reply", agent = "chat_agent" }
 	local function normal(text)
 		local clean = util.trim(tostring(text)):lower():gsub("%s+", " "):gsub("[%p]+$", "")
 		return util.trim(clean)
@@ -24,9 +24,12 @@ return function(env)
 		if job.state ~= "running" then return end
 		job.state, job.reason, job.finishedAt = state, reason, clock.ms()
 		job.pending = nil
-		if job.bot then
-			job.bot.queue = {}
-			job.bot.generating = false
+		if job.agent then
+			job.agent.queue = {}
+			job.agent.generating = false
+			-- The worker is a real session; releasing it here is what stops a reply
+			-- that is still being prepared from arriving after the job ended.
+			chatbot.close(job)
 		end
 		publish(job)
 	end
@@ -38,7 +41,7 @@ return function(env)
 		elseif disabled.chat or permissions.mode() == "readonly" or permissions.ruleFor(TOOL[job.kind]) == "deny"
 			or permissions.ruleFor("chat_send") == "deny" then finish(job, "stopped", "Chat disabled")
 		elseif clock.ms() >= job.deadline then finish(job, "completed", "Duration reached")
-		elseif job.bot and job.bot.inputs >= 2000 then finish(job, "completed", "Chatbot input budget reached") end
+		elseif job.agent and job.agent.inputs >= 2000 then finish(job, "completed", "Chat agent input budget reached") end
 		return job.state == "running"
 	end
 	function M.list(session)
@@ -81,9 +84,9 @@ return function(env)
 		end
 		local route, reason = chat.route(channel)
 		if not route then return nil, reason end
-		local interval = number(args.interval, kind == "quiz" and 30 or (kind == "bot" and 5 or 15), 5, 3600)
+		local interval = number(args.interval, kind == "quiz" and 30 or (kind == "agent" and 5 or 15), 5, 3600)
 		local duration = number(args.duration, 600, 10, 3600)
-		local count = number(args.count, kind == "quiz" and type(args.questions) == "table" and #args.questions or (kind == "bot" and 100 or 10), 1, 100)
+		local count = number(args.count, kind == "quiz" and type(args.questions) == "table" and #args.questions or (kind == "agent" and 20 or 10), 1, 100)
 		if not interval or not duration or not count or count % 1 ~= 0 then return nil, "Invalid interval, duration, or count." end
 		local job = { id = util.uid("chat"), kind = kind, session = session, channel = channel,
 			state = "running", sent = 0, completed = 0, count = count, interval = interval,
@@ -127,7 +130,7 @@ return function(env)
 				if normal(trigger) == "" then return nil, "Trigger needs letters or numbers." end
 				job.rules[#job.rules + 1] = { trigger = normal(trigger), response = response, exact = rule.exact == true }
 			end
-		elseif kind == "bot" then
+		elseif kind == "agent" then
 			local ok, err = chatbot.configure(job, args)
 			if not ok then return nil, err end
 		else return nil, "Unknown loop type." end
@@ -150,7 +153,7 @@ return function(env)
 		local text = normal(entry.text)
 		for _, job in ipairs(M.running()) do
 			if entry.channel == job.channel and entry.at >= job.startedAt and active(job) then
-				if job.kind == "bot" then chatbot.receive(job, entry)
+				if job.kind == "agent" then chatbot.receive(job, entry)
 				elseif job.kind == "quiz" and job.phase == "answer" and not job.winner and clock.ms() < job.nextAt then
 					for _, answer in ipairs(job.current.aliases) do
 						if text == answer then
@@ -173,7 +176,7 @@ return function(env)
 		if not alive then return end
 		local now = clock.ms()
 		for _, job in ipairs(M.running()) do
-			if active(job) and job.kind == "bot" then chatbot.step(job, active, finish, publish) end
+			if active(job) and job.kind == "agent" then chatbot.step(job, active, finish, publish) end
 		end
 		if sending or now < nextSend then return end
 		-- Round-robin across channels so a five-second loop cannot starve another.
@@ -183,7 +186,7 @@ return function(env)
 			if job.state == "running" and now >= job.nextAt then
 				local text
 				if job.kind == "auto" then text = job.messages[job.completed % #job.messages + 1]
-				elseif job.kind == "reply" or job.kind == "bot" then text = job.pending
+				elseif job.kind == "reply" or job.kind == "agent" then text = job.pending
 				elseif job.phase == "question" then
 					job.current = job.questions[job.completed % #job.questions + 1]
 					text = "Quiz " .. (job.completed + 1) .. ": " .. job.current.question
@@ -191,9 +194,9 @@ return function(env)
 					text = job.winner.name .. " got it right!"
 				else text = "Time's up! Answer: " .. job.current.answer end
 				if text then
-					if job.kind == "bot" then
+					if job.kind == "agent" then
 						if chatbot.duplicate(job, text) then
-							job.pending = nil; job.bot.skipped = job.bot.skipped + 1
+							job.pending = nil; job.agent.skipped = job.agent.skipped + 1
 							job.nextAt = clock.ms() + job.interval * 1000
 							publish(job); return
 						end
@@ -207,7 +210,6 @@ return function(env)
 					if job.state ~= "running" or not alive then return end
 					if not callOk or not ok then finish(job, "failed", tostring(callOk and reason or ok)); return end
 					job.sent = job.sent + 1
-					if job.kind == "bot" then chatbot.sent(job, text) end
 					if job.kind == "quiz" and job.phase == "question" then
 						job.phase = "answer"; job.nextAt = clock.ms() + job.interval * 1000
 					else

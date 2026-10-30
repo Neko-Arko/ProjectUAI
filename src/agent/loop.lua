@@ -302,6 +302,10 @@ return function(env)
 					accounting = result.accounting,
 					prompt = usage.estimateMessages(messages),
 					completion = usage.estimateText(result.content) + usage.estimateText(result.reasoning),
+					-- A chat worker compacts on its own schedule, in the middle of the
+					-- user's turn. Its tokens still belong to the session total, but
+					-- they must not move the counters the conversation is showing.
+					background = session.backgroundUsage == true,
 				}, record)
 				session.emit("usage", { session = usage.session, turn = usage.turn })
 			end
@@ -436,6 +440,9 @@ return function(env)
 				accounting = result.accounting,
 				prompt = accounting and (accounting.history + accounting.estimate) or usage.estimateMessages(request.messages),
 				completion = usage.estimateText(result.content) + usage.estimateText(result.reasoning),
+				-- See the summariser above: a background session pays into the session
+				-- total without moving the turn the user is watching.
+				background = session.backgroundUsage == true,
 			}, record)
 			session.emit("usage", { session = usage.session, turn = usage.turn })
 

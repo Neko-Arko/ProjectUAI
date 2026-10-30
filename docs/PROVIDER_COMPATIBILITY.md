@@ -267,13 +267,13 @@ key or model entry is required. Existing providers and private credentials stay
 intact. Choose **Use Project UAI Free** to add it later. Thank you for your continued
 use and support of Project UAI; more free providers may become available soon.
 
-Included community access is scheduled **daily from 20:00 to 06:00 the following
-morning, fixed UTC+8 (Beijing/Singapore)**. The client's local timezone and daylight
+Included community access is scheduled **daily from 20:00 to 12:00 the following
+midday, fixed UTC+8 (Beijing/Singapore)**. The client's local timezone and daylight
 saving do not change these hours. Outside the schedule, UAI explains the next
 opening and skips new included-access inference, model discovery and background
 probes. Choose another provider or return at 20:00 UTC+8. You can still save the
 free provider; personal HCNSEC keys do not use this community schedule. An already
-accepted inference may finish after 06:00. These checks provide client guidance;
+accepted inference may finish after 12:00. These checks provide client guidance;
 the service controls actual availability and must enforce any server access limits.
 
 **Settings → Agent → Automatic free routing** is enabled by default and optional.

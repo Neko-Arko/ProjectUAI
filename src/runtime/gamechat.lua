@@ -80,6 +80,25 @@ return function(env)
 		end)
 	end
 
+	-- SendAsync reports Sending while the message is still in flight, which is the
+	-- accepted case: the message is already in the channel and the terminal status
+	-- arrives later through MessageReceived. Treating anything but Success as a
+	-- rejection reported a failure for every delivered message, so only the
+	-- statuses that name a refusal are failures here. Unknown is one of them --
+	-- it is the engine's catch-all for a send that did not complete.
+	local REFUSED = {
+		Unknown = true, TextFilterFailed = true, Floodchecked = true, InvalidPrivacySettings = true,
+		InvalidTextChannelPermissions = true, MessageTooLong = true, ModerationTimeout = true,
+	}
+
+	local function rejection(status)
+		-- EnumItem or a bare name, depending on the host; the trailing identifier is
+		-- the member either way.
+		local name = tostring(status):match("([%w_]+)$")
+		if name and REFUSED[name] then return name end
+		return nil
+	end
+
 	-- Resolve before starting a loop, and again before each send as channels can change.
 	function M.route(channelName)
 		local name = M.channel(channelName)
@@ -91,9 +110,8 @@ return function(env)
 				if not channel then return nil end
 				return { name = name, send = function(text)
 					local message = channel:SendAsync(text)
-					if message and message.Status and message.Status ~= Enum.TextChatMessageStatus.Success then
-						return false, "Chat rejected the message: " .. tostring(message.Status)
-					end
+					local refused = message and message.Status and rejection(message.Status)
+					if refused then return false, "Chat rejected the message: " .. refused end
 					return true
 				end }
 			end

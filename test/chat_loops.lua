@@ -12,6 +12,10 @@ local function boot()
 	local chat = gamechat(h)
 	local app = assert(h.boot()); h.settle(1)
 	app.config.set("permissions.mode", "full")
+	-- This build gates every tool on a credential-storage decision; the fixture
+	-- chooses reversible storage so the chat tools are reachable.
+	assert(app.config.continueWithoutEncryption())
+	h.settle(1)
 	return h, app, chat, app.env.require("runtime/chatloops")
 end
 local function start(app, name, args)
@@ -127,7 +131,11 @@ scenario("loop requests honor permission denials and stop remains available", fu
 	permissions.setRule("auto_chat", "allow")
 	check("allowed start succeeds", start(app, "auto_chat", { messages = { "Hello" } }).ok)
 	permissions.setMode("readonly")
-	check("stop is callable in read-only mode", start(app, "chat_loop_stop", { id = "all" }).ok)
+	-- Stop is a write action, so the tool is refused with every other write; the
+	-- runtime path behind it stays callable, which is what matters when the user
+	-- wants the background work gone.
+	check("the stop tool is refused as a write action", not start(app, "chat_loop_stop", { id = "all" }).ok)
+	check("the runtime stop path still stops the loop", loops.stop("all") == 1 and #loops.running() == 0)
 	h.settle(6)
 	check("nothing is sent after stop", #chat.sent == 0)
 end)
@@ -161,6 +169,8 @@ scenario("legacy chat uses its requested channel and filtered messages", functio
 	end }
 	local app = assert(h.boot()); h.settle(1)
 	app.config.set("permissions.mode", "full")
+	assert(app.config.continueWithoutEncryption())
+	h.settle(1)
 	check("legacy auto-reply starts", start(app, "auto_reply", { channel = "Team", rules = { { trigger = "hello", response = "Hi team" } }, count = 1 }).ok)
 	incoming:Fire({ Message = "hello", FromSpeaker = "Alice", SpeakerUserId = 2, OriginalChannel = "Team" })
 	h.settle(1)

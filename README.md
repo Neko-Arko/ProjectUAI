@@ -78,7 +78,7 @@ and checking the connection simpler, and accepts compressed message submissions
 that previously failed JSON decoding after pairing. Both apps retain verified
 automatic updates, and Android installation still requires confirmation.
 
-During its daily **20:00–06:00 UTC+8** window, use **Project UAI Free** without
+During its daily **20:00–12:00 UTC+8** window, use **Project UAI Free** without
 supplying an API key. It is the default when no provider is configured.
 Its adaptive router measures small tool
 requests and prefers verified fast HCNSEC models when compatible; otherwise it
@@ -232,7 +232,7 @@ Ollama on localhost. Model lists are never guessed: they come from
 `GET /v1/models` or from you typing one in.
 
 **Project UAI Free** is configured when no provider exists and opens daily during
-**20:00–06:00 UTC+8**. Add it later from the
+**20:00–12:00 UTC+8**. Add it later from the
 Recommended tier, or from the start card's Project UAI Free row; existing providers
 and personal keys stay as configured. AgentRouter can recover from explicit
 unauthorized-client errors using the
@@ -545,17 +545,19 @@ action. Opening a conversation acknowledges its own notifications; other unread
 conversations keep their badge. Long notifications scroll, hover/focus pauses
 expiry, and the stack fits the available screen and keyboard space.
 
-**Independent in-game chatbot.** `chat_bot` listens to new player messages and
-answers with the selected AI provider/model using its own short conversation memory.
-Set `instructions` for its personality, `prefix` (default `[AGENT]`), and optionally
-`user_ids` to choose players. It returns immediately and appears in the chat-loop
-indicator; `chat_loop_status` reports its progress and `chat_loop_stop` stops it.
-By default it runs for 600 seconds, sends at most 100 replies, and waits at least
-5 seconds between sends. Rapid messages are batched into one response. Incoming
-message IDs and short-window repeats are deduplicated, self/system/tagged-bot
-messages are ignored, and repeated reply text is suppressed for the entire run.
+**In-game chat agent.** `chat_agent` launches a background subagent that answers
+players with the active provider. It keeps its own conversation context and the
+read-only game tools (instances, players, environment, chat history), so it can look
+something up before answering instead of guessing. Set `instructions` for the job,
+`prefix` (default `[AGENT]`), and optionally `user_ids` to choose players. It
+returns immediately and appears in the chat-loop indicator; `chat_loop_status`
+reports its turns and `chat_loop_stop` stops it. By default it runs for 600 seconds,
+sends at most 20 replies, and waits at least 5 seconds between sends. Rapid messages
+are batched into one turn. Incoming message IDs and short-window repeats are
+deduplicated, self/system/tagged-bot messages are ignored, and repeated reply text
+is suppressed for the entire run.
 Only one managed job owns a channel, and manual `chat_send` calls are blocked there
-while the chatbot runs. A failed or ambiguous chat send stops the bot without retrying.
+while the chat agent runs. A failed or ambiguous chat send stops the loop without retrying.
 
 **Every listing the model produced, in the transcript.** A tool call that carries
 code -- the Luau it is about to execute, the body it is about to write to a file, the
@@ -798,7 +800,7 @@ remain usable without JavaScript; only search and copy controls need it.
 Set a master password or deliberately choose the red **Continue without encryption**
 action at startup. The latter saves recoverable, unprotected keys and skips future
 password prompts. Project UAI Free is configured on a fresh install and opens daily
-during 20:00–06:00 UTC+8. During those hours, open Chat and send a message, or
+during 20:00–12:00 UTC+8. During those hours, open Chat and send a message, or
 add your own connection in Providers: choose a provider in the gallery or enter a
 base URL, then enter its authentication details and fetch or type an exact model
 ID. Shared free capacity and speed can vary; existing provider choices stay

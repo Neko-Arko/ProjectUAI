@@ -44,24 +44,24 @@ end
 
 case("closed hours skip probes and opening restores measurements", function()
 	local f = fixture()
-	f.now = 1767225600000 -- 08:00 UTC+8, outside the overnight schedule.
+	f.now = 1767225600000 + 8 * 3600000 -- 16:00 UTC+8, between the midday close and the evening opening.
 	f.warm()
 	local status = f.route.status(f.record)
 	check("closed included access retains setup but reports its schedule", status.supported and not status.available
-		and status.availability:find("20:00-06:00 UTC+8", 1, true))
+		and status.availability:find("20:00-12:00 UTC+8", 1, true))
 	check("closed refresh and selection send no probes", f.route.select(f.record, request) == f.record and f.h.http.requestCount == 0)
 	f.now = 1767268800000
 	f.warm()
 	local selected = f.route.select(f.record, request)
 	check("the next open-hours action resumes measurement", selected.model == FAST and f.route.status(f.record).available)
-	f.now = 1767304800000 -- 06:00 UTC+8 the next morning.
+	f.now = 1767326400000 -- 12:00 UTC+8 the next day, when the window closes.
 	check("closing hides stale measurements without cancelling accepted ownership", not f.route.status(f.record).ready and f.route.current(selected))
 	f.healthy(); f.close()
 end)
 
 case("probes accepted near closing never issue an off-hours replay", function()
 	local f = fixture({ delay = { [FAST] = 3, [OTHER] = 3, auto = 3 } })
-	f.now = 1767304800000 - 1000
+	f.now = 1767326400000 - 1000
 	f.warm(8)
 	check("closing stops follow-up probe work and publication", #f.posts == 2 and not f.route.status(f.record).ready)
 	f.healthy(); f.close()
@@ -84,10 +84,14 @@ end)
 
 case("the model picker explains closed free hours without probing", function()
 	local f = F.ui(390, 760); local registry = f.env.require("provider/registry")
+	-- 16:00 UTC+8: closed, four hours before the evening opening.
+	f.now = 1767225600000 + 8 * 3600000
+	f.env.require("runtime/clock").ms = function() return f.now + f.h.sched.now * 1000 end
 	local record = registry.blank("hcnsec"); registry.save(record); registry.setActive(record.id)
 	local picker = f.env.require("ui/panels/modelpicker").open(); f.h.settle(0.2)
 	local text = f.h.textOf()
-	check("closed Auto names its schedule", text:find("Auto (outside free hours)", 1, true) and text:find("20:00-06:00 UTC+8", 1, true))
+	check("closed Auto names the wait until opening", text:find("Auto (outside free hours)", 1, true)
+		and text:find("Free | opens in ", 1, true))
 	check("opening the picker outside free hours dispatches no probes", f.h.http.requestCount == 0)
 	picker.close(); f.healthy(); f.close()
 end)

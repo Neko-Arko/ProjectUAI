@@ -76,7 +76,12 @@ return function(env)
 		return true
 	end
 
-	M.hours = "20:00-06:00 UTC+8 (Beijing/Singapore)"
+	-- The window opens at 20:00 and closes at 12:00 the following midday, so the
+	-- morning half is part of the same interval rather than a second one.
+	M.hours = "20:00-12:00 UTC+8 (Beijing/Singapore)"
+	M.shortHours = "20:00-12:00 UTC+8"
+	local OPEN_HOUR, CLOSE_HOUR = 20, 12
+
 	-- This is local request guidance, not upstream access control. Fixed UTC+8
 	-- avoids the host's local timezone and daylight-saving settings entirely.
 	function M.availability(record, atMs)
@@ -90,14 +95,36 @@ return function(env)
 		local shifted = now + 8 * hour
 		local sinceMidnight = shifted % day
 		local midnight = now - sinceMidnight
-		local open = sinceMidnight < 6 * hour or sinceMidnight >= 20 * hour
-		local nextOpen = midnight + 20 * hour
-		if sinceMidnight >= 20 * hour then nextOpen = nextOpen + day end
-		local nextClose = midnight + 6 * hour
-		if sinceMidnight >= 6 * hour then nextClose = nextClose + day end
+		local open = sinceMidnight < CLOSE_HOUR * hour or sinceMidnight >= OPEN_HOUR * hour
+		local nextOpen = midnight + OPEN_HOUR * hour
+		if sinceMidnight >= OPEN_HOUR * hour then nextOpen = nextOpen + day end
+		local nextClose = midnight + CLOSE_HOUR * hour
+		if sinceMidnight >= CLOSE_HOUR * hour then nextClose = nextClose + day end
 		return { applies = true, open = open, hours = M.hours, nextOpenMs = nextOpen, nextCloseMs = nextClose,
 			message = open and ("Project UAI Free is within its daily " .. M.hours .. " schedule. Shared capacity and speed can vary.")
 				or ("Project UAI Free is outside its daily " .. M.hours .. " schedule. Try again from 20:00 UTC+8 or choose another provider.") }
+	end
+
+	-- Remaining time in the form a countdown label reads: minutes while the answer
+	-- is hours away, seconds inside the last minute so the number visibly moves.
+	function M.remaining(ms)
+		local seconds = math.max(0, math.floor((tonumber(ms) or 0) / 1000))
+		if seconds < 60 then return tostring(seconds) .. "s" end
+		if seconds < 3600 then return string.format("%dm %02ds", math.floor(seconds / 60), seconds % 60) end
+		return string.format("%dh %02dm", math.floor(seconds / 3600), math.floor(seconds % 3600 / 60))
+	end
+
+	-- The live half of the schedule message: what the next change is and when.
+	-- Nil when the record is not on included access, so a caller can leave its
+	-- own wording in place.
+	function M.countdown(record, atMs)
+		local status = M.availability(record, atMs)
+		if not status.applies then return nil end
+		local now = atMs or env.require("runtime/clock").ms()
+		local target = status.open and status.nextCloseMs or status.nextOpenMs
+		local left = target - now
+		return { open = status.open, ms = left, opensAt = status.nextOpenMs, closesAt = status.nextCloseMs,
+			text = (status.open and "Closes in " or "Opens in ") .. M.remaining(left) }
 	end
 
 	function M.problem(record, atMs)

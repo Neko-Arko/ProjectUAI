@@ -353,7 +353,8 @@ local KNOWN = {
 	HumanoidStateType = "Running Jumping Freefall Landed Seated Dead Climbing Swimming Physics GettingUp None",
 	CoreGuiType = "PlayerList Health Backpack Chat EmotesMenu All",
 	ChatVersion = "LegacyChatService TextChatService",
-	TextChatMessageStatus = "Success Sending TextFilterFailed Floodchecked",
+	TextChatMessageStatus = "Unknown Success Sending TextFilterFailed Floodchecked InvalidPrivacySettings"
+		.. " InvalidTextChannelPermissions MessageTooLong ModerationTimeout",
 	ThumbnailSize = "Size48x48 Size100x100 Size150x150 Size420x420",
 	ThumbnailType = "HeadShot AvatarBust AvatarThumbnail",
 	ScaleType = "Stretch Slice Tile Fit Crop",

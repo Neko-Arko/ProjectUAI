@@ -30,7 +30,7 @@ return function(env)
 			body = "Ask questions, explore this place, or build a script. UAI connects "
 				.. "a model to tools inside Roblox.",
 			items = {
-				"Project UAI Free is included daily 20:00-06:00 UTC+8 (Beijing/Singapore), ending the following morning. Outside these hours, choose another provider. Shared capacity and speed can vary.",
+				"Project UAI Free is included daily 20:00-12:00 UTC+8 (Beijing/Singapore), through the following midday. Outside these hours, choose another provider. Shared capacity and speed can vary.",
 				"Try: Explain what is in this place before making any changes.",
 				"Your messages and relevant tool results are sent to your selected provider.",
 			},

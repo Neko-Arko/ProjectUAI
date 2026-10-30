@@ -424,12 +424,25 @@ return function(env)
 			P.text(intro, { name = "FreeIntroductionTitle", text = "Project UAI Free hours", role = "label",
 				size = UDim2.new(1, 0, 0, 0), auto = "Y", wrap = true, layoutOrder = 1 })
 			P.text(intro, { name = "FreeIntroductionText",
-				text = "Thank you for your continued use and support of Project UAI. Free access powered by HCNSEC is included daily 20:00-06:00 UTC+8 (Beijing/Singapore), ending the following morning, with no account or personal key needed. Outside these hours, choose another provider or return at 20:00 UTC+8. Speed and availability vary with shared capacity. More free providers may be available soon.",
+				text = "Thank you for your continued use and support of Project UAI. Free access powered by HCNSEC is included daily 20:00-12:00 UTC+8 (Beijing/Singapore), through the following midday, with no account or personal key needed. Outside these hours, choose another provider or return at 20:00 UTC+8. Speed and availability vary with shared capacity. More free providers may be available soon.",
 				role = "caption", color = theme.color.textSecondary, size = UDim2.new(1, 0, 0, 0),
 				auto = "Y", wrap = true, layoutOrder = 2 })
+			-- The countdown is the one line that has to move: a person deciding whether
+			-- to wait wants the remaining time, not a schedule to work out themselves.
+			local timer = P.text(intro, { name = "FreeHoursTimer", text = "", role = "caption",
+				color = theme.color.text, size = UDim2.new(1, 0, 0, 0), auto = "Y", wrap = true, layoutOrder = 3 })
+			local community = env.require("provider/community_key")
+			local stopTimer
+			stopTimer = env.require("runtime/clock").interval(1, function()
+				if not timer.Parent then stopTimer(); return end
+				local countdown = community.countdown(freeRecord)
+				timer.Text = countdown and (countdown.text .. "  ·  daily " .. community.shortHours) or ""
+			end)
+			local countdown = community.countdown(freeRecord)
+			timer.Text = countdown and (countdown.text .. "  ·  daily " .. community.shortHours) or ""
 			P.text(intro, { name = "FreeCommunityInvite", text = "Updates and help: https://discord.gg/9xYyyYuKap",
-				role = "caption", color = theme.color.accent, size = UDim2.new(1, 0, 0, 0), auto = "Y", wrap = true, layoutOrder = 3 })
-			P.button(intro, { name = "FreeCommunity", text = "Join our Discord", variant = "ghost", size = "sm", layoutOrder = 4,
+				role = "caption", color = theme.color.accent, size = UDim2.new(1, 0, 0, 0), auto = "Y", wrap = true, layoutOrder = 4 })
+			P.button(intro, { name = "FreeCommunity", text = "Join our Discord", variant = "ghost", size = "sm", layoutOrder = 5,
 				onClick = function() env.require("ui/community").open() end })
 		end
 

@@ -6,7 +6,7 @@ return function(env)
 	local overlay = env.require("ui/overlay")
 	local loops = env.require("runtime/chatloops")
 	local M = {}
-	local function kind(job) return job.kind == "bot" and "Chatbot" or job.kind end
+	local function kind(job) return job.kind == "agent" and "Chat agent" or job.kind end
 	function M.open(target)
 		local options = {}
 		for _, job in ipairs(loops.list()) do
@@ -16,7 +16,7 @@ return function(env)
 				detail = string.format("%d/%d · %s%s", job.completed, job.count, job.session.title or "Chat",
 					#score > 0 and (" · " .. table.concat(score, ", ")) or (job.reason and (" · " .. job.reason) or "")) }
 		end
-		if #options == 0 then options[1] = { label = "No chat loops yet", detail = "Ask UAI to start a chatbot, quiz, or auto-chat.", value = "empty" } end
+		if #options == 0 then options[1] = { label = "No chat loops yet", detail = "Ask UAI to start a chat agent, quiz, or auto-chat.", value = "empty" } end
 		overlay.menu({ target = target, width = theme.size.menuWide, options = options, onSelect = function(id)
 			if id ~= "empty" then
 				local stopped = loops.stop(id)

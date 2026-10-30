@@ -177,8 +177,8 @@ replacement by a script that remains active.
 
 ## Included community access
 
-**Project UAI Free opens daily from 8 PM to 6 AM, GMT+8 / Beijing / Singapore.**
-That is 20:00 inclusive through 06:00 exclusive the following morning, using a fixed
+**Project UAI Free opens daily from 8 PM to 12 PM noon, GMT+8 / Beijing / Singapore.**
+That is 20:00 inclusive through 12:00 exclusive the following midday, using a fixed
 UTC+8 offset. New requests, discovery and background probes observe this window.
 Replies already accepted can finish. Personal HCNSEC keys and other providers do
 not inherit the schedule. Shared capacity and upstream limits still apply.

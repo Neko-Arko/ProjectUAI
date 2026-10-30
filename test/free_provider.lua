@@ -41,22 +41,33 @@ case("an empty setup receives a usable free provider without network setup", fun
 	free.stop(); f.healthy(); f.close()
 end)
 
-case("included access follows a fixed overnight UTC+8 schedule", function()
+case("included access follows a fixed UTC+8 schedule from 20:00 to noon", function()
 	local f = F.new(); local registry = f.env.require("provider/registry")
 	local record = registry.blank("hcnsec"); local community = f.env.require("provider/community_key")
-	local midnightUtc, hour = 1767225600000, 3600000
-	for _, sample in ipairs({ { 12 * hour - 1, false }, { 12 * hour, true }, { 16 * hour - 1, true },
-		{ 16 * hour, true }, { 22 * hour - 1, true }, { 22 * hour, false }, { 36 * hour, true } }) do
-		local status = community.availability(record, midnightUtc + sample[1])
-		check("opening, midnight and closing boundaries honor UTC+8", status.applies and status.open == sample[2])
+	local base, hour = 1767225600000, 3600000 -- 08:00 UTC+8 on 1 January.
+	for _, sample in ipairs({ { 4 * hour - 1, true }, { 4 * hour, false }, { 8 * hour, false },
+		{ 12 * hour - 1, false }, { 12 * hour, true }, { 16 * hour, true }, { 24 * hour - 1, true },
+		{ 28 * hour, false }, { 36 * hour, true } }) do
+		local status = community.availability(record, base + sample[1])
+		check("opening, midday, midnight and closing boundaries honor UTC+8", status.applies and status.open == sample[2])
 	end
-	local before = community.availability(record, midnightUtc)
-	check("closed guidance names the fixed zone and next opening", has(before.message, "20:00-06:00 UTC+8 (Beijing/Singapore)")
-		and before.nextOpenMs == midnightUtc + 12 * hour and before.nextCloseMs == midnightUtc + 22 * hour)
+	local closed = community.availability(record, base + 8 * hour)
+	check("closed guidance names the fixed zone and next opening", has(closed.message, "20:00-12:00 UTC+8 (Beijing/Singapore)")
+		and closed.nextOpenMs == base + 12 * hour and closed.nextCloseMs == base + 28 * hour)
+	local waiting = community.countdown(record, base + 8 * hour)
+	check("the countdown reports the wait until opening", waiting and not waiting.open and waiting.ms == 4 * hour
+		and waiting.text == "Opens in 4h 00m")
+	local open = community.countdown(record, base + 16 * hour)
+	check("the countdown reports the time until closing", open and open.open and open.ms == 12 * hour
+		and open.text == "Closes in 12h 00m")
+	check("remaining time reads as seconds, minutes and hours",
+		community.remaining(59000) == "59s" and community.remaining(61000) == "1m 01s"
+		and community.remaining(3 * hour + 12 * 60000) == "3h 12m")
 	record.apiKey = "personal-schedule-fixture"
-	check("personal HCNSEC credentials have no community schedule", not community.availability(record, midnightUtc).applies and community.problem(record, midnightUtc) == nil)
+	check("personal HCNSEC credentials have no community schedule", not community.availability(record, base).applies
+		and community.problem(record, base) == nil and community.countdown(record, base) == nil)
 	community.apply(record); record.headers.Authorization = "Bearer personal-header-fixture"
-	check("a personal auth-header override has no community schedule", not community.availability(record, midnightUtc).applies)
+	check("a personal auth-header override has no community schedule", not community.availability(record, base).applies)
 	check("schedule inspection is entirely offline", f.h.http.requestCount == 0)
 	f.healthy(); f.close()
 end)
@@ -175,14 +186,16 @@ end)
 
 case("closed included access can be saved but cannot start inference or discovery", function()
 	local f = F.new(); local registry = f.env.require("provider/registry")
+	-- 16:00 UTC+8: after the midday close and before the evening opening.
+	f.env.require("runtime/clock").ms = function() return 1767225600000 + 8 * 3600000 + f.h.sched.now * 1000 end
 	local record = registry.blank("hcnsec")
 	check("closed included access remains a valid saved provider", registry.validate(record) and registry.save(record))
 	local reply, why = f.run(function()
 		return f.env.require("provider/chat").complete(record, { messages = { { role = "user", content = "Hello" } }, stream = false })
 	end)
-	check("closed inference explains its next opening", reply == nil and has(why, "20:00-06:00 UTC+8") and has(why, "choose another provider"))
+	check("closed inference explains its next opening", reply == nil and has(why, "20:00-12:00 UTC+8") and has(why, "choose another provider"))
 	local found, note = f.run(function() return f.env.require("provider/models").discover(record) end)
-	check("closed discovery explains its schedule", #found == 0 and has(note, "20:00-06:00 UTC+8"))
+	check("closed discovery explains its schedule", #found == 0 and has(note, "20:00-12:00 UTC+8"))
 	check("closed admissions send no network requests", f.h.http.requestCount == 0)
 	record.apiKey = "personal-schedule-fixture"
 	check("personal HCNSEC requests remain eligible during daytime", registry.protocolProblem(record) == nil)
@@ -191,7 +204,7 @@ end)
 
 case("an admitted free inference can settle after closing", function()
 	local f = F.new(); local registry = f.env.require("provider/registry")
-	f.env.require("runtime/clock").ms = function() return 1767304800000 - 1000 + f.h.sched.now * 1000 end
+	f.env.require("runtime/clock").ms = function() return 1767326400000 - 1000 + f.h.sched.now * 1000 end
 	local record = registry.blank("hcnsec"); registry.save(record)
 	f.h.http.handler = function()
 		f.h.sched.wait(2)
@@ -201,7 +214,7 @@ case("an admitted free inference can settle after closing", function()
 		return f.env.require("provider/chat").complete(record, { messages = { { role = "user", content = "Hello" } }, stream = false })
 	end, 3)
 	check("closing does not cancel an accepted response", reply and reply.content == "Finished" and f.h.http.requestCount == 1)
-	check("the next inference is outside the schedule", has(registry.protocolProblem(record), "20:00-06:00 UTC+8"))
+	check("the next inference is outside the schedule", has(registry.protocolProblem(record), "20:00-12:00 UTC+8"))
 	f.healthy(); f.close()
 end)
 
@@ -365,6 +378,8 @@ case("free setup and introduction are available without key entry", function()
 	local intro = assert(f.h.byName("FreeIntroductionText"))
 	check("welcome thanks continued support and explains capacity", has(intro.Text, "continued use and support") and has(intro.Text, "availability vary") and has(intro.Text, "More free providers"))
 	check("Discord is directly visible", has(f.h.byName("FreeCommunityInvite").Text, "https://discord.gg/9xYyyYuKap"))
+	check("the card counts down to the next schedule change", has(assert(f.h.byName("FreeHoursTimer")).Text, "Closes in ")
+		and has(f.h.byName("FreeHoursTimer").Text, "20:00-12:00 UTC+8"))
 	check("all managed-provider models qualify for free filtering", f.env.require("provider/models").isFree(f.saved, "auto"))
 	check("setup and introduction send no inference", f.h.http.requestCount == 0)
 	f.healthy(); f.close()
