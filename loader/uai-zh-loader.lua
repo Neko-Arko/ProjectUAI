@@ -15,7 +15,7 @@
 --   强制重新下载：
 --     getgenv().UAI_FORCE_UPDATE = true
 
-local REF = "14330e3"
+local REF = "e1e1a74"
 local MIN_BYTES = 1000000 -- 完整包约 3.6 MB；小于这个数一定是坏了
 
 local SOURCES = {
